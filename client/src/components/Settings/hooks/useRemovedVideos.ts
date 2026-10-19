@@ -14,6 +14,9 @@ export interface RemovedVideosSummary {
   // Deleted videos removed before Youtarr recorded why (a subset of deleted).
   legacy: number;
   libraryCheck: RemovedVideosLibraryCheck;
+  // The failing library check covers missing videos: marking all of them as
+  // deleted needs the user's say-so (empty folder only) and emptying them is refused.
+  missingActionsBlocked: boolean;
   // A download is running, so emptying the trash with archive removal would be refused.
   downloadsActive: boolean;
 }
@@ -23,6 +26,12 @@ export type TrashState = 'deleted' | 'missing';
 export interface EmptyTrashOptions {
   states: TrashState[];
   removeFromArchive: boolean;
+}
+
+export interface MarkAllMissingOptions {
+  // The user emptied the downloads folder (or a subfolder) on purpose; the
+  // server honours it only while the check fails because a folder is empty.
+  ignoreLibraryCheck?: boolean;
 }
 
 export interface EmptyTrashResult {
@@ -37,7 +46,7 @@ export interface UseRemovedVideosReturn {
   error: string | null;
   refetch: () => Promise<void>;
   // Both resolve null on failure, with the server's message in actionError.
-  markAllMissingDeleted: () => Promise<{ updated: number } | null>;
+  markAllMissingDeleted: (options?: MarkAllMissingOptions) => Promise<{ updated: number } | null>;
   emptyTrash: (options: EmptyTrashOptions) => Promise<EmptyTrashResult | null>;
   actionPending: boolean;
   actionError: string | null;
@@ -95,8 +104,12 @@ export function useRemovedVideos(token: string | null): UseRemovedVideosReturn {
   }, [refetch]);
 
   const markAllMissingDeleted = useCallback(
-    () => runAction(
-      () => axios.post<{ updated: number }>('/api/videos/mark-deleted', { all: true }, headers()),
+    ({ ignoreLibraryCheck = false }: MarkAllMissingOptions = {}) => runAction(
+      () => axios.post<{ updated: number }>(
+        '/api/videos/mark-deleted',
+        ignoreLibraryCheck ? { all: true, ignoreLibraryCheck: true } : { all: true },
+        headers()
+      ),
       'Failed to mark videos as deleted'
     ),
     [runAction, headers]

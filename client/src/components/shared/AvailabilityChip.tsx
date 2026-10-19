@@ -1,11 +1,12 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Chip, Tooltip } from '../ui';
 import {
-  AlertCircle as ErrorOutlineIcon,
   CheckCircle as CheckCircleIcon,
+  CloudOff as MissingIcon,
   Trash2 as DeletedIcon,
 } from 'lucide-react';
 import { SHARED_THEMED_CHIP_SMALL_STYLE, SHARED_COMPACT_CHIP_OVERRIDES } from './chipStyles';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import type { RemovalState } from '../../utils/videoRemoval';
 
 export interface AvailabilityChipProps {
@@ -46,7 +47,7 @@ const VARIANTS: Record<RemovalState, Variant> = {
     tooltip: 'Video file not found on disk',
     color: 'error',
     variant: 'filled',
-    icon: <ErrorOutlineIcon size={12} />,
+    icon: <MissingIcon size={12} data-testid="CloudOffIcon" />,
     style: {
       ...SHARED_THEMED_CHIP_SMALL_STYLE,
       backgroundColor: 'var(--destructive)',
@@ -70,17 +71,31 @@ const VARIANTS: Record<RemovalState, Variant> = {
 function AvailabilityChip({ state, tooltip, label, compact = false }: AvailabilityChipProps) {
   const variant = VARIANTS[state];
   const style = compact ? { ...variant.style, ...SHARED_COMPACT_CHIP_OVERRIDES } : variant.style;
+  // On a touch device a tap opens the tooltip (the only way to read the reason
+  // on a phone), so it must not also select or expand the row underneath.
+  // Mouse clicks still pass through, as rows that expand on click expect, and
+  // so do taps where the tooltip does not open on tap: the same query as Tooltip.
+  const lastPointerType = useRef('mouse');
+  const tapOpensTooltip = useMediaQuery('(pointer: coarse)');
 
   return (
     <Tooltip title={tooltip ?? variant.tooltip} enterTouchDelay={0}>
-      <Chip
-        size="small"
-        icon={variant.icon}
-        label={label ?? variant.label}
-        color={variant.color}
-        variant={variant.variant}
-        style={style}
-      />
+      <span
+        className="inline-flex"
+        onPointerDown={(event) => { lastPointerType.current = event.pointerType; }}
+        onClick={(event) => {
+          if (tapOpensTooltip && lastPointerType.current !== 'mouse') event.stopPropagation();
+        }}
+      >
+        <Chip
+          size="small"
+          icon={variant.icon}
+          label={label ?? variant.label}
+          color={variant.color}
+          variant={variant.variant}
+          style={style}
+        />
+      </span>
     </Tooltip>
   );
 }

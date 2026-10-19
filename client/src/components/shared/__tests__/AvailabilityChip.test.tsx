@@ -18,6 +18,75 @@ describe('AvailabilityChip', () => {
     expect(screen.queryByText('Available')).not.toBeInTheDocument();
   });
 
+  test('shows the same crossed-out cloud for Missing as the status chips elsewhere', () => {
+    renderWithProviders(<AvailabilityChip state="missing" />);
+    expect(screen.getByTestId('CloudOffIcon')).toBeInTheDocument();
+  });
+
+  describe('on a touch screen', () => {
+    const originalMatchMedia = window.matchMedia;
+    const pointerIs = (coarse: boolean) => {
+      window.matchMedia = jest.fn().mockImplementation((query: string) => ({
+        matches: coarse && query === '(pointer: coarse)',
+        media: query,
+        onchange: null,
+        addListener: jest.fn(),
+        removeListener: jest.fn(),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        dispatchEvent: jest.fn(),
+      }));
+    };
+    const renderInRow = (onRowClick: jest.Mock) => renderWithProviders(
+      <div onClick={onRowClick}>
+        <AvailabilityChip state="missing" tooltip="Youtarr expected a file and could not find it." />
+      </div>
+    );
+
+    afterEach(() => {
+      window.matchMedia = originalMatchMedia;
+    });
+
+    test('keeps a tap from reaching the row, so the tap shows the reason', async () => {
+      pointerIs(true);
+      const user = userEvent.setup();
+      const onRowClick = jest.fn();
+      renderInRow(onRowClick);
+
+      await user.pointer({ keys: '[TouchA]', target: screen.getByText('Missing') });
+
+      expect(onRowClick).not.toHaveBeenCalled();
+      expect(await screen.findByRole('tooltip')).toHaveTextContent('Youtarr expected a file and could not find it.');
+    });
+
+    // A laptop with a touchscreen reports a fine pointer; there the tooltip
+    // does not open on tap, so the tap must keep working on the row.
+    test('lets a tap through to the row where the device reports a fine pointer', async () => {
+      pointerIs(false);
+      const user = userEvent.setup();
+      const onRowClick = jest.fn();
+      renderInRow(onRowClick);
+
+      await user.pointer({ keys: '[TouchA]', target: screen.getByText('Missing') });
+
+      expect(onRowClick).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  test('lets a mouse click through to the row, which may expand on click', async () => {
+    const user = userEvent.setup();
+    const onRowClick = jest.fn();
+    renderWithProviders(
+      <div onClick={onRowClick}>
+        <AvailabilityChip state="missing" tooltip="Youtarr expected a file and could not find it." />
+      </div>
+    );
+
+    await user.click(screen.getByText('Missing'));
+
+    expect(onRowClick).toHaveBeenCalledTimes(1);
+  });
+
   test('renders Deleted for a file Youtarr removed', () => {
     renderWithProviders(<AvailabilityChip state="deleted" />);
     expect(screen.getByText('Deleted')).toBeInTheDocument();

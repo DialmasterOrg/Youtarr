@@ -1,5 +1,5 @@
 import React from 'react';
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import RemovedVideosCard from '../RemovedVideosCard';
@@ -19,13 +19,14 @@ const summary = (overrides: Partial<RemovedVideosSummary> = {}): RemovedVideosSu
   missing: 4,
   legacy: 0,
   libraryCheck: { ok: true, reason: null, path: null, message: null },
+  missingActionsBlocked: false,
   downloadsActive: false,
   ...overrides,
 });
 
 type CardProps = Partial<React.ComponentProps<typeof RemovedVideosCard>>;
 
-const EMPTY_ROOT = { ok: false, reason: 'empty', path: '/d', message: 'The downloads folder /d is empty.' };
+const EMPTY_ROOT = { ok: false, reason: 'empty', path: '/d', message: 'The downloads folder is empty.' };
 const rescanThatStarts = () => jest.fn().mockResolvedValue({ started: true });
 
 function setup(
@@ -65,20 +66,64 @@ describe('RemovedVideosCard', () => {
   });
 
   test('disables the missing action with the warning while the downloads folder looks unmounted', () => {
-    setup(summary({ libraryCheck: { ok: false, reason: 'empty', path: '/d', message: 'The downloads folder /d is empty.' } }));
-    expect(screen.getByText('The downloads folder /d is empty. Marking or emptying missing videos is disabled until it is back.')).toBeInTheDocument();
+    setup(summary({ libraryCheck: { ok: false, reason: 'missing', path: '/d', message: 'The downloads folder does not exist.' }, missingActionsBlocked: true }));
+    expect(screen.getByText('The downloads folder does not exist. Marking or emptying missing videos is disabled until it is back.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mark all missing as deleted' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Empty trash...' })).toBeEnabled();
   });
 
   test('offers Rescan anyway while the downloads folder looks empty', () => {
     setup(summary({ libraryCheck: EMPTY_ROOT }), {}, { onRescanAnyway: rescanThatStarts(), rescanRunning: false });
-    expect(screen.getByText(/If the folder really is empty because you removed the files yourself/)).toBeInTheDocument();
+    expect(screen.getByText(/If you removed the files yourself, rescan anyway to mark them missing\./)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Rescan anyway...' })).toBeEnabled();
   });
 
+  test('points to Mark all once the emptied folder\'s videos are missing', () => {
+    setup(summary({ libraryCheck: EMPTY_ROOT, missingActionsBlocked: true }), {}, { onRescanAnyway: rescanThatStarts(), rescanRunning: false });
+    expect(screen.getByText(/Mark all missing as deleted asks you to confirm that you removed the files yourself/)).toBeInTheDocument();
+  });
+
+  test('keeps the missing actions open, without asking, when the failing folder holds no missing videos', async () => {
+    const { hook, user } = setup(summary({ libraryCheck: EMPTY_ROOT, missingActionsBlocked: false }));
+
+    await user.click(screen.getByRole('button', { name: 'Mark all missing as deleted' }));
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Mark 4 as deleted' }));
+
+    expect(hook.markAllMissingDeleted).toHaveBeenCalledWith({ ignoreLibraryCheck: false });
+  });
+
+  test('offers missing videos in Empty trash when the failing folder holds none of them', async () => {
+    const { user } = setup(summary({ libraryCheck: EMPTY_ROOT, missingActionsBlocked: false }));
+    await user.click(screen.getByRole('button', { name: 'Empty trash...' }));
+    expect(screen.getByRole('radio', { name: 'Missing (4)' })).toBeEnabled();
+  });
+
+  test('disables Mark all while a rescan is running, so it cannot mark a half-scanned set', () => {
+    setup(summary(), {}, { onRescanAnyway: rescanThatStarts(), rescanRunning: true });
+    expect(screen.getByRole('button', { name: 'Mark all missing as deleted' })).toBeDisabled();
+  });
+
+  test('lets Mark all look past an empty folder once the user says they emptied it', async () => {
+    const { hook, user } = setup(summary({ libraryCheck: EMPTY_ROOT, missingActionsBlocked: true }));
+
+    await user.click(screen.getByRole('button', { name: 'Mark all missing as deleted' }));
+    const confirm = screen.getByRole('button', { name: 'Mark 4 as deleted' });
+    expect(confirm).toBeDisabled();
+    await user.click(screen.getByRole('checkbox', { name: 'I removed these files myself; they are not on an unmounted drive' }));
+    await user.click(confirm);
+
+    expect(hook.markAllMissingDeleted).toHaveBeenCalledWith({ ignoreLibraryCheck: true });
+  });
+
+  test('speaks of a single missing video in the singular', async () => {
+    const { user } = setup(summary({ missing: 1 }));
+    await user.click(screen.getByRole('button', { name: 'Mark all missing as deleted' }));
+    expect(screen.getByText(/1 missing video will be marked as deleted.*Its record is kept, so it can still be re-downloaded/)).toBeInTheDocument();
+  });
+
   test('does not offer Rescan anyway when the downloads folder is missing', () => {
-    const missingRoot = { ok: false, reason: 'missing', path: '/d', message: 'The downloads folder /d does not exist.' };
+    const missingRoot = { ok: false, reason: 'missing', path: '/d', message: 'The downloads folder does not exist.' };
     setup(summary({ libraryCheck: missingRoot }), {}, { onRescanAnyway: rescanThatStarts(), rescanRunning: false });
     expect(screen.queryByRole('button', { name: 'Rescan anyway...' })).not.toBeInTheDocument();
   });
@@ -93,6 +138,37 @@ describe('RemovedVideosCard', () => {
 
     expect(onRescanAnyway).toHaveBeenCalledTimes(1);
     expect(await screen.findByText('Rescan started. When it finishes, the missing videos can be marked as deleted here.')).toBeInTheDocument();
+  });
+
+  test('says when the rescan anyway has finished, replacing the started message', async () => {
+    const onRescanAnyway = rescanThatStarts();
+    const { user, rerender } = setup(summary({ libraryCheck: EMPTY_ROOT }), {}, { onRescanAnyway, rescanRunning: false });
+    await user.click(screen.getByRole('button', { name: 'Rescan anyway...' }));
+    await user.click(screen.getByRole('button', { name: 'Rescan anyway' }));
+    expect(await screen.findByText(/^Rescan started\./)).toBeInTheDocument();
+
+    rerender(<RemovedVideosCard token="tok" onRescanAnyway={onRescanAnyway} rescanRunning />);
+    rerender(<RemovedVideosCard token="tok" onRescanAnyway={onRescanAnyway} rescanRunning={false} />);
+
+    expect(screen.getByText('Rescan finished. Videos it could not find now count as missing and can be marked as deleted.')).toBeInTheDocument();
+    expect(screen.queryByText(/^Rescan started\./)).not.toBeInTheDocument();
+  });
+
+  // The rescan hook flips running on optimistically and off again on a refusal,
+  // which can land before the refusal itself does.
+  test('does not claim a rescan finished when it was refused after an optimistic start', async () => {
+    let refuse: (outcome: { started: boolean }) => void = () => {};
+    const onRescanAnyway = jest.fn(() => new Promise<{ started: boolean }>((resolve) => { refuse = resolve; }));
+    const { user, rerender } = setup(summary({ libraryCheck: EMPTY_ROOT }), {}, { onRescanAnyway, rescanRunning: false });
+
+    await user.click(screen.getByRole('button', { name: 'Rescan anyway...' }));
+    await user.click(screen.getByRole('button', { name: 'Rescan anyway' }));
+    rerender(<RemovedVideosCard token="tok" onRescanAnyway={onRescanAnyway} rescanRunning />);
+    rerender(<RemovedVideosCard token="tok" onRescanAnyway={onRescanAnyway} rescanRunning={false} />);
+    await act(async () => refuse({ started: false }));
+
+    expect(screen.getByText('The rescan did not start. The rescan card above shows why.')).toBeInTheDocument();
+    expect(screen.queryByText(/^Rescan finished\./)).not.toBeInTheDocument();
   });
 
   test('does not claim a rescan started when it was refused', async () => {
@@ -140,7 +216,7 @@ describe('RemovedVideosCard', () => {
   });
 
   test('disables Empty trash when only missing videos remain and the folder looks unmounted', () => {
-    setup(summary({ deleted: 0, missing: 5, libraryCheck: EMPTY_ROOT }));
+    setup(summary({ deleted: 0, missing: 5, libraryCheck: EMPTY_ROOT, missingActionsBlocked: true }));
     expect(screen.getByRole('button', { name: 'Empty trash...' })).toBeDisabled();
   });
 
@@ -172,7 +248,7 @@ describe('RemovedVideosCard', () => {
 
     await user.click(screen.getByRole('button', { name: 'Mark 4 as deleted' }));
 
-    expect(hook.markAllMissingDeleted).toHaveBeenCalledTimes(1);
+    expect(hook.markAllMissingDeleted).toHaveBeenCalledWith({ ignoreLibraryCheck: false });
     expect(await screen.findByText('Marked 4 videos as deleted.')).toBeInTheDocument();
   });
 

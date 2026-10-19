@@ -685,6 +685,62 @@ describe('VideoModal', () => {
     });
   });
 
+  describe('handleMarkDeleted', () => {
+    const missingVideo: VideoModalData = {
+      ...baseVideo,
+      status: 'missing',
+      isDownloaded: false,
+      removal: { reason: 'not_found', at: '2026-10-18T21:41:04.000Z', detail: null },
+    };
+
+    test('marks a missing video as deleted and tells the page', async () => {
+      const onMarkedDeleted = jest.fn();
+      axios.post.mockResolvedValueOnce({ data: { updated: 1 } });
+
+      renderModal({ video: missingVideo, onMarkedDeleted });
+      await userEvent.click(screen.getByRole('button', { name: 'Mark as deleted' }));
+
+      await waitFor(() => {
+        expect(axios.post).toHaveBeenCalledWith(
+          '/api/videos/mark-deleted',
+          { videoIds: [42] },
+          { headers: { 'x-access-token': 'test-token' } }
+        );
+      });
+      expect(await screen.findByText('Marked as deleted')).toBeInTheDocument();
+      expect(screen.getByText('Deleted')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Mark as deleted' })).not.toBeInTheDocument();
+      expect(onMarkedDeleted).toHaveBeenCalledWith('test123');
+    });
+
+    test('says nothing changed when the video was no longer missing', async () => {
+      const onMarkedDeleted = jest.fn();
+      axios.post.mockResolvedValueOnce({ data: { updated: 0 } });
+
+      renderModal({ video: missingVideo, onMarkedDeleted });
+      await userEvent.click(screen.getByRole('button', { name: 'Mark as deleted' }));
+
+      expect(await screen.findByText('Not marked: this video is no longer missing.')).toBeInTheDocument();
+      expect(screen.queryByText('Marked as deleted')).not.toBeInTheDocument();
+      expect(onMarkedDeleted).not.toHaveBeenCalled();
+    });
+
+    test('is not offered for a video that is already deleted', () => {
+      renderModal({ video: { ...missingVideo, status: 'deleted', removal: { reason: 'user_deleted', at: null, detail: null } } });
+      expect(screen.queryByRole('button', { name: 'Mark as deleted' })).not.toBeInTheDocument();
+    });
+
+    test('shows the server message when marking fails', async () => {
+      axios.post.mockRejectedValueOnce({ response: { data: { error: 'Failed to mark videos as deleted' } } });
+
+      renderModal({ video: missingVideo });
+      await userEvent.click(screen.getByRole('button', { name: 'Mark as deleted' }));
+
+      expect(await screen.findByText('Failed to mark videos as deleted')).toBeInTheDocument();
+      expect(screen.getByText('Missing')).toBeInTheDocument();
+    });
+  });
+
   describe('handleRatingApply', () => {
     test('calls rating API and fires onRatingChanged on success', async () => {
       const onRatingChanged = jest.fn();

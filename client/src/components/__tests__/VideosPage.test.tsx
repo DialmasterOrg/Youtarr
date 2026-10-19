@@ -116,7 +116,10 @@ jest.mock('../shared/VideoModal', () => ({
     return React.createElement('div', {
       'data-testid': 'video-modal',
       'data-video-title': props.video?.title,
-    }, props.video?.title);
+    }, props.video?.title, React.createElement('button', {
+      type: 'button',
+      onClick: () => props.onMarkedDeleted?.(props.video?.youtubeId),
+    }, 'Modal mark as deleted'));
   }
 }));
 
@@ -472,7 +475,7 @@ describe('VideosPage Component', () => {
 
         await waitFor(() => expect(axios.get).toHaveBeenCalledTimes(2));
         expect(axios.get.mock.calls[1][0]).not.toContain('deletedFilter');
-        expect(window.localStorage.getItem('youtarr.videosPage.deletedFilter')).toBe('off');
+        expect(window.localStorage.getItem('youtarr:videosPageDeletedFilter')).toBe('off');
       });
 
       test('shows no hidden note when nothing is hidden', async () => {
@@ -485,7 +488,7 @@ describe('VideosPage Component', () => {
       });
 
       test('remembers that deleted videos were shown', async () => {
-        window.localStorage.setItem('youtarr.videosPage.deletedFilter', 'off');
+        window.localStorage.setItem('youtarr:videosPageDeletedFilter', 'off');
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
 
         render(<VideosPage token={mockToken} />);
@@ -499,13 +502,74 @@ describe('VideosPage Component', () => {
       axios.get.mockResolvedValueOnce({
         data: {
           ...mockPaginatedResponse(mockVideos),
-          libraryWarning: { reason: 'empty', path: '/data/youtube', message: 'The downloads folder /data/youtube is empty.', heldBack: 2 },
+          libraryWarning: { reason: 'empty', path: '/data/youtube', message: 'The downloads folder is empty.', heldBack: 2 },
         },
       });
 
       render(<VideosPage token={mockToken} />);
 
-      expect(await screen.findByText(/The downloads folder \/data\/youtube is empty\. Videos are not being marked missing until it is back\./)).toBeInTheDocument();
+      expect(await screen.findByText(/The downloads folder is empty\. Videos stored there are not being marked missing until it is back/)).toBeInTheDocument();
+    });
+
+    test('hides the unmounted-folder warning once dismissed', async () => {
+      const user = setupUser();
+      axios.get.mockResolvedValueOnce({
+        data: {
+          ...mockPaginatedResponse(mockVideos),
+          libraryWarning: { reason: 'empty', path: '/data/youtube', message: 'The downloads folder is empty.', heldBack: 2 },
+        },
+      });
+
+      render(<VideosPage token={mockToken} />);
+      await screen.findByText(/Videos stored there are not being marked missing/);
+
+      await user.click(screen.getByRole('button', { name: 'Close' }));
+
+      expect(screen.queryByText(/Videos stored there are not being marked missing/)).not.toBeInTheDocument();
+    });
+
+    test('shows the warning again when a later problem follows one that cleared', async () => {
+      const user = setupUser();
+      const warned = {
+        data: {
+          ...mockPaginatedResponse(mockVideos),
+          libraryWarning: { reason: 'empty', path: '/data/youtube', message: 'The downloads folder is empty.', heldBack: 2 },
+        },
+      };
+      axios.get
+        .mockResolvedValueOnce(warned)
+        .mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) })
+        .mockResolvedValueOnce(warned);
+
+      render(<VideosPage token={mockToken} />);
+      await screen.findByText(/Videos stored there are not being marked missing/);
+      await user.click(screen.getByRole('button', { name: 'Close' }));
+
+      // Each mark from the modal reloads the list: first with the folder back, then failing again.
+      await user.click(screen.getByRole('button', { name: 'How to Code' }));
+      await user.click(screen.getByRole('button', { name: 'Modal mark as deleted' }));
+      await waitFor(() => expect(axios.get).toHaveBeenCalledTimes(2));
+      await user.click(screen.getByRole('button', { name: 'Modal mark as deleted' }));
+
+      expect(await screen.findByText(/Videos stored there are not being marked missing/)).toBeInTheDocument();
+    });
+
+    test('does not suggest rescanning anyway when a folder could not be read', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: {
+          ...mockPaginatedResponse(mockVideos),
+          libraryWarning: {
+            reason: 'subfolder-unreadable', path: '/data/youtube/__Kids',
+            message: 'The subfolder __Music is empty. The subfolder __Kids could not be read.', heldBack: 2,
+          },
+        },
+      });
+
+      render(<VideosPage token={mockToken} />);
+
+      expect(await screen.findByText(/Videos stored there are not being marked missing/)).toBeInTheDocument();
+      expect(screen.queryByText(/rescan anyway/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Maintenance' })).not.toBeInTheDocument();
     });
 
     test('links the unmounted-folder warning to Maintenance for a folder emptied on purpose', async () => {
@@ -513,7 +577,7 @@ describe('VideosPage Component', () => {
       axios.get.mockResolvedValueOnce({
         data: {
           ...mockPaginatedResponse(mockVideos),
-          libraryWarning: { reason: 'empty', path: '/data/youtube', message: 'The downloads folder /data/youtube is empty.', heldBack: 2 },
+          libraryWarning: { reason: 'empty', path: '/data/youtube', message: 'The downloads folder is empty.', heldBack: 2 },
         },
       });
 
@@ -575,6 +639,20 @@ describe('VideosPage Component', () => {
       await user.click(screen.getByRole('button', { name: 'How to Code' }));
 
       expect(screen.getByTestId('video-modal')).toHaveAttribute('data-video-title', 'How to Code');
+    });
+
+    test('reloads the list after the modal marks a video as deleted', async () => {
+      const user = setupUser();
+      axios.get.mockResolvedValue({ data: mockPaginatedResponse([mockVideos[0]]) });
+
+      render(<VideosPage token={mockToken} />);
+      await screen.findByText('How to Code');
+      await user.click(screen.getByRole('button', { name: 'How to Code' }));
+      const callsBefore = axios.get.mock.calls.length;
+
+      await user.click(screen.getByRole('button', { name: 'Modal mark as deleted' }));
+
+      await waitFor(() => expect(axios.get.mock.calls.length).toBe(callsBefore + 1));
     });
 
     test('renders the channel name as a link to the channel page', async () => {

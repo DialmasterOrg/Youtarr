@@ -19,7 +19,8 @@ function describeRowProblems(result) {
   if (count(result.skippedChanged) > 0) parts.push(`${count(result.skippedChanged)} skipped (changed during the scan)`);
   if (count(result.failed) > 0) parts.push(`${count(result.failed)} failed`);
   if (count(result.notMarkedMissing) > 0) {
-    const cause = result.libraryCheckMessage ? ` (${result.libraryCheckMessage})` : '';
+    // The check's message is a sentence; inside parentheses it drops its period.
+    const cause = result.libraryCheckMessage ? ` (${result.libraryCheckMessage.replace(/\.$/, '')})` : '';
     parts.push(`${count(result.notMarkedMissing)} not marked missing${cause}`);
   }
   return parts;

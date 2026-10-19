@@ -4,7 +4,7 @@ const { Video } = require('../models');
 const { VIDEO_EXTENSIONS, AUDIO_EXTENSIONS } = require('./filesystem/constants');
 const createLimiter = require('./subscriptionImport/concurrencyLimiter');
 const { REMOVAL_REASONS, REMOVAL_COLUMNS, removedColumns, presentColumns } = require('./videoRemovalState');
-const { checkLibraryRoot } = require('./libraryRootCheck');
+const { checkLibraryRoot, isRowUnderLibraryCheck } = require('./libraryRootCheck');
 const configModule = require('./configModule');
 
 // Per-video checks run concurrently up to this bound: each stat costs a full
@@ -65,8 +65,8 @@ class FileCheckModule {
   /**
    * @returns {Promise<{videos: Array, updates: Array, libraryWarning: (Object|null)}>}
    *   libraryWarning is set when rows would have been marked missing but the
-   *   downloads folder looks unmounted (see libraryRootCheck): those rows are
-   *   left as they are and counted in `heldBack`.
+   *   downloads folder, or the subfolder they are stored in, looks unmounted
+   *   (see libraryRootCheck): those rows are left as they are and counted in `heldBack`.
    */
   async checkVideoFiles(videos) {
     const updatedVideos = [...videos];
@@ -144,8 +144,9 @@ class FileCheckModule {
         } else if (!hasAnyFile && !video.removed) {
           // A row that is already removed (deleted in Youtarr, or marked as
           // deleted) is left as it is: only a present row becomes missing.
+          // A failing subfolder holds back only the rows stored under it.
           const libraryCheck = await getLibraryCheck();
-          if (libraryCheck.ok) {
+          if (!isRowUnderLibraryCheck(libraryCheck, video)) {
             Object.assign(update, removedColumns(REMOVAL_REASONS.NOT_FOUND));
             hasUpdates = true;
           } else {

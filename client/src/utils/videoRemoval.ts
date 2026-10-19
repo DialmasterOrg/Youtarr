@@ -47,7 +47,7 @@ export function removalFromRow(row: RemovalRow): RemovalInfo {
   };
 }
 
-const CAN_REDOWNLOAD = 'It can be downloaded again from its channel or playlist page.';
+const CAN_REDOWNLOAD = 'It can be downloaded again.';
 
 export function describeRemoval(state: RemovalState, info: RemovalInfo = NO_REMOVAL, filePath?: string | null): string {
   if (state === 'present') return 'Video file exists on disk';
@@ -66,9 +66,9 @@ export function describeRemoval(state: RemovalState, info: RemovalInfo = NO_REMO
     case 'auto_removal':
       return `Deleted by automatic cleanup${on}${info.detail ? ` (${info.detail})` : ''}. ${CAN_REDOWNLOAD}`;
     case 'marked_deleted':
-      return `Marked as deleted${on}. Its file was missing from disk when it was marked.`;
+      return `Marked as deleted${on}. Its file was missing from disk when it was marked. ${CAN_REDOWNLOAD}`;
     default:
-      return 'Removed before Youtarr recorded why.';
+      return `Removed before Youtarr recorded why. ${CAN_REDOWNLOAD}`;
   }
 }
 

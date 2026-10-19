@@ -75,7 +75,7 @@ describe('POST /api/videos/mark-deleted', () => {
     const res = await supertest(makeApp(module)).post('/api/videos/mark-deleted').send({ videoIds: [1, 2] });
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ updated: 2 });
-    expect(module.markMissingAsDeleted).toHaveBeenCalledWith({ videoIds: [1, 2], all: false });
+    expect(module.markMissingAsDeleted).toHaveBeenCalledWith({ videoIds: [1, 2], all: false, ignoreLibraryCheck: false });
   });
 
   test('marks all missing videos', async () => {
@@ -83,16 +83,31 @@ describe('POST /api/videos/mark-deleted', () => {
     const res = await supertest(makeApp(module)).post('/api/videos/mark-deleted').send({ all: true });
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ updated: 40 });
-    expect(module.markMissingAsDeleted).toHaveBeenCalledWith({ videoIds: null, all: true });
+    expect(module.markMissingAsDeleted).toHaveBeenCalledWith({ videoIds: null, all: true, ignoreLibraryCheck: false });
+  });
+
+  test('marks all past the downloads folder check when asked to', async () => {
+    const module = makeModule({ markMissingAsDeleted: jest.fn().mockResolvedValue({ updated: 40 }) });
+    const res = await supertest(makeApp(module)).post('/api/videos/mark-deleted').send({ all: true, ignoreLibraryCheck: true });
+    expect(res.status).toBe(200);
+    expect(module.markMissingAsDeleted).toHaveBeenCalledWith({ videoIds: null, all: true, ignoreLibraryCheck: true });
+  });
+
+  test('rejects a non-boolean ignoreLibraryCheck with 400', async () => {
+    const module = makeModule();
+    const res = await supertest(makeApp(module)).post('/api/videos/mark-deleted').send({ all: true, ignoreLibraryCheck: 'yes' });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'ignoreLibraryCheck must be true or false' });
+    expect(module.markMissingAsDeleted).not.toHaveBeenCalled();
   });
 
   test('answers 409 with the reason while the downloads folder looks unmounted', async () => {
     const module = makeModule({
-      markMissingAsDeleted: jest.fn().mockRejectedValue(new LibraryUnavailableError('The downloads folder /d is empty.')),
+      markMissingAsDeleted: jest.fn().mockRejectedValue(new LibraryUnavailableError('The downloads folder is empty.')),
     });
     const res = await supertest(makeApp(module)).post('/api/videos/mark-deleted').send({ all: true });
     expect(res.status).toBe(409);
-    expect(res.body).toEqual({ error: 'The downloads folder /d is empty.', reason: 'library-unavailable' });
+    expect(res.body).toEqual({ error: 'The downloads folder is empty.', reason: 'library-unavailable' });
   });
 
   test('answers 500 with the standard error shape on any other failure', async () => {
@@ -153,10 +168,10 @@ describe('POST /api/videos/purge-removed', () => {
   });
 
   test('answers 409 with the reason while the downloads folder looks unmounted', async () => {
-    const module = makeModule({ purgeRemoved: jest.fn().mockRejectedValue(new LibraryUnavailableError('The downloads folder /d is empty.')) });
+    const module = makeModule({ purgeRemoved: jest.fn().mockRejectedValue(new LibraryUnavailableError('The downloads folder is empty.')) });
     const res = await supertest(makeApp(module)).post('/api/videos/purge-removed').send({ states: ['missing'], removeFromArchive: false });
     expect(res.status).toBe(409);
-    expect(res.body).toEqual({ error: 'The downloads folder /d is empty.', reason: 'library-unavailable' });
+    expect(res.body).toEqual({ error: 'The downloads folder is empty.', reason: 'library-unavailable' });
   });
 
   test('answers 500 with the standard error shape on any other failure', async () => {

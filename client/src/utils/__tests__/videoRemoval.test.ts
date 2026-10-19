@@ -33,27 +33,27 @@ describe('describeRemoval', () => {
   });
 
   test('explains a row removed before the reason was recorded', () => {
-    expect(describeRemoval('deleted', { reason: null, at: null, detail: null })).toBe('Removed before Youtarr recorded why.');
+    expect(describeRemoval('deleted', { reason: null, at: null, detail: null })).toBe('Removed before Youtarr recorded why. It can be downloaded again.');
   });
 
   test('explains a delete made in Youtarr', () => {
     expect(describeRemoval('deleted', { reason: 'user_deleted', at: AT, detail: null })).toBe(
-      `Deleted in Youtarr${ON}. It can be downloaded again from its channel or playlist page.`
+      `Deleted in Youtarr${ON}. It can be downloaded again.`
     );
   });
 
   test('explains automatic cleanup with the rule that removed it', () => {
     expect(describeRemoval('deleted', { reason: 'auto_removal', at: AT, detail: 'older than 30 days' })).toBe(
-      `Deleted by automatic cleanup${ON} (older than 30 days). It can be downloaded again from its channel or playlist page.`
+      `Deleted by automatic cleanup${ON} (older than 30 days). It can be downloaded again.`
     );
     expect(describeRemoval('deleted', { reason: 'auto_removal', at: null, detail: null })).toBe(
-      'Deleted by automatic cleanup. It can be downloaded again from its channel or playlist page.'
+      'Deleted by automatic cleanup. It can be downloaded again.'
     );
   });
 
   test('explains a missing video the user marked as deleted', () => {
     expect(describeRemoval('deleted', { reason: 'marked_deleted', at: AT, detail: null })).toBe(
-      `Marked as deleted${ON}. Its file was missing from disk when it was marked.`
+      `Marked as deleted${ON}. Its file was missing from disk when it was marked. It can be downloaded again.`
     );
   });
 

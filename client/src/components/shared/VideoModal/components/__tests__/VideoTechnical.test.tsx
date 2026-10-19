@@ -195,17 +195,26 @@ describe('VideoTechnical', () => {
       });
       expect(screen.getByText('File Details')).toBeInTheDocument();
       expect(screen.getByText('Status')).toBeInTheDocument();
-      expect(screen.getByText('Deleted by automatic cleanup (older than 30 days). It can be downloaded again from its channel or playlist page.')).toBeInTheDocument();
+      expect(screen.getByText('Deleted by automatic cleanup (older than 30 days). It can be downloaded again.')).toBeInTheDocument();
     });
 
-    test('tells a missing video from a deleted one in the Status row', () => {
+    test('tells a missing video from a deleted one in the Status row, leaving the path to the file row below', () => {
       renderTech({
         isDownloaded: false,
         status: 'missing',
         filePath: '/usr/src/app/data/Channel/video.mp4',
         removal: { reason: 'not_found', at: null, detail: null },
       });
-      expect(screen.getByText(/Youtarr expected a file at .*video\.mp4 and could not find it\./)).toBeInTheDocument();
+      expect(screen.getByText(/^Youtarr expected a file and could not find it\./)).toBeInTheDocument();
+    });
+
+    test('lays the Status sentence out left-aligned, as prose', () => {
+      renderTech({
+        isDownloaded: false,
+        status: 'deleted',
+        removal: { reason: 'user_deleted', at: null, detail: null },
+      });
+      expect(screen.getByText(/^Deleted in Youtarr\./)).toHaveStyle({ textAlign: 'left' });
     });
 
     test('has no Status row for a present file', () => {

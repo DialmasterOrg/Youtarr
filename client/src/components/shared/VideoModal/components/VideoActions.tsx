@@ -9,7 +9,7 @@ import {
   Shield as ShieldIcon,
   ShieldCheck as ShieldOutlinedIcon,
 } from '../../../../lib/icons';
-import { Youtube as YoutubeIcon } from 'lucide-react';
+import { FileX as MarkDeletedIcon, Youtube as YoutubeIcon } from 'lucide-react';
 import { VideoModalData } from '../types';
 import {
   getMediaTypeInfo,
@@ -30,7 +30,9 @@ interface VideoActionsProps {
   onIgnoreToggle: () => void;
   onDownloadClick: () => void;
   onRatingClick: () => void;
+  onMarkDeleted: () => void;
   protectionLoading: boolean;
+  markDeletedPending: boolean;
   isMobile: boolean;
   allowIgnore?: boolean;
 }
@@ -42,7 +44,9 @@ function VideoActions({
   onIgnoreToggle,
   onDownloadClick,
   onRatingClick,
+  onMarkDeleted,
   protectionLoading,
+  markDeletedPending,
   isMobile,
   allowIgnore = true,
 }: VideoActionsProps) {
@@ -51,6 +55,7 @@ function VideoActions({
   const showDownload = !isDownloadedAndPresent && video.status !== 'queued' && video.status !== 'downloading';
   const showIgnore = (!isDownloadedAndPresent || video.isIgnored) && allowIgnore;
   const showDelete = isDownloadedAndPresent;
+  const showMarkDeleted = video.status === 'missing' && video.databaseId !== null;
   const mediaTypeInfo = getMediaTypeInfo(video.mediaType);
   const statusLabel = video.status === 'downloaded' ? 'Available' : getStatusLabel(video.status);
   const youtubeUrl = `${YOUTUBE_URL_BASE}${video.youtubeId}`;
@@ -222,6 +227,23 @@ function VideoActions({
       </Tooltip>
 
       <Box style={{ flex: 1, minWidth: isMobile ? 0 : 12 }} />
+
+      {showMarkDeleted && (
+        <Tooltip title="The file is really gone: hide this video from the Videos page by default">
+          <Button
+            size="small"
+            variant="outlined"
+            color="warning"
+            onClick={onMarkDeleted}
+            disabled={markDeletedPending}
+            aria-label="Mark as deleted"
+            startIcon={useIconOnlyActions ? undefined : <MarkDeletedIcon size={16} />}
+            style={actionButtonStyle}
+          >
+            {useIconOnlyActions ? <MarkDeletedIcon size={16} /> : 'Mark as deleted'}
+          </Button>
+        </Tooltip>
+      )}
 
       {showDelete && (
         <Tooltip title="Delete video">

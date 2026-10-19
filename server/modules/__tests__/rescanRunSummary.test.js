@@ -36,12 +36,12 @@ describe('rescanRunSummary', () => {
     test('records a scan that held back missing marks behind a library check as partial, naming the cause', () => {
       const record = toRunRecord({
         status: 'completed', processed: 10, updated: 1, removed: 0,
-        notMarkedMissing: 2, libraryCheckMessage: 'The subfolder /d/__Music is empty.',
+        notMarkedMissing: 2, libraryCheckMessage: 'The subfolder __Music is empty.',
       });
       expect(record).toEqual(expect.objectContaining({
         status: 'error',
         outcome: 'partial',
-        message: 'Scanned 10 videos: 1 updated, 0 marked missing, 2 not marked missing (The subfolder /d/__Music is empty.).',
+        message: 'Scanned 10 videos: 1 updated, 0 marked missing, 2 not marked missing (The subfolder __Music is empty).',
       }));
       expect(record.details.videosNotMarkedMissing).toBe(2);
     });

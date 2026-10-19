@@ -71,14 +71,14 @@ describe('statusLabel', () => {
     expect(statusLabel(makeVideo({ previously_downloaded: true, removed_reason: 'auto_removal', removed_detail: 'older than 30 days' }))).toEqual({
       label: 'Deleted',
       color: 'default',
-      tooltip: 'Deleted by automatic cleanup (older than 30 days). It can be downloaded again from its channel or playlist page.',
+      tooltip: 'Deleted by automatic cleanup (older than 30 days). It can be downloaded again.',
     });
   });
   test('treats a previously-downloaded video without a recorded reason as Deleted', () => {
     expect(statusLabel(makeVideo({ previously_downloaded: true }))).toEqual({
       label: 'Deleted',
       color: 'default',
-      tooltip: 'Removed before Youtarr recorded why.',
+      tooltip: 'Removed before Youtarr recorded why. It can be downloaded again.',
     });
   });
   test('returns Tracked for a plain tracked video', () => {

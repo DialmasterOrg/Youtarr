@@ -201,6 +201,12 @@ describe('VideoTableView Component', () => {
       expect(screen.getByTestId('VideoFormatIcon')).toBeInTheDocument();
     });
 
+    test('shows no format chips for a deleted video, whose stored path is only history', () => {
+      const deletedVideo = { ...mockVideo, added: true, removed: true, removed_reason: 'user_deleted' as const, filePath: '/path/to/video.mp4' };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[deletedVideo]} />);
+      expect(screen.queryByTestId('VideoFormatIcon')).not.toBeInTheDocument();
+    });
+
     test('renders dash when no file path exists', () => {
       const videoNoFile = { ...mockVideo, filePath: undefined };
       renderWithProviders(<VideoTableView {...defaultProps} videos={[videoNoFile]} />);

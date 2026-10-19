@@ -4,7 +4,8 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { useSwipeable } from 'react-swipeable';
 import { Alert, Box, Button, Grid, Snackbar, Typography } from '../ui';
-import { Trash2 as DeleteIcon, Star as RatingIcon, Download as DownloadIcon, CloudOff as CloudOffIcon } from '../../lib/icons';
+import { Trash2 as DeleteIcon, Star as RatingIcon, Download as DownloadIcon } from '../../lib/icons';
+import { FileX as MarkDeletedIcon } from 'lucide-react';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useConfig } from '../../hooks/useConfig';
 import { useDownloadListingsRefresh } from '../../hooks/useDownloadListingsRefresh';
@@ -48,7 +49,11 @@ interface VideosPageProps {
 
 const VIEW_MODE_STORAGE_KEY = 'youtarr:videosPageViewMode';
 // Deleted videos are hidden by default; showing them is remembered in this browser.
-const DELETED_FILTER_STORAGE_KEY = 'youtarr.videosPage.deletedFilter';
+const DELETED_FILTER_STORAGE_KEY = 'youtarr:videosPageDeletedFilter';
+// Check results that can mean the user emptied the folder on purpose, the only
+// ones Maintenance offers "Rescan anyway" for (a mix with an unreadable share is
+// reported as unreadable, so it never qualifies).
+const EMPTY_FOLDER_REASONS = ['empty', 'subfolder-empty'];
 
 const YOUTUBE_CHANNEL_ID_PATTERN = /^UC[a-zA-Z0-9_-]{22}$/;
 
@@ -109,6 +114,9 @@ function VideosPage({ token }: VideosPageProps) {
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [markDeletedDialogOpen, setMarkDeletedDialogOpen] = useState(false);
+  // The message the user closed; a different one, or the same one after the
+  // folder came back and failed again, shows the banner again.
+  const [dismissedLibraryWarning, setDismissedLibraryWarning] = useState<string | null>(null);
   const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -174,6 +182,10 @@ function VideosPage({ token }: VideosPageProps) {
     watchedFilter,
     useInfiniteScroll,
   });
+
+  useEffect(() => {
+    if (!libraryWarning) setDismissedLibraryWarning(null);
+  }, [libraryWarning]);
 
   const videoMetaRef = useRef<Map<number, VideoSelectionMeta>>(new Map());
 
@@ -357,7 +369,7 @@ function VideosPage({ token }: VideosPageProps) {
       {
         id: 'mark-deleted',
         label: 'Mark as deleted',
-        icon: <CloudOffIcon size={14} />,
+        icon: <MarkDeletedIcon size={14} />,
         intent: 'warning',
         disabled: (ids) =>
           markDeletedLoading ||
@@ -571,12 +583,23 @@ function VideosPage({ token }: VideosPageProps) {
           <Button variant="text" size="sm" onClick={showDeleted}>Show</Button>
         </Typography>
       )}
-      {libraryWarning && (
-        <Alert severity="warning" className="mt-2">
-          {libraryWarning.message} Videos are not being marked missing until it is back. If your downloads
-          live on a drive or network share, check that it is mounted. If the folder really is empty on purpose,
-          you can rescan anyway from{' '}
-          <Button variant="text" size="sm" onClick={() => navigate('/settings/maintenance')}>Maintenance</Button>.
+      {libraryWarning && libraryWarning.message !== dismissedLibraryWarning && (
+        <Alert severity="warning" className="mt-2 break-words" onClose={() => setDismissedLibraryWarning(libraryWarning.message)}>
+          {libraryWarning.message} Videos stored there are not being marked missing until it is back; check that
+          the drive or share is mounted.
+          {EMPTY_FOLDER_REASONS.includes(libraryWarning.reason) && (
+            <>
+              {' '}If you emptied it on purpose, you can rescan anyway from{' '}
+              <Button
+                variant="link"
+                className="h-auto p-0 align-baseline text-sm"
+                onClick={() => navigate('/settings/maintenance')}
+              >
+                Maintenance
+              </Button>
+              .
+            </>
+          )}
         </Alert>
       )}
     </div>
@@ -808,6 +831,7 @@ function VideosPage({ token }: VideosPageProps) {
             setModalVideo(null);
             reloadFromFirstPage();
           }}
+          onMarkedDeleted={reloadFromFirstPage}
           onProtectionChanged={(youtubeId, isProtected) => {
             setVideos((prev) =>
               prev.map((v) =>

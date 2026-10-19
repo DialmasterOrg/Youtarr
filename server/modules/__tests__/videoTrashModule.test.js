@@ -13,7 +13,7 @@ jest.mock('../../models', () => mockModels);
 jest.mock('../../db.js', () => ({
   sequelize: { transaction: jest.fn(async (fn) => fn('tx')) },
 }));
-jest.mock('../libraryRootCheck', () => ({ checkLibraryRoot: jest.fn() }));
+jest.mock('../libraryRootCheck', () => ({ ...jest.requireActual('../libraryRootCheck'), checkLibraryRoot: jest.fn() }));
 jest.mock('../configModule', () => ({
   directoryPath: '/data/youtube',
   getJobsPath: () => '/app/jobs',
@@ -36,7 +36,19 @@ const videoTrashModule = require('../videoTrashModule');
 const { LibraryUnavailableError, PurgeRunningError } = videoTrashModule;
 
 const LIBRARY_OK = { ok: true };
-const LIBRARY_EMPTY = { ok: false, reason: 'empty', path: '/data/youtube', message: 'The downloads folder /data/youtube is empty.' };
+const LIBRARY_EMPTY = { ok: false, reason: 'empty', path: '/data/youtube', message: 'The downloads folder is empty.' };
+const LIBRARY_MISSING = { ok: false, reason: 'missing', path: '/data/youtube', message: 'The downloads folder does not exist.' };
+const SUBFOLDER_EMPTY = { ok: false, reason: 'subfolder-empty', path: '/data/youtube/__Kids', message: 'The subfolder __Kids is empty.' };
+// A Video.count for a library of `total` videos with none stored under a
+// failing subfolder: a count scoped to the subfolder (an Op.and) finds nothing.
+const countNoneUnderSubfolder = (total) => async ({ where }) => (where[Op.and] ? 0 : total);
+// A Video.count for a failing subfolder that holds present videos but no
+// missing ones: a subfolder-scoped count of missing rows finds nothing.
+const countOnlyPresentUnderSubfolder = (total) => async ({ where }) => {
+  if (!where[Op.and]) return total;
+  const [filter] = where[Op.and];
+  return filter.removed_reason === 'not_found' ? 0 : 2;
+};
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -58,6 +70,7 @@ describe('getRemovedSummary', () => {
       missing: 4,
       legacy: 3,
       libraryCheck: { ok: true, reason: null, path: null, message: null },
+      missingActionsBlocked: false,
       downloadsActive: false,
     });
     expect(Video.count).toHaveBeenNthCalledWith(1, { where: stateWhere('deleted') });
@@ -75,17 +88,43 @@ describe('getRemovedSummary', () => {
   });
 
   test('passes a failed library check through so the page can disable the missing actions', async () => {
-    Video.count.mockResolvedValue(0);
+    Video.count.mockResolvedValue(2);
     checkLibraryRoot.mockResolvedValue(LIBRARY_EMPTY);
 
     const summary = await videoTrashModule.getRemovedSummary();
 
     expect(summary.libraryCheck).toEqual({ ok: false, reason: 'empty', path: '/data/youtube', message: LIBRARY_EMPTY.message });
+    expect(summary.missingActionsBlocked).toBe(true);
     expect(checkLibraryRoot).toHaveBeenCalledWith('/data/youtube');
+  });
+
+  // The warning still shows (the Videos page banner sends people to Rescan
+  // anyway), but marking and emptying missing videos stay open.
+  test('warns about a failing subfolder that holds only present videos without blocking the missing actions', async () => {
+    Video.count.mockImplementation(countOnlyPresentUnderSubfolder(5));
+    checkLibraryRoot.mockResolvedValue(SUBFOLDER_EMPTY);
+
+    const summary = await videoTrashModule.getRemovedSummary();
+
+    expect(summary.libraryCheck.ok).toBe(false);
+    expect(summary.missingActionsBlocked).toBe(false);
+  });
+
+  test('reports the folder as fine when the failing subfolder holds no present or missing video', async () => {
+    Video.count.mockImplementation(countNoneUnderSubfolder(5));
+    checkLibraryRoot.mockResolvedValue(SUBFOLDER_EMPTY);
+
+    const summary = await videoTrashModule.getRemovedSummary();
+
+    expect(summary.libraryCheck).toEqual({ ok: true, reason: null, path: null, message: null });
   });
 });
 
 describe('markMissingAsDeleted', () => {
+  beforeEach(() => {
+    Video.count.mockReset().mockResolvedValue(3); // videos on record, so a failing check covers some
+  });
+
   test('marks only the selected rows that are missing, leaving present and deleted ones alone', async () => {
     Video.update.mockResolvedValue([2]);
 
@@ -119,6 +158,37 @@ describe('markMissingAsDeleted', () => {
       message: LIBRARY_EMPTY.message,
       libraryCheck: LIBRARY_EMPTY,
     });
+    expect(Video.update).not.toHaveBeenCalled();
+  });
+
+  test('marks all while only an empty subfolder no video is stored in fails the check', async () => {
+    checkLibraryRoot.mockResolvedValue(SUBFOLDER_EMPTY);
+    Video.count.mockImplementation(countNoneUnderSubfolder(3));
+    Video.update.mockResolvedValue([2]);
+
+    await expect(videoTrashModule.markMissingAsDeleted({ all: true })).resolves.toEqual({ updated: 2 });
+  });
+
+  test('marks all without asking while the failing subfolder holds present videos but no missing ones', async () => {
+    checkLibraryRoot.mockResolvedValue(SUBFOLDER_EMPTY);
+    Video.count.mockImplementation(countOnlyPresentUnderSubfolder(3));
+    Video.update.mockResolvedValue([2]);
+
+    await expect(videoTrashModule.markMissingAsDeleted({ all: true })).resolves.toEqual({ updated: 2 });
+  });
+
+  test('marks all anyway when asked to, for a folder the user emptied on purpose', async () => {
+    checkLibraryRoot.mockResolvedValue(LIBRARY_EMPTY);
+    Video.update.mockResolvedValue([5]);
+
+    await expect(videoTrashModule.markMissingAsDeleted({ all: true, ignoreLibraryCheck: true })).resolves.toEqual({ updated: 5 });
+  });
+
+  test('still refuses to mark all when the folder is gone, even when asked to ignore the check', async () => {
+    checkLibraryRoot.mockResolvedValue(LIBRARY_MISSING);
+
+    await expect(videoTrashModule.markMissingAsDeleted({ all: true, ignoreLibraryCheck: true }))
+      .rejects.toBeInstanceOf(LibraryUnavailableError);
     expect(Video.update).not.toHaveBeenCalled();
   });
 
@@ -167,6 +237,7 @@ describe('purgeRemoved', () => {
     Video.destroy.mockResolvedValue(2);
     fs.promises.unlink.mockResolvedValue(undefined);
     archiveModule.removeVideosFromArchive.mockResolvedValue(2);
+    Video.count.mockReset().mockResolvedValue(3); // videos on record, so a failing check covers some
   });
 
   test('selects deleted rows only, including ones removed before the reason was recorded', async () => {
@@ -325,6 +396,24 @@ describe('purgeRemoved', () => {
     await expect(videoTrashModule.purgeRemoved({ states: ['missing'], removeFromArchive: false })).rejects.toBeInstanceOf(LibraryUnavailableError);
     expect(Video.destroy).not.toHaveBeenCalled();
     expect(sequelize.transaction).not.toHaveBeenCalled();
+  });
+
+  test('purges missing videos while only an empty subfolder no video is stored in fails the check', async () => {
+    checkLibraryRoot.mockResolvedValue(SUBFOLDER_EMPTY);
+    Video.count.mockImplementation(countNoneUnderSubfolder(3));
+
+    await expect(videoTrashModule.purgeRemoved({ states: ['missing'], removeFromArchive: false })).resolves.toEqual(
+      expect.objectContaining({ purged: 2 })
+    );
+  });
+
+  test('purges missing videos while the failing subfolder holds present videos but no missing ones', async () => {
+    checkLibraryRoot.mockResolvedValue(SUBFOLDER_EMPTY);
+    Video.count.mockImplementation(countOnlyPresentUnderSubfolder(3));
+
+    await expect(videoTrashModule.purgeRemoved({ states: ['missing'], removeFromArchive: false })).resolves.toEqual(
+      expect.objectContaining({ purged: 2 })
+    );
   });
 
   test('still purges deleted videos while the downloads folder looks unmounted', async () => {

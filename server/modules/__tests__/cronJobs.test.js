@@ -181,7 +181,7 @@ describe('CronJobs', () => {
 
     test('records a skipped run and leaves folders alone when cleanup skipped an unmounted downloads folder', async () => {
       mockVideoDeletionModule.performAutomaticCleanup.mockResolvedValue({
-        skipped: { reason: 'empty', message: 'The downloads folder /d is empty.' },
+        skipped: { reason: 'empty', message: 'The downloads folder is empty.' },
         totalDeleted: 0,
         freedBytes: 0,
         errors: []
@@ -191,7 +191,7 @@ describe('CronJobs', () => {
       const outcome = await scheduledTasks.runNow('autoRemovalFrequency', { trigger: 'manual' });
       const record = await outcome.completion;
 
-      expect(record).toEqual(expect.objectContaining({ status: 'skipped', outcome: 'skipped', message: 'The downloads folder /d is empty.' }));
+      expect(record).toEqual(expect.objectContaining({ status: 'skipped', outcome: 'skipped', message: 'The downloads folder is empty.' }));
       expect(mockVideoDeletionModule.cleanupOrphanDirectories).not.toHaveBeenCalled();
     });
 
@@ -199,14 +199,14 @@ describe('CronJobs', () => {
       // Auto-removal off: performAutomaticCleanup returns before its own check.
       mockVideoDeletionModule.performAutomaticCleanup.mockResolvedValue({ totalDeleted: 0, freedBytes: 0, errors: [] });
       mockVideoDeletionModule.cleanupOrphanDirectories.mockResolvedValue({
-        removed: [], errors: [], skipped: { reason: 'empty', message: 'The downloads folder /d is empty.' }
+        removed: [], errors: [], skipped: { reason: 'empty', message: 'The downloads folder is empty.' }
       });
       const scheduledTasks = require('../scheduledTaskManager');
 
       const outcome = await scheduledTasks.runNow('autoRemovalFrequency', { trigger: 'manual' });
       const record = await outcome.completion;
 
-      expect(record).toEqual(expect.objectContaining({ status: 'skipped', outcome: 'skipped', message: 'The downloads folder /d is empty.' }));
+      expect(record).toEqual(expect.objectContaining({ status: 'skipped', outcome: 'skipped', message: 'The downloads folder is empty.' }));
     });
 
     test('should log success when videos are deleted', async () => {

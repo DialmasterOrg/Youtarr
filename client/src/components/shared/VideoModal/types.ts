@@ -35,6 +35,8 @@ export interface VideoModalProps {
   video: VideoModalData;
   token: string | null;
   onVideoDeleted?: (youtubeId: string) => void;
+  // A missing video was marked as deleted from the modal.
+  onMarkedDeleted?: (youtubeId: string) => void;
   onProtectionChanged?: (youtubeId: string, isProtected: boolean) => void;
   onIgnoreChanged?: (youtubeId: string, isIgnored: boolean) => void;
   onDownloadQueued?: (youtubeId: string) => void;

@@ -140,7 +140,7 @@ describe('VideosModule', () => {
 
     // The downloads folder looks mounted unless a test says otherwise.
     mockLibraryRootCheck = {
-      LIBRARY_CHECK_REASONS: { MISSING: 'missing', EMPTY: 'empty', UNREADABLE: 'unreadable', SUBFOLDER_EMPTY: 'subfolder-empty', SUBFOLDER_UNREADABLE: 'subfolder-unreadable' },
+      ...jest.requireActual('../libraryRootCheck'),
       checkLibraryRoot: jest.fn().mockResolvedValue({ ok: true }),
     };
     jest.doMock('../libraryRootCheck', () => mockLibraryRootCheck);
@@ -742,7 +742,7 @@ describe('VideosModule', () => {
           youtube_removed_checked_at: null
         }
       ];
-      const failedCheck = { ok: false, reason: 'empty', path: '/test/output/dir', message: 'The downloads folder /test/output/dir is empty.' };
+      const failedCheck = { ok: false, reason: 'empty', path: '/test/output/dir', message: 'The downloads folder is empty.' };
       mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(failedCheck);
       mockVideo.count.mockResolvedValue(1);
       mockVideo.findAll.mockResolvedValue(mockVideos);
@@ -1496,8 +1496,8 @@ describe('VideosModule', () => {
     });
 
     describe('when the downloads folder looks unmounted', () => {
-      const missingRoot = { ok: false, reason: 'missing', path: '/test/output/dir', message: 'The downloads folder /test/output/dir does not exist.' };
-      const emptySubfolder = { ok: false, reason: 'subfolder-empty', path: '/test/output/dir/__Music', message: 'The subfolder /test/output/dir/__Music is empty.' };
+      const missingRoot = { ok: false, reason: 'missing', path: '/test/output/dir', message: 'The downloads folder does not exist.' };
+      const emptySubfolder = { ok: false, reason: 'subfolder-empty', path: '/test/output/dir/__Music', message: 'The subfolder __Music is empty.' };
 
       test('stops before the walk, changing nothing, while videos are present', async () => {
         mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(missingRoot);
@@ -1506,7 +1506,7 @@ describe('VideosModule', () => {
         const result = await VideosModule.backfillVideoMetadata();
 
         expect(result.status).toBe('error');
-        expect(result.errorMessage).toBe('The downloads folder /test/output/dir does not exist. Nothing was marked missing; is the drive mounted?');
+        expect(result.errorMessage).toBe('The downloads folder does not exist. Nothing was marked missing; is the drive mounted?');
         expect(result.libraryCheckMessage).toBe(missingRoot.message);
         expect(mockFs.readdir).not.toHaveBeenCalled();
         expect(mockVideo.update).not.toHaveBeenCalled();
@@ -1544,8 +1544,40 @@ describe('VideosModule', () => {
         expect(mockVideo.update).not.toHaveBeenCalled();
       });
 
+      test('stays quiet about an empty subfolder no present video is stored in', async () => {
+        mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(emptySubfolder);
+        // Present rows under the subfolder: none. Then the total row count.
+        mockVideo.count.mockImplementationOnce(async ({ where }) => (where[Op.and] ? 0 : 1));
+        mockVideo.count.mockResolvedValueOnce(0);
+        mockFs.readdir.mockResolvedValueOnce([]);
+
+        const result = await VideosModule.backfillVideoMetadata();
+
+        expect(result.status).toBe('completed');
+        expect(result.libraryCheckMessage).toBeNull();
+        expect(mockLogger.warn).not.toHaveBeenCalledWith(expect.anything(), expect.stringMatching(/looks unmounted or unreadable/));
+      });
+
+      test('still marks missing a video stored outside the empty subfolder', async () => {
+        mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(emptySubfolder);
+        mockVideo.count.mockResolvedValueOnce(1); // present rows
+        mockVideo.count.mockResolvedValueOnce(1); // total rows
+        mockFs.readdir.mockResolvedValueOnce([]);
+        mockVideo.findAll.mockResolvedValueOnce([
+          dbRow({ youtubeId: 'missing123', filePath: '/test/output/dir/__Videos/missing.mp4', fileSize: '1000' })
+        ]);
+        mockFs.stat.mockRejectedValue(fsError('ENOENT'));
+        mockVideo.update.mockResolvedValue([1]);
+
+        const result = await VideosModule.backfillVideoMetadata();
+
+        expect(result.status).toBe('completed');
+        expect(result.removed).toBe(1);
+        expect(result.notMarkedMissing).toBe(0);
+      });
+
       test('finishes the scan but holds back missing marks while a subfolder cannot be read', async () => {
-        const unreadableSubfolder = { ok: false, reason: 'subfolder-unreadable', path: '/test/output/dir/__Music', message: 'The subfolder /test/output/dir/__Music could not be read.' };
+        const unreadableSubfolder = { ok: false, reason: 'subfolder-unreadable', path: '/test/output/dir/__Music', message: 'The subfolder __Music could not be read.' };
         mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(unreadableSubfolder);
         mockVideo.count.mockResolvedValueOnce(1); // present rows
         mockVideo.count.mockResolvedValueOnce(1); // total rows

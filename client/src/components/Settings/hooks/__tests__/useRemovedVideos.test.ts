@@ -61,6 +61,22 @@ describe('useRemovedVideos', () => {
     expect(result.current.actionPending).toBe(false);
   });
 
+  test('markAllMissingDeleted can ask the server to look past an empty downloads folder', async () => {
+    axios.post.mockResolvedValueOnce({ data: { updated: 4 } });
+    const { result } = renderHook(() => useRemovedVideos('tok'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.markAllMissingDeleted({ ignoreLibraryCheck: true });
+    });
+
+    expect(axios.post).toHaveBeenCalledWith(
+      '/api/videos/mark-deleted',
+      { all: true, ignoreLibraryCheck: true },
+      { headers: { 'x-access-token': 'tok' } }
+    );
+  });
+
   test('emptyTrash posts the options and returns the result', async () => {
     axios.post.mockResolvedValueOnce({ data: { purged: 16, archiveEntriesRemoved: 16, jobsAffected: 3 } });
     const { result } = renderHook(() => useRemovedVideos('tok'));
@@ -80,7 +96,7 @@ describe('useRemovedVideos', () => {
   });
 
   test('surfaces the server message when an action is refused', async () => {
-    axios.post.mockRejectedValueOnce({ response: { status: 409, data: { error: 'The downloads folder /d is empty.', reason: 'library-unavailable' } } });
+    axios.post.mockRejectedValueOnce({ response: { status: 409, data: { error: 'The downloads folder is empty.', reason: 'library-unavailable' } } });
     const { result } = renderHook(() => useRemovedVideos('tok'));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -90,7 +106,7 @@ describe('useRemovedVideos', () => {
     });
 
     expect(outcome).toBeNull();
-    expect(result.current.actionError).toBe('The downloads folder /d is empty.');
+    expect(result.current.actionError).toBe('The downloads folder is empty.');
     expect(result.current.actionPending).toBe(false);
   });
 

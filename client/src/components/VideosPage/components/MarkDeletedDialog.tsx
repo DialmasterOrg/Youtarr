@@ -7,7 +7,7 @@ import {
   Button,
   Typography,
 } from '../../ui';
-import { CloudOff as CloudOffIcon } from '../../../lib/icons';
+import { FileX as MarkDeletedIcon } from 'lucide-react';
 
 interface MarkDeletedDialogProps {
   open: boolean;
@@ -34,7 +34,7 @@ const MarkDeletedDialog: React.FC<MarkDeletedDialogProps> = ({
 }) => (
   <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
     <DialogTitle>
-      <CloudOffIcon size={20} className="shrink-0" />
+      <MarkDeletedIcon size={20} className="shrink-0" />
       Mark as deleted
     </DialogTitle>
 

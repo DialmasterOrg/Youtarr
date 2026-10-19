@@ -9,7 +9,7 @@ const storageUsage = require('./storageUsage');
 const { STORED_BYTES_SQL } = storageUsage;
 const storageGuard = require('./storageGuard');
 const { REMOVAL_REASONS, removedColumns } = require('./videoRemovalState');
-const { checkLibraryRoot, isUnderLibraryCheckPath } = require('./libraryRootCheck');
+const { checkLibraryRoot, isUnderLibraryCheckPath, libraryCheckCoversRows } = require('./libraryRootCheck');
 
 // Oldest-first removal (free-space and total-usage strategies) works in
 // batches and stops after a bounded number of them per run.
@@ -251,13 +251,13 @@ class VideoDeletionModule {
     }
   }
 
-  // Why the library must not be touched right now: the downloads folder looks
-  // unmounted (see libraryRootCheck) while downloaded videos are on record. A
-  // fresh install with nothing recorded is never blocked. Null when fine.
+  // Why the library must not be touched right now: the downloads folder (or a
+  // subfolder downloaded videos are stored in) looks unmounted (see
+  // libraryRootCheck). A fresh install with nothing recorded, or an empty
+  // subfolder no video is stored in, never blocks. Null when fine.
   async _libraryBlock() {
     const libraryCheck = await checkLibraryRoot(configModule.directoryPath);
-    if (libraryCheck.ok) return null;
-    if ((await Video.count({ where: { removed: false } })) === 0) return null;
+    if (!(await libraryCheckCoversRows(libraryCheck, Video, { removed: false }))) return null;
     return { reason: libraryCheck.reason, message: libraryCheck.message };
   }
 

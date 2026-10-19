@@ -18,7 +18,7 @@ const createLimiter = require('./subscriptionImport/concurrencyLimiter');
 const { isRescanCandidate, resolveRescanUpdate } = require('./rescanRowUpdate');
 const { unchangedSinceRead, GUARDED_COLUMNS } = require('./videoRowGuard');
 const youtubeExistenceCheck = require('./youtubeExistenceCheck');
-const { LIBRARY_CHECK_REASONS, checkLibraryRoot } = require('./libraryRootCheck');
+const { LIBRARY_CHECK_REASONS, checkLibraryRoot, isRowUnderLibraryCheck, libraryCheckCoversRows } = require('./libraryRootCheck');
 const { REMOVAL_STATES, stateWhere, notStateWhere } = require('./videoRemovalState');
 
 const { EXISTENCE } = youtubeExistenceCheck;
@@ -524,11 +524,12 @@ class VideosModule {
    * Deliberately does not check the run's time limit: once started, a slice's
    * writes complete, so the expensive work already done is never discarded.
    * @param {Array<{row: Object, fileInfo: Object|undefined, probedResolution: string|null}>} candidates
-   * @param {{suppressMissing?: boolean}} [options] - suppressMissing: the downloads folder looks
-   *   partly unmounted, so rows that would be marked missing are left alone and counted
+   * @param {{holdBackMissing?: function(Object): boolean}} [options] - holdBackMissing: true for a row
+   *   stored where the downloads folder looks partly unmounted; if it would be marked missing it is
+   *   left alone and counted
    * @returns {Promise<{updated: number, removed: number, kept: number, skipped: number, failed: number, notMarkedMissing: number}>}
    */
-  async _applyRescanUpdates(candidates, { suppressMissing = false } = {}) {
+  async _applyRescanUpdates(candidates, { holdBackMissing = () => false } = {}) {
     const counts = { updated: 0, removed: 0, kept: 0, skipped: 0, failed: 0, notMarkedMissing: 0 };
     const limit = createLimiter(RESCAN_WRITE_CONCURRENCY);
     await Promise.all(candidates.map(({ row, fileInfo, probedResolution }) => limit(async () => {
@@ -540,7 +541,7 @@ class VideosModule {
           counts.kept++;
           return;
         }
-        if (suppressMissing && changes.removed === true) {
+        if (changes.removed === true && holdBackMissing(row)) {
           counts.notMarkedMissing++;
           return;
         }
@@ -611,18 +612,20 @@ class VideosModule {
       }
 
       // An unmounted drive or share would make every present video look
-      // gone. With no present rows there is nothing to protect (a fresh
-      // install with an empty folder), so the scan simply runs.
-      let suppressMissing = false;
+      // gone. With no present rows under the failing folder there is nothing
+      // to protect (a fresh install, or an empty subfolder nothing is stored
+      // in), so the scan simply runs.
+      let holdBackMissing = () => false;
       if (ignoreLibraryCheck) logger.warn({ trigger }, 'Rescan is skipping the downloads folder check by request');
       const libraryCheck = ignoreLibraryCheck ? { ok: true } : await checkLibraryRoot(outputDir);
-      if (!libraryCheck.ok && (await Video.count({ where: { removed: false } })) > 0) {
+      if (await libraryCheckCoversRows(libraryCheck, Video, { removed: false })) {
         const subfolderOnly = libraryCheck.reason === LIBRARY_CHECK_REASONS.SUBFOLDER_EMPTY
           || libraryCheck.reason === LIBRARY_CHECK_REASONS.SUBFOLDER_UNREADABLE;
         if (subfolderOnly) {
-          suppressMissing = true;
+          // Only the rows stored under that subfolder are in doubt.
+          holdBackMissing = (row) => isRowUnderLibraryCheck(libraryCheck, row);
           libraryCheckMessage = libraryCheck.message;
-          logger.warn({ libraryCheck }, 'A subfolder looks unmounted or unreadable; the rescan will not mark videos missing');
+          logger.warn({ libraryCheck }, 'A subfolder looks unmounted or unreadable; the rescan will not mark videos in it missing');
         } else {
           logger.warn({ libraryCheck }, 'The downloads folder looks unmounted; skipping the rescan');
           result = {
@@ -737,7 +740,7 @@ class VideosModule {
           // re-probed next run and never converge.
           if (candidates.length > 0) {
             logProgress(`Checking ${candidates.length} records (chunk ${Math.floor(offset / VIDEO_CHUNK_SIZE) + 1})...`);
-            const counts = await this._applyRescanUpdates(candidates, { suppressMissing });
+            const counts = await this._applyRescanUpdates(candidates, { holdBackMissing });
             totalUpdated += counts.updated;
             totalRemoved += counts.removed;
             totalKept += counts.kept;

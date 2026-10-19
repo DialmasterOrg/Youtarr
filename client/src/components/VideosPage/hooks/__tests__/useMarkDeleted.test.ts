@@ -55,7 +55,7 @@ describe('useMarkDeleted', () => {
   test('stops at the first failing batch and reports what was marked before it', async () => {
     axios.post
       .mockResolvedValueOnce({ data: { updated: 1000 } })
-      .mockRejectedValueOnce({ isAxiosError: true, response: { data: { error: 'The downloads folder /d is empty.' } } });
+      .mockRejectedValueOnce({ isAxiosError: true, response: { data: { error: 'The downloads folder is empty.' } } });
     const { result } = renderHook(() => useMarkDeleted('tok'));
 
     let outcome: { updated: number; error: string | null } | null = null;
@@ -63,13 +63,13 @@ describe('useMarkDeleted', () => {
       outcome = await result.current.markDeleted(ids(2500));
     });
 
-    expect(outcome).toEqual({ updated: 1000, error: 'The downloads folder /d is empty.' });
+    expect(outcome).toEqual({ updated: 1000, error: 'The downloads folder is empty.' });
     expect(axios.post).toHaveBeenCalledTimes(2);
     expect(result.current.loading).toBe(false);
   });
 
   test('returns the server error message when the request fails', async () => {
-    axios.post.mockRejectedValueOnce({ isAxiosError: true, response: { data: { error: 'The downloads folder /d is empty.' } } });
+    axios.post.mockRejectedValueOnce({ isAxiosError: true, response: { data: { error: 'The downloads folder is empty.' } } });
     const { result } = renderHook(() => useMarkDeleted('tok'));
 
     let outcome: { updated: number; error: string | null } | null = null;
@@ -77,7 +77,7 @@ describe('useMarkDeleted', () => {
       outcome = await result.current.markDeleted([4]);
     });
 
-    expect(outcome).toEqual({ updated: 0, error: 'The downloads folder /d is empty.' });
+    expect(outcome).toEqual({ updated: 0, error: 'The downloads folder is empty.' });
     expect(result.current.loading).toBe(false);
   });
 

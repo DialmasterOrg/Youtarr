@@ -40,12 +40,10 @@ function ToggleChipFilter({
     : value === 'exclude'
       ? excludeLabel
       : (offIsActive && offLabel) || inactiveLabel;
-  const color = value === 'only'
-    ? 'primary'
-    : value === 'exclude'
-      ? 'warning'
-      : offIsActive ? 'primary' : 'default';
   const isResting = value === restingValue;
+  // A chip at rest is not filtering anything the user chose, so it looks
+  // neutral even when its resting label reads "Hide: ...".
+  const color = isResting ? 'default' : value === 'exclude' ? 'warning' : 'primary';
   const variant = isResting ? 'outlined' : 'filled';
   // Pressed means "moved off the resting value"; the label carries which mode.
   const ariaPressed = !isResting;

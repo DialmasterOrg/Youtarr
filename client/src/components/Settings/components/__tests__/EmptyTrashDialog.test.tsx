@@ -61,7 +61,7 @@ describe('EmptyTrashDialog', () => {
     expect(screen.getByText('They disappear from the Videos page and from Download History.')).toBeInTheDocument();
     expect(screen.getByText('Their channel and playlist pages show them as not downloaded.')).toBeInTheDocument();
     expect(screen.getByText('Watch history Youtarr synced for them from your media servers is removed.')).toBeInTheDocument();
-    expect(screen.getByText("Nothing on disk is touched. If a missing video's file turns up later, Youtarr will not know about it; download it again instead.")).toBeInTheDocument();
+    expect(screen.getByText("No files in your downloads folder are touched. If a missing video's file turns up later, Youtarr will not know about it; download it again instead.")).toBeInTheDocument();
     expect(screen.getByText('This cannot be undone.')).toBeInTheDocument();
     expect(screen.getByText('Automatic channel and playlist downloads keep skipping them, as they do now.')).toBeInTheDocument();
     expect(screen.getByText('Automatic downloads treat them as new and may download them again at the next run.')).toBeInTheDocument();
@@ -91,11 +91,11 @@ describe('EmptyTrashDialog', () => {
   });
 
   test('disables the missing choices and shows why while the downloads folder looks unmounted', () => {
-    renderDialog({ missingDisabledReason: 'The downloads folder /d is empty.' });
+    renderDialog({ missingDisabledReason: 'The downloads folder is empty.' });
 
     expect(screen.getByRole('radio', { name: 'Missing (4)' })).toBeDisabled();
     expect(screen.getByRole('radio', { name: 'Both (16)' })).toBeDisabled();
-    expect(screen.getByText('The downloads folder /d is empty.')).toBeInTheDocument();
+    expect(screen.getByText('The downloads folder is empty.')).toBeInTheDocument();
   });
 
   test('disables the missing choices when there are no missing videos', () => {

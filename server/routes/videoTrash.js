@@ -26,7 +26,9 @@ module.exports = function createVideoTrashRoutes({ verifyToken, videoTrashModule
    *       Deleted = Youtarr removed the file (a delete in the app, automatic cleanup, or a missing video the user
    *       marked as deleted), including videos removed before Youtarr recorded why (`legacy`, a subset of `deleted`).
    *       Missing = a file was expected on disk and not found. `libraryCheck` says whether the downloads folder
-   *       looks mounted; while it does not, actions over all missing videos are refused.
+   *       looks mounted; a failing subfolder that no present or missing video is stored in is reported as passing,
+   *       since it puts nothing in doubt. `missingActionsBlocked` says whether the failing check covers missing
+   *       videos, in which case actions over all missing videos are refused.
    *     tags: [Videos]
    *     responses:
    *       200:
@@ -57,6 +59,9 @@ module.exports = function createVideoTrashRoutes({ verifyToken, videoTrashModule
    *                     message:
    *                       type: string
    *                       nullable: true
+   *                 missingActionsBlocked:
+   *                   type: boolean
+   *                   description: The failing library check covers missing videos, so marking all of them or emptying them is refused
    *                 downloadsActive:
    *                   type: boolean
    *                   description: A download is running, so a purge that removes archive entries would be refused
@@ -83,7 +88,10 @@ module.exports = function createVideoTrashRoutes({ verifyToken, videoTrashModule
    *       Turns missing videos (a file was expected on disk and not found) into deleted ones, which the Videos page
    *       hides by default. Only missing rows change; present and deleted ids in a selection are left alone.
    *       The records are kept, so the videos can still be re-downloaded, and a file that turns up again is marked
-   *       downloaded by the rescan. Send either `videoIds` or `all: true`.
+   *       downloaded by the rescan. Send either `videoIds` or `all: true`. `all` is refused while the downloads
+   *       folder, or a subfolder missing videos are stored in, looks unmounted; with
+   *       `ignoreLibraryCheck: true` it goes ahead anyway when the check failed only because a folder is empty
+   *       (one the user emptied on purpose), never when a folder is gone or unreadable.
    *     tags: [Videos]
    *     requestBody:
    *       required: true
@@ -102,6 +110,10 @@ module.exports = function createVideoTrashRoutes({ verifyToken, videoTrashModule
    *               all:
    *                 type: boolean
    *                 description: Mark every missing video
+   *               ignoreLibraryCheck:
+   *                 type: boolean
+   *                 default: false
+   *                 description: With all, go ahead while the downloads folder (or a subfolder) looks empty
    *     responses:
    *       200:
    *         description: How many videos were marked
@@ -113,11 +125,11 @@ module.exports = function createVideoTrashRoutes({ verifyToken, videoTrashModule
    *                 updated:
    *                   type: integer
    *       400:
-   *         description: Neither a valid selection nor all, or both
+   *         description: Neither a valid selection nor all, or both, or ignoreLibraryCheck was not a boolean
    *       401:
    *         description: Authentication required
    *       409:
-   *         description: all was asked for while the downloads folder looks unmounted (reason library-unavailable); the videos may be fine
+   *         description: all was asked for while the downloads folder, or a subfolder missing videos are stored in, looks unmounted (reason library-unavailable); the videos may be fine
    *         content:
    *           application/json:
    *             schema:
@@ -132,7 +144,10 @@ module.exports = function createVideoTrashRoutes({ verifyToken, videoTrashModule
    *         description: The videos could not be marked
    */
   router.post('/api/videos/mark-deleted', verifyToken, async (req, res) => {
-    const { videoIds, all } = req.body || {};
+    const { videoIds, all, ignoreLibraryCheck = false } = req.body || {};
+    if (typeof ignoreLibraryCheck !== 'boolean') {
+      return res.status(400).json({ error: 'ignoreLibraryCheck must be true or false' });
+    }
     const wantsAll = all === true;
     const selection = Array.isArray(videoIds)
       && videoIds.length >= 1
@@ -146,7 +161,11 @@ module.exports = function createVideoTrashRoutes({ verifyToken, videoTrashModule
     }
 
     try {
-      const result = await videoTrashModule.markMissingAsDeleted({ videoIds: wantsAll ? null : selection, all: wantsAll });
+      const result = await videoTrashModule.markMissingAsDeleted({
+        videoIds: wantsAll ? null : selection,
+        all: wantsAll,
+        ignoreLibraryCheck,
+      });
       res.json(result);
     } catch (err) {
       if (err.code === 'LIBRARY_UNAVAILABLE') {
@@ -207,7 +226,7 @@ module.exports = function createVideoTrashRoutes({ verifyToken, videoTrashModule
    *       401:
    *         description: Authentication required
    *       409:
-   *         description: Another purge is running (reason running), downloads are using the archive (reason archive-busy), or missing videos were included while the downloads folder looks unmounted (reason library-unavailable)
+   *         description: Another purge is running (reason running), downloads are using the archive (reason archive-busy), or missing videos were included while the downloads folder, or a subfolder missing videos are stored in, looks unmounted (reason library-unavailable)
    *         content:
    *           application/json:
    *             schema:

@@ -111,13 +111,13 @@ describe('useVideosData', () => {
   test('exposes the hidden deleted count and the library warning from the response', async () => {
     const response = buildResponse([{ id: 1, youtubeId: 'a' }]);
     response.data.hiddenDeletedCount = 4;
-    response.data.libraryWarning = { reason: 'empty', path: '/d', message: 'The downloads folder /d is empty.', heldBack: 2 };
+    response.data.libraryWarning = { reason: 'empty', path: '/d', message: 'The downloads folder is empty.', heldBack: 2 };
     axios.get.mockResolvedValueOnce(response);
 
     const { result } = renderHook(() => useVideosData(baseParams));
 
     await waitFor(() => expect(result.current.hiddenDeletedCount).toBe(4));
-    expect(result.current.libraryWarning).toEqual({ reason: 'empty', path: '/d', message: 'The downloads folder /d is empty.', heldBack: 2 });
+    expect(result.current.libraryWarning).toEqual({ reason: 'empty', path: '/d', message: 'The downloads folder is empty.', heldBack: 2 });
   });
 
   test('reports no hidden deleted count and no warning when the response has none', async () => {

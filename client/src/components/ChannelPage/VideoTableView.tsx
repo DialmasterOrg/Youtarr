@@ -330,7 +330,7 @@ function VideoTableView({
                   />
                 </td>
                 <td style={{ whiteSpace: 'nowrap', padding: '8px 4px' }}>
-                  {(video.filePath || video.audioFilePath) ? (
+                  {!video.removed && (video.filePath || video.audioFilePath) ? (
                     <DownloadFormatIndicator
                       filePath={video.filePath}
                       audioFilePath={video.audioFilePath}

@@ -136,6 +136,14 @@ describe('ToggleChipFilter', () => {
       expect(screen.queryByLabelText('Remove')).not.toBeInTheDocument();
     });
 
+    test('looks neutral while resting, like other chips that are not filtering', () => {
+      renderWithProviders(
+        <ToggleChipFilter {...restingProps} value="exclude" onChange={jest.fn()} />
+      );
+      expect(screen.getByRole('button')).toHaveClass('chip-default');
+      expect(screen.getByRole('button')).not.toHaveClass('chip-warning');
+    });
+
     test('announces the resting state as not pressed and the active off state as pressed', () => {
       const { unmount } = renderWithProviders(
         <ToggleChipFilter {...restingProps} value="exclude" onChange={jest.fn()} />

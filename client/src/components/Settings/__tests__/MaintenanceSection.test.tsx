@@ -66,7 +66,7 @@ describe('MaintenanceSection', () => {
 
   test('wires Rescan anyway to a rescan that skips the downloads folder check', async () => {
     const user = userEvent.setup();
-    const { triggerRescan } = setup({}, { ok: false, reason: 'empty', path: '/d', message: 'The downloads folder /d is empty.' });
+    const { triggerRescan } = setup({}, { ok: false, reason: 'empty', path: '/d', message: 'The downloads folder is empty.' });
 
     await user.click(screen.getByRole('button', { name: 'Rescan anyway...' }));
     await user.click(screen.getByRole('button', { name: 'Rescan anyway' }));

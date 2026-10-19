@@ -174,7 +174,7 @@ const EmptyTrashDialog: React.FC<EmptyTrashDialogProps> = ({
                 Watch history Youtarr synced for them from your media servers is removed.
               </Typography>
               <Typography component="li" variant="body2" color="text.secondary">
-                Nothing on disk is touched. If a missing video&apos;s file turns up later, Youtarr will not know about it; download it again instead.
+                No files in your downloads folder are touched. If a missing video&apos;s file turns up later, Youtarr will not know about it; download it again instead.
               </Typography>
             </ul>
           </div>

@@ -17,8 +17,12 @@ jest.mock('../storageGuard', () => ({
 // beforeEach installs persists across resetModules and only has `promises`,
 // which fs-extra (required by directoryManager) cannot load against.
 const { isVideoDirectoryFor } = jest.requireActual('../filesystem/directoryManager');
-// The real path predicate; only the check itself is mocked.
-const { isUnderLibraryCheckPath } = jest.requireActual('../libraryRootCheck');
+// The real path predicates; only the check itself is mocked.
+const { isUnderLibraryCheckPath, libraryCheckCoversRows } = jest.requireActual('../libraryRootCheck');
+const { Op } = jest.requireActual('sequelize');
+// A Video.count for a library of `total` videos with none stored under a
+// failing subfolder: a count scoped to the subfolder (an Op.and) finds nothing.
+const countNoneUnderSubfolder = (total) => async ({ where }) => (where[Op.and] ? 0 : total);
 
 // What a delete in the app writes on the row: removed, by the user, now.
 const USER_DELETED_COLUMNS = expect.objectContaining({
@@ -57,7 +61,8 @@ describe('VideoDeletionModule', () => {
     mockCheckLibraryRoot = jest.fn().mockResolvedValue({ ok: true });
     jest.doMock('../libraryRootCheck', () => ({
       checkLibraryRoot: mockCheckLibraryRoot,
-      isUnderLibraryCheckPath
+      isUnderLibraryCheckPath,
+      libraryCheckCoversRows
     }));
 
     // Mock fs.promises (only the methods videoDeletionModule still calls directly,
@@ -779,8 +784,8 @@ describe('VideoDeletionModule', () => {
     });
 
     describe('while the downloads folder looks unmounted', () => {
-      const emptyRoot = { ok: false, reason: 'empty', path: '/test/output', message: 'The downloads folder /test/output is empty.' };
-      const emptySubfolder = { ok: false, reason: 'subfolder-empty', path: '/test/output/__Music', message: 'The subfolder /test/output/__Music is empty.' };
+      const emptyRoot = { ok: false, reason: 'empty', path: '/test/output', message: 'The downloads folder is empty.' };
+      const emptySubfolder = { ok: false, reason: 'subfolder-empty', path: '/test/output/__Music', message: 'The subfolder __Music is empty.' };
       const video = (id, youtubeId, filePath) => ({ id, youtubeId, filePath, removed: false, update: jest.fn().mockResolvedValue() });
 
       test('refuses every video with the check message and touches nothing', async () => {
@@ -791,7 +796,7 @@ describe('VideoDeletionModule', () => {
 
         const result = await VideoDeletionModule.deleteVideos([1, 2]);
 
-        const error = 'The downloads folder /test/output is empty. Nothing was deleted; check that the drive is mounted.';
+        const error = 'The downloads folder is empty. Nothing was deleted; check that the drive is mounted.';
         expect(result).toEqual({ success: false, deleted: [], failed: [{ videoId: 1, error }, { videoId: 2, error }] });
         expect(mockVideo1.update).not.toHaveBeenCalled();
         expect(mockFilesystem.removeDirectoryResilient).not.toHaveBeenCalled();
@@ -806,7 +811,7 @@ describe('VideoDeletionModule', () => {
         const result = await VideoDeletionModule.deleteVideos([1, 2]);
 
         expect(result.deleted).toEqual([2]);
-        expect(result.failed).toEqual([{ videoId: 1, error: 'The subfolder /test/output/__Music is empty. Nothing was deleted; check that the drive is mounted.' }]);
+        expect(result.failed).toEqual([{ videoId: 1, error: 'The subfolder __Music is empty. Nothing was deleted; check that the drive is mounted.' }]);
         expect(inMusic.update).not.toHaveBeenCalled();
         expect(inRoot.update).toHaveBeenCalledWith(USER_DELETED_COLUMNS);
       });
@@ -1480,7 +1485,7 @@ describe('VideoDeletionModule', () => {
     });
 
     describe('while the downloads folder looks unmounted', () => {
-      const emptyRoot = { ok: false, reason: 'empty', path: '/test', message: 'The downloads folder /test is empty.' };
+      const emptyRoot = { ok: false, reason: 'empty', path: '/test', message: 'The downloads folder is empty.' };
 
       beforeEach(() => {
         mockConfigModule.getConfig.mockReturnValue({ autoRemovalEnabled: true, autoRemovalVideoAgeThreshold: '30' });
@@ -1493,7 +1498,7 @@ describe('VideoDeletionModule', () => {
 
         const result = await VideoDeletionModule.performAutomaticCleanup();
 
-        expect(result.skipped).toEqual({ reason: 'empty', message: 'The downloads folder /test is empty.' });
+        expect(result.skipped).toEqual({ reason: 'empty', message: 'The downloads folder is empty.' });
         expect(result.totalDeleted).toBe(0);
         expect(mockAutoRemovalQueries.getChannelKeepRecentIds).not.toHaveBeenCalled();
         expect(mockSequelize.query).not.toHaveBeenCalled();
@@ -1501,6 +1506,16 @@ describe('VideoDeletionModule', () => {
 
       test('runs normally when nothing downloaded is recorded, as on a fresh install', async () => {
         mockVideo.count.mockResolvedValue(0);
+
+        const result = await VideoDeletionModule.performAutomaticCleanup();
+
+        expect(result.skipped).toBeUndefined();
+        expect(mockAutoRemovalQueries.getChannelKeepRecentIds).toHaveBeenCalled();
+      });
+
+      test('runs normally when only an empty subfolder no video is stored in fails the check', async () => {
+        mockCheckLibraryRoot.mockResolvedValue({ ok: false, reason: 'subfolder-empty', path: '/test/__Kids', message: 'The subfolder __Kids is empty.' });
+        mockVideo.count.mockImplementation(countNoneUnderSubfolder(12));
 
         const result = await VideoDeletionModule.performAutomaticCleanup();
 
@@ -2487,19 +2502,19 @@ describe('VideoDeletionModule', () => {
     });
 
     test('skips the sweep while the downloads folder looks unmounted and videos are recorded', async () => {
-      mockCheckLibraryRoot.mockResolvedValue({ ok: false, reason: 'empty', path: '/test/output', message: 'The downloads folder /test/output is empty.' });
+      mockCheckLibraryRoot.mockResolvedValue({ ok: false, reason: 'empty', path: '/test/output', message: 'The downloads folder is empty.' });
       mockVideo.count.mockResolvedValue(3);
       mockFilesystem.listSubdirectories.mockResolvedValue(['/test/output/__Music']);
 
       const result = await VideoDeletionModule.cleanupOrphanDirectories();
 
-      expect(result).toEqual({ removed: [], errors: [], skipped: { reason: 'empty', message: 'The downloads folder /test/output is empty.' } });
+      expect(result).toEqual({ removed: [], errors: [], skipped: { reason: 'empty', message: 'The downloads folder is empty.' } });
       expect(mockFilesystem.listSubdirectories).not.toHaveBeenCalled();
       expect(mockFilesystem.cleanupEmptyParents).not.toHaveBeenCalled();
     });
 
     test('sweeps normally when the folder looks unmounted but nothing downloaded is recorded', async () => {
-      mockCheckLibraryRoot.mockResolvedValue({ ok: false, reason: 'empty', path: '/test/output', message: 'The downloads folder /test/output is empty.' });
+      mockCheckLibraryRoot.mockResolvedValue({ ok: false, reason: 'empty', path: '/test/output', message: 'The downloads folder is empty.' });
       mockVideo.count.mockResolvedValue(0);
       mockFilesystem.listSubdirectories.mockResolvedValue([]);
 
@@ -2507,6 +2522,19 @@ describe('VideoDeletionModule', () => {
 
       expect(result).toEqual({ removed: [], errors: [] });
       expect(mockFilesystem.listSubdirectories).toHaveBeenCalledWith('/test/output');
+    });
+
+    test('sweeps an empty subfolder that no recorded video is stored in, so the check passes again', async () => {
+      mockCheckLibraryRoot.mockResolvedValue({ ok: false, reason: 'subfolder-empty', path: '/test/output/__Kids', message: 'The subfolder __Kids is empty.' });
+      mockVideo.count.mockImplementation(countNoneUnderSubfolder(3));
+      mockFilesystem.listSubdirectories
+        .mockResolvedValueOnce(['/test/output/__Kids'])
+        .mockResolvedValueOnce([]);
+
+      const result = await VideoDeletionModule.cleanupOrphanDirectories();
+
+      expect(result.skipped).toBeUndefined();
+      expect(mockFilesystem.cleanupEmptyParents).toHaveBeenCalledWith('/test/output/__Kids', '/test/output');
     });
 
     test('should clean up root-level empty channel directories', async () => {

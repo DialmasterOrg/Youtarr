@@ -752,6 +752,19 @@ describe('DownloadHistory', () => {
       expect(screen.getByText('Missing')).toBeInTheDocument();
     });
 
+    test('explains a single deleted video in the singular', async () => {
+      const user = userEvent.setup();
+      const job = makeMultiVideoJob('job-one-deleted', [
+        makeVideo({ id: 1, youtubeId: 'v1', youTubeVideoName: 'Video A' }),
+        makeVideo({ id: 2, youtubeId: 'v2', youTubeVideoName: 'Video B', removed: true, removed_reason: 'user_deleted' }),
+      ]);
+
+      render(<DownloadHistory {...defaultProps} jobs={[job]} />);
+      await user.hover(screen.getByText('1 deleted'));
+
+      expect(await screen.findByRole('tooltip')).toHaveTextContent('1 of 2 videos was deleted by Youtarr or marked as deleted');
+    });
+
     test('desktop summary row hides the aggregate chip when no videos are removed', () => {
       const job = makeMultiVideoJob('job-multi-none', [
         makeVideo({ id: 1, youtubeId: 'v1' }),

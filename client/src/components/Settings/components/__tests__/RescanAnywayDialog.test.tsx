@@ -9,15 +9,27 @@ const renderDialog = (overrides: Partial<React.ComponentProps<typeof RescanAnywa
   const onClose = jest.fn();
   const onConfirm = jest.fn();
   renderWithProviders(
-    <RescanAnywayDialog open onClose={onClose} onConfirm={onConfirm} pending={false} {...overrides} />
+    <RescanAnywayDialog
+      open
+      onClose={onClose}
+      onConfirm={onConfirm}
+      pending={false}
+      folderMessage="The subfolder __Kids is empty."
+      {...overrides}
+    />
   );
   return { onClose, onConfirm, user: userEvent.setup() };
 };
 
 describe('RescanAnywayDialog', () => {
+  test('names the folder that looks empty', () => {
+    renderDialog();
+    expect(screen.getByText(/The subfolder __Kids is empty\./)).toBeInTheDocument();
+  });
+
   test('explains when to use it and what it does', () => {
     renderDialog();
-    expect(screen.getByText(/Only continue if you removed the files yourself and the downloads folder really is empty\./)).toBeInTheDocument();
+    expect(screen.getByText(/Only continue if you removed the files yourself\./)).toBeInTheDocument();
     expect(screen.getByText(/If a drive or network share is unmounted, mount it instead\./)).toBeInTheDocument();
     expect(screen.getByText(/Every downloaded video whose file is not found will be marked missing\./)).toBeInTheDocument();
   });

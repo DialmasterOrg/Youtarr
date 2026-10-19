@@ -11,12 +11,16 @@ const messageEmitter = require('./messageEmitter');
 const archiveModule = require('./archiveModule');
 const archiveAccess = require('./download/archiveAccess');
 const logger = require('../logger');
-const { checkLibraryRoot } = require('./libraryRootCheck');
+const { LIBRARY_CHECK_REASONS, checkLibraryRoot, libraryCheckCoversRows } = require('./libraryRootCheck');
 const createLimiter = require('./subscriptionImport/concurrencyLimiter');
-const { REMOVAL_REASONS, REMOVAL_STATES, stateWhere, removedColumns } = require('./videoRemovalState');
+const { REMOVAL_REASONS, REMOVAL_STATES, stateWhere, notStateWhere, removedColumns } = require('./videoRemovalState');
 
 // Rows are forgotten in chunks of this size, each in its own transaction.
 const PURGE_CHUNK_SIZE = 500;
+// Check results that can also mean the user emptied the folder on purpose,
+// the only ones "mark all missing as deleted" may be told to look past.
+const EMPTY_FOLDER_REASONS = [LIBRARY_CHECK_REASONS.EMPTY, LIBRARY_CHECK_REASONS.SUBFOLDER_EMPTY];
+const PASSING_CHECK = { ok: true };
 // Cached files (info.json, thumbnails) are unlinked this many at a time.
 const UNLINK_CONCURRENCY = 16;
 
@@ -54,8 +58,12 @@ class VideoTrashModule {
   }
 
   /**
-   * @returns {Promise<{deleted: number, missing: number, legacy: number, libraryCheck: Object, downloadsActive: boolean}>}
+   * @returns {Promise<{deleted: number, missing: number, legacy: number, libraryCheck: Object,
+   *   missingActionsBlocked: boolean, downloadsActive: boolean}>}
    *   legacy: deleted rows removed before the reason was recorded (a subset of deleted);
+   *   libraryCheck: failing while it covers present or missing videos (the Maintenance card warns and
+   *   offers Rescan anyway), passing otherwise; missingActionsBlocked: it covers missing videos, so
+   *   marking all of them as deleted or emptying them from the trash is refused;
    *   downloadsActive: a purge that removes archive entries would be refused right now
    */
   async getRemovedSummary() {
@@ -63,26 +71,48 @@ class VideoTrashModule {
     const missing = await Video.count({ where: stateWhere(REMOVAL_STATES.MISSING) });
     const legacy = await Video.count({ where: { removed: true, removed_reason: null } });
     const libraryCheck = await checkLibraryRoot(configModule.directoryPath);
+    // Present videos count for the warning: their missing marks are held back,
+    // and Rescan anyway is how a user who emptied the folder releases them.
+    const coversRecorded = await libraryCheckCoversRows(libraryCheck, Video, notStateWhere(REMOVAL_STATES.DELETED));
+    const missingActionsBlocked = coversRecorded
+      && await libraryCheckCoversRows(libraryCheck, Video, stateWhere(REMOVAL_STATES.MISSING));
     return {
       deleted,
       missing,
       legacy,
-      libraryCheck: normalizeLibraryCheck(libraryCheck),
+      libraryCheck: normalizeLibraryCheck(coversRecorded ? libraryCheck : PASSING_CHECK),
+      missingActionsBlocked,
       downloadsActive: archiveAccess.isDownloading(),
     };
+  }
+
+  // The failing library check that puts missing videos in doubt, or null. The
+  // missing-video actions touch nothing else: present videos under a failing
+  // folder are already held back by the file check and the rescan.
+  async _checkCoveringMissing() {
+    const libraryCheck = await checkLibraryRoot(configModule.directoryPath);
+    const covers = await libraryCheckCoversRows(libraryCheck, Video, stateWhere(REMOVAL_STATES.MISSING));
+    return covers ? libraryCheck : null;
   }
 
   /**
    * Turn missing videos into deleted ones. Only rows that are missing change;
    * present and deleted ids in the selection are left alone.
-   * @param {{videoIds?: (number[]|null), all?: boolean}} options
+   * @param {{videoIds?: (number[]|null), all?: boolean, ignoreLibraryCheck?: boolean}} options -
+   *   ignoreLibraryCheck: the user emptied the downloads folder (or a subfolder) on purpose; honoured
+   *   only while the check fails because a folder is empty, never because one is gone or unreadable
    * @returns {Promise<{updated: number}>}
    * @throws {LibraryUnavailableError} for `all` while the downloads folder looks unmounted
    */
-  async markMissingAsDeleted({ videoIds = null, all = false } = {}) {
+  async markMissingAsDeleted({ videoIds = null, all = false, ignoreLibraryCheck = false } = {}) {
     if (all) {
-      const libraryCheck = await checkLibraryRoot(configModule.directoryPath);
-      if (!libraryCheck.ok) throw new LibraryUnavailableError(libraryCheck);
+      const libraryCheck = await this._checkCoveringMissing();
+      if (libraryCheck) {
+        if (!ignoreLibraryCheck || !EMPTY_FOLDER_REASONS.includes(libraryCheck.reason)) {
+          throw new LibraryUnavailableError(libraryCheck);
+        }
+        logger.warn({ libraryCheck }, 'Marking every missing video as deleted without the downloads folder check, by request');
+      }
     }
 
     const where = { ...stateWhere(REMOVAL_STATES.MISSING) };
@@ -122,8 +152,8 @@ class VideoTrashModule {
     try {
       if (removeFromArchive) releaseArchive = archiveAccess.acquirePurge();
       if (states.includes(REMOVAL_STATES.MISSING)) {
-        const libraryCheck = await checkLibraryRoot(configModule.directoryPath);
-        if (!libraryCheck.ok) throw new LibraryUnavailableError(libraryCheck);
+        const libraryCheck = await this._checkCoveringMissing();
+        if (libraryCheck) throw new LibraryUnavailableError(libraryCheck);
       }
 
       const jobIds = new Set();

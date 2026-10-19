@@ -37,6 +37,7 @@ function VideoModal({
   video,
   token,
   onVideoDeleted,
+  onMarkedDeleted,
   onProtectionChanged,
   onIgnoreChanged,
   onDownloadQueued,
@@ -54,12 +55,14 @@ function VideoModal({
     downloadDialogOpen,
     ratingDialogOpen,
     protectionLoading,
+    markDeletedPending,
     setDeleteDialogOpen,
     setDownloadDialogOpen,
     setRatingDialogOpen,
     handleProtectionToggle,
     handleDeleteConfirm,
     handleIgnoreToggle,
+    handleMarkDeleted,
     handleDownloadConfirm,
     handleRatingApply,
     handleSnackbarClose,
@@ -67,6 +70,7 @@ function VideoModal({
     video,
     token,
     onVideoDeleted,
+    onMarkedDeleted,
     onProtectionChanged,
     onIgnoreChanged,
     onDownloadQueued,
@@ -272,7 +276,9 @@ function VideoModal({
               onIgnoreToggle={handleIgnoreToggle}
               onDownloadClick={() => setDownloadDialogOpen(true)}
               onRatingClick={() => setRatingDialogOpen(true)}
+              onMarkDeleted={() => { void handleMarkDeleted(); }}
               protectionLoading={protectionLoading}
+              markDeletedPending={markDeletedPending}
               isMobile={isMobile}
               allowIgnore={allowIgnore}
             />

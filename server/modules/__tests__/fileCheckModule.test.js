@@ -31,7 +31,10 @@ describe('FileCheckModule', () => {
     }));
 
     // The downloads folder looks mounted unless a test says otherwise.
-    mockLibraryRootCheck = { checkLibraryRoot: jest.fn().mockResolvedValue({ ok: true }) };
+    mockLibraryRootCheck = {
+      ...jest.requireActual('../libraryRootCheck'),
+      checkLibraryRoot: jest.fn().mockResolvedValue({ ok: true }),
+    };
     jest.doMock('../libraryRootCheck', () => mockLibraryRootCheck);
     jest.doMock('../configModule', () => ({ directoryPath: '/videos' }));
 
@@ -39,7 +42,7 @@ describe('FileCheckModule', () => {
   });
 
   describe('while the downloads folder looks unmounted', () => {
-    const failedCheck = { ok: false, reason: 'empty', path: '/videos', message: 'The downloads folder /videos is empty.' };
+    const failedCheck = { ok: false, reason: 'empty', path: '/videos', message: 'The downloads folder is empty.' };
     const presentRow = (id, youtubeId) => ({
       id, youtubeId, filePath: `/videos/channel/${youtubeId}.mp4`, fileSize: '1000', removed: false
     });
@@ -65,6 +68,49 @@ describe('FileCheckModule', () => {
 
       expect(result.updates).toEqual([{ id: 1, fileSize: 2000 }]);
       expect(result.libraryWarning).toBeNull();
+    });
+
+    describe('when only a subfolder looks unmounted', () => {
+      const emptySubfolder = { ok: false, reason: 'subfolder-empty', path: '/videos/__Music', message: 'The subfolder __Music is empty.' };
+      const rowAt = (id, filePath) => ({ id, youtubeId: `vid${id}`, filePath, fileSize: '1000', removed: false });
+
+      test('still marks a video stored outside that subfolder missing', async () => {
+        mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(emptySubfolder);
+        mockFs.stat.mockRejectedValue({ code: 'ENOENT' });
+
+        const result = await fileCheckModule.checkVideoFiles([rowAt(1, '/videos/__Videos/channel/vid1.mp4')]);
+
+        expect(result.updates).toEqual([{ id: 1, ...MISSING_COLUMNS }]);
+        expect(result.libraryWarning).toBeNull();
+      });
+
+      test('holds back only the videos under that subfolder', async () => {
+        mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(emptySubfolder);
+        mockFs.stat.mockRejectedValue({ code: 'ENOENT' });
+
+        const result = await fileCheckModule.checkVideoFiles([
+          rowAt(1, '/videos/__Music/artist/vid1.mp4'),
+          rowAt(2, '/videos/__Videos/channel/vid2.mp4'),
+        ]);
+
+        expect(result.updates).toEqual([{ id: 2, ...MISSING_COLUMNS }]);
+        expect(result.libraryWarning).toEqual(expect.objectContaining({ reason: 'subfolder-empty', heldBack: 1 }));
+      });
+
+      test('holds back the videos under every failing subfolder, not just the first', async () => {
+        mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue({
+          ...emptySubfolder, paths: ['/videos/__Music', '/videos/__Kids'], message: 'The subfolders __Music and __Kids are empty.',
+        });
+        mockFs.stat.mockRejectedValue({ code: 'ENOENT' });
+
+        const result = await fileCheckModule.checkVideoFiles([
+          rowAt(1, '/videos/__Music/artist/vid1.mp4'),
+          rowAt(2, '/videos/__Kids/channel/vid2.mp4'),
+        ]);
+
+        expect(result.updates).toEqual([]);
+        expect(result.libraryWarning).toEqual(expect.objectContaining({ heldBack: 2 }));
+      });
     });
 
     test('does not run the check when no row would be marked missing', async () => {

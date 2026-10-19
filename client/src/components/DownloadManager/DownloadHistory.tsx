@@ -311,7 +311,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                               <AvailabilityChip
                                 state="deleted"
                                 label={`${deletedCount} deleted`}
-                                tooltip={`${deletedCount} of ${videos.length} videos were deleted by Youtarr or marked as deleted`}
+                                tooltip={`${deletedCount} of ${videos.length} videos ${deletedCount === 1 ? 'was' : 'were'} deleted by Youtarr or marked as deleted`}
                               />
                             )}
                             {failedForJob.length > 0 && (
@@ -530,7 +530,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                                   <AvailabilityChip
                                     state="deleted"
                                     label={`${deletedCount} deleted`}
-                                    tooltip={`${deletedCount} of ${videos.length} videos were deleted by Youtarr or marked as deleted`}
+                                    tooltip={`${deletedCount} of ${videos.length} videos ${deletedCount === 1 ? 'was' : 'were'} deleted by Youtarr or marked as deleted`}
                                   />
                                 )}
                                 {failedForJob.length > 0 && (
