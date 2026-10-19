@@ -7,6 +7,10 @@ jest.mock('../m3uGenerator', () => ({
   generateChannelM3UInBackground: jest.fn()
 }));
 
+jest.mock('../playlistOutputRefresh', () => ({
+  refreshForVideosInBackground: jest.fn()
+}));
+
 jest.mock('../storageGuard', () => ({
   getStatus: jest.fn(() => ({ paused: false })),
   refresh: jest.fn().mockResolvedValue({ paused: false })
@@ -39,6 +43,7 @@ describe('VideoDeletionModule', () => {
   let mockLogger;
   let mockFilesystem;
   let m3uGenerator;
+  let playlistOutputRefresh;
   let mockCheckLibraryRoot;
 
   beforeEach(() => {
@@ -49,6 +54,7 @@ describe('VideoDeletionModule', () => {
     mockLogger = require('../../logger');
 
     m3uGenerator = require('../m3uGenerator');
+    playlistOutputRefresh = require('../playlistOutputRefresh');
 
     // Mock the Video model
     mockVideo = {
@@ -129,6 +135,7 @@ describe('VideoDeletionModule', () => {
       expect(result).toEqual({
         success: true,
         videoId: 1,
+        youtubeId: 'abc123',
         message: 'Video deleted successfully'
       });
       expect(mockLogger.info).toHaveBeenCalledWith(
@@ -208,6 +215,7 @@ describe('VideoDeletionModule', () => {
       expect(result).toEqual({
         success: true,
         videoId: 1,
+        youtubeId: 'abc123',
         message: 'Video marked as removed (no file path)'
       });
     });
@@ -384,6 +392,7 @@ describe('VideoDeletionModule', () => {
       expect(result).toEqual({
         success: true,
         videoId: 1,
+        youtubeId: 'abc123',
         message: 'Video deleted successfully'
       });
     });
@@ -1101,6 +1110,50 @@ describe('VideoDeletionModule', () => {
     });
   });
 
+  describe('playlist refresh after deletion', () => {
+    // The no-file-path branch of deleteVideoById: marked removed without fs work.
+    const makeVideo = (id) => ({
+      id,
+      youtubeId: `yt${id}`,
+      channel_id: 'UC1',
+      removed: false,
+      filePath: null,
+      update: jest.fn().mockResolvedValue(undefined)
+    });
+
+    test('refreshes the playlists of the videos deleteVideos removed', async () => {
+      mockVideo.findByPk
+        .mockResolvedValueOnce(makeVideo(1))
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(makeVideo(3));
+
+      await VideoDeletionModule.deleteVideos([1, 2, 3]);
+
+      expect(playlistOutputRefresh.refreshForVideosInBackground)
+        .toHaveBeenCalledWith(['yt1', 'yt3'], expect.any(String));
+    });
+
+    test('refreshes the playlists of the videos deleteVideosByYoutubeIds removed', async () => {
+      mockVideo.findOne
+        .mockResolvedValueOnce(makeVideo(1))
+        .mockResolvedValueOnce(null);
+      mockVideo.findByPk.mockResolvedValueOnce(makeVideo(1));
+
+      await VideoDeletionModule.deleteVideosByYoutubeIds(['yt1', 'yt2']);
+
+      expect(playlistOutputRefresh.refreshForVideosInBackground)
+        .toHaveBeenCalledWith(['yt1'], expect.any(String));
+    });
+
+    test('does not refresh playlists when nothing was deleted', async () => {
+      mockVideo.findByPk.mockResolvedValue(null);
+
+      await VideoDeletionModule.deleteVideos([99]);
+
+      expect(playlistOutputRefresh.refreshForVideosInBackground).not.toHaveBeenCalled();
+    });
+  });
+
   describe('download pause re-check after deletion', () => {
     let storageGuard;
 
@@ -1481,6 +1534,7 @@ describe('VideoDeletionModule', () => {
       jest.resetModules();
       mockLogger = require('../../logger');
       m3uGenerator = require('../m3uGenerator');
+      playlistOutputRefresh = require('../playlistOutputRefresh');
       VideoDeletionModule = require('../videoDeletionModule');
     });
 
@@ -1720,6 +1774,8 @@ describe('VideoDeletionModule', () => {
       expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledTimes(2);
       expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledWith('UC1', expect.any(String));
       expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledWith('UC2', expect.any(String));
+      expect(playlistOutputRefresh.refreshForVideosInBackground)
+        .toHaveBeenCalledWith(['yt1', 'yt2', 'yt3'], expect.any(String));
     });
 
     test('should skip space cleanup when storage is above threshold', async () => {

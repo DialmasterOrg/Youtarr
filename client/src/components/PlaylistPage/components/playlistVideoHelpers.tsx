@@ -20,6 +20,15 @@ export function isDownloadable(v: PlaylistVideo): boolean {
   return !v.activity && !v.downloaded && !v.youtube_removed;
 }
 
+export function isDeletable(v: PlaylistVideo): boolean {
+  return !v.activity && v.downloaded;
+}
+
+// One selection serves both actions: each applies to the selected videos it fits.
+export function isSelectable(v: PlaylistVideo): boolean {
+  return isDownloadable(v) || isDeletable(v);
+}
+
 // Maps PlaylistVideo's snake_case file fields to the indicator's camelCase props.
 export function toDownloadFileProps(v: PlaylistVideo): {
   filePath: string | null;

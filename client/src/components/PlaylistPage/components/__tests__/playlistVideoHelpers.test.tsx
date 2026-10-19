@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { isDownloadable, statusLabel, PublishedDate, toDownloadFileProps, toModalData } from '../playlistVideoHelpers';
+import { isDeletable, isDownloadable, isSelectable, statusLabel, PublishedDate, toDownloadFileProps, toModalData } from '../playlistVideoHelpers';
 import { PlaylistVideo } from '../../../../types/playlist';
 
 function makeVideo(overrides: Partial<PlaylistVideo> = {}): PlaylistVideo {
@@ -41,6 +41,36 @@ describe('isDownloadable', () => {
   });
   test('true even when ignored (explicit selection overrides ignore)', () => {
     expect(isDownloadable(makeVideo({ ignored: true }))).toBe(true);
+  });
+});
+
+describe('isDeletable', () => {
+  test('true for a downloaded video', () => {
+    expect(isDeletable(makeVideo({ downloaded: true }))).toBe(true);
+  });
+  test('false for a video with no file', () => {
+    expect(isDeletable(makeVideo({ previously_downloaded: true }))).toBe(false);
+  });
+  test('false while the video is downloading again', () => {
+    expect(isDeletable(makeVideo({ downloaded: true, activity: 'downloading' }))).toBe(false);
+  });
+  test('true for a downloaded video YouTube has since removed', () => {
+    expect(isDeletable(makeVideo({ downloaded: true, youtube_removed: true }))).toBe(true);
+  });
+});
+
+describe('isSelectable', () => {
+  test('true for a video that can be downloaded', () => {
+    expect(isSelectable(makeVideo())).toBe(true);
+  });
+  test('true for a video that can be deleted', () => {
+    expect(isSelectable(makeVideo({ downloaded: true }))).toBe(true);
+  });
+  test('false for a never-downloaded video removed on YouTube', () => {
+    expect(isSelectable(makeVideo({ youtube_removed: true }))).toBe(false);
+  });
+  test('false while the video is queued', () => {
+    expect(isSelectable(makeVideo({ activity: 'queued' }))).toBe(false);
   });
 });
 
