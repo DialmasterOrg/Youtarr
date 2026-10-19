@@ -106,7 +106,7 @@ describe('videoSearchModule', () => {
     test('marks results as downloaded, missing, or never_downloaded based on DB state', async () => {
       Video.findAll.mockResolvedValueOnce([
         { youtubeId: 'aaaaaaaaaaa', removed: false },
-        { youtubeId: 'bbbbbbbbbbb', removed: true },
+        { youtubeId: 'bbbbbbbbbbb', removed: true, removed_reason: 'not_found' },
       ]);
 
       const ndjson =

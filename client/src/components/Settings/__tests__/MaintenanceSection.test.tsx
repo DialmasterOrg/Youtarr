@@ -5,17 +5,28 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MaintenanceSection } from '../MaintenanceSection';
 import { UseRescanStatusReturn, RescanLastRun } from '../../../hooks/useRescanStatus';
+import type { RemovedVideosLibraryCheck } from '../hooks/useRemovedVideos';
 
 jest.mock('../../../hooks/useRescanStatus', () => ({
   useRescanStatus: jest.fn()
 }));
 
+jest.mock('../hooks/useRemovedVideos', () => ({
+  useRemovedVideos: jest.fn()
+}));
+
 const { useRescanStatus } = require('../../../hooks/useRescanStatus') as {
   useRescanStatus: jest.Mock<UseRescanStatusReturn, [string | null]>;
 };
+const { useRemovedVideos } = require('../hooks/useRemovedVideos') as {
+  useRemovedVideos: jest.Mock;
+};
 
-function setup(overrides: Partial<UseRescanStatusReturn> = {}) {
-  const triggerRescan = jest.fn().mockResolvedValue(undefined);
+function setup(
+  overrides: Partial<UseRescanStatusReturn> = {},
+  libraryCheck: RemovedVideosLibraryCheck = { ok: true, reason: null, path: null, message: null }
+) {
+  const triggerRescan = jest.fn().mockResolvedValue({ started: true });
   useRescanStatus.mockReturnValue({
     running: false,
     lastRun: null,
@@ -23,6 +34,16 @@ function setup(overrides: Partial<UseRescanStatusReturn> = {}) {
     error: null,
     triggerRescan,
     ...overrides
+  });
+  useRemovedVideos.mockReturnValue({
+    summary: { deleted: 2, missing: 1, legacy: 0, libraryCheck },
+    loading: false,
+    error: null,
+    refetch: jest.fn(),
+    markAllMissingDeleted: jest.fn(),
+    emptyTrash: jest.fn(),
+    actionPending: false,
+    actionError: null,
   });
   renderWithProviders(<MaintenanceSection token="tok" config={DEFAULT_CONFIG} />);
   return { triggerRescan };
@@ -35,6 +56,22 @@ describe('MaintenanceSection', () => {
     setup();
     expect(screen.getByRole('button', { name: /rescan files on disk/i })).toBeEnabled();
     expect(screen.getByText(/no rescan has run yet/i)).toBeInTheDocument();
+  });
+
+  test('hosts the deleted and missing videos card below the rescan card', () => {
+    setup();
+    expect(screen.getByText('Deleted and missing videos')).toBeInTheDocument();
+    expect(screen.getByText('Deleted: 2. Missing: 1.')).toBeInTheDocument();
+  });
+
+  test('wires Rescan anyway to a rescan that skips the downloads folder check', async () => {
+    const user = userEvent.setup();
+    const { triggerRescan } = setup({}, { ok: false, reason: 'empty', path: '/d', message: 'The downloads folder is empty.' });
+
+    await user.click(screen.getByRole('button', { name: 'Rescan anyway...' }));
+    await user.click(screen.getByRole('button', { name: 'Rescan anyway' }));
+
+    expect(triggerRescan).toHaveBeenCalledWith({ ignoreLibraryCheck: true });
   });
 
   test('renders idle with last-run summary', () => {
@@ -52,6 +89,23 @@ describe('MaintenanceSection', () => {
     setup({ lastRun });
     expect(screen.getByText(/updated 7 videos/i)).toBeInTheDocument();
     expect(screen.getByText(/marked 2 missing/i)).toBeInTheDocument();
+  });
+
+  test('says when the last rescan skipped the downloads folder check', () => {
+    const lastRun: RescanLastRun = {
+      startedAt: '2026-05-04T15:00:00.000Z',
+      completedAt: '2026-05-04T15:01:00.000Z',
+      trigger: 'manual',
+      status: 'completed',
+      videosUpdated: 0,
+      videosMarkedMissing: 3,
+      videosScanned: 100,
+      filesFoundOnDisk: 97,
+      errorMessage: null,
+      libraryCheckSkipped: true
+    };
+    setup({ lastRun });
+    expect(screen.getByText(/The downloads folder check was skipped\./)).toBeInTheDocument();
   });
 
   test('disables button while running', () => {

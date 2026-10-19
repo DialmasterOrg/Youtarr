@@ -1,3 +1,5 @@
+import type { RemovalReason } from '../utils/videoRemoval';
+
 // Saved output order for the .m3u file and media server playlist sync.
 export type PlaylistSortOrderSetting = 'default' | 'reversed';
 
@@ -56,6 +58,10 @@ export interface PlaylistVideo {
   // Previously downloaded but the file is gone (deleted/missing). The backend
   // skips these during downloads unless allowRedownload is set.
   previously_downloaded: boolean;
+  // Why it is gone (see utils/videoRemoval): 'not_found' = missing, anything else = deleted
+  removed_reason?: RemovalReason | null;
+  removed_at?: string | null;
+  removed_detail?: string | null;
   youtube_removed: boolean;
   // Populated only for videos that have been downloaded; used to hydrate VideoModal
   video_id: number | null;

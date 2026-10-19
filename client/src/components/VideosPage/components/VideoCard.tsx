@@ -20,6 +20,7 @@ import ProtectionShieldButton from '../../shared/ProtectionShieldButton';
 import ThumbnailClickOverlay from '../../shared/ThumbnailClickOverlay';
 import AvailabilityChip from '../../shared/AvailabilityChip';
 import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../../shared/chipStyles';
+import { DELETED_OVERLAY_BACKGROUND, describeRow, getRemovalState } from '../../../utils/videoRemoval';
 import ChannelNameDisplay from './ChannelNameDisplay';
 import WatchedChip from '../../shared/WatchedChip';
 
@@ -151,20 +152,32 @@ function VideoCard({
               left: 0,
               right: 0,
               bottom: 0,
-              backgroundColor: 'rgba(244, 67, 54, 0.3)',
+              backgroundColor: getRemovalState(video.removed, video.removed_reason) === 'missing'
+                ? 'rgba(244, 67, 54, 0.3)'
+                : DELETED_OVERLAY_BACKGROUND,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               zIndex: 1,
             }}
           >
-            <ErrorOutlineIcon
-              className="text-destructive"
-              style={{
-                fontSize: '3rem',
-                filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))',
-              }}
-            />
+            {getRemovalState(video.removed, video.removed_reason) === 'missing' ? (
+              <ErrorOutlineIcon
+                className="text-destructive"
+                style={{
+                  fontSize: '3rem',
+                  filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))',
+                }}
+              />
+            ) : (
+              <DeleteIcon
+                className="text-muted-foreground"
+                style={{
+                  fontSize: '3rem',
+                  filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))',
+                }}
+              />
+            )}
           </Box>
         )}
 
@@ -305,9 +318,9 @@ function VideoCard({
               size="small"
             />
             {video.removed ? (
-              <AvailabilityChip isAvailable={false} />
+              <AvailabilityChip state={getRemovalState(video.removed, video.removed_reason)} tooltip={describeRow(video)} />
             ) : video.fileSize ? (
-              <AvailabilityChip isAvailable={true} />
+              <AvailabilityChip state="present" />
             ) : null}
             <WatchedChip watchedBy={video.watchedBy || []} />
           </Box>

@@ -19,6 +19,7 @@ const downloadCleanup = require('./download/downloadCleanup');
 const { serializeAuxData, parseAuxData } = require('./jobAuxData');
 const storageGuard = require('./storageGuard');
 const { unchangedSinceRead } = require('./videoRowGuard');
+const { REMOVAL_REASONS, removedColumns, presentColumns } = require('./videoRemovalState');
 const videosModule = require('./videosModule');
 const logger = require('../logger');
 
@@ -232,13 +233,14 @@ class JobModule {
           if (resolvedPath) {
             videoData.filePath = resolvedPath;
             videoData.fileSize = resolvedStats?.size !== undefined ? resolvedStats.size.toString() : null;
-            videoData.removed = false;
+            Object.assign(videoData, presentColumns());
           } else {
-            // File not found, but we still want to record the expected metadata location
+            // File not found: record the expected location but leave the removal
+            // columns alone, so a video deleted in-app while its job ran stays
+            // deleted and a new row simply awaits the file check.
             const assumedPath = actualFilePath || `${fallbackBasePath}.mp4`;
             videoData.filePath = assumedPath;
             videoData.fileSize = null;
-            videoData.removed = false;
           }
 
           // Upsert video into Videos table and ensure JobVideo relationship exists
@@ -973,7 +975,7 @@ class JobModule {
                 fileSize: files ? sizeOf(files.videoFileSize) : null,
                 audioFilePath: files ? files.audioFilePath : null,
                 audioFileSize: files ? sizeOf(files.audioFileSize) : null,
-                removed: !files,
+                ...(files ? presentColumns() : removedColumns(REMOVAL_REASONS.NOT_FOUND)),
               });
               videosUpserts += 1;
               if (!files && unreadableOnDisk > 0) recreatedUnverified += 1;
@@ -991,7 +993,7 @@ class JobModule {
             // column, which the zero-rows conflict check relies on.
             if (foundFile) {
               const [affected] = await Video.update(
-                { filePath: foundFile.path, fileSize: foundFile.size, removed: false },
+                { filePath: foundFile.path, fileSize: foundFile.size, ...presentColumns() },
                 { where: unchangedSinceRead(videoInstance) }
               );
               if (affected === 0) {
@@ -1161,6 +1163,45 @@ class JobModule {
     return this.jobs;
   }
 
+  // The videos still linked to a job, as Download History shows them.
+  async _loadJobVideos(jobId) {
+    const jobVideos = await JobVideo.findAll({
+      where: { job_id: jobId }
+    });
+
+    const videos = [];
+    for (const jobVideo of jobVideos) {
+      const video = await Video.findOne({ where: { id: jobVideo.video_id } });
+      if (video) {
+        videos.push(video.dataValues);
+      }
+    }
+    return videos;
+  }
+
+  /**
+   * Refresh the in-memory video lists of the given jobs from the database,
+   * after their rows changed outside the download path (emptying the trash
+   * deletes jobvideos rows). Jobs not held in memory are skipped; a failure
+   * is logged and the job keeps its previous list.
+   * @param {string[]} jobIds
+   */
+  async reloadJobVideos(jobIds) {
+    for (const jobId of jobIds || []) {
+      const job = this.jobs[jobId];
+      if (!job) continue;
+      try {
+        const videos = await this._loadJobVideos(jobId);
+        if (!job.data) {
+          job.data = {};
+        }
+        job.data.videos = videos;
+      } catch (err) {
+        logger.error({ err, jobId }, 'Error reloading videos for job');
+      }
+    }
+  }
+
   // Lets listing pages (e.g. Download History) refetch when a job is enqueued or starts.
   emitJobsUpdated(jobId, status) {
     MessageEmitter.emitMessage('broadcast', null, 'download', 'jobsUpdated', {
@@ -1264,17 +1305,7 @@ class JobModule {
       // This is especially important for multi-group downloads where each group
       // updates the job with only its own videos, potentially losing earlier videos
       try {
-        const jobVideos = await JobVideo.findAll({
-          where: { job_id: jobId }
-        });
-
-        const videos = [];
-        for (const jobVideo of jobVideos) {
-          const video = await Video.findOne({ where: { id: jobVideo.video_id } });
-          if (video) {
-            videos.push(video.dataValues);
-          }
-        }
+        const videos = await this._loadJobVideos(jobId);
 
         // Update in-memory structure with complete video list from DB
         if (!job.data) {

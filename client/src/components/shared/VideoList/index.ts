@@ -26,3 +26,4 @@ export { default as VideoListPaginationBar } from './VideoListPaginationBar';
 export { ALLOWED_PAGE_SIZES, DEFAULT_PAGE_SIZE, INFINITE_SCROLL_FETCH_SIZE, isPageSize } from './pageSizes';
 export type { PageSize } from './pageSizes';
 export { useListPageSize } from './useListPageSize';
+export { usePersistedChipFilter } from './usePersistedChipFilter';

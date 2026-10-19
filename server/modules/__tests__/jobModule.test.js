@@ -616,7 +616,11 @@ describe('JobModule', () => {
       expect(Video.create).toHaveBeenCalledWith(expect.objectContaining({
         youtubeId: 'video-1',
         filePath: actualPath,
-        fileSize: '98765'
+        fileSize: '98765',
+        removed: false,
+        removed_reason: null,
+        removed_at: null,
+        removed_detail: null
       }));
     });
 
@@ -627,6 +631,33 @@ describe('JobModule', () => {
 
       expect(count).toBe(0);
       expect(Video.create).not.toHaveBeenCalled();
+    });
+
+    test('leaves the removal columns alone when the recovered file is not found', async () => {
+      JobVideoDownload.findAll.mockResolvedValue([
+        { job_id: 'job-1', youtube_id: 'video-1', status: 'completed' }
+      ]);
+      fsPromises.readFile.mockResolvedValue(JSON.stringify({
+        id: 'video-1',
+        uploader: 'Channel 1',
+        title: 'Video 1',
+        duration: 100,
+        upload_date: '20240101',
+        channel_id: 'channel-1',
+        _actual_filepath: '/data/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1  [video-1].mp4'
+      }));
+      fsPromises.access.mockResolvedValue();
+      fsPromises.stat.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+      Job.findOne.mockResolvedValue({ id: 'job-1' });
+      Video.findOne.mockResolvedValue(null);
+
+      await JobModule.recoverCompletedVideos('job-1');
+
+      expect(Video.create).toHaveBeenCalledTimes(1);
+      const created = Video.create.mock.calls[0][0];
+      expect(created.fileSize).toBeNull();
+      expect(created).not.toHaveProperty('removed');
+      expect(created).not.toHaveProperty('removed_reason');
     });
 
     test('should skip videos with missing info.json files', async () => {
@@ -2477,6 +2508,14 @@ describe('JobModule', () => {
         details: { videosUpserts: 2, channelVideosUpserts: 2, failed: 0, unreadableOnDisk: 0, recreatedUnverified: 0 }
       }));
       expect(Video.create).toHaveBeenCalledTimes(2);
+      // Recreated without a file on disk: missing, not deleted.
+      expect(Video.create).toHaveBeenCalledWith(expect.objectContaining({
+        youtubeId: 'video-1',
+        removed: true,
+        removed_reason: 'not_found',
+        removed_at: expect.any(Date),
+        removed_detail: null
+      }));
       expect(ChannelVideo.findOrCreate).toHaveBeenCalledTimes(2);
       expect(logger.info).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -2639,7 +2678,10 @@ describe('JobModule', () => {
           youtubeId: 'video-1',
           filePath,
           fileSize: '123456789',
-          removed: false
+          removed: false,
+          removed_reason: null,
+          removed_at: null,
+          removed_detail: null
         })
       );
 
@@ -2693,7 +2735,7 @@ describe('JobModule', () => {
 
         expect(Video.create).not.toHaveBeenCalled();
         expect(Video.update).toHaveBeenCalledWith(
-          { filePath: mp4Path, fileSize: '987654321', removed: false },
+          { filePath: mp4Path, fileSize: '987654321', removed: false, removed_reason: null, removed_at: null, removed_detail: null },
           { where: expect.objectContaining({ id: 7, removed: false, filePath: mp4Path, fileSize: null }) }
         );
       });
@@ -2894,7 +2936,7 @@ describe('JobModule', () => {
         await JobModule.backfillFromCompleteList();
 
         expect(Video.update).toHaveBeenCalledWith(
-          { filePath: `${base}.webm`, fileSize: '777', removed: false },
+          { filePath: `${base}.webm`, fileSize: '777', removed: false, removed_reason: null, removed_at: null, removed_detail: null },
           expect.anything()
         );
       });
@@ -3524,6 +3566,39 @@ describe('JobModule', () => {
       await JobModule.loadJobsFromDB();
 
       expect(JobModule.jobs['job-4'].data).toEqual({ videos: [] });
+    });
+  });
+
+  describe('reloadJobVideos', () => {
+    beforeEach(() => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({ plexApiKey: 'test-key' }));
+      JobModule = require('../jobModule');
+    });
+
+    test('replaces each named job\'s videos with the rows still linked to it', async () => {
+      JobModule.jobs = {
+        'job-1': { timeCreated: Date.now(), status: 'Complete', data: { videos: [{ id: 1 }, { id: 2 }] } },
+        'job-2': { timeCreated: Date.now(), status: 'Complete', data: { videos: [{ id: 3 }] } },
+      };
+      JobVideo.findAll.mockImplementation(async ({ where }) => (where.job_id === 'job-1' ? [{ video_id: 2 }] : []));
+      Video.findOne.mockResolvedValue({ dataValues: { id: 2, youtubeId: 'b' } });
+
+      await JobModule.reloadJobVideos(['job-1', 'job-2']);
+
+      expect(JobModule.jobs['job-1'].data.videos).toEqual([{ id: 2, youtubeId: 'b' }]);
+      expect(JobModule.jobs['job-2'].data.videos).toEqual([]);
+    });
+
+    test('skips jobs it does not hold and never throws', async () => {
+      JobModule.jobs = { 'job-1': { timeCreated: Date.now(), status: 'Complete', data: { videos: [{ id: 1 }] } } };
+      JobVideo.findAll.mockRejectedValue(new Error('db down'));
+
+      await expect(JobModule.reloadJobVideos(['job-1', 'unknown'])).resolves.toBeUndefined();
+
+      expect(JobModule.jobs['job-1'].data.videos).toEqual([{ id: 1 }]);
+      expect(JobVideo.findAll).toHaveBeenCalledWith({ where: { job_id: 'job-1' } });
+      expect(JobVideo.findAll).not.toHaveBeenCalledWith({ where: { job_id: 'unknown' } });
     });
   });
 });

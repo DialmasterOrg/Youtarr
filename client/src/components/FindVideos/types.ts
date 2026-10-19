@@ -1,4 +1,6 @@
-export type SearchResultStatus = 'downloaded' | 'missing' | 'never_downloaded' | 'queued' | 'downloading';
+import type { RemovalReason } from '../../utils/videoRemoval';
+
+export type SearchResultStatus = 'downloaded' | 'deleted' | 'missing' | 'never_downloaded' | 'queued' | 'downloading';
 
 export interface SearchResult {
   youtubeId: string;
@@ -13,6 +15,10 @@ export interface SearchResult {
   // Listed in the download archive without a database record, so a download
   // skips it unless re-downloading is allowed.
   inArchive?: boolean;
+  // Why the file is gone, for a 'deleted' or 'missing' status (see utils/videoRemoval).
+  removedReason?: RemovalReason | null;
+  removedAt?: string | null;
+  removedDetail?: string | null;
   isDownloaded?: boolean;
   databaseId?: number | null;
   filePath?: string | null;
@@ -56,9 +62,9 @@ export interface ResultSelection {
   toggle: (id: string) => void;
 }
 
-// Eligible to multi-select for download. Includes 'missing' so users can bulk
-// re-download videos whose files are gone; the DownloadSettingsDialog already
-// surfaces the allow-redownload toggle for that case.
+// Eligible to multi-select for download. Includes 'missing' and 'deleted' so
+// users can bulk re-download videos whose files are gone; the
+// DownloadSettingsDialog already surfaces the allow-redownload toggle for that case.
 export function isSelectableForDownload(status: SearchResultStatus): boolean {
-  return status === 'never_downloaded' || status === 'missing';
+  return status === 'never_downloaded' || status === 'missing' || status === 'deleted';
 }

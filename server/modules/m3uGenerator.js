@@ -9,8 +9,8 @@ const {
   resolveChannelFolderName,
 } = require('./filesystem/pathBuilder');
 const configModule = require('./configModule');
+const { M3U_FOLDER_NAME } = require('./filesystem/constants');
 
-const M3U_FOLDER_NAME = '__playlists__';
 // Empty marker file that tells the Jellyfin and Emby library scanners to skip
 // this folder. Without it, those servers auto-import the .m3u files as duplicate
 // (and on Jellyfin, empty) playlists alongside the ones created via native API

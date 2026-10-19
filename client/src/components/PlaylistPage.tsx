@@ -20,7 +20,7 @@ import { usePlaylistDetail, PlaylistSortOrder, PlaylistDownloadState, PlaylistWa
 import { useDownloadListingsRefresh } from '../hooks/useDownloadListingsRefresh';
 import { usePlaylistMutations } from '../hooks/usePlaylistMutations';
 import { useMediaServerStatus } from '../hooks/useMediaServerStatus';
-import { MediaServerType, PlaylistSubscribeSettings, PlaylistVideo } from '../types/playlist';
+import { MediaServerType, PlaylistSubscribeSettings } from '../types/playlist';
 import PlaylistHeader from './PlaylistPage/components/PlaylistHeader';
 import NoMediaServerWarning from './PlaylistPage/components/NoMediaServerWarning';
 import PlaylistVideoList from './PlaylistPage/components/PlaylistVideoList';
@@ -33,7 +33,7 @@ import { SelectionAction } from './shared/VideoList/types';
 import { Download as DownloadIcon } from '../lib/icons';
 import PlaylistFollowingDialog, { FollowingDialogMode } from './PlaylistPage/components/PlaylistFollowingDialog';
 import PlaylistSettingsDialog from './PlaylistPage/components/PlaylistSettingsDialog';
-import { toDownloadFileProps } from './PlaylistPage/components/playlistVideoHelpers';
+import { toDownloadFileProps, toModalData } from './PlaylistPage/components/playlistVideoHelpers';
 import DownloadSettingsDialog from './DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from './DownloadManager/ManualDownload/types';
 import SubscriptionsBackButton from './shared/SubscriptionsBackButton';
@@ -48,33 +48,6 @@ interface SnackbarState {
   open: boolean;
   message: string;
   severity: 'success' | 'error' | 'info' | 'warning';
-}
-
-function toModalData(v: PlaylistVideo): VideoModalData {
-  const status = v.youtube_removed || v.previously_downloaded
-    ? 'missing'
-    : v.downloaded
-      ? 'downloaded'
-      : 'never_downloaded';
-  return {
-    youtubeId: v.youtube_id,
-    title: v.title || v.youtube_id,
-    channelName: v.channel_name || '',
-    thumbnailUrl: v.thumbnail || `https://i.ytimg.com/vi/${v.youtube_id}/hqdefault.jpg`,
-    duration: v.duration,
-    publishedAt: v.published_at,
-    addedAt: v.downloaded_at ?? null,
-    mediaType: 'video',
-    status,
-    isDownloaded: v.downloaded,
-    ...toDownloadFileProps(v),
-    isProtected: false,
-    isIgnored: v.ignored,
-    normalizedRating: null,
-    ratingSource: null,
-    databaseId: v.video_id,
-    channelId: v.channel_id,
-  };
 }
 
 function PlaylistPage({ token }: PlaylistPageProps) {

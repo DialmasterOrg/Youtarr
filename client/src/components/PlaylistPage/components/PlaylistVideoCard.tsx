@@ -88,6 +88,10 @@ const PlaylistVideoCard: React.FC<PlaylistVideoCardProps> = ({
                 <Chip label={status.label} color={status.color} size="small" style={compactStatusChipStyle} />
               )}
             </>
+          ) : status.tooltip ? (
+            <Tooltip title={status.tooltip} enterTouchDelay={0}>
+              <Chip label={status.label} color={status.color} size="small" style={compactStatusChipStyle} />
+            </Tooltip>
           ) : (
             <Chip label={status.label} color={status.color} size="small" style={compactStatusChipStyle} />
           )}

@@ -3,9 +3,8 @@ const fs = require('fs-extra');
 const configModule = require('../configModule');
 const directoryManager = require('../filesystem/directoryManager');
 const logger = require('../../logger');
-
 // Hidden temp directory name (dot-prefix hides from media servers like Plex/Jellyfin)
-const LOCAL_TEMP_DIR_NAME = '.youtarr_tmp';
+const { LOCAL_TEMP_DIR_NAME } = require('../filesystem/constants');
 
 /**
  * Manages temporary download paths and conversions between temp and final locations.

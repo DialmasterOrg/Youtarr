@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { isDownloadable, statusLabel, PublishedDate, toDownloadFileProps } from '../playlistVideoHelpers';
+import { isDownloadable, statusLabel, PublishedDate, toDownloadFileProps, toModalData } from '../playlistVideoHelpers';
 import { PlaylistVideo } from '../../../../types/playlist';
 
 function makeVideo(overrides: Partial<PlaylistVideo> = {}): PlaylistVideo {
@@ -60,10 +60,25 @@ describe('statusLabel', () => {
       color: 'error',
     });
   });
-  test('returns Missing for a previously-downloaded video whose file is gone', () => {
-    expect(statusLabel(makeVideo({ previously_downloaded: true }))).toEqual({
+  test('returns Missing for a previously-downloaded video whose file was not found, explaining it', () => {
+    expect(statusLabel(makeVideo({ previously_downloaded: true, removed_reason: 'not_found', file_path: '/d/v.mp4' }))).toEqual({
       label: 'Missing',
       color: 'error',
+      tooltip: 'Youtarr expected a file at /d/v.mp4 and could not find it. If the drive is mounted and the file is really gone, mark it as deleted.',
+    });
+  });
+  test('returns a neutral Deleted for a previously-downloaded video Youtarr removed', () => {
+    expect(statusLabel(makeVideo({ previously_downloaded: true, removed_reason: 'auto_removal', removed_detail: 'older than 30 days' }))).toEqual({
+      label: 'Deleted',
+      color: 'default',
+      tooltip: 'Deleted by automatic cleanup (older than 30 days). It can be downloaded again.',
+    });
+  });
+  test('treats a previously-downloaded video without a recorded reason as Deleted', () => {
+    expect(statusLabel(makeVideo({ previously_downloaded: true }))).toEqual({
+      label: 'Deleted',
+      color: 'default',
+      tooltip: 'Removed before Youtarr recorded why. It can be downloaded again.',
     });
   });
   test('returns Tracked for a plain tracked video', () => {
@@ -103,6 +118,31 @@ describe('toDownloadFileProps', () => {
       audioFileSize: null,
       videoResolution: null,
     });
+  });
+});
+
+describe('toModalData', () => {
+  test('shows a present file as downloaded even when YouTube removed the video', () => {
+    const data = toModalData(makeVideo({ downloaded: true, youtube_removed: true, file_path: '/d/Chan/v [v1].mp4' }));
+    expect(data.status).toBe('downloaded');
+    expect(data.isDownloaded).toBe(true);
+  });
+
+  test('shows a previously downloaded video whose file was not found as missing, YouTube-removed or not', () => {
+    const data = toModalData(makeVideo({ previously_downloaded: true, youtube_removed: true, removed_reason: 'not_found' }));
+    expect(data.status).toBe('missing');
+  });
+
+  test('shows a previously downloaded video Youtarr removed as deleted', () => {
+    expect(toModalData(makeVideo({ previously_downloaded: true, removed_reason: 'user_deleted' })).status).toBe('deleted');
+  });
+
+  test('shows a never downloaded video that YouTube removed as missing', () => {
+    expect(toModalData(makeVideo({ youtube_removed: true })).status).toBe('missing');
+  });
+
+  test('shows a tracked video as never downloaded', () => {
+    expect(toModalData(makeVideo()).status).toBe('never_downloaded');
   });
 });
 

@@ -194,6 +194,26 @@ describe('FindVideos page', () => {
     expect(screen.queryByTestId('select-downloaded1')).not.toBeInTheDocument();
   });
 
+  test('a video Youtarr deleted is selectable and counts as previously downloaded', async () => {
+    axios.post.mockResolvedValueOnce({
+      data: { results: [
+        { youtubeId: 'deleted0001', title: 'Gone video', channelName: 'C', channelId: null, duration: 600, thumbnailUrl: null, publishedAt: null, viewCount: null, status: 'deleted', removedReason: 'user_deleted' },
+      ] },
+    });
+
+    renderWithRouter(<FindVideos token="t" />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'q' } });
+    fireEvent.click(screen.getByRole('button', { name: /^search$/i }));
+    await screen.findByText('Gone video');
+
+    fireEvent.click(screen.getByTestId('select-deleted0001'));
+    fireEvent.click(screen.getByTestId('video-list-selection-pill'));
+    fireEvent.click(await screen.findByTestId('selection-menu-download'));
+
+    expect(await screen.findByTestId('mock-download-dialog')).toBeInTheDocument();
+    expect(screen.getByTestId('dialog-missing-count')).toHaveTextContent('1');
+  });
+
   test('selecting eligible videos and confirming dialog calls triggerDownloads with URLs', async () => {
     axios.post.mockResolvedValueOnce({
       data: { results: [

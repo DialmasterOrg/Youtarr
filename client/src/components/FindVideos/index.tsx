@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVideoActivity } from '../../providers/VideoActivityProvider';
 import { useLocalVideoStatus } from '../../hooks/useLocalVideoStatus';
 import { useNavigate } from 'react-router-dom';
+import { isRemovedStatus } from '../../utils/videoStatus';
+import { removedState } from '../../utils/videoRemoval';
 import { Alert, Box, Typography } from '../ui';
 import { Download as DownloadIcon } from '../../lib/icons';
 import VideoModal from '../shared/VideoModal';
@@ -56,9 +58,10 @@ function toModalData(r: SearchResult): VideoModalData {
     addedAt: r.addedAt ?? null,
     mediaType: 'video',
     status: r.status === 'queued' || r.status === 'downloading'
-      ? (r.isDownloaded ? 'downloaded' : r.databaseId ? 'missing' : 'never_downloaded')
+      ? (r.isDownloaded ? 'downloaded' : r.databaseId ? removedState(r.removedReason) : 'never_downloaded')
       : r.status,
     inArchive: r.inArchive,
+    removal: { reason: r.removedReason ?? null, at: r.removedAt ?? null, detail: r.removedDetail ?? null },
     isDownloaded: r.isDownloaded ?? r.status === 'downloaded',
     filePath: r.filePath ?? null,
     fileSize: r.fileSize ?? null,
@@ -199,7 +202,7 @@ export default function FindVideos({ token }: FindVideosProps) {
 
   const missingVideoCount = useMemo(
     () => results.filter(
-      (r) => selection.isSelected(r.youtubeId) && (r.status === 'missing' || r.inArchive)
+      (r) => selection.isSelected(r.youtubeId) && (isRemovedStatus(r.status) || r.inArchive)
     ).length,
     [results, selection.isSelected]
   );

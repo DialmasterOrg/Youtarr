@@ -101,7 +101,8 @@ module.exports = function createVideoRoutes({
    *                         type: string
    *                       status:
    *                         type: string
-   *                         enum: [never_downloaded, missing, downloaded]
+   *                         enum: [never_downloaded, downloaded, deleted, missing]
+   *                         description: deleted = Youtarr removed the file (or the video was marked as deleted); missing = a file was expected on disk and not found. `removedReason`, `removedAt` and `removedDetail` say why.
    *                       inArchive:
    *                         type: boolean
    *                         description: Listed in the download archive without a database record (ignored videos excluded); a download skips it unless re-downloading is allowed
@@ -196,7 +197,14 @@ module.exports = function createVideoRoutes({
    *           type: string
    *           enum: [off, only, exclude]
    *           default: off
-   *         description: Tri-state filter on missing (file removed) videos
+   *         description: Tri-state filter on missing videos (a file was expected on disk and not found)
+   *       - in: query
+   *         name: deletedFilter
+   *         schema:
+   *           type: string
+   *           enum: [off, only, exclude]
+   *           default: off
+   *         description: Tri-state filter on deleted videos (deleted in Youtarr or by automatic cleanup, marked as deleted, or removed before Youtarr recorded why). With `exclude`, the response's `hiddenDeletedCount` says how many were hidden.
    *       - in: query
    *         name: watchedFilter
    *         schema:
@@ -212,7 +220,7 @@ module.exports = function createVideoRoutes({
    *         description: Hide videos rated above this rating. Unrated videos are always included.
    *     responses:
    *       200:
-   *         description: Paginated list of videos
+   *         description: Paginated list of videos. Each row carries `removed`, `removed_reason`, `removed_at` and `removed_detail`. `libraryWarning` is set when videos were not marked missing because the downloads folder looked unmounted.
    *       400:
    *         description: Invalid maxRating
    *       500:
@@ -222,7 +230,7 @@ module.exports = function createVideoRoutes({
     req.log.info('Getting videos');
 
     try {
-      const { page, limit, search, dateFrom, dateTo, sortBy, sortOrder, channelFilter, protectedFilter, missingFilter, watchedFilter } = req.query;
+      const { page, limit, search, dateFrom, dateTo, sortBy, sortOrder, channelFilter, protectedFilter, missingFilter, deletedFilter, watchedFilter } = req.query;
 
       const maxRating = ratingMapper.parseMaxRatingParam(req.query.maxRating);
       if (!maxRating.valid) {
@@ -242,6 +250,7 @@ module.exports = function createVideoRoutes({
         channelFilter: channelFilter || '',
         protectedFilter: parseFilterMode(protectedFilter),
         missingFilter: parseFilterMode(missingFilter),
+        deletedFilter: parseFilterMode(deletedFilter),
         watchedFilter: parseFilterMode(watchedFilter),
         maxRating: maxRating.value,
       };

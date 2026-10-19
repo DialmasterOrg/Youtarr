@@ -139,6 +139,10 @@ const PlaylistVideoTable: React.FC<PlaylistVideoTableProps> = ({
                         <Chip label={status.label} color={status.color} size="small" />
                       )}
                     </>
+                  ) : status.tooltip ? (
+                    <Tooltip title={status.tooltip} enterTouchDelay={0}>
+                      <Chip label={status.label} color={status.color} size="small" />
+                    </Tooltip>
                   ) : (
                     <Chip label={status.label} color={status.color} size="small" />
                   )}

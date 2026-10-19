@@ -374,9 +374,11 @@ Videos can become "missing" if they're manually deleted from disk. This feature 
 
 > **Note**: If the file still exists somewhere (you moved it, renamed its folder, or converted it to a different format), use [Rescan Files on Disk](#rescan-files-on-disk) instead. Rescan reconciles Youtarr's database with what's already on disk without re-downloading.
 
+Youtarr tells two kinds of gone-from-disk videos apart. **Deleted** (grey) means Youtarr removed the file itself, through a delete in the app or automatic cleanup, or you marked it as deleted; the Videos page hides these by default behind the **Deleted** filter chip, and remembers it when you turn them back on. **Missing** (red) means Youtarr expected a file and could not find it; these stay visible so you can check on them. Hover over or tap either chip, or open the video, for the reason in plain words. When a missing video really is gone, select it and choose **Mark as deleted** (or use the same button in the video's window, from any page), or mark them all from **Settings -> Maintenance & Rescan**, where **Empty trash...** can also forget deleted and missing videos entirely (see [Troubleshooting](TROUBLESHOOTING.md#deleted-vs-missing-videos-and-emptying-the-trash) for what that removes and how it treats the download archive). Both kinds can be re-downloaded with the steps below.
+
 1. **Identify missing videos**
    - Go to "Downloaded Videos" or a specific channel's video page
-   - Look for videos marked with a cloud-off icon (indicates missing from disk)
+   - Look for videos marked with a cloud-off icon (missing from disk) or a trash icon (deleted); on the Videos page, turn the **Deleted** filter chip off to see deleted videos
    - The video metadata is still in Youtarr's database, but the file is gone
 
 2. **Select videos to re-download**
@@ -408,6 +410,8 @@ Common cases:
 You can also start a rescan with **Run now** on the Rescan files on disk card in **Settings -> Scheduling**.
 
 A scan also runs daily on a schedule and once at server startup, so changes you make outside Youtarr will eventually be picked up even if you don't trigger a manual rescan.
+
+If the downloads folder is missing or empty when the scan runs, as it is while a drive or network share is unmounted, the scan does not mark anything missing: it records a run that names the folder and asks whether the drive is mounted, and the Videos page shows the same warning. If only some of its `__subfolders` are empty or unreadable, just the videos stored in those subfolders are left alone; an empty subfolder no video is stored in (for example one a channel was moved out of) does not count. Mount the share and run it again. If the folder really is empty because you removed the files yourself, **Rescan anyway...** on the Deleted and missing videos card runs the scan without that check; it marks every video whose file is gone as missing, and **Mark all missing as deleted** then asks you to confirm that you emptied the folder yourself before marking them.
 
 **Supported file extensions**: `.mp4`, `.webm`, `.mkv`, `.m4v`, `.avi` for video, plus `.mp3` for audio-only downloads. Youtarr only writes `.mp4` (or `.mp3` for audio-only), but the rescan recognizes any of these so transcoding outside Youtarr won't orphan your library. Files must keep the `[<youtube-id>]` segment in their filename (the 11-character ID in brackets that yt-dlp writes by default) for Youtarr to match them back to the database.
 

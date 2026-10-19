@@ -2,8 +2,17 @@ import React from 'react';
 import { CalendarToday as CalendarTodayIcon } from '../../../lib/icons';
 import { PlaylistSortOrder } from '../../../hooks/usePlaylistDetail';
 import { PlaylistVideo } from '../../../types/playlist';
+import { VideoModalData } from '../../shared/VideoModal/types';
+import { describeRemoval, removalFromRow, removedState } from '../../../utils/videoRemoval';
 
 export type PlaylistVideoStatusColor = 'success' | 'default' | 'warning' | 'error' | 'info';
+
+export interface PlaylistVideoStatus {
+  label: string;
+  color: PlaylistVideoStatusColor;
+  // Plain-language explanation for a removed video, shown on hover or tap.
+  tooltip?: string;
+}
 
 // Ignored videos stay downloadable: explicitly selecting one is an intentional
 // override of the ignore.
@@ -28,14 +37,54 @@ export function toDownloadFileProps(v: PlaylistVideo): {
   };
 }
 
-export function statusLabel(v: PlaylistVideo): { label: string; color: PlaylistVideoStatusColor } {
+// The modal's status follows the file first: a present file is downloaded
+// whatever YouTube did since, a previously downloaded one reads its removal
+// state, and only a never-downloaded video that YouTube removed is missing.
+export function toModalData(v: PlaylistVideo): VideoModalData {
+  const status: VideoModalData['status'] = v.downloaded
+    ? 'downloaded'
+    : v.previously_downloaded
+      ? removedState(v.removed_reason)
+      : v.youtube_removed
+        ? 'missing'
+        : 'never_downloaded';
+  return {
+    removal: removalFromRow(v),
+    youtubeId: v.youtube_id,
+    title: v.title || v.youtube_id,
+    channelName: v.channel_name || '',
+    thumbnailUrl: v.thumbnail || `https://i.ytimg.com/vi/${v.youtube_id}/hqdefault.jpg`,
+    duration: v.duration,
+    publishedAt: v.published_at,
+    addedAt: v.downloaded_at ?? null,
+    mediaType: 'video',
+    status,
+    isDownloaded: v.downloaded,
+    ...toDownloadFileProps(v),
+    isProtected: false,
+    isIgnored: v.ignored,
+    normalizedRating: null,
+    ratingSource: null,
+    databaseId: v.video_id,
+    channelId: v.channel_id,
+  };
+}
+
+export function statusLabel(v: PlaylistVideo): PlaylistVideoStatus {
   if (v.activity) return { label: v.activity === 'queued' ? 'Queued…' : 'Downloading…', color: 'info' };
   // "Excluded" is the user-facing name for the per-playlist `ignored` flag:
   // left out of this playlist's downloads, server sync, and M3U files.
   if (v.ignored) return { label: 'Excluded', color: 'warning' };
   if (v.youtube_removed) return { label: 'Removed on YT', color: 'error' };
   if (v.downloaded) return { label: 'Downloaded', color: 'success' };
-  if (v.previously_downloaded) return { label: 'Missing', color: 'error' };
+  if (v.previously_downloaded) {
+    // Missing (file not found) is a warning; deleted (removed by Youtarr) is not.
+    const state = removedState(v.removed_reason);
+    const tooltip = describeRemoval(state, removalFromRow(v), v.file_path);
+    return state === 'missing'
+      ? { label: 'Missing', color: 'error', tooltip }
+      : { label: 'Deleted', color: 'default', tooltip };
+  }
   return { label: 'Tracked', color: 'default' };
 }
 

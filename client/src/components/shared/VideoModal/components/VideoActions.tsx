@@ -9,7 +9,7 @@ import {
   Shield as ShieldIcon,
   ShieldCheck as ShieldOutlinedIcon,
 } from '../../../../lib/icons';
-import { Youtube as YoutubeIcon } from 'lucide-react';
+import { FileX as MarkDeletedIcon, Youtube as YoutubeIcon } from 'lucide-react';
 import { VideoModalData } from '../types';
 import {
   getMediaTypeInfo,
@@ -18,6 +18,7 @@ import {
   getStatusColor,
   getStatusIcon,
   getStatusLabel,
+  isRemovedStatus,
 } from '../../../../utils/videoStatus';
 import { SHARED_STATUS_CHIP_STYLE, SHARED_THEMED_CHIP_STYLE } from '../../../shared/chipStyles';
 import { YOUTUBE_URL_BASE } from '../constants';
@@ -29,7 +30,9 @@ interface VideoActionsProps {
   onIgnoreToggle: () => void;
   onDownloadClick: () => void;
   onRatingClick: () => void;
+  onMarkDeleted: () => void;
   protectionLoading: boolean;
+  markDeletedPending: boolean;
   isMobile: boolean;
   allowIgnore?: boolean;
 }
@@ -41,15 +44,18 @@ function VideoActions({
   onIgnoreToggle,
   onDownloadClick,
   onRatingClick,
+  onMarkDeleted,
   protectionLoading,
+  markDeletedPending,
   isMobile,
   allowIgnore = true,
 }: VideoActionsProps) {
-  const isDownloadedAndPresent = video.isDownloaded && video.status !== 'missing';
+  const isDownloadedAndPresent = video.isDownloaded && !isRemovedStatus(video.status);
   const showProtect = isDownloadedAndPresent;
   const showDownload = !isDownloadedAndPresent && video.status !== 'queued' && video.status !== 'downloading';
   const showIgnore = (!isDownloadedAndPresent || video.isIgnored) && allowIgnore;
   const showDelete = isDownloadedAndPresent;
+  const showMarkDeleted = video.status === 'missing' && video.databaseId !== null;
   const mediaTypeInfo = getMediaTypeInfo(video.mediaType);
   const statusLabel = video.status === 'downloaded' ? 'Available' : getStatusLabel(video.status);
   const youtubeUrl = `${YOUTUBE_URL_BASE}${video.youtubeId}`;
@@ -83,7 +89,8 @@ function VideoActions({
     <Box
       style={{
         display: 'flex',
-        flexWrap: 'nowrap',
+        // On a phone, a labeled button that does not fit moves to a second line instead of being cut off.
+        flexWrap: isMobile ? 'wrap' : 'nowrap',
         alignItems: 'center',
         gap: 'var(--video-modal-action-row-gap, 8px)',
         paddingTop: 'var(--video-modal-action-row-padding-y, 2px)',
@@ -221,6 +228,24 @@ function VideoActions({
       </Tooltip>
 
       <Box style={{ flex: 1, minWidth: isMobile ? 0 : 12 }} />
+
+      {showMarkDeleted && (
+        // Labeled even on a phone: it acts on the first tap, and its icon alone does not say what it does.
+        <Tooltip title="The file is really gone: hide this video from the Videos page by default">
+          <Button
+            size="small"
+            variant="outlined"
+            color="warning"
+            onClick={onMarkDeleted}
+            disabled={markDeletedPending}
+            aria-label="Mark as deleted"
+            startIcon={<MarkDeletedIcon size={16} />}
+            style={labeledActionButtonStyle}
+          >
+            Mark as deleted
+          </Button>
+        </Tooltip>
+      )}
 
       {showDelete && (
         <Tooltip title="Delete video">

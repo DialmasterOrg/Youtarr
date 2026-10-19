@@ -26,15 +26,31 @@ it('merges downloaded and removed records while leaving unknown videos alone', a
     { id: 1, youtubeId: 'aaaaaaaaaaa', removed: false, filePath: '/video.mp4', fileSize: 123,
       audioFilePath: '/audio.mp3', audioFileSize: 45, last_downloaded_at: '2026-09-01T00:00:00Z',
       protected: true, normalized_rating: 'PG', rating_source: 'manual' },
-    { id: 2, youtubeId: 'bbbbbbbbbbb', removed: true, last_downloaded_at: null, protected: false },
+    { id: 2, youtubeId: 'bbbbbbbbbbb', removed: true, removed_reason: 'not_found', removed_at: '2026-10-03T00:00:00Z',
+      removed_detail: null, last_downloaded_at: null, protected: false },
   ]);
   const results = pending('aaaaaaaaaaa', 'bbbbbbbbbbb', 'ccccccccccc');
   await applyLocalVideoStatus(results);
   expect(results[0]).toMatchObject({ status: 'downloaded', databaseId: 1, filePath: '/video.mp4',
     fileSize: 123, audioFilePath: '/audio.mp3', audioFileSize: 45, addedAt: '2026-09-01T00:00:00.000Z',
-    isProtected: true, normalizedRating: 'PG', ratingSource: 'manual' });
-  expect(results[1]).toMatchObject({ status: 'missing', databaseId: 2, addedAt: null, isProtected: false });
+    isProtected: true, normalizedRating: 'PG', ratingSource: 'manual', removedReason: null, removedAt: null, removedDetail: null });
+  expect(results[1]).toMatchObject({ status: 'missing', databaseId: 2, addedAt: null, isProtected: false,
+    removedReason: 'not_found', removedAt: '2026-10-03T00:00:00.000Z', removedDetail: null });
   expect(results[2]).toEqual({ youtubeId: 'ccccccccccc', status: 'never_downloaded', inArchive: false });
+});
+
+it('reports a video Youtarr removed as deleted, with why', async () => {
+  Video.findAll.mockResolvedValue([
+    { id: 3, youtubeId: 'ddddddddddd', removed: true, removed_reason: 'auto_removal',
+      removed_at: new Date('2026-10-03T00:00:00Z'), removed_detail: 'older than 30 days' },
+    { id: 4, youtubeId: 'eeeeeeeeeee', removed: true, removed_reason: null, removed_at: null, removed_detail: null },
+  ]);
+  const results = pending('ddddddddddd', 'eeeeeeeeeee');
+  await applyLocalVideoStatus(results);
+  expect(results[0]).toMatchObject({ status: 'deleted', removedReason: 'auto_removal',
+    removedAt: '2026-10-03T00:00:00.000Z', removedDetail: 'older than 30 days' });
+  // Removed before the reason was recorded: deleted, with nothing to explain it.
+  expect(results[1]).toMatchObject({ status: 'deleted', removedReason: null, removedAt: null, removedDetail: null });
 });
 
 describe('inArchive', () => {
