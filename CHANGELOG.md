@@ -1,5 +1,38 @@
 # Changelog
 
+## [v1.90.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.90.0) - 2026-10-20
+
+### Features
+
+* add library cleanup hints and path tooltips ([84fb3c8](https://github.com/DialmasterOrg/Youtarr/commit/84fb3c891af4eb71064b1be48f0ea36b95146a1c)), closes [#670](https://github.com/DialmasterOrg/Youtarr/issues/670)
+* delete videos from the playlist page ([a2f601f](https://github.com/DialmasterOrg/Youtarr/commit/a2f601fe17d5deaa47a38021c957f48904180d5a))
+* separate deleted videos from missing ones ([3e3ba5a](https://github.com/DialmasterOrg/Youtarr/commit/3e3ba5a4e1c55c2f3cf760b3cba3a93b07999b5a)), closes [#670](https://github.com/DialmasterOrg/Youtarr/issues/670)
+* **find-videos:** make YouTube search easier to use ([a1bca45](https://github.com/DialmasterOrg/Youtarr/commit/a1bca45ad55b56735195050f1404a9b8c72aec73))
+
+
+### Bug Fixes
+
+* harden the unmounted-drive guard and trash UI ([ffc6d89](https://github.com/DialmasterOrg/Youtarr/commit/ffc6d89410031eff62580ff72ec3cf920dda3473)), closes [#670](https://github.com/DialmasterOrg/Youtarr/issues/670)
+* hide filter chips while inline panel is open ([630c175](https://github.com/DialmasterOrg/Youtarr/commit/630c1758d4cdbc6e24efa383a3ff6861805b8590))
+* keep video list button text readable on hover ([b16e7f4](https://github.com/DialmasterOrg/Youtarr/commit/b16e7f4649cec8d91c0893a0b4304a7b6b941557))
+* scope the unmounted-drive guard by subfolder ([0eb698a](https://github.com/DialmasterOrg/Youtarr/commit/0eb698ad23efa3023150bf600f6a37954bae9ae5)), closes [#670](https://github.com/DialmasterOrg/Youtarr/issues/670)
+* tidy trash wording and label mark as deleted ([006bb04](https://github.com/DialmasterOrg/Youtarr/commit/006bb04bdecab63c47317a6afd9eb92d8f40ff35)), closes [#670](https://github.com/DialmasterOrg/Youtarr/issues/670)
+* **deps:** bump follow-redirects to 1.16.1 ([3394eae](https://github.com/DialmasterOrg/Youtarr/commit/3394eaea78a87a05655b284b1bcd69c41e96422a))
+
+
+### Documentation
+
+* update CHANGELOG for v1.89.0 [skip ci] ([d8379ea](https://github.com/DialmasterOrg/Youtarr/commit/d8379ea0648e0903b985bc06020ed6dae3a0571d))
+
+
+### Continuous Integration
+
+* bump anthropics/claude-code-action ([fa7b3b6](https://github.com/DialmasterOrg/Youtarr/commit/fa7b3b6d34b8ac1dbf1b7aaca1bd0b57a611812b))
+* bump the github-actions group with 15 updates ([a501516](https://github.com/DialmasterOrg/Youtarr/commit/a501516cd02297e92d43536a2cd45bc6b51abf64))
+* correct action version comments ([dbbd962](https://github.com/DialmasterOrg/Youtarr/commit/dbbd96281fc7c5afd8ae13e82200af7ccb6fd809))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.89.0...v1.90.0
+
 ## [v1.89.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.89.0) - 2026-10-17
 
 ### Features
