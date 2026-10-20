@@ -1,6 +1,7 @@
 export { default as VideoListContainer } from './VideoListContainer';
 export { default as VideoListToolbar } from './VideoListToolbar';
 export { default as VideoListViewToggle } from './VideoListViewToggle';
+export { default as VideoListSortButton } from './VideoListSortButton';
 export { default as VideoListFilterPanel } from './VideoListFilterPanel';
 export { default as VideoListFilterChips, countActiveFilters, hasActiveFilters, clearAllFilters } from './VideoListFilterChips';
 export { default as VideoListSelectionPill } from './VideoListSelectionPill';

@@ -22,7 +22,7 @@ import AvailabilityChip from '../../shared/AvailabilityChip';
 import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../../shared/chipStyles';
 import { DELETED_OVERLAY_BACKGROUND, getRemovalState } from '../../../utils/videoRemoval';
 import RemovalDescription from '../../shared/RemovalDescription';
-import ChannelNameDisplay from './ChannelNameDisplay';
+import ChannelNameDisplay from '../../shared/ChannelNameDisplay';
 import WatchedChip from '../../shared/WatchedChip';
 
 export interface VideoCardProps {
