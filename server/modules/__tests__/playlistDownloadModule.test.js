@@ -1,7 +1,9 @@
 jest.mock('../../logger', () => ({ error: jest.fn() }));
 jest.mock('../download/videoActivity', () => ({ isActive: jest.fn(() => false) }));
+jest.mock('../archiveOnlyIds', () => ({ findArchiveOnlyIds: jest.fn() }));
 const playlistDownloads = require('../playlistDownloadModule');
 const videoActivity = require('../download/videoActivity');
+const { findArchiveOnlyIds } = require('../archiveOnlyIds');
 
 const baseline = new Date('2026-09-01T00:00:00Z');
 const playlist = { playlist_id: 'PL1', auto_download: true, auto_download_baseline_at: baseline, auto_download_baseline_id: 10 };
@@ -25,6 +27,32 @@ describe('playlistDownloadModule', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     videoActivity.isActive.mockReturnValue(false);
+    findArchiveOnlyIds.mockResolvedValue(new Set());
+  });
+
+  test('leaves out videos the download archive lists without a row, such as emptied from the trash', async () => {
+    findArchiveOnlyIds.mockResolvedValue(new Set(['old']));
+    const { candidates } = await playlistDownloads.getTrackedVideos('PL1', dependencies());
+    expect(candidates.map((row) => row.youtube_id)).toEqual(['new']);
+  });
+
+  test('looks up the archive only for videos without a row', async () => {
+    const deps = dependencies();
+    deps.Video.findAll.mockResolvedValue([{ youtubeId: 'old' }]);
+    await playlistDownloads.getTrackedVideos('PL1', deps);
+    expect(findArchiveOnlyIds).toHaveBeenCalledWith(['new']);
+  });
+
+  test('keeps archived videos when re-downloading is allowed', async () => {
+    findArchiveOnlyIds.mockResolvedValue(new Set(['old']));
+    const { candidates } = await playlistDownloads.getTrackedVideos('PL1', dependencies(), { allowRedownload: true });
+    expect(candidates.map((row) => row.youtube_id)).toEqual(['old', 'new']);
+  });
+
+  test('leaves archived videos out of the not-downloaded count', async () => {
+    findArchiveOnlyIds.mockResolvedValue(new Set(['new']));
+    expect(await playlistDownloads.getCounts(playlist, dependencies()))
+      .toMatchObject({ not_downloaded_count: 1 });
   });
 
   test('keeps channel attribution for all download paths', async () => {

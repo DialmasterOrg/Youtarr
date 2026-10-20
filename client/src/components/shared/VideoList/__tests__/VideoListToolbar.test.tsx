@@ -98,6 +98,47 @@ describe('VideoListToolbar', () => {
     expect(onFiltersClick).toHaveBeenCalledTimes(1);
   });
 
+  test('inactive filters button keeps foreground text on hover', () => {
+    renderWithProviders(
+      <VideoListToolbar
+        state={buildState()}
+        viewModes={VIEW_MODES}
+        onFiltersClick={jest.fn()}
+        isMobile={false}
+      />
+    );
+    const filtersButton = screen.getByTestId('video-list-filters-button');
+    expect(filtersButton).toHaveClass('hover:text-foreground');
+    expect(filtersButton).not.toHaveClass('hover:text-primary-foreground');
+  });
+
+  test('active filters button uses the primary fill', () => {
+    renderWithProviders(
+      <VideoListToolbar
+        state={buildState()}
+        viewModes={VIEW_MODES}
+        onFiltersClick={jest.fn()}
+        filtersButtonActive
+        isMobile={false}
+      />
+    );
+    expect(screen.getByTestId('video-list-filters-button')).toHaveClass('bg-primary');
+  });
+
+  test('sort button keeps foreground text on hover', () => {
+    renderWithProviders(
+      <VideoListToolbar
+        state={buildState()}
+        viewModes={VIEW_MODES}
+        sort={buildSort()}
+        isMobile={false}
+      />
+    );
+    const sortButton = screen.getByTestId('video-list-sort-button');
+    expect(sortButton).toHaveClass('hover:text-foreground');
+    expect(sortButton).not.toHaveClass('hover:text-primary-foreground');
+  });
+
   test('omits the sort button when sort prop is missing', () => {
     renderWithProviders(
       <VideoListToolbar

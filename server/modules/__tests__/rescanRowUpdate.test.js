@@ -5,10 +5,17 @@ const MP4 = '/videos/Channel/Video [abc].mp4';
 const MP3 = '/videos/Channel/Video [abc].mp3';
 const MOVED_MP4 = '/videos/Other/Video [abc].mp4';
 
+// What the rescan writes when a row loses its files, and when they are (back) on disk.
+const MISSING = { removed: true, removed_reason: 'not_found', removed_at: expect.any(Date), removed_detail: null };
+const PRESENT = { removed: false, removed_reason: null, removed_at: null, removed_detail: null };
+
 const row = (overrides = {}) => ({
   id: 1,
   youtubeId: 'abc',
   removed: 0,
+  removed_reason: null,
+  removed_at: null,
+  removed_detail: null,
   filePath: null,
   fileSize: null,
   audioFilePath: null,
@@ -69,7 +76,7 @@ describe('resolveRescanUpdate', () => {
       row({ filePath: MP4, fileSize: '1000', audioFilePath: MP3, audioFileSize: '500', video_resolution: '1920x1080' }),
       undefined, null, diskWith({})
     );
-    expect(update).toEqual({ removed: true });
+    expect(update).toEqual(MISSING);
   });
 
   test('writes nothing for a row already missing whose files are still gone', async () => {
@@ -88,7 +95,21 @@ describe('resolveRescanUpdate', () => {
       row({ filePath: MP4, fileSize: '1000', removed: 1 }),
       { videoFilePath: MP4, videoFileSize: 1000 }, null, diskWith({ [MP4]: 1000 })
     );
-    expect(update).toEqual({ removed: false });
+    expect(update).toEqual(PRESENT);
+  });
+
+  test('restores a deleted row whose file is back, clearing why it was removed', async () => {
+    const update = await resolveRescanUpdate(
+      row({ filePath: MP4, fileSize: '1000', removed: 1, removed_reason: 'marked_deleted', removed_at: new Date('2026-10-03T00:00:00Z') }),
+      { videoFilePath: MP4, videoFileSize: 1000 }, null, diskWith({ [MP4]: 1000 })
+    );
+    expect(update).toEqual(PRESENT);
+  });
+
+  test('leaves a deleted row deleted while its files are still gone', async () => {
+    expect(await resolveRescanUpdate(
+      row({ filePath: MP4, removed: 1, removed_reason: 'user_deleted' }), undefined, null, diskWith({})
+    )).toBeNull();
   });
 
   test('records a moved file at the path the walk found, with its fresh size', async () => {
@@ -96,7 +117,7 @@ describe('resolveRescanUpdate', () => {
       row({ filePath: MP4, fileSize: '1000' }),
       { videoFilePath: MOVED_MP4, videoFileSize: 1000 }, null, diskWith({ [MOVED_MP4]: 1200 })
     );
-    expect(update).toEqual({ filePath: MOVED_MP4, fileSize: 1200, removed: false });
+    expect(update).toEqual({ filePath: MOVED_MP4, fileSize: 1200, ...PRESENT });
   });
 
   test('falls back to the stored path when the walked path is gone', async () => {
@@ -112,7 +133,7 @@ describe('resolveRescanUpdate', () => {
       row({ filePath: MP4, fileSize: '1000', audioFilePath: MP3, audioFileSize: '500', video_resolution: '1920x1080' }),
       { audioFilePath: MP3, audioFileSize: 500 }, null, diskWith({ [MP3]: 500 })
     );
-    expect(update).toEqual({ filePath: null, fileSize: null, video_resolution: null, removed: false });
+    expect(update).toEqual({ filePath: null, fileSize: null, video_resolution: null, ...PRESENT });
   });
 
   test('keeps a format that appeared after the walk', async () => {
@@ -128,7 +149,7 @@ describe('resolveRescanUpdate', () => {
       row({ filePath: MP4, fileSize: '900' }),
       { videoFilePath: MP4, videoFileSize: 1000 }, null, diskWith({ [MP4]: 1100 })
     );
-    expect(update).toEqual({ fileSize: 1100, removed: false });
+    expect(update).toEqual({ fileSize: 1100, ...PRESENT });
   });
 
   test('stores a probed resolution only while the probed file is unchanged', async () => {
@@ -139,8 +160,8 @@ describe('resolveRescanUpdate', () => {
     const replaced = await resolveRescanUpdate(
       row({ filePath: MP4, fileSize: '1000' }), fileInfo, '1920x1080', diskWith({ [MP4]: 2000 })
     );
-    expect(unchanged).toEqual({ video_resolution: '1920x1080', removed: false });
-    expect(replaced).toEqual({ fileSize: 2000, removed: false });
+    expect(unchanged).toEqual({ video_resolution: '1920x1080', ...PRESENT });
+    expect(replaced).toEqual({ fileSize: 2000, ...PRESENT });
   });
 
   test('leaves the row alone when its only file cannot be checked', async () => {
@@ -154,14 +175,14 @@ describe('resolveRescanUpdate', () => {
     const update = await resolveRescanUpdate(
       row({ filePath: MP4, fileSize: '1000' }), undefined, null, diskWith({}, { [MP4]: 'ENOTDIR' })
     );
-    expect(update).toEqual({ removed: true });
+    expect(update).toEqual(MISSING);
   });
 
   test('does not record a directory at the stored path as the file', async () => {
     const update = await resolveRescanUpdate(
       row({ filePath: MP4, fileSize: '1000' }), undefined, null, diskWith({}, {}, [MP4])
     );
-    expect(update).toEqual({ removed: true });
+    expect(update).toEqual(MISSING);
   });
 
   test('neither clears nor marks missing while one format cannot be checked', async () => {
@@ -177,7 +198,7 @@ describe('resolveRescanUpdate', () => {
       row({ filePath: MP4, fileSize: '900', audioFilePath: MP3, audioFileSize: '500' }),
       undefined, null, diskWith({ [MP4]: 1000 }, { [MP3]: 'EIO' })
     );
-    expect(update).toEqual({ fileSize: 1000, removed: false });
+    expect(update).toEqual({ fileSize: 1000, ...PRESENT });
   });
 
   test('restores a missing row whose video is back even though its audio cannot be checked', async () => {
@@ -185,7 +206,7 @@ describe('resolveRescanUpdate', () => {
       row({ removed: 1, filePath: MP4, fileSize: '1000', audioFilePath: MP3, audioFileSize: '500' }),
       { videoFilePath: MP4, videoFileSize: 1000 }, null, diskWith({ [MP4]: 1000 }, { [MP3]: 'EIO' })
     );
-    expect(update).toEqual({ removed: false });
+    expect(update).toEqual(PRESENT);
   });
 
   // videoRowGuard can't tell a no-op write from a conflict (Sequelize connects

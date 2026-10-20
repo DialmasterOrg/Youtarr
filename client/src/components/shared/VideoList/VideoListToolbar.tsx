@@ -1,21 +1,8 @@
-import React, { useState } from 'react';
-import {
-  Badge,
-  Button,
-  Menu,
-  MenuItem,
-  TextField,
-  ListItemIcon,
-  ListItemText,
-} from '../../ui';
-import {
-  Search as SearchIcon,
-  ListFilter as FilterListIcon,
-  ArrowUpward as ArrowUpIcon,
-  ArrowDownward as ArrowDownIcon,
-  Check as CheckIcon,
-} from '../../../lib/icons';
+import React from 'react';
+import { Badge, Button, TextField } from '../../ui';
+import { Search as SearchIcon, ListFilter as FilterListIcon } from '../../../lib/icons';
 import VideoListViewToggle from './VideoListViewToggle';
+import VideoListSortButton from './VideoListSortButton';
 import { VideoListViewMode, SortConfig } from './types';
 import { VideoListState } from './hooks/useVideoListState';
 
@@ -30,68 +17,6 @@ export interface VideoListToolbarProps {
   toolbarExtras?: React.ReactNode;
   rightActions?: React.ReactNode;
   isMobile: boolean;
-}
-
-function SortButton({ sort }: { sort: SortConfig }) {
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-
-  const active = sort.options.find((o) => o.key === sort.activeKey);
-  const label = active ? active.label : 'Sort';
-  const DirectionIcon = sort.direction === 'asc' ? ArrowUpIcon : ArrowDownIcon;
-
-  return (
-    <>
-      <Button
-        variant="outlined"
-        size="small"
-        onClick={(e) => setAnchorEl(e.currentTarget)}
-        className="text-foreground border-border hover:bg-muted hover:border-foreground"
-        endIcon={<DirectionIcon size={14} />}
-        data-testid="video-list-sort-button"
-      >
-        Sort: {label}
-      </Button>
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={() => setAnchorEl(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-      >
-        {sort.options.map((option) => {
-          const isActive = option.key === sort.activeKey;
-          return (
-            <MenuItem
-              key={option.key}
-              onClick={() => {
-                if (isActive) {
-                  sort.onChange(option.key, sort.direction === 'asc' ? 'desc' : 'asc');
-                } else {
-                  sort.onChange(option.key, 'desc');
-                }
-                setAnchorEl(null);
-              }}
-            >
-              <ListItemText>{option.label}</ListItemText>
-              {isActive && (
-                <ListItemIcon style={{ marginLeft: 8, minWidth: 'auto' }}>
-                  {sort.direction === 'asc' ? (
-                    <ArrowUpIcon size={14} />
-                  ) : (
-                    <ArrowDownIcon size={14} />
-                  )}
-                </ListItemIcon>
-              )}
-              {!isActive && (
-                <ListItemIcon style={{ marginLeft: 8, minWidth: 'auto', opacity: 0 }}>
-                  <CheckIcon size={14} />
-                </ListItemIcon>
-              )}
-            </MenuItem>
-          );
-        })}
-      </Menu>
-    </>
-  );
 }
 
 function VideoListToolbar({
@@ -109,6 +34,7 @@ function VideoListToolbar({
   const filtersButton = onFiltersClick ? (
     <Button
       variant={filtersButtonActive ? 'contained' : 'outlined'}
+      color={filtersButtonActive ? 'primary' : 'inherit'}
       size="small"
       onClick={onFiltersClick}
       startIcon={
@@ -120,11 +46,7 @@ function VideoListToolbar({
           <FilterListIcon size={16} />
         </Badge>
       }
-      className={
-        filtersButtonActive
-          ? undefined
-          : 'text-foreground border-border hover:bg-muted hover:border-foreground'
-      }
+      className={filtersButtonActive ? undefined : 'hover:border-foreground'}
       data-testid="video-list-filters-button"
     >
       Filters
@@ -147,7 +69,7 @@ function VideoListToolbar({
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <VideoListViewToggle value={state.viewMode} modes={viewModes} onChange={state.setViewMode} />
           {filtersButton}
-          {sort && <SortButton sort={sort} />}
+          {sort && <VideoListSortButton sort={sort} />}
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
             {rightActions}
           </div>
@@ -182,7 +104,7 @@ function VideoListToolbar({
       />
       <VideoListViewToggle value={state.viewMode} modes={viewModes} onChange={state.setViewMode} />
       {filtersButton}
-      {sort && <SortButton sort={sort} />}
+      {sort && <VideoListSortButton sort={sort} />}
       {toolbarExtras}
       <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
         {rightActions}

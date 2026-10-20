@@ -221,6 +221,9 @@ class JellyfinAdapter extends BaseAdapter {
       const status = err.response?.status;
       logger.warn({ status, playlistId }, 'jellyfin replacePlaylistItems: delete failed, creating fresh');
     }
+    // An empty playlist cannot be created, so an emptied one stays deleted
+    // (id null) until the next sync with items creates it again.
+    if (itemIds.length === 0) return { id: null };
     return this.createPlaylist(opts.name, itemIds, { public: !!opts.public, mediaType: opts.mediaType });
   }
 }

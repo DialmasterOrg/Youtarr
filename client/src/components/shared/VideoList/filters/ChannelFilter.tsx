@@ -39,10 +39,11 @@ function ChannelFilter({ value, options, onChange, buttonLabel }: ChannelFilterP
     <>
       <Button
         variant="outlined"
+        color="inherit"
         size="small"
         startIcon={<FilterListIcon size={16} data-testid="FilterListIcon" />}
         onClick={(event) => setAnchorEl(event.currentTarget)}
-        className="text-foreground border-border hover:bg-muted hover:border-foreground"
+        className="hover:border-foreground"
       >
         {label}
       </Button>

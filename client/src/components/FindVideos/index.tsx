@@ -1,45 +1,34 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useVideoActivity } from '../../providers/VideoActivityProvider';
 import { useLocalVideoStatus } from '../../hooks/useLocalVideoStatus';
-import { useNavigate } from 'react-router-dom';
+import { removedState } from '../../utils/videoRemoval';
 import { Alert, Box, Typography } from '../ui';
 import { Download as DownloadIcon } from '../../lib/icons';
 import VideoModal from '../shared/VideoModal';
 import { VideoModalData } from '../shared/VideoModal/types';
+import AddChannelDialog from '../shared/AddChannelDialog';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useConfig } from '../../hooks/useConfig';
-import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
 import { useVideoSelection } from '../shared/VideoList/hooks/useVideoSelection';
 import VideoListSelectionPill from '../shared/VideoList/VideoListSelectionPill';
-import { SelectionAction } from '../shared/VideoList/types';
+import { SelectionAction, SortConfig } from '../shared/VideoList/types';
 import DownloadSettingsDialog from '../DownloadManager/ManualDownload/DownloadSettingsDialog';
-import { DownloadSettings } from '../DownloadManager/ManualDownload/types';
 import SearchBar from './components/SearchBar';
 import ResultsGrid from './components/ResultsGrid';
 import { useVideoSearch } from './hooks/useVideoSearch';
+import { useFindVideosPreferences } from './hooks/useFindVideosPreferences';
+import { useResultDownload } from './hooks/useResultDownload';
+import { DEFAULT_SORT, defaultDirectionFor, isSortKey, SORT_OPTIONS, SortKey, sortResults } from './sortResults';
 import {
-  DEFAULT_MIN_DURATION,
   DEFAULT_PAGE_SIZE,
   isSelectableForDownload,
-  MIN_DURATIONS,
-  MIN_DURATION_STORAGE_KEY,
-  MinDuration,
   PageSize,
   ResultSelection,
   SearchResult,
-  ViewMode,
 } from './types';
 
-function readStoredMinDuration(): MinDuration {
-  try {
-    const raw = window.localStorage.getItem(MIN_DURATION_STORAGE_KEY);
-    if (raw === null) return DEFAULT_MIN_DURATION;
-    const parsed = Number(raw) as MinDuration;
-    return MIN_DURATIONS.includes(parsed) ? parsed : DEFAULT_MIN_DURATION;
-  } catch {
-    return DEFAULT_MIN_DURATION;
-  }
-}
+const QUERY_PARAM = 'q';
 
 interface FindVideosProps {
   token: string | null;
@@ -56,9 +45,10 @@ function toModalData(r: SearchResult): VideoModalData {
     addedAt: r.addedAt ?? null,
     mediaType: 'video',
     status: r.status === 'queued' || r.status === 'downloading'
-      ? (r.isDownloaded ? 'downloaded' : r.databaseId ? 'missing' : 'never_downloaded')
+      ? (r.isDownloaded ? 'downloaded' : r.databaseId ? removedState(r.removedReason) : 'never_downloaded')
       : r.status,
     inArchive: r.inArchive,
+    removal: { reason: r.removedReason ?? null, at: r.removedAt ?? null, detail: r.removedDetail ?? null },
     isDownloaded: r.isDownloaded ?? r.status === 'downloaded',
     filePath: r.filePath ?? null,
     fileSize: r.fileSize ?? null,
@@ -75,19 +65,18 @@ function toModalData(r: SearchResult): VideoModalData {
 
 export default function FindVideos({ token }: FindVideosProps) {
   const isMobile = useMediaQuery('(max-width: 767px)');
-  const navigate = useNavigate();
-  const [query, setQuery] = useState('');
-  const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
-  const [minDuration, setMinDuration] = useState<MinDuration>(readStoredMinDuration);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>(isMobile ? 'table' : 'grid');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlQuery = searchParams.get(QUERY_PARAM);
+  const prefs = useFindVideosPreferences();
+  const { results: searchResults, loading, error, restored, search, cancel } = useVideoSearch(token, { restoreQuery: urlQuery });
+  const [query, setQuery] = useState(restored?.query ?? urlQuery ?? '');
+  const [pageSize, setPageSize] = useState<PageSize>(restored?.count ?? DEFAULT_PAGE_SIZE);
+  const [hasSearched, setHasSearched] = useState(Boolean(restored));
   const [modalVideo, setModalVideo] = useState<VideoModalData | null>(null);
-  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
-  const lastQueryRef = useRef('');
-  const lastPageSizeRef = useRef<PageSize>(DEFAULT_PAGE_SIZE);
+  const [addChannel, setAddChannel] = useState<{ name: string; url: string } | null>(null);
+  const lastQueryRef = useRef(restored?.query ?? '');
+  const lastPageSizeRef = useRef<PageSize>(restored?.count ?? DEFAULT_PAGE_SIZE);
 
-  const { results: searchResults, loading, error, search, cancel } = useVideoSearch(token);
   const { snapshot } = useVideoActivity();
   const localStatuses = useLocalVideoStatus(searchResults.map(r => r.youtubeId), token);
   const results = useMemo(() => searchResults.map(result => ({
@@ -97,41 +86,54 @@ export default function FindVideos({ token }: FindVideosProps) {
     status: snapshot.videos[result.youtubeId]?.state || localStatuses[result.youtubeId]?.status || result.status,
   })), [searchResults, localStatuses, snapshot]);
   const { config } = useConfig(token);
-  const { triggerDownloads } = useTriggerDownloads(token);
 
+  const runSearch = useCallback((trimmed: string, count: PageSize) => {
+    lastQueryRef.current = trimmed;
+    lastPageSizeRef.current = count;
+    setHasSearched(true);
+    setSearchParams({ [QUERY_PARAM]: trimmed }, { replace: true });
+    search(trimmed, count);
+  }, [search, setSearchParams]);
+
+  // Opened with ?q= and nothing remembered for it (a fresh tab, a shared link):
+  // run that search once. Only the query the page was opened with counts; the
+  // ones it writes to the URL itself must not trigger a second search.
+  const openedWithQuery = useRef(urlQuery);
   useEffect(() => {
-    try {
-      window.localStorage.setItem(MIN_DURATION_STORAGE_KEY, String(minDuration));
-    } catch {
-      // localStorage unavailable (private mode, quota); filter still works in-session.
-    }
-  }, [minDuration]);
-
-  const filteredResults = useMemo(() => {
-    if (minDuration === 0) return results;
-    return results.filter((r) => r.duration === null || r.duration >= minDuration);
-  }, [results, minDuration]);
+    const initial = openedWithQuery.current?.trim();
+    if (restored || !initial) return;
+    runSearch(initial, pageSize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const doSearch = useCallback(() => {
     const trimmed = query.trim();
     if (!trimmed) return;
-    setDownloadError(null);
-    lastQueryRef.current = trimmed;
-    lastPageSizeRef.current = pageSize;
-    setHasSearched(true);
-    search(trimmed, pageSize);
-  }, [query, pageSize, search]);
+    runSearch(trimmed, pageSize);
+  }, [query, pageSize, runSearch]);
 
   const onRetry = useCallback(() => {
     if (!lastQueryRef.current) return;
     search(lastQueryRef.current, lastPageSizeRef.current);
   }, [search]);
 
+  const filteredResults = useMemo(() => {
+    if (prefs.minDuration === 0) return results;
+    return results.filter((r) => r.duration === null || r.duration >= prefs.minDuration);
+  }, [results, prefs.minDuration]);
+  const sortedResults = useMemo(
+    () => sortResults(filteredResults, prefs.sort.key, prefs.sort.direction),
+    [filteredResults, prefs.sort]
+  );
+
   const showFilterCount =
-    hasSearched && !loading && !error && minDuration !== 0 && results.length > 0;
+    hasSearched && !loading && !error && prefs.minDuration !== 0 && results.length > 0;
   const allFilteredOut =
     showFilterCount && results.length > 0 && filteredResults.length === 0;
 
+  // The selection's Download action opens the dialog, and the dialog hook needs
+  // the selection: the ref breaks the loop.
+  const openForSelectionRef = useRef<() => void>(() => {});
   const downloadActions: SelectionAction<string>[] = useMemo(
     () => [
       {
@@ -139,16 +141,15 @@ export default function FindVideos({ token }: FindVideosProps) {
         label: 'Download',
         icon: <DownloadIcon size={14} />,
         intent: 'success',
-        onClick: () => {
-          setDownloadError(null);
-          setDownloadDialogOpen(true);
-        },
+        onClick: () => openForSelectionRef.current(),
       },
     ],
     []
   );
 
   const selection = useVideoSelection<string>({ actions: downloadActions });
+  const download = useResultDownload({ token, results, selection, activeVideos: snapshot.videos });
+  openForSelectionRef.current = download.openForSelection;
 
   // Drop selected ids that are no longer eligible (e.g. their status changed,
   // or a new search wiped them from the results list).
@@ -169,40 +170,31 @@ export default function FindVideos({ token }: FindVideosProps) {
     [selection.isSelected, selection.toggle]
   );
 
-  const handleDownloadConfirm = useCallback(
-    async (settings: DownloadSettings | null) => {
-      setDownloadDialogOpen(false);
-      const ids = selection.selectedIds.filter(id => !snapshot.videos[id]?.state);
-      if (ids.length === 0) return;
-      const urls = ids.map((id) => `https://www.youtube.com/watch?v=${id}`);
-      const overrideSettings = settings
-        ? {
-            resolution: settings.resolution,
-            allowRedownload: settings.allowRedownload,
-            subfolder: settings.subfolder,
-            audioFormat: settings.audioFormat,
-            rating: settings.rating,
-            skipVideoFolder: settings.skipVideoFolder,
-          }
-        : undefined;
-      const success = await triggerDownloads({ urls, overrideSettings });
-      if (success === null) return;
-      if (!success) {
-        setDownloadError('Failed to queue selected videos. Please try again.');
-        return;
-      }
-      selection.clear();
-      navigate('/downloads/activity');
-    },
-    [selection, triggerDownloads, navigate, snapshot]
-  );
+  // Column headers cycle: the column's natural direction, the other, then back to relevance.
+  const handleHeaderSort = useCallback((key: SortKey) => {
+    const { sort, setSort } = prefs;
+    if (sort.key !== key) {
+      setSort({ key, direction: defaultDirectionFor(key) });
+    } else if (sort.direction === defaultDirectionFor(key)) {
+      setSort({ key, direction: sort.direction === 'asc' ? 'desc' : 'asc' });
+    } else {
+      setSort(DEFAULT_SORT);
+    }
+  }, [prefs]);
 
-  const missingVideoCount = useMemo(
-    () => results.filter(
-      (r) => selection.isSelected(r.youtubeId) && (r.status === 'missing' || r.inArchive)
-    ).length,
-    [results, selection.isSelected]
-  );
+  // The desktop table sorts through its headers; every other layout gets the menu.
+  const showSortMenu = isMobile || prefs.viewMode === 'grid';
+  const sortConfig: SortConfig | undefined = showSortMenu
+    ? {
+      options: SORT_OPTIONS,
+      activeKey: prefs.sort.key,
+      direction: prefs.sort.direction,
+      onChange: (key, direction) => {
+        if (isSortKey(key)) prefs.setSort({ key, direction });
+      },
+    }
+    : undefined;
+
   const defaultResolution = config.preferredResolution || '1080';
 
   return (
@@ -211,13 +203,14 @@ export default function FindVideos({ token }: FindVideosProps) {
       <SearchBar
         query={query}
         pageSize={pageSize}
-        minDuration={minDuration}
+        minDuration={prefs.minDuration}
         loading={loading}
-        viewMode={viewMode}
+        viewMode={prefs.viewMode}
+        sort={sortConfig}
         onQueryChange={setQuery}
         onPageSizeChange={setPageSize}
-        onMinDurationChange={setMinDuration}
-        onViewModeChange={setViewMode}
+        onMinDurationChange={prefs.setMinDuration}
+        onViewModeChange={prefs.setViewMode}
         onSearch={doSearch}
         onCancel={cancel}
       />
@@ -227,9 +220,9 @@ export default function FindVideos({ token }: FindVideosProps) {
           {results.length - filteredResults.length} hidden by minimum duration filter)
         </Typography>
       )}
-      {downloadError && (
-        <Alert severity="error" onClose={() => setDownloadError(null)}>
-          {downloadError}
+      {download.error && (
+        <Alert severity="error" onClose={download.clearError}>
+          {download.error}
         </Alert>
       )}
       {allFilteredOut ? (
@@ -239,30 +232,42 @@ export default function FindVideos({ token }: FindVideosProps) {
         </Typography>
       ) : (
         <ResultsGrid
-          results={filteredResults}
+          results={sortedResults}
           loading={loading}
           error={error}
           hasSearched={hasSearched}
           lastQuery={lastQueryRef.current}
           pageSize={pageSize}
-          viewMode={viewMode}
+          viewMode={prefs.viewMode}
           onResultClick={(r) => setModalVideo(toModalData(r))}
           onRetry={onRetry}
           selection={resultSelection}
+          sort={prefs.sort}
+          onSortChange={handleHeaderSort}
+          onAddChannel={(name, url) => setAddChannel({ name, url })}
+          onDownloadOne={download.openForOne}
         />
       )}
       <VideoListSelectionPill selection={selection} isMobile={isMobile} />
       <DownloadSettingsDialog
-        open={downloadDialogOpen}
-        onClose={() => setDownloadDialogOpen(false)}
-        onConfirm={handleDownloadConfirm}
-        videoCount={selection.selectedIds.length}
-        missingVideoCount={missingVideoCount}
+        open={download.dialogOpen}
+        onClose={download.close}
+        onConfirm={download.confirm}
+        videoCount={download.targetIds.length}
+        missingVideoCount={download.missingVideoCount}
         defaultResolution={defaultResolution}
         defaultResolutionSource="global"
         mode="manual"
         token={token}
       />
+      {addChannel && (
+        <AddChannelDialog
+          open
+          onClose={() => setAddChannel(null)}
+          channelName={addChannel.name}
+          channelUrl={addChannel.url}
+        />
+      )}
       {modalVideo && (
         <VideoModal
           open

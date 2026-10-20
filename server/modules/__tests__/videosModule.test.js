@@ -1,10 +1,18 @@
 /* eslint-env jest */
 const { Sequelize } = require('sequelize');
+const { stateWhere, notStateWhere } = require('../videoRemovalState');
+
+const { Op } = Sequelize;
+
+// What the rescan and the page-load check write when a file is gone or (back) on disk.
+const MISSING_COLUMNS = { removed: true, removed_reason: 'not_found', removed_at: expect.any(Date), removed_detail: null };
+const PRESENT_COLUMNS = { removed: false, removed_reason: null, removed_at: null, removed_detail: null };
 
 describe('VideosModule', () => {
   let VideosModule;
   let mockSequelize;
   let mockVideo;
+  let mockLibraryRootCheck;
   let mockWatchStatusQueries;
   let mockFs;
   let mockConfigModule;
@@ -130,6 +138,13 @@ describe('VideosModule', () => {
 
     jest.doMock('../youtubeExistenceCheck', () => mockYoutubeExistenceCheck);
 
+    // The downloads folder looks mounted unless a test says otherwise.
+    mockLibraryRootCheck = {
+      ...jest.requireActual('../libraryRootCheck'),
+      checkLibraryRoot: jest.fn().mockResolvedValue({ ok: true }),
+    };
+    jest.doMock('../libraryRootCheck', () => mockLibraryRootCheck);
+
     jest.doMock('../nfoGenerator', () => mockNfoGenerator);
 
     jest.doMock('../messageEmitter', () => mockMessageEmitter);
@@ -216,7 +231,9 @@ describe('VideosModule', () => {
         videos: mockVideos,
         total: 2,
         page: 1,
-        totalPages: 1
+        totalPages: 1,
+        libraryWarning: null,
+        hiddenDeletedCount: null
       });
       // Count query + videos query + getAllUniqueChannels query + no update queries needed
       expect(mockVideo.count).toHaveBeenCalledTimes(1);
@@ -448,32 +465,65 @@ describe('VideosModule', () => {
       }));
     });
 
-    test('should apply missingFilter=only to the WHERE clause', async () => {
+    // The removal-state filters land in the WHERE's AND list; read it back from the count call.
+    const countWhereAnd = (call = 0) => mockVideo.count.mock.calls[call][0].where[Op.and];
+
+    test('missingFilter=only keeps only rows whose file was not found, not deleted ones', async () => {
       mockVideo.count.mockResolvedValue(0);
       mockVideo.findAll.mockResolvedValue([]);
       mockSequelize.query.mockResolvedValueOnce([]);
 
       await VideosModule.getVideosPaginated({ missingFilter: 'only' });
 
-      expect(mockVideo.count).toHaveBeenCalledWith(expect.objectContaining({
-        where: {
-          removed: true,
-        },
-      }));
+      expect(countWhereAnd()).toEqual([stateWhere('missing')]);
     });
 
-    test('should apply missingFilter=exclude to the WHERE clause', async () => {
+    test('missingFilter=exclude keeps deleted rows, dropping only the missing ones', async () => {
       mockVideo.count.mockResolvedValue(0);
       mockVideo.findAll.mockResolvedValue([]);
       mockSequelize.query.mockResolvedValueOnce([]);
 
       await VideosModule.getVideosPaginated({ missingFilter: 'exclude' });
 
-      expect(mockVideo.count).toHaveBeenCalledWith(expect.objectContaining({
-        where: {
-          removed: false,
-        },
-      }));
+      expect(countWhereAnd()).toEqual([notStateWhere('missing')]);
+    });
+
+    test('deletedFilter=only keeps rows removed by Youtarr, including ones without a recorded reason', async () => {
+      mockVideo.count.mockResolvedValue(0);
+      mockVideo.findAll.mockResolvedValue([]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+
+      await VideosModule.getVideosPaginated({ deletedFilter: 'only' });
+
+      expect(countWhereAnd()).toEqual([stateWhere('deleted')]);
+      expect(countWhereAnd()[0][Op.or]).toEqual(expect.arrayContaining([{ removed_reason: null }]));
+    });
+
+    test('deletedFilter=exclude hides deleted rows and reports how many it hid', async () => {
+      mockVideo.count.mockResolvedValueOnce(10).mockResolvedValueOnce(3);
+      mockVideo.findAll.mockResolvedValue([]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+
+      const result = await VideosModule.getVideosPaginated({ deletedFilter: 'exclude', protectedFilter: 'only' });
+
+      expect(countWhereAnd(0)).toEqual([notStateWhere('deleted')]);
+      // The hidden count keeps every other filter and swaps in "deleted only".
+      expect(mockVideo.count).toHaveBeenCalledTimes(2);
+      expect(mockVideo.count.mock.calls[1][0].where.protected).toBe(true);
+      expect(countWhereAnd(1)).toEqual([stateWhere('deleted')]);
+      expect(result.total).toBe(10);
+      expect(result.hiddenDeletedCount).toBe(3);
+    });
+
+    test('does not count hidden deleted rows unless the deleted filter excludes them', async () => {
+      mockVideo.count.mockResolvedValue(0);
+      mockVideo.findAll.mockResolvedValue([]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+
+      const result = await VideosModule.getVideosPaginated({ deletedFilter: 'only' });
+
+      expect(mockVideo.count).toHaveBeenCalledTimes(1);
+      expect(result.hiddenDeletedCount).toBeNull();
     });
 
     test('should omit missingFilter from the WHERE clause by default', async () => {
@@ -665,15 +715,47 @@ describe('VideosModule', () => {
 
       // Check update was called
       expect(mockVideo.update).toHaveBeenCalledTimes(2);
+      // Marked missing only while still present: a delete landing meanwhile keeps its reason.
       expect(mockVideo.update).toHaveBeenNthCalledWith(
         1,
-        { removed: true },
-        { where: { id: 1 } },
+        { ...MISSING_COLUMNS },
+        { where: { id: 1, removed: false } },
       );
       expect(mockVideo.update).toHaveBeenNthCalledWith(
         2,
         { youtube_removed_checked_at: result.videos[0].youtube_removed_checked_at },
         { where: { id: [1] } },
+      );
+    });
+
+    test('holds back the missing mark and reports a library warning while the downloads folder looks unmounted', async () => {
+      const mockVideos = [
+        {
+          id: 1,
+          youtubeId: 'abc123',
+          youTubeChannelName: 'Test Channel',
+          youTubeVideoName: 'Test Video',
+          filePath: '/test/output/dir/Test Channel/video [abc123].mp4',
+          fileSize: '1000',
+          removed: false,
+          youtube_removed: false,
+          youtube_removed_checked_at: null
+        }
+      ];
+      const failedCheck = { ok: false, reason: 'empty', path: '/test/output/dir', message: 'The downloads folder is empty.' };
+      mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(failedCheck);
+      mockVideo.count.mockResolvedValue(1);
+      mockVideo.findAll.mockResolvedValue(mockVideos);
+      mockVideo.aggregate.mockResolvedValue([]);
+      mockFs.stat.mockRejectedValue({ code: 'ENOENT' });
+
+      const result = await VideosModule.getVideosPaginated();
+
+      expect(result.videos[0].removed).toBe(false);
+      expect(result.libraryWarning).toEqual({ reason: 'empty', path: '/test/output/dir', message: failedCheck.message, heldBack: 1 });
+      expect(mockVideo.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ removed: true }),
+        expect.anything()
       );
     });
 
@@ -1185,7 +1267,7 @@ describe('VideosModule', () => {
       );
       expect(mockVideo.update).toHaveBeenCalledTimes(1);
       expect(mockVideo.update).toHaveBeenCalledWith(
-        { removed: false, video_resolution: '1280x720' },
+        { ...PRESENT_COLUMNS, video_resolution: '1280x720' },
         { where: expect.objectContaining({ id: 1, video_resolution: null }) },
       );
     });
@@ -1294,7 +1376,7 @@ describe('VideosModule', () => {
 
       expect(mockVideo.update).toHaveBeenCalledTimes(1);
       expect(mockVideo.update).toHaveBeenCalledWith(
-        { removed: false, video_resolution: '0x0' },
+        { ...PRESENT_COLUMNS, video_resolution: '0x0' },
         { where: expect.objectContaining({ id: 1 }) },
       );
     });
@@ -1324,7 +1406,7 @@ describe('VideosModule', () => {
       expect(mockExecFile).not.toHaveBeenCalled();
       expect(mockVideo.update).toHaveBeenCalledTimes(1);
       expect(mockVideo.update).toHaveBeenCalledWith(
-        { filePath: null, fileSize: null, video_resolution: null, removed: false },
+        { filePath: null, fileSize: null, video_resolution: null, ...PRESENT_COLUMNS },
         { where: expect.objectContaining({ id: 1 }) },
       );
     });
@@ -1408,9 +1490,130 @@ describe('VideosModule', () => {
       expect(result.updated).toBe(0);
       // Stored paths are kept so a file returning to its location is found again.
       expect(mockVideo.update).toHaveBeenCalledWith(
-        { removed: true },
+        { ...MISSING_COLUMNS },
         { where: expect.objectContaining({ id: 1, filePath: '/test/missing.mp4' }) },
       );
+    });
+
+    describe('when the downloads folder looks unmounted', () => {
+      const missingRoot = { ok: false, reason: 'missing', path: '/test/output/dir', message: 'The downloads folder does not exist.' };
+      const emptySubfolder = { ok: false, reason: 'subfolder-empty', path: '/test/output/dir/__Music', message: 'The subfolder __Music is empty.' };
+
+      test('stops before the walk, changing nothing, while videos are present', async () => {
+        mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(missingRoot);
+        mockVideo.count.mockResolvedValueOnce(5); // present rows
+
+        const result = await VideosModule.backfillVideoMetadata();
+
+        expect(result.status).toBe('error');
+        expect(result.errorMessage).toBe('The downloads folder does not exist. Nothing was marked missing; is the drive mounted?');
+        expect(result.libraryCheckMessage).toBe(missingRoot.message);
+        expect(mockFs.readdir).not.toHaveBeenCalled();
+        expect(mockVideo.update).not.toHaveBeenCalled();
+      });
+
+      test('runs normally on a fresh install with no present videos', async () => {
+        mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue({ ...missingRoot, reason: 'empty' });
+        mockVideo.count.mockResolvedValueOnce(0); // present rows
+        mockVideo.count.mockResolvedValueOnce(0); // total rows
+        mockFs.readdir.mockResolvedValueOnce([]);
+
+        const result = await VideosModule.backfillVideoMetadata();
+
+        expect(result.status).toBe('completed');
+        expect(result.notMarkedMissing).toBe(0);
+        expect(result.libraryCheckMessage).toBeNull();
+      });
+
+      test('finishes the scan but holds back missing marks while a subfolder is empty, counting them', async () => {
+        mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(emptySubfolder);
+        mockVideo.count.mockResolvedValueOnce(1); // present rows
+        mockVideo.count.mockResolvedValueOnce(1); // total rows
+        mockFs.readdir.mockResolvedValueOnce([]);
+        mockVideo.findAll.mockResolvedValueOnce([
+          dbRow({ youtubeId: 'missing123', filePath: '/test/output/dir/__Music/missing.mp4', fileSize: '1000' })
+        ]);
+        mockFs.stat.mockRejectedValue(fsError('ENOENT'));
+
+        const result = await VideosModule.backfillVideoMetadata();
+
+        expect(result.status).toBe('completed');
+        expect(result.removed).toBe(0);
+        expect(result.notMarkedMissing).toBe(1);
+        expect(result.libraryCheckMessage).toBe(emptySubfolder.message);
+        expect(mockVideo.update).not.toHaveBeenCalled();
+      });
+
+      test('stays quiet about an empty subfolder no present video is stored in', async () => {
+        mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(emptySubfolder);
+        // Present rows under the subfolder: none. Then the total row count.
+        mockVideo.count.mockImplementationOnce(async ({ where }) => (where[Op.and] ? 0 : 1));
+        mockVideo.count.mockResolvedValueOnce(0);
+        mockFs.readdir.mockResolvedValueOnce([]);
+
+        const result = await VideosModule.backfillVideoMetadata();
+
+        expect(result.status).toBe('completed');
+        expect(result.libraryCheckMessage).toBeNull();
+        expect(mockLogger.warn).not.toHaveBeenCalledWith(expect.anything(), expect.stringMatching(/looks unmounted or unreadable/));
+      });
+
+      test('still marks missing a video stored outside the empty subfolder', async () => {
+        mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(emptySubfolder);
+        mockVideo.count.mockResolvedValueOnce(1); // present rows
+        mockVideo.count.mockResolvedValueOnce(1); // total rows
+        mockFs.readdir.mockResolvedValueOnce([]);
+        mockVideo.findAll.mockResolvedValueOnce([
+          dbRow({ youtubeId: 'missing123', filePath: '/test/output/dir/__Videos/missing.mp4', fileSize: '1000' })
+        ]);
+        mockFs.stat.mockRejectedValue(fsError('ENOENT'));
+        mockVideo.update.mockResolvedValue([1]);
+
+        const result = await VideosModule.backfillVideoMetadata();
+
+        expect(result.status).toBe('completed');
+        expect(result.removed).toBe(1);
+        expect(result.notMarkedMissing).toBe(0);
+      });
+
+      test('finishes the scan but holds back missing marks while a subfolder cannot be read', async () => {
+        const unreadableSubfolder = { ok: false, reason: 'subfolder-unreadable', path: '/test/output/dir/__Music', message: 'The subfolder __Music could not be read.' };
+        mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(unreadableSubfolder);
+        mockVideo.count.mockResolvedValueOnce(1); // present rows
+        mockVideo.count.mockResolvedValueOnce(1); // total rows
+        mockFs.readdir.mockResolvedValueOnce([]);
+        mockVideo.findAll.mockResolvedValueOnce([
+          dbRow({ youtubeId: 'missing123', filePath: '/test/output/dir/__Music/missing.mp4', fileSize: '1000' })
+        ]);
+        mockFs.stat.mockRejectedValue(fsError('ENOENT'));
+
+        const result = await VideosModule.backfillVideoMetadata();
+
+        expect(result.status).toBe('completed');
+        expect(result.removed).toBe(0);
+        expect(result.notMarkedMissing).toBe(1);
+        expect(result.libraryCheckMessage).toBe(unreadableSubfolder.message);
+        expect(mockVideo.update).not.toHaveBeenCalled();
+      });
+
+      test('skips the folder check when a manual run asks to, marking missing and saying so', async () => {
+        mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(missingRoot);
+        mockVideo.count.mockResolvedValueOnce(1); // total rows
+        mockFs.readdir.mockResolvedValueOnce([]);
+        mockVideo.findAll.mockResolvedValueOnce([
+          dbRow({ youtubeId: 'missing123', filePath: '/test/output/dir/Channel/missing.mp4', fileSize: '1000' })
+        ]);
+        mockFs.stat.mockRejectedValue(fsError('ENOENT'));
+        mockVideo.update.mockResolvedValue([1]);
+
+        const result = await VideosModule.backfillVideoMetadata({ trigger: 'manual', ignoreLibraryCheck: true });
+
+        expect(mockLibraryRootCheck.checkLibraryRoot).not.toHaveBeenCalled();
+        expect(result.status).toBe('completed');
+        expect(result.removed).toBe(1);
+        expect(result.notMarkedMissing).toBe(0);
+        expect(result.libraryCheckSkipped).toBe(true);
+      });
     });
 
     test('should clear removed flag when a previously-missing file reappears (raw row removed=1)', async () => {
@@ -1544,7 +1747,7 @@ describe('VideosModule', () => {
 
         await VideosModule.backfillVideoMetadata();
 
-        expect(mockVideo.update).toHaveBeenCalledWith({ removed: false }, {
+        expect(mockVideo.update).toHaveBeenCalledWith(PRESENT_COLUMNS, {
           where: {
             id: 1,
             removed: true,

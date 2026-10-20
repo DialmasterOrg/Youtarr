@@ -1172,6 +1172,9 @@ describe('GET /api/playlists/:playlistId/videos', () => {
         youtubeId: 'gone1',
         youTubeVideoName: 'Deleted local file',
         removed: true,
+        removed_reason: 'auto_removal',
+        removed_at: new Date('2026-10-03T00:00:00Z'),
+        removed_detail: 'older than 30 days',
         youtube_removed: false,
         filePath: '/videos/gone1.mp4',
         fileSize: 1024,
@@ -1189,6 +1192,10 @@ describe('GET /api/playlists/:playlistId/videos', () => {
       youtube_id: 'gone1',
       downloaded: false,
       previously_downloaded: true,
+      // Why it is gone, so the page can tell Deleted from Missing.
+      removed_reason: 'auto_removal',
+      removed_at: new Date('2026-10-03T00:00:00Z'),
+      removed_detail: 'older than 30 days',
     });
   });
 

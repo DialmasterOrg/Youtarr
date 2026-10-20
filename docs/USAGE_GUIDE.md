@@ -227,7 +227,7 @@ Open a playlist to manage it:
 - **Public on media servers**: makes the playlist visible to other users on Jellyfin and Emby. Plex playlists are always created under one account and shared manually, so this setting doesn't affect Plex.
 - **Sync now** and **Rebuild .m3u file**: push the current state to your servers or regenerate the `.m3u` on demand. Sync runs in the background and can take a minute or two while your media server's library scan finishes.
 
-In the video list you can sort by playlist order, reverse order, discovery time, download time, or newest publication date, filter by download state with the **Show** control (All videos / Downloaded / Not downloaded), filter by watch status with the **Watched** control (see [Track Watch Status from Media Servers](#track-watch-status-from-media-servers)), exclude videos you don't want, and select specific videos to download with **Download Selected**. Excluded videos are skipped when downloading the playlist and removed from synced server playlists; if the file is already on disk, it stays there. Videos whose file was deleted after downloading count as not downloaded.
+In the video list you can sort by playlist order, reverse order, discovery time, download time, or newest publication date, filter by download state with the **Show** control (All videos / Downloaded / Not downloaded), filter by watch status with the **Watched** control (see [Track Watch Status from Media Servers](#track-watch-status-from-media-servers)), exclude videos you don't want, and select videos to act on: **Download** fetches the selected videos that aren't on disk, and **Delete** removes the selected downloaded videos from disk (after a confirmation). Excluded videos are skipped when downloading the playlist and removed from synced server playlists; if the file is already on disk, it stays there. Videos whose file was deleted after downloading count as not downloaded.
 
 Discovery means when Youtarr first saw a video in this playlist; it is not the date the owner added it on YouTube. Downloading never changes discovery order. Videos discovered in the same refresh share a timestamp and use playlist order as a tie-break. Publication dates stay visible in every sort, including in the existing-video review list. Sorting by discovery or download time shows that date below Published in both the desktop table and cards on narrower screens. The Downloaded line is omitted for videos without a local file. Tap or click a discovery or download date to expand its full timestamp. Missing dates display as Unknown and sort last. Sorting the page or changing media-server playback order never changes automatic download eligibility.
 
@@ -374,9 +374,11 @@ Videos can become "missing" if they're manually deleted from disk. This feature 
 
 > **Note**: If the file still exists somewhere (you moved it, renamed its folder, or converted it to a different format), use [Rescan Files on Disk](#rescan-files-on-disk) instead. Rescan reconciles Youtarr's database with what's already on disk without re-downloading.
 
+Youtarr tells two kinds of gone-from-disk videos apart. **Deleted** (grey) means Youtarr removed the file itself, through a delete in the app or automatic cleanup, or you marked it as deleted; the Videos page hides these by default behind the **Deleted** filter chip, and remembers it when you turn them back on. **Missing** (red) means Youtarr expected a file and could not find it; these stay visible so you can check on them. Hover over or tap either chip, or open the video, for the reason in plain words. When a missing video really is gone, select it and choose **Mark as deleted** (or use the same button in the video's window, from any page), or mark them all from **Settings -> Maintenance & Rescan**, where **Empty trash...** can also forget deleted and missing videos entirely (see [Troubleshooting](TROUBLESHOOTING.md#deleted-vs-missing-videos-and-emptying-the-trash) for what that removes and how it treats the download archive). Both kinds can be re-downloaded with the steps below.
+
 1. **Identify missing videos**
    - Go to "Downloaded Videos" or a specific channel's video page
-   - Look for videos marked with a cloud-off icon (indicates missing from disk)
+   - Look for videos marked with a cloud-off icon (missing from disk) or a trash icon (deleted); on the Videos page, turn the **Deleted** filter chip off to see deleted videos
    - The video metadata is still in Youtarr's database, but the file is gone
 
 2. **Select videos to re-download**
@@ -408,6 +410,8 @@ Common cases:
 You can also start a rescan with **Run now** on the Rescan files on disk card in **Settings -> Scheduling**.
 
 A scan also runs daily on a schedule and once at server startup, so changes you make outside Youtarr will eventually be picked up even if you don't trigger a manual rescan.
+
+If the downloads folder is missing or empty when the scan runs, as it is while a drive or network share is unmounted, the scan does not mark anything missing: it records a run that names the folder and asks whether the drive is mounted, and the Videos page shows the same warning. If only some of its `__subfolders` are empty or unreadable, just the videos stored in those subfolders are left alone; an empty subfolder no video is stored in (for example one a channel was moved out of) does not count. Mount the share and run it again. If the folder really is empty because you removed the files yourself, **Rescan anyway...** on the Deleted and missing videos card runs the scan without that check; it marks every video whose file is gone as missing, and **Mark all missing as deleted** then asks you to confirm that you emptied the folder yourself before marking them.
 
 **Supported file extensions**: `.mp4`, `.webm`, `.mkv`, `.m4v`, `.avi` for video, plus `.mp3` for audio-only downloads. Youtarr only writes `.mp4` (or `.mp3` for audio-only), but the rescan recognizes any of these so transcoding outside Youtarr won't orphan your library. Files must keep the `[<youtube-id>]` segment in their filename (the 11-character ID in brackets that yt-dlp writes by default) for Youtarr to match them back to the database.
 
@@ -520,16 +524,23 @@ Search YouTube from inside Youtarr and see which results you already have, which
 1. **Open Find Videos on YouTube**
    - In the sidebar, expand **Videos** and click **Find Videos on YouTube**
    - Enter a search query (up to 200 characters)
-   - Pick a result count (10, 25, 50, or 100), optionally choose a minimum duration, and click Search
+   - Pick a result count (10, 25, 50, or 100), optionally choose a minimum duration (**1+ min** hides Shorts), and click Search
+   - The query is kept in the page address, so the browser's Back button returns you to the same results without searching again
 
 2. **Results**
-   - Sorted newest-to-oldest by YouTube's approximate publish date (accurate to within a day or two, same fidelity as the channel videos page)
+   - Listed in YouTube's own relevance order by default. Sort by published date, views, duration, title, or channel from the table's column headers on desktop (click a header again to reverse it, a third time to return to relevance) or from the **Sort** menu on phones and in grid view
+   - Desktop opens results in a table; the toggle beside the Search button switches to a grid of cards. The choice, the sort, and the minimum duration are remembered
+   - Each result shows the channel, duration, how long ago it was published (the exact date on hover), and the view count; videos of a minute or less carry a **Short** badge
+   - Live and upcoming streams are left out, since a download would record the stream
    - If a minimum duration is selected, shorter results are hidden in the browser and the page shows how many results were filtered out
-   - Each card shows the channel, duration, upload date, and a status chip:
+   - A status chip appears only when there is something to know:
      - **Downloaded**: already in your library
-     - **Missing**: previously downloaded but removed from disk
-     - **Not Downloaded**: new result, not yet saved
-   - Click a result to open the video detail modal, where you can download, play (if downloaded), or ignore it
+     - **Deleted**: previously downloaded and removed by Youtarr
+     - **Missing**: previously downloaded but gone from disk
+     - **Queued** / **Downloading**: on its way
+   - Channel names link to the channel page for channels you follow (marked **Subscribed**); other channel names offer to add the channel
+   - The download icon on a row queues that one video; tick several and use the selection bar to download them together
+   - Click a result to open the video detail modal, where you can download, play (if downloaded), or open it on YouTube
 
 3. **Notes**
    - Rate-limited to 10 searches per minute per session; server-side timeout is 60 seconds

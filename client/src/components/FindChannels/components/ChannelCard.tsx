@@ -2,16 +2,11 @@ import React from 'react';
 import { Avatar, Box, Card, CardActionArea, Chip, Typography } from '../../ui';
 import { ChannelSearchResult } from '../types';
 import OpenInYouTubeLink from '../../shared/OpenInYouTubeLink';
+import { formatCompactCount as formatCount } from '../../../utils/formatters';
 
 interface ChannelCardProps {
   result: ChannelSearchResult;
   onClick: () => void;
-}
-
-function formatCount(count: number): string {
-  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
-  if (count >= 1_000) return `${(count / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
-  return count.toLocaleString();
 }
 
 export default function ChannelCard({ result, onClick }: ChannelCardProps) {
