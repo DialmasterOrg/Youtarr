@@ -1,4 +1,4 @@
-import { describeRemoval, describeRow, getRemovalState, removalFromRow } from '../videoRemoval';
+import { describeMissing, describeRemoval, describeRow, getRemovalState, removalFromRow } from '../videoRemoval';
 import { formatDate } from '../formatters';
 
 const AT = '2026-10-03T12:00:00.000Z';
@@ -64,6 +64,19 @@ describe('describeRemoval', () => {
     expect(describeRemoval('missing', { reason: 'not_found', at: null, detail: null })).toBe(
       'Youtarr expected a file and could not find it. If the drive is mounted and the file is really gone, mark it as deleted.'
     );
+  });
+});
+
+describe('describeMissing', () => {
+  test('splits the missing-file sentence around the path', () => {
+    expect(describeMissing({ reason: 'not_found', at: AT, detail: null }, '/usr/src/app/data/Channel/v.mp4')).toEqual({
+      path: 'Channel/v.mp4',
+      rest: `and could not find it (checked ${formatDate(AT)}). If the drive is mounted and the file is really gone, mark it as deleted.`,
+    });
+  });
+
+  test('has no path when none is stored', () => {
+    expect(describeMissing({ reason: 'not_found', at: null, detail: null }, null).path).toBeNull();
   });
 });
 

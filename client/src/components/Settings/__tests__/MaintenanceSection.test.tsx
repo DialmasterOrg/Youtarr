@@ -24,7 +24,8 @@ const { useRemovedVideos } = require('../hooks/useRemovedVideos') as {
 
 function setup(
   overrides: Partial<UseRescanStatusReturn> = {},
-  libraryCheck: RemovedVideosLibraryCheck = { ok: true, reason: null, path: null, message: null }
+  libraryCheck: RemovedVideosLibraryCheck = { ok: true, reason: null, path: null, message: null },
+  route = '/settings/maintenance'
 ) {
   const triggerRescan = jest.fn().mockResolvedValue({ started: true });
   useRescanStatus.mockReturnValue({
@@ -45,7 +46,7 @@ function setup(
     actionPending: false,
     actionError: null,
   });
-  renderWithProviders(<MaintenanceSection token="tok" config={DEFAULT_CONFIG} />);
+  renderWithProviders(<MaintenanceSection token="tok" config={DEFAULT_CONFIG} />, { initialEntries: [route] });
   return { triggerRescan };
 }
 
@@ -62,6 +63,40 @@ describe('MaintenanceSection', () => {
     setup();
     expect(screen.getByText('Deleted and missing videos')).toBeInTheDocument();
     expect(screen.getByText('Deleted: 2. Missing: 1.')).toBeInTheDocument();
+  });
+
+  describe('linked from the Videos page', () => {
+    const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
+    let scrolledTo: Element[];
+
+    beforeEach(() => {
+      scrolledTo = [];
+      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+        configurable: true,
+        writable: true,
+        value: function scrollIntoView(this: Element) {
+          scrolledTo.push(this);
+        },
+      });
+    });
+
+    afterEach(() => {
+      if (original) {
+        Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', original);
+      } else {
+        delete (HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+      }
+    });
+
+    test('scrolls to the deleted and missing videos card', () => {
+      setup({}, undefined, '/settings/maintenance#deleted-and-missing');
+      expect(scrolledTo).toEqual([screen.getByRole('region', { name: 'Deleted and missing videos' })]);
+    });
+
+    test('stays at the top of the page without the link', () => {
+      setup();
+      expect(scrolledTo).toEqual([]);
+    });
   });
 
   test('wires Rescan anyway to a rescan that skips the downloads folder check', async () => {

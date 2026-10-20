@@ -937,6 +937,15 @@ describe('VideosPage Component', () => {
       });
     });
 
+    test('still says how many deleted videos are hidden', async () => {
+      axios.get.mockResolvedValueOnce({ data: { ...mockPaginatedResponse(mockVideos), hiddenDeletedCount: 2 } });
+
+      render(<VideosPage token={mockToken} />);
+
+      expect(await screen.findByText('2 deleted videos hidden.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Clean up' })).toBeInTheDocument();
+    });
+
     test('shows 6 videos per page in mobile view', async () => {
       const manyVideos = Array.from({ length: 10 }, (_, i) => ({
         id: i,

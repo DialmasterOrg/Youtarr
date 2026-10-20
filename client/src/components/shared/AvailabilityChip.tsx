@@ -8,13 +8,14 @@ import {
 import { SHARED_THEMED_CHIP_SMALL_STYLE, SHARED_COMPACT_CHIP_OVERRIDES } from './chipStyles';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import type { RemovalState } from '../../utils/videoRemoval';
+import { REMOVAL_TOOLTIP_CLASS } from './RemovalDescription';
 
 export interface AvailabilityChipProps {
   // present = Available; missing = red, a file was expected and not found;
   // deleted = neutral, Youtarr removed the file (or the user marked it deleted).
   state: RemovalState;
-  // Plain-language explanation (see utils/videoRemoval describeRow); shown on hover or tap.
-  tooltip?: string;
+  // Plain-language explanation (see RemovalDescription); shown on hover or tap.
+  tooltip?: React.ReactNode;
   // Replaces the state's label, e.g. a "2 missing" summary count.
   label?: string;
   compact?: boolean;
@@ -79,7 +80,7 @@ function AvailabilityChip({ state, tooltip, label, compact = false }: Availabili
   const tapOpensTooltip = useMediaQuery('(pointer: coarse)');
 
   return (
-    <Tooltip title={tooltip ?? variant.tooltip} enterTouchDelay={0}>
+    <Tooltip title={tooltip ?? variant.tooltip} enterTouchDelay={0} className={REMOVAL_TOOLTIP_CLASS}>
       <span
         className="inline-flex"
         onPointerDown={(event) => { lastPointerType.current = event.pointerType; }}

@@ -2,7 +2,8 @@ import React from 'react';
 import VideoActivityChip from '../../shared/VideoActivityChip';
 import { Box, Typography, Chip, Checkbox, Stack } from '../../ui';
 import { AlertCircle as ErrorOutlineIcon, Trash2 as DeletedIcon } from 'lucide-react';
-import { DELETED_OVERLAY_BACKGROUND, describeRow, getRemovalState } from '../../../utils/videoRemoval';
+import { DELETED_OVERLAY_BACKGROUND, getRemovalState } from '../../../utils/videoRemoval';
+import RemovalDescription from '../../shared/RemovalDescription';
 import { formatDuration, formatYTDate } from '../../../utils';
 import { formatAddedDateTime, formatFileSize } from '../../../utils/formatters';
 import { getMediaTypeInfo } from '../../../utils/videoStatus';
@@ -310,7 +311,7 @@ function VideosListMobile({
                   style={compactRatingChipStyle}
                 />
                 {video.removed ? (
-                  <AvailabilityChip state={getRemovalState(video.removed, video.removed_reason)} tooltip={describeRow(video)} compact />
+                  <AvailabilityChip state={getRemovalState(video.removed, video.removed_reason)} tooltip={<RemovalDescription row={video} />} compact />
                 ) : video.fileSize ? (
                   <AvailabilityChip state="present" compact />
                 ) : null}

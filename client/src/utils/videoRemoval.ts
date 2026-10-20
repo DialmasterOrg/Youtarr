@@ -49,16 +49,37 @@ export function removalFromRow(row: RemovalRow): RemovalInfo {
 
 const CAN_REDOWNLOAD = 'It can be downloaded again.';
 
+// Where Settings > Maintenance cleans up deleted and missing videos.
+export const REMOVED_VIDEOS_ANCHOR = 'deleted-and-missing';
+export const REMOVED_VIDEOS_SETTINGS_PATH = `/settings/maintenance#${REMOVED_VIDEOS_ANCHOR}`;
+
+export interface MissingDescription {
+  // The path as the user knows it, or null when none is stored.
+  path: string | null;
+  // Everything after the path: "and could not find it ...".
+  rest: string;
+}
+
+// The missing-file sentence in pieces, so a tooltip can set the path apart.
+export function describeMissing(info: RemovalInfo = NO_REMOVAL, filePath?: string | null): MissingDescription {
+  const date = info.at ? formatDate(info.at) : null;
+  const checked = date ? ` (checked ${date})` : '';
+  return {
+    path: filePath ? stripInternalPath(filePath) : null,
+    rest: `and could not find it${checked}. If the drive is mounted and the file is really gone, mark it as deleted.`,
+  };
+}
+
 export function describeRemoval(state: RemovalState, info: RemovalInfo = NO_REMOVAL, filePath?: string | null): string {
   if (state === 'present') return 'Video file exists on disk';
-  const date = info.at ? formatDate(info.at) : null;
-  const on = date ? ` on ${date}` : '';
 
   if (state === 'missing') {
-    const where = filePath ? ` at ${stripInternalPath(filePath)}` : '';
-    const checked = date ? ` (checked ${date})` : '';
-    return `Youtarr expected a file${where} and could not find it${checked}. If the drive is mounted and the file is really gone, mark it as deleted.`;
+    const { path, rest } = describeMissing(info, filePath);
+    return `Youtarr expected a file${path ? ` at ${path}` : ''} ${rest}`;
   }
+
+  const date = info.at ? formatDate(info.at) : null;
+  const on = date ? ` on ${date}` : '';
 
   switch (info.reason) {
     case 'user_deleted':

@@ -20,6 +20,8 @@ import VideoModal from '../shared/VideoModal';
 import { VideoModalData } from '../shared/VideoModal/types';
 import { getRemovalState, removalFromRow, removedState, type RemovalState } from '../../utils/videoRemoval';
 import MarkDeletedDialog from './components/MarkDeletedDialog';
+import LibraryCleanupHints from './components/LibraryCleanupHints';
+import HiddenDeletedNote from './components/HiddenDeletedNote';
 import { useMarkDeleted } from './hooks/useMarkDeleted';
 import DownloadSettingsDialog from '../DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from '../DownloadManager/ManualDownload/types';
@@ -574,15 +576,18 @@ function VideosPage({ token }: VideosPageProps) {
 
   const headerSlot = (
     <div style={{ padding: '12px 16px 0 16px' }}>
-      <Typography variant={isMobile ? 'h6' : 'h5'} component="h2" gutterBottom align="center">
-        Library ({totalVideos} total)
-      </Typography>
-      {hiddenDeletedCount !== null && hiddenDeletedCount > 0 && (
-        <Typography variant="caption" color="text.secondary" component="p" align="center" className="flex items-center justify-center gap-1">
-          <span>{hiddenDeletedCount} deleted {hiddenDeletedCount === 1 ? 'video' : 'videos'} hidden.</span>
-          <Button variant="text" size="sm" onClick={showDeleted}>Show</Button>
+      {/* Wide screens put the hidden-deleted note on the heading's line; phones stack it. */}
+      <div className={isMobile ? undefined : 'flex flex-wrap items-baseline justify-center gap-x-4'}>
+        <Typography variant={isMobile ? 'h6' : 'h5'} component="h2" gutterBottom align="center">
+          Library ({totalVideos} total)
         </Typography>
-      )}
+        <HiddenDeletedNote hiddenDeletedCount={hiddenDeletedCount} onShowDeleted={showDeleted} />
+      </div>
+      <LibraryCleanupHints
+        missingFilter={missingFilter}
+        deletedFilter={deletedFilter}
+        hasVideos={totalVideos > 0}
+      />
       {libraryWarning && libraryWarning.message !== dismissedLibraryWarning && (
         <Alert severity="warning" className="mt-2 break-words" onClose={() => setDismissedLibraryWarning(libraryWarning.message)}>
           {libraryWarning.message} Until that changes, videos stored there are not being marked missing; check

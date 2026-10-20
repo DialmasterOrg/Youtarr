@@ -20,7 +20,8 @@ import ProtectionShieldButton from '../../shared/ProtectionShieldButton';
 import ThumbnailClickOverlay from '../../shared/ThumbnailClickOverlay';
 import AvailabilityChip from '../../shared/AvailabilityChip';
 import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../../shared/chipStyles';
-import { DELETED_OVERLAY_BACKGROUND, describeRow, getRemovalState } from '../../../utils/videoRemoval';
+import { DELETED_OVERLAY_BACKGROUND, getRemovalState } from '../../../utils/videoRemoval';
+import RemovalDescription from '../../shared/RemovalDescription';
 import ChannelNameDisplay from './ChannelNameDisplay';
 import WatchedChip from '../../shared/WatchedChip';
 
@@ -318,7 +319,7 @@ function VideoCard({
               size="small"
             />
             {video.removed ? (
-              <AvailabilityChip state={getRemovalState(video.removed, video.removed_reason)} tooltip={describeRow(video)} />
+              <AvailabilityChip state={getRemovalState(video.removed, video.removed_reason)} tooltip={<RemovalDescription row={video} />} />
             ) : video.fileSize ? (
               <AvailabilityChip state="present" />
             ) : null}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import AvailabilityChip from '../AvailabilityChip';
@@ -102,6 +102,17 @@ describe('AvailabilityChip', () => {
     await user.hover(screen.getByText('Deleted'));
 
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Deleted by automatic cleanup on 10/3/2026 (older than 30 days).');
+  });
+
+  test('shows a formatted explanation in its tooltip', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <AvailabilityChip state="missing" tooltip={<>Youtarr expected a file at: <code>/d/v.mp4</code></>} />
+    );
+
+    await user.hover(screen.getByText('Missing'));
+
+    expect(within(await screen.findByRole('tooltip')).getByRole('code')).toHaveTextContent('/d/v.mp4');
   });
 
   test('takes a label override for summary counts', () => {
