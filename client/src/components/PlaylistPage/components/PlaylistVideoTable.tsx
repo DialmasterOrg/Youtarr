@@ -18,6 +18,7 @@ import { Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon } from
 import { isSelectable, statusLabel, PlaylistVideoDates, toDownloadFileProps } from './playlistVideoHelpers';
 import DownloadFormatIndicator from '../../shared/DownloadFormatIndicator';
 import WatchedChip from '../../shared/WatchedChip';
+import { REMOVAL_TOOLTIP_CLASS } from '../../shared/RemovalDescription';
 
 const THUMB_WIDTH = 120;
 const THUMB_HEIGHT = 67;
@@ -171,7 +172,7 @@ const PlaylistVideoTable: React.FC<PlaylistVideoTableProps> = ({
                       )}
                     </>
                   ) : status.tooltip ? (
-                    <Tooltip title={status.tooltip} enterTouchDelay={0}>
+                    <Tooltip title={status.tooltip} enterTouchDelay={0} className={REMOVAL_TOOLTIP_CLASS}>
                       <Chip label={status.label} color={status.color} size="small" />
                     </Tooltip>
                   ) : (

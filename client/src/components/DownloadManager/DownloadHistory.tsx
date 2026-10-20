@@ -30,7 +30,8 @@ import VideoModal from '../shared/VideoModal';
 import { VideoModalData } from '../shared/VideoModal/types';
 import VideoThumbnail from './VideoThumbnail';
 import AvailabilityChip from '../shared/AvailabilityChip';
-import { describeRow, getRemovalState, removalFromRow, removedState } from '../../utils/videoRemoval';
+import { getRemovalState, removalFromRow, removedState } from '../../utils/videoRemoval';
+import RemovalDescription from '../shared/RemovalDescription';
 import FailedVideoChip from './FailedVideoChip';
 import FailedDownloadsDetail from './FailedDownloadsDetail';
 import { jobTypeLabel } from '../../utils/jobTypeLabel';
@@ -401,7 +402,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                                       {video.youTubeChannelName}
                                     </Typography>
                                     <VideoActivityChip youtubeId={video.youtubeId} />
-                                    {video.removed && <AvailabilityChip state={removedState(video.removed_reason)} tooltip={describeRow(video)} />}
+                                    {video.removed && <AvailabilityChip state={removedState(video.removed_reason)} tooltip={<RemovalDescription row={video} />} />}
                                   </Box>
                                 </Box>
                               ))}
@@ -571,7 +572,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                                                 {video.youTubeVideoName}
                                               </Link>
                                               <VideoActivityChip youtubeId={video.youtubeId} />
-                                              {video.removed && <AvailabilityChip state={removedState(video.removed_reason)} tooltip={describeRow(video)} />}
+                                              {video.removed && <AvailabilityChip state={removedState(video.removed_reason)} tooltip={<RemovalDescription row={video} />} />}
                                             </Box>
                                             <Typography variant="caption" color="secondary" className="block">{video.youTubeChannelName}</Typography>
                                           </TableCell>

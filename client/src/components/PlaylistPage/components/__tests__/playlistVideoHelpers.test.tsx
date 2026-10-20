@@ -90,26 +90,28 @@ describe('statusLabel', () => {
       color: 'error',
     });
   });
-  test('returns Missing for a previously-downloaded video whose file was not found, explaining it', () => {
-    expect(statusLabel(makeVideo({ previously_downloaded: true, removed_reason: 'not_found', file_path: '/d/v.mp4' }))).toEqual({
+  test('returns Missing for a previously-downloaded video whose file was not found', () => {
+    expect(statusLabel(makeVideo({ previously_downloaded: true, removed_reason: 'not_found', file_path: '/d/v.mp4' }))).toMatchObject({
       label: 'Missing',
       color: 'error',
-      tooltip: 'Youtarr expected a file at /d/v.mp4 and could not find it. If the drive is mounted and the file is really gone, mark it as deleted.',
     });
   });
-  test('returns a neutral Deleted for a previously-downloaded video Youtarr removed', () => {
-    expect(statusLabel(makeVideo({ previously_downloaded: true, removed_reason: 'auto_removal', removed_detail: 'older than 30 days' }))).toEqual({
-      label: 'Deleted',
-      color: 'default',
-      tooltip: 'Deleted by automatic cleanup (older than 30 days). It can be downloaded again.',
-    });
+  test('explains a missing video with the path Youtarr looked at', () => {
+    const { tooltip } = statusLabel(makeVideo({ previously_downloaded: true, removed_reason: 'not_found', file_path: '/d/v.mp4' }));
+    render(<>{tooltip}</>);
+    expect(screen.getByRole('code')).toHaveTextContent('/d/v.mp4');
+  });
+  test('returns a neutral Deleted for a previously-downloaded video Youtarr removed, explaining it', () => {
+    const status = statusLabel(makeVideo({ previously_downloaded: true, removed_reason: 'auto_removal', removed_detail: 'older than 30 days' }));
+    expect(status).toMatchObject({ label: 'Deleted', color: 'default' });
+    const { container } = render(<>{status.tooltip}</>);
+    expect(container).toHaveTextContent('Deleted by automatic cleanup (older than 30 days). It can be downloaded again.');
   });
   test('treats a previously-downloaded video without a recorded reason as Deleted', () => {
-    expect(statusLabel(makeVideo({ previously_downloaded: true }))).toEqual({
-      label: 'Deleted',
-      color: 'default',
-      tooltip: 'Removed before Youtarr recorded why. It can be downloaded again.',
-    });
+    const status = statusLabel(makeVideo({ previously_downloaded: true }));
+    expect(status).toMatchObject({ label: 'Deleted', color: 'default' });
+    const { container } = render(<>{status.tooltip}</>);
+    expect(container).toHaveTextContent('Removed before Youtarr recorded why. It can be downloaded again.');
   });
   test('returns Tracked for a plain tracked video', () => {
     expect(statusLabel(makeVideo())).toEqual({ label: 'Tracked', color: 'default' });

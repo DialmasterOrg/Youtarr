@@ -6,6 +6,7 @@ import { formatDurationClock } from '../../../utils';
 import { isSelectable, statusLabel, PlaylistVideoDates, toDownloadFileProps } from './playlistVideoHelpers';
 import DownloadFormatIndicator from '../../shared/DownloadFormatIndicator';
 import WatchedChip from '../../shared/WatchedChip';
+import { REMOVAL_TOOLTIP_CLASS } from '../../shared/RemovalDescription';
 import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_COMPACT_CHIP_OVERRIDES } from '../../shared/chipStyles';
 
 const compactStatusChipStyle: React.CSSProperties = {
@@ -89,7 +90,7 @@ const PlaylistVideoCard: React.FC<PlaylistVideoCardProps> = ({
               )}
             </>
           ) : status.tooltip ? (
-            <Tooltip title={status.tooltip} enterTouchDelay={0}>
+            <Tooltip title={status.tooltip} enterTouchDelay={0} className={REMOVAL_TOOLTIP_CLASS}>
               <Chip label={status.label} color={status.color} size="small" style={compactStatusChipStyle} />
             </Tooltip>
           ) : (

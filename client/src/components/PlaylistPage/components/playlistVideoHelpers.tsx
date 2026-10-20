@@ -3,7 +3,8 @@ import { CalendarToday as CalendarTodayIcon } from '../../../lib/icons';
 import { PlaylistSortOrder } from '../../../hooks/usePlaylistDetail';
 import { PlaylistVideo } from '../../../types/playlist';
 import { VideoModalData } from '../../shared/VideoModal/types';
-import { describeRemoval, removalFromRow, removedState } from '../../../utils/videoRemoval';
+import { removalFromRow, removedState } from '../../../utils/videoRemoval';
+import RemovalDescription from '../../shared/RemovalDescription';
 
 export type PlaylistVideoStatusColor = 'success' | 'default' | 'warning' | 'error' | 'info';
 
@@ -11,7 +12,7 @@ export interface PlaylistVideoStatus {
   label: string;
   color: PlaylistVideoStatusColor;
   // Plain-language explanation for a removed video, shown on hover or tap.
-  tooltip?: string;
+  tooltip?: React.ReactNode;
 }
 
 // Ignored videos stay downloadable: explicitly selecting one is an intentional
@@ -89,7 +90,17 @@ export function statusLabel(v: PlaylistVideo): PlaylistVideoStatus {
   if (v.previously_downloaded) {
     // Missing (file not found) is a warning; deleted (removed by Youtarr) is not.
     const state = removedState(v.removed_reason);
-    const tooltip = describeRemoval(state, removalFromRow(v), v.file_path);
+    const tooltip = (
+      <RemovalDescription
+        row={{
+          removed: true,
+          removed_reason: v.removed_reason,
+          removed_at: v.removed_at,
+          removed_detail: v.removed_detail,
+          filePath: v.file_path,
+        }}
+      />
+    );
     return state === 'missing'
       ? { label: 'Missing', color: 'error', tooltip }
       : { label: 'Deleted', color: 'default', tooltip };

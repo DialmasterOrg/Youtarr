@@ -15,7 +15,7 @@ import { decodeHtml, formatAddedDate } from '../../utils/formatters';
 import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
 import { getPublishedDateDisplay } from './publishedDateDisplay';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle, isRemovedStatus } from '../../utils/videoStatus';
-import { describeRow } from '../../utils/videoRemoval';
+import RemovalDescription, { REMOVAL_TOOLTIP_CLASS } from '../shared/RemovalDescription';
 import StillLiveDot from './StillLiveDot';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 import ProtectionShieldButton from '../shared/ProtectionShieldButton';
@@ -371,7 +371,11 @@ function VideoListItem({
               style={{ ...SHARED_STATUS_CHIP_SMALL_STYLE }}
             />
             <WatchedChip watchedBy={video.watchedBy || []} />
-            <Tooltip title={isRemovedStatus(status) ? describeRow(video) : ''} enterTouchDelay={0}>
+            <Tooltip
+              title={isRemovedStatus(status) ? <RemovalDescription row={video} /> : ''}
+              enterTouchDelay={0}
+              className={REMOVAL_TOOLTIP_CLASS}
+            >
               <Chip
                 icon={getStatusIcon(status)}
                 label={statusLabel}

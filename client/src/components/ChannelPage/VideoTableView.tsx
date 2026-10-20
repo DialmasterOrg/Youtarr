@@ -12,7 +12,7 @@ import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml, formatAddedDateParts } from '../../utils/formatters';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle, isRemovedStatus } from '../../utils/videoStatus';
-import { describeRow } from '../../utils/videoRemoval';
+import RemovalDescription, { REMOVAL_TOOLTIP_CLASS } from '../shared/RemovalDescription';
 import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
@@ -354,7 +354,11 @@ function VideoTableView({
                       />
                     )}
                     <WatchedChip watchedBy={video.watchedBy || []} />
-                    <Tooltip title={isRemovedStatus(status) ? describeRow(video) : ''} enterTouchDelay={0}>
+                    <Tooltip
+                      title={isRemovedStatus(status) ? <RemovalDescription row={video} /> : ''}
+                      enterTouchDelay={0}
+                      className={REMOVAL_TOOLTIP_CLASS}
+                    >
                       <Chip
                         icon={getStatusIcon(status)}
                         label={statusLabel}

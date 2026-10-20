@@ -11,7 +11,7 @@ import {
 } from '../../ui';
 import { Refresh as RefreshIcon, MoreHorizontal } from '../../../lib/icons';
 import { MediaServerStatus, MediaServerType, Playlist } from '../../../types/playlist';
-import InfoHint from './InfoHint';
+import InfoHint from '../../shared/InfoHint';
 import PlaylistSyncChips from './PlaylistSyncChips';
 
 interface MediaServerSyncGroupProps {
