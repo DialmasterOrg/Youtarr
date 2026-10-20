@@ -16,7 +16,7 @@ import ThumbnailClickOverlay from '../../shared/ThumbnailClickOverlay';
 import AvailabilityChip from '../../shared/AvailabilityChip';
 import WatchedChip from '../../shared/WatchedChip';
 import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../../shared/chipStyles';
-import ChannelNameDisplay from './ChannelNameDisplay';
+import ChannelNameDisplay from '../../shared/ChannelNameDisplay';
 
 export interface VideosListMobileProps {
   videos: VideoData[];

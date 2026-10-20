@@ -139,3 +139,38 @@ export function formatAddedDate(iso: string | null | undefined): string {
   const time = date.toLocaleTimeString([], ADDED_TIME_OPTIONS);
   return `${day} ${time}`;
 }
+
+// "12.5K", "1.5M": YouTube-style abbreviation for view, like, and subscriber counts.
+export function formatCompactCount(count: number): string {
+  if (count >= 1_000_000) {
+    return `${(count / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  }
+  if (count >= 1_000) {
+    return `${(count / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
+  }
+  return count.toLocaleString();
+}
+
+const DAY_MS = 86_400_000;
+const DAYS_PER_WEEK = 7;
+const DAYS_PER_MONTH = 30;
+const DAYS_PER_YEAR = 365;
+
+function plural(count: number, unit: string): string {
+  return `${count} ${unit}${count === 1 ? '' : 's'} ago`;
+}
+
+// "3 days ago", "2 weeks ago", "5 years ago": the precision YouTube itself
+// shows, which also matches what yt-dlp's approximate search dates carry.
+export function formatRelativeDate(iso: string | null | undefined, now: Date = new Date()): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  const days = Math.floor((now.getTime() - date.getTime()) / DAY_MS);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < DAYS_PER_WEEK) return plural(days, 'day');
+  if (days < DAYS_PER_MONTH) return plural(Math.floor(days / DAYS_PER_WEEK), 'week');
+  if (days < DAYS_PER_YEAR) return plural(Math.floor(days / DAYS_PER_MONTH), 'month');
+  return plural(Math.floor(days / DAYS_PER_YEAR), 'year');
+}

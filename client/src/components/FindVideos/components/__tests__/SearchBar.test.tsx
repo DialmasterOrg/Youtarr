@@ -60,4 +60,17 @@ describe('SearchBar', () => {
     fireEvent.click(screen.getByRole('button', { name: /table view/i }));
     expect(onViewModeChange).toHaveBeenCalledWith('table');
   });
+
+  test('renders the sort menu only when a sort is given', () => {
+    const sort = {
+      options: [{ key: 'relevance', label: 'Relevance', undirected: true }],
+      activeKey: 'relevance',
+      direction: 'desc' as const,
+      onChange: jest.fn(),
+    };
+    const { rerender } = render(<SearchBar {...baseProps} sort={sort} />);
+    expect(screen.getByTestId('video-list-sort-button')).toHaveTextContent('Sort: Relevance');
+    rerender(<SearchBar {...baseProps} />);
+    expect(screen.queryByTestId('video-list-sort-button')).not.toBeInTheDocument();
+  });
 });

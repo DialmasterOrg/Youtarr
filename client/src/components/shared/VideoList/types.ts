@@ -87,6 +87,9 @@ export type FilterConfig =
 export interface SortOption {
   key: string;
   label: string;
+  // An order with no direction (e.g. the source's own ranking): the button
+  // shows no arrow for it and re-choosing it changes nothing.
+  undirected?: boolean;
 }
 
 export interface SortConfig {

@@ -1,12 +1,29 @@
-const { Video } = require('../models');
+const { Video, Channel } = require('../models');
 const { findArchiveOnlyIds } = require('./archiveOnlyIds');
 const { REMOVAL_STATES, removalState } = require('./videoRemovalState');
 
 const toIso = (value) => (value ? new Date(value).toISOString() : null);
 
+// Search results carry a channelId; the local-status endpoint's do not, so the
+// flag is only set where it can be answered and a refresh never clears it.
+async function applyChannelSubscribed(results) {
+  const withChannel = results.filter(r => typeof r.channelId === 'string' && r.channelId);
+  if (withChannel.length === 0) return;
+  const channelIds = [...new Set(withChannel.map(r => r.channelId))];
+  const enabled = await Channel.findAll({
+    where: { channel_id: channelIds, enabled: true },
+    attributes: ['channel_id'],
+  });
+  const subscribed = new Set(enabled.map(c => c.channel_id));
+  for (const r of withChannel) {
+    r.channelSubscribed = subscribed.has(r.channelId);
+  }
+}
+
 async function applyLocalVideoStatus(results) {
   const youtubeIds = results.map(r => r.youtubeId).filter(Boolean);
   if (youtubeIds.length === 0) return;
+  await applyChannelSubscribed(results);
   const existing = await Video.findAll({
     where: { youtubeId: youtubeIds },
     attributes: [

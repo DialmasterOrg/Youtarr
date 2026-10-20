@@ -524,16 +524,23 @@ Search YouTube from inside Youtarr and see which results you already have, which
 1. **Open Find Videos on YouTube**
    - In the sidebar, expand **Videos** and click **Find Videos on YouTube**
    - Enter a search query (up to 200 characters)
-   - Pick a result count (10, 25, 50, or 100), optionally choose a minimum duration, and click Search
+   - Pick a result count (10, 25, 50, or 100), optionally choose a minimum duration (**1+ min** hides Shorts), and click Search
+   - The query is kept in the page address, so the browser's Back button returns you to the same results without searching again
 
 2. **Results**
-   - Sorted newest-to-oldest by YouTube's approximate publish date (accurate to within a day or two, same fidelity as the channel videos page)
+   - Listed in YouTube's own relevance order by default. Sort by published date, views, duration, title, or channel from the table's column headers on desktop (click a header again to reverse it, a third time to return to relevance) or from the **Sort** menu on phones and in grid view
+   - Desktop opens results in a table; the toggle beside the Search button switches to a grid of cards. The choice, the sort, and the minimum duration are remembered
+   - Each result shows the channel, duration, how long ago it was published (the exact date on hover), and the view count; videos of a minute or less carry a **Short** badge
+   - Live and upcoming streams are left out, since a download would record the stream
    - If a minimum duration is selected, shorter results are hidden in the browser and the page shows how many results were filtered out
-   - Each card shows the channel, duration, upload date, and a status chip:
+   - A status chip appears only when there is something to know:
      - **Downloaded**: already in your library
-     - **Missing**: previously downloaded but removed from disk
-     - **Not Downloaded**: new result, not yet saved
-   - Click a result to open the video detail modal, where you can download, play (if downloaded), or ignore it
+     - **Deleted**: previously downloaded and removed by Youtarr
+     - **Missing**: previously downloaded but gone from disk
+     - **Queued** / **Downloading**: on its way
+   - Channel names link to the channel page for channels you follow (marked **Subscribed**); other channel names offer to add the channel
+   - The download icon on a row queues that one video; tick several and use the selection bar to download them together
+   - Click a result to open the video detail modal, where you can download, play (if downloaded), or open it on YouTube
 
 3. **Notes**
    - Rate-limited to 10 searches per minute per session; server-side timeout is 60 seconds

@@ -1,8 +1,8 @@
 /* eslint-env jest */
-jest.mock('../../models', () => ({ Video: { findAll: jest.fn() } }));
+jest.mock('../../models', () => ({ Video: { findAll: jest.fn() }, Channel: { findAll: jest.fn() } }));
 jest.mock('../../models/channelvideo', () => ({ findAll: jest.fn() }));
 jest.mock('../archiveModule', () => ({ filterArchivedVideoIds: jest.fn() }));
-const { Video } = require('../../models');
+const { Video, Channel } = require('../../models');
 const ChannelVideo = require('../../models/channelvideo');
 const archiveModule = require('../archiveModule');
 const { applyLocalVideoStatus } = require('../videoLocalStatus');
@@ -12,6 +12,7 @@ const pending = (...youtubeIds) => youtubeIds.map(youtubeId => ({ youtubeId, sta
 beforeEach(() => {
   jest.clearAllMocks();
   Video.findAll.mockResolvedValue([]);
+  Channel.findAll.mockResolvedValue([]);
   ChannelVideo.findAll.mockResolvedValue([]);
   archiveModule.filterArchivedVideoIds.mockReturnValue(new Set());
 });
@@ -102,5 +103,32 @@ describe('inArchive', () => {
   it('skips the ignored lookup when nothing is in the archive', async () => {
     await applyLocalVideoStatus(pending('aaaaaaaaaaa'));
     expect(ChannelVideo.findAll).not.toHaveBeenCalled();
+  });
+});
+
+describe('channelSubscribed', () => {
+  const withChannel = (youtubeId, channelId) => ({ youtubeId, channelId, status: 'never_downloaded' });
+
+  it('is true for results whose channel is an enabled subscription and false otherwise', async () => {
+    Channel.findAll.mockResolvedValue([{ channel_id: 'UCsubscribed' }]);
+    const results = [withChannel('aaaaaaaaaaa', 'UCsubscribed'), withChannel('bbbbbbbbbbb', 'UCother')];
+    await applyLocalVideoStatus(results);
+    expect(results.map(r => r.channelSubscribed)).toEqual([true, false]);
+  });
+
+  it('asks only for enabled channels among the distinct channel ids in the results', async () => {
+    const results = [withChannel('aaaaaaaaaaa', 'UCone'), withChannel('bbbbbbbbbbb', 'UCone'), withChannel('ccccccccccc', null)];
+    await applyLocalVideoStatus(results);
+    expect(Channel.findAll).toHaveBeenCalledWith({
+      where: { channel_id: ['UCone'], enabled: true },
+      attributes: ['channel_id'],
+    });
+  });
+
+  it('leaves the flag unset and skips the lookup when no result carries a channel id', async () => {
+    const results = pending('aaaaaaaaaaa');
+    await applyLocalVideoStatus(results);
+    expect(Channel.findAll).not.toHaveBeenCalled();
+    expect(results[0]).not.toHaveProperty('channelSubscribed');
   });
 });
