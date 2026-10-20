@@ -43,9 +43,10 @@ function SortButton({ sort }: { sort: SortConfig }) {
     <>
       <Button
         variant="outlined"
+        color="inherit"
         size="small"
         onClick={(e) => setAnchorEl(e.currentTarget)}
-        className="text-foreground border-border hover:bg-muted hover:border-foreground"
+        className="hover:border-foreground"
         endIcon={<DirectionIcon size={14} />}
         data-testid="video-list-sort-button"
       >
@@ -109,6 +110,7 @@ function VideoListToolbar({
   const filtersButton = onFiltersClick ? (
     <Button
       variant={filtersButtonActive ? 'contained' : 'outlined'}
+      color={filtersButtonActive ? 'primary' : 'inherit'}
       size="small"
       onClick={onFiltersClick}
       startIcon={
@@ -120,11 +122,7 @@ function VideoListToolbar({
           <FilterListIcon size={16} />
         </Badge>
       }
-      className={
-        filtersButtonActive
-          ? undefined
-          : 'text-foreground border-border hover:bg-muted hover:border-foreground'
-      }
+      className={filtersButtonActive ? undefined : 'hover:border-foreground'}
       data-testid="video-list-filters-button"
     >
       Filters
