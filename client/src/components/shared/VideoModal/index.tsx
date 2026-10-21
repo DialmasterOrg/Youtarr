@@ -28,6 +28,7 @@ import AddChannelDialog from '../AddChannelDialog';
 import DownloadSettingsDialog from '../../DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { useConfig } from '../../../hooks/useConfig';
 import { uploadDateToIso } from '../../../utils/formatters';
+import { isRemovedStatus } from '../../../utils/videoStatus';
 
 const SNACKBAR_AUTO_HIDE_MS = 4000;
 
@@ -37,6 +38,7 @@ function VideoModal({
   video,
   token,
   onVideoDeleted,
+  onMarkedDeleted,
   onProtectionChanged,
   onIgnoreChanged,
   onDownloadQueued,
@@ -55,12 +57,14 @@ function VideoModal({
     downloadDialogOpen,
     ratingDialogOpen,
     protectionLoading,
+    markDeletedPending,
     setDeleteDialogOpen,
     setDownloadDialogOpen,
     setRatingDialogOpen,
     handleProtectionToggle,
     handleDeleteConfirm,
     handleIgnoreToggle,
+    handleMarkDeleted,
     handleDownloadConfirm,
     handleRatingApply,
     handleSnackbarClose,
@@ -68,6 +72,7 @@ function VideoModal({
     video,
     token,
     onVideoDeleted,
+    onMarkedDeleted,
     onProtectionChanged,
     onIgnoreChanged,
     onDownloadQueued,
@@ -273,7 +278,9 @@ function VideoModal({
               onIgnoreToggle={handleIgnoreToggle}
               onDownloadClick={() => setDownloadDialogOpen(true)}
               onRatingClick={() => setRatingDialogOpen(true)}
+              onMarkDeleted={() => { void handleMarkDeleted(); }}
               protectionLoading={protectionLoading}
+              markDeletedPending={markDeletedPending}
               isMobile={isMobile}
               allowIgnore={allowIgnore}
             />
@@ -312,7 +319,7 @@ function VideoModal({
         onClose={() => setDownloadDialogOpen(false)}
         onConfirm={handleDownloadConfirm}
         videoCount={1}
-        missingVideoCount={displayVideo.status === 'missing' || displayVideo.inArchive ? 1 : 0}
+        missingVideoCount={isRemovedStatus(displayVideo.status) || displayVideo.inArchive ? 1 : 0}
         mode="manual"
         token={token}
         defaultResolution={defaultResolution}

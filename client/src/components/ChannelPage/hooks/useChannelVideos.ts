@@ -21,6 +21,7 @@ interface UseChannelVideosParams {
   dateTo?: Date | null;
   protectedFilter?: ChipFilterMode;
   missingFilter?: ChipFilterMode;
+  deletedFilter?: ChipFilterMode;
   ignoredFilter?: ChipFilterMode;
   watchedFilter?: ChipFilterMode;
   /** Only the episodes of this title show */
@@ -58,6 +59,7 @@ export function useChannelVideos({
   dateTo,
   protectedFilter,
   missingFilter,
+  deletedFilter,
   ignoredFilter,
   watchedFilter,
   showId = null,
@@ -130,6 +132,9 @@ export function useChannelVideos({
       }
       if (missingFilter && missingFilter !== 'off') {
         queryParams.append('missingFilter', missingFilter);
+      }
+      if (deletedFilter && deletedFilter !== 'off') {
+        queryParams.append('deletedFilter', deletedFilter);
       }
       if (ignoredFilter && ignoredFilter !== 'off') {
         queryParams.append('ignoredFilter', ignoredFilter);
@@ -207,7 +212,7 @@ export function useChannelVideos({
         setLoading(false);
       }
     }
-  }, [channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, maxRating, token, append, resetKey, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, showId]);
+  }, [channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, maxRating, token, append, resetKey, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, deletedFilter, ignoredFilter, watchedFilter, showId]);
 
   useEffect(() => {
     fetchVideos();

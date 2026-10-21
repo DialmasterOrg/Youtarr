@@ -356,11 +356,18 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *     responses:
    *       200:
    *         description: Channel information
+   *       500:
+   *         description: Failed to get channel information
    */
   router.get('/getchannelinfo/:channelId', verifyToken, async (req, res) => {
     const channelId = req.params.channelId;
-    const channelInfo = await channelModule.getChannelInfo(channelId, true);
-    res.json(channelInfo);
+    try {
+      const channelInfo = await channelModule.getChannelInfo(channelId, true);
+      res.json(channelInfo);
+    } catch (error) {
+      req.log.error({ err: error, channelId }, 'Failed to get channel information');
+      res.status(500).json({ error: 'Failed to get channel information' });
+    }
   });
 
   /**
@@ -904,6 +911,18 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *           default: off
    *         description: Tri-state filter on watched status (per the configured watched rule). `only` keeps watched videos, `exclude` hides them.
    *       - in: query
+   *         name: missingFilter
+   *         schema:
+   *           type: string
+   *           enum: [off, only, exclude]
+   *         description: Tri-state filter on missing videos (previously downloaded; a file was expected on disk and not found)
+   *       - in: query
+   *         name: deletedFilter
+   *         schema:
+   *           type: string
+   *           enum: [off, only, exclude]
+   *         description: Tri-state filter on deleted videos (previously downloaded; deleted in Youtarr or by automatic cleanup, marked as deleted, or removed before Youtarr recorded why)
+   *       - in: query
    *         name: maxRating
    *         schema:
    *           type: string
@@ -919,6 +938,10 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *         description: List of channel videos
    *       400:
    *         description: Invalid maxRating or showId
+   *       404:
+   *         description: Channel not found
+   *       500:
+   *         description: Failed to get channel videos
    */
   router.get('/getchannelvideos/:channelId', verifyToken, async (req, res) => {
     req.log.info({ channelId: req.params.channelId }, 'Getting channel videos');
@@ -941,6 +964,7 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     const missingFilter = parseFilterMode(req.query.missingFilter);
     const ignoredFilter = parseFilterMode(req.query.ignoredFilter);
     const watchedFilter = parseFilterMode(req.query.watchedFilter);
+    const deletedFilter = parseFilterMode(req.query.deletedFilter);
     const maxRating = ratingMapper.parseMaxRatingParam(req.query.maxRating);
     if (!maxRating.valid) {
       return res.status(400).json({ error: 'Invalid maxRating' });
@@ -950,7 +974,16 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     if (showId !== null && (!Number.isInteger(showId) || showId <= 0)) {
       return res.status(400).json({ error: 'Invalid showId' });
     }
-    const result = await channelModule.getChannelVideos(channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, maxRating.value, showId);
+    let result;
+    try {
+      result = await channelModule.getChannelVideos(channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, maxRating.value, showId, deletedFilter);
+    } catch (error) {
+      if (error.code === 'CHANNEL_NOT_FOUND') {
+        return res.status(404).json({ error: 'Channel not found' });
+      }
+      req.log.error({ err: error, channelId }, 'Failed to get channel videos');
+      return res.status(500).json({ error: 'Failed to get channel videos' });
+    }
 
     if (Array.isArray(result)) {
       res.status(200).json({ videos: result });

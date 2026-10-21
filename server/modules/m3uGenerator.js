@@ -10,8 +10,9 @@ const {
 } = require('./filesystem/pathBuilder');
 const configModule = require('./configModule');
 const channelFolders = require('./tvShows/channelFolders');
+const { M3U_FOLDER_NAME } = require('./filesystem/constants');
+const { REMOVAL_STATES, removalState } = require('./videoRemovalState');
 
-const M3U_FOLDER_NAME = '__playlists__';
 // Empty marker file that tells the Jellyfin and Emby library scanners to skip
 // this folder. Without it, those servers auto-import the .m3u files as duplicate
 // (and on Jellyfin, empty) playlists alongside the ones created via native API
@@ -62,7 +63,9 @@ class M3uGenerator {
       let included = 0;
       for (const pv of videos) {
         const video = await Video.findOne({ where: { youtubeId: pv.youtube_id } });
-        const mediaPath = video && (preferAudio
+        // A deleted row keeps its stored paths, but its file is gone for good.
+        // A missing one stays listed: its file may come back.
+        const mediaPath = video && removalState(video) !== REMOVAL_STATES.DELETED && (preferAudio
           ? (video.audioFilePath || video.filePath)
           : (video.filePath || video.audioFilePath));
         if (!mediaPath) {

@@ -22,7 +22,9 @@ const createLogRoutes = require('./logs');
 const createTvShowRoutes = require('./tvShows');
 const createTvReorganizeRoutes = require('./tvReorganize');
 const createTvTitleShowRoutes = require('./tvTitleShows');
+const createVideoTrashRoutes = require('./videoTrash');
 const videoMetadataModule = require('../modules/videoMetadataModule');
+const videoTrashModule = require('../modules/videoTrashModule');
 const videoOembedEnricher = require('../modules/videoOembedEnricher');
 const playlistModule = require('../modules/playlistModule');
 const m3uGenerator = require('../modules/m3uGenerator');
@@ -35,6 +37,7 @@ const playlistVideoFilters = require('../modules/playlistVideoFilters');
 const playlistDownloadModule = require('../modules/playlistDownloadModule');
 const models = require('../models');
 const videoLocalStatus = require('../modules/videoLocalStatus');
+const youtubeUrlParser = require('../modules/youtubeUrlParser');
 const videoActivity = require('../modules/download/videoActivity');
 const scheduledTaskManager = require('../modules/scheduledTaskManager');
 const scheduledTaskRuns = require('../modules/scheduledTaskRuns');
@@ -113,7 +116,11 @@ function registerRoutes(app, deps) {
   app.use(createVideoRoutes({
     verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard, scheduledTaskManager, ratingMapper,
     layoutGuards, reorganizeLock: reorganize.lock,
+    youtubeUrlParser,
   }));
+
+  // Trash routes: deleted and missing videos (counts, mark as deleted, purge)
+  app.use(createVideoTrashRoutes({ verifyToken, videoTrashModule, jobModule }));
 
   // Video search routes
   app.use(createVideoSearchRoutes({ verifyToken, videoSearchModule }));

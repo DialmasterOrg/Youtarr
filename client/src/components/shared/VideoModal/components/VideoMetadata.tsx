@@ -11,7 +11,7 @@ import {
   FileDownload as DownloadedIcon,
   Plus as AddIcon,
 } from '../../../../lib/icons';
-import { formatDate, formatDateTime } from '../../../../utils/formatters';
+import { formatCompactCount as formatCount, formatDate, formatDateTime } from '../../../../utils/formatters';
 import { VideoModalData, VideoExtendedMetadata } from '../types';
 
 interface VideoMetadataProps {
@@ -23,16 +23,6 @@ interface VideoMetadataProps {
 
 const DESCRIPTION_PREVIEW_LENGTH = 300;
 const VISIBLE_TAGS_COUNT = 6;
-
-function formatCount(count: number): string {
-  if (count >= 1_000_000) {
-    return `${(count / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
-  }
-  if (count >= 1_000) {
-    return `${(count / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
-  }
-  return count.toLocaleString();
-}
 
 function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600);

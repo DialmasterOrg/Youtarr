@@ -201,6 +201,12 @@ describe('VideoTableView Component', () => {
       expect(screen.getByTestId('VideoFormatIcon')).toBeInTheDocument();
     });
 
+    test('shows no format chips for a deleted video, whose stored path is only history', () => {
+      const deletedVideo = { ...mockVideo, added: true, removed: true, removed_reason: 'user_deleted' as const, filePath: '/path/to/video.mp4' };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[deletedVideo]} />);
+      expect(screen.queryByTestId('VideoFormatIcon')).not.toBeInTheDocument();
+    });
+
     test('renders dash when no file path exists', () => {
       const videoNoFile = { ...mockVideo, filePath: undefined };
       renderWithProviders(<VideoTableView {...defaultProps} videos={[videoNoFile]} />);
@@ -239,7 +245,7 @@ describe('VideoTableView Component', () => {
     });
 
     test('renders "Missing" status for removed video', () => {
-      const removedVideo = { ...mockVideo, added: true, removed: true };
+      const removedVideo = { ...mockVideo, added: true, removed: true, removed_reason: 'not_found' as const };
       renderWithProviders(<VideoTableView {...defaultProps} videos={[removedVideo]} />);
       expect(screen.getByText('Missing')).toBeInTheDocument();
       expect(screen.getByText('Missing')).toBeVisible();
@@ -427,11 +433,28 @@ describe('VideoTableView Component', () => {
     });
 
     test('renders checkbox for missing videos', () => {
-      const missingVideo = { ...mockVideo, added: true, removed: true };
+      const missingVideo = { ...mockVideo, added: true, removed: true, removed_reason: 'not_found' as const };
       renderWithProviders(<VideoTableView {...defaultProps} videos={[missingVideo]} />);
       const checkboxes = screen.getAllByRole('checkbox');
       // Header + 1 video checkbox
       expect(checkboxes).toHaveLength(2);
+    });
+
+    test('renders checkbox for deleted videos, including ones removed before the reason was recorded', () => {
+      const deletedVideo = { ...mockVideo, added: true, removed: true, removed_reason: null };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[deletedVideo]} />);
+      const checkboxes = screen.getAllByRole('checkbox');
+      // Header + 1 video checkbox
+      expect(checkboxes).toHaveLength(2);
+    });
+
+    test('counts deleted videos as selectable for the header checkbox', () => {
+      const deletedVideo = { ...mockVideo, added: true, removed: true, removed_reason: 'user_deleted' as const };
+      renderWithProviders(
+        <VideoTableView {...defaultProps} videos={[deletedVideo]} checkedBoxes={[deletedVideo.youtube_id]} />
+      );
+      const headerCheckbox = screen.getAllByRole('checkbox')[0];
+      expect(headerCheckbox).toBeChecked();
     });
 
     test('does not render checkbox for downloaded videos', () => {
@@ -529,7 +552,7 @@ describe('VideoTableView Component', () => {
     });
 
     test('does not render delete checkbox for missing videos', () => {
-      const missingVideo = { ...mockVideo, added: true, removed: true };
+      const missingVideo = { ...mockVideo, added: true, removed: true, removed_reason: 'not_found' as const };
       renderWithProviders(
         <VideoTableView {...defaultProps} videos={[missingVideo]} selectionMode="delete" />
       );
@@ -569,7 +592,7 @@ describe('VideoTableView Component', () => {
     });
 
     test('renders ignore button for missing videos', () => {
-      const missingVideo = { ...mockVideo, added: true, removed: true };
+      const missingVideo = { ...mockVideo, added: true, removed: true, removed_reason: 'not_found' as const };
       renderWithProviders(<VideoTableView {...defaultProps} videos={[missingVideo]} />);
       const buttons = screen.getAllByRole('button', { name: /ignore/i });
       expect(buttons.length).toBeGreaterThan(0);
@@ -710,7 +733,7 @@ describe('VideoTableView Component', () => {
     });
 
     test('renders ignore button for missing video, not delete button', () => {
-      const missingVideo = { ...mockVideo, added: true, removed: true };
+      const missingVideo = { ...mockVideo, added: true, removed: true, removed_reason: 'not_found' as const };
       renderWithProviders(<VideoTableView {...defaultProps} videos={[missingVideo]} />);
 
       // Should have ignore button
@@ -936,7 +959,7 @@ describe('VideoTableView Component', () => {
     });
 
     test('renders CloudOffIcon for missing videos', () => {
-      const missingVideo = { ...mockVideo, added: true, removed: true };
+      const missingVideo = { ...mockVideo, added: true, removed: true, removed_reason: 'not_found' as const };
       renderWithProviders(<VideoTableView {...defaultProps} videos={[missingVideo]} />);
       expect(screen.getByTestId('CloudOffIcon')).toBeInTheDocument();
     });

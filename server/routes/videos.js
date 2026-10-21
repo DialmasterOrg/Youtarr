@@ -59,7 +59,12 @@ const apiKeyDownloadLimiter = rateLimit({
 module.exports = function createVideoRoutes({
   verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard, scheduledTaskManager, ratingMapper,
   layoutGuards, reorganizeLock,
+  youtubeUrlParser,
 }) {
+  if (!youtubeUrlParser || typeof youtubeUrlParser.normalizeUrlToVideoId !== 'function') {
+    throw new Error('youtubeUrlParser dependency is required');
+  }
+
   const router = express.Router();
   /**
    * @swagger
@@ -98,7 +103,8 @@ module.exports = function createVideoRoutes({
    *                         type: string
    *                       status:
    *                         type: string
-   *                         enum: [never_downloaded, missing, downloaded]
+   *                         enum: [never_downloaded, downloaded, deleted, missing]
+   *                         description: deleted = Youtarr removed the file (or the video was marked as deleted); missing = a file was expected on disk and not found. `removedReason`, `removedAt` and `removedDetail` say why.
    *                       inArchive:
    *                         type: boolean
    *                         description: Listed in the download archive without a database record (ignored videos excluded); a download skips it unless re-downloading is allowed
@@ -193,7 +199,14 @@ module.exports = function createVideoRoutes({
    *           type: string
    *           enum: [off, only, exclude]
    *           default: off
-   *         description: Tri-state filter on missing (file removed) videos
+   *         description: Tri-state filter on missing videos (a file was expected on disk and not found)
+   *       - in: query
+   *         name: deletedFilter
+   *         schema:
+   *           type: string
+   *           enum: [off, only, exclude]
+   *           default: off
+   *         description: Tri-state filter on deleted videos (deleted in Youtarr or by automatic cleanup, marked as deleted, or removed before Youtarr recorded why). With `exclude`, the response's `hiddenDeletedCount` says how many were hidden.
    *       - in: query
    *         name: watchedFilter
    *         schema:
@@ -209,7 +222,7 @@ module.exports = function createVideoRoutes({
    *         description: Hide videos rated above this rating. Unrated videos are always included.
    *     responses:
    *       200:
-   *         description: Paginated list of videos
+   *         description: Paginated list of videos. Each row carries `removed`, `removed_reason`, `removed_at` and `removed_detail`. `libraryWarning` is set when videos were not marked missing because the downloads folder looked unmounted.
    *       400:
    *         description: Invalid maxRating
    *       500:
@@ -219,7 +232,7 @@ module.exports = function createVideoRoutes({
     req.log.info('Getting videos');
 
     try {
-      const { page, limit, search, dateFrom, dateTo, sortBy, sortOrder, channelFilter, protectedFilter, missingFilter, watchedFilter } = req.query;
+      const { page, limit, search, dateFrom, dateTo, sortBy, sortOrder, channelFilter, protectedFilter, missingFilter, deletedFilter, watchedFilter } = req.query;
 
       const maxRating = ratingMapper.parseMaxRatingParam(req.query.maxRating);
       if (!maxRating.valid) {
@@ -239,6 +252,7 @@ module.exports = function createVideoRoutes({
         channelFilter: channelFilter || '',
         protectedFilter: parseFilterMode(protectedFilter),
         missingFilter: parseFilterMode(missingFilter),
+        deletedFilter: parseFilterMode(deletedFilter),
         watchedFilter: parseFilterMode(watchedFilter),
         maxRating: maxRating.value,
       };
@@ -707,7 +721,11 @@ module.exports = function createVideoRoutes({
    *             properties:
    *               url:
    *                 type: string
-   *                 description: YouTube video URL
+   *                 description: >
+   *                   YouTube video URL: watch, shorts, live, or embed on youtube.com,
+   *                   m.youtube.com, or music.youtube.com, or a youtu.be link. A watch
+   *                   URL opened from a playlist (list=) downloads only that video;
+   *                   playlist and channel page URLs are rejected.
    *                 example: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
    *               resolution:
    *                 type: string
@@ -779,20 +797,20 @@ module.exports = function createVideoRoutes({
       });
     }
 
-    // Validate URL format - single videos only
-    const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|shorts\/)|youtu\.be\/)[a-zA-Z0-9_-]{11}/;
-    if (!youtubeRegex.test(url)) {
+    // Single videos only. Queue the canonical URL, never the one sent: yt-dlp
+    // downloads the whole playlist for a watch URL that also carries list=.
+    let canonicalUrl;
+    try {
+      ({ canonicalUrl } = youtubeUrlParser.normalizeUrlToVideoId(url));
+    } catch {
+      const isPlaylistOrChannel = typeof url === 'string' && (
+        url.includes('list=') || url.includes('/playlist') || url.includes('/channel/') || url.includes('/@')
+      );
       return res.status(400).json({
         success: false,
-        error: 'Invalid YouTube URL format'
-      });
-    }
-
-    // Reject playlists and channels - API keys only support single video downloads
-    if (url.includes('list=') || url.includes('/playlist') || url.includes('/channel/') || url.includes('/@')) {
-      return res.status(400).json({
-        success: false,
-        error: 'API keys only support single video downloads. Playlists and channels require the web UI.'
+        error: isPlaylistOrChannel
+          ? 'API keys only support single video downloads. Playlists and channels require the web UI.'
+          : 'Invalid YouTube URL format'
       });
     }
 
@@ -827,7 +845,7 @@ module.exports = function createVideoRoutes({
     try {
       // Optionally fetch video metadata for response
       const videoValidationModule = require('../modules/videoValidationModule');
-      const metadata = await videoValidationModule.validateVideo(url);
+      const metadata = await videoValidationModule.validateVideo(canonicalUrl);
 
       if (!metadata.isValidUrl) {
         return res.status(400).json({
@@ -855,7 +873,7 @@ module.exports = function createVideoRoutes({
 
       const admission = await downloadModule.doGroupedManualDownloads({
         body: {
-          urls: [url],
+          urls: [canonicalUrl],
           overrideSettings: Object.keys(overrideSettings).length > 0 ? overrideSettings : undefined,
           videoChannelMap,
           initiatedBy
@@ -912,7 +930,10 @@ module.exports = function createVideoRoutes({
    *                 type: array
    *                 items:
    *                   type: string
-   *                 description: Array of YouTube video URLs to download
+   *                 description: >
+   *                   Array of YouTube video URLs to download. Each URL is reduced to its
+   *                   canonical watch URL, so a video opened from a playlist (list=)
+   *                   downloads only that video.
    *               overrideSettings:
    *                 type: object
    *                 properties:
@@ -933,7 +954,7 @@ module.exports = function createVideoRoutes({
    *       200:
    *         description: Download job started
    *       400:
-   *         description: Invalid override settings, or an MP3 download type with a TV-layout destination override
+   *         description: Invalid override settings or videoChannelMap, a URL that is not a single YouTube video, or an MP3 download type with a TV-layout destination override
    *       409:
    *         description: Downloads are paused because a storage limit was reached (Settings > Storage Limits); the error message gives the reason
    *         content:
@@ -1032,6 +1053,20 @@ module.exports = function createVideoRoutes({
           error: 'videoChannelMap must map 11-character YouTube video IDs to UC-format channel IDs'
         });
       }
+    }
+
+    // URLs reach yt-dlp as given, and yt-dlp downloads the whole playlist for
+    // a video URL that also carries list=, so forward canonical URLs only.
+    if (Array.isArray(req.body.urls)) {
+      const canonicalUrls = [];
+      for (const [index, url] of req.body.urls.entries()) {
+        try {
+          canonicalUrls.push(youtubeUrlParser.normalizeUrlToVideoId(url).canonicalUrl);
+        } catch {
+          return res.status(400).json({ error: `URL ${index + 1} is not a single YouTube video: ${url}` });
+        }
+      }
+      req.body.urls = canonicalUrls;
     }
 
     try {

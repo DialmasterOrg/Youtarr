@@ -6,6 +6,8 @@ import type { EpisodeInfo } from './tvShows';
   duration: number;
 }*/
 
+import type { RemovalReason } from '../utils/videoRemoval';
+
 export interface VideoData {
   id: number;
   youtubeId: string;
@@ -20,6 +22,10 @@ export interface VideoData {
   audioFilePath?: string | null;
   audioFileSize?: string | null;
   removed?: boolean;
+  // Why the file is gone (see utils/videoRemoval): 'not_found' = missing, anything else = deleted
+  removed_reason?: RemovalReason | null;
+  removed_at?: string | null;
+  removed_detail?: string | null;
   youtube_removed?: boolean;
   channel_id?: string | null;
   media_type?: string;
@@ -38,6 +44,15 @@ export interface EnabledChannel {
   uploader: string;
 }
 
+// Set when videos were not marked missing because the downloads folder looked
+// unmounted (missing, empty, unreadable, or an empty __subfolder).
+export interface LibraryWarning {
+  reason: string;
+  path: string;
+  message: string;
+  heldBack: number;
+}
+
 export interface PaginatedVideosResponse {
   videos: VideoData[];
   total: number;
@@ -45,4 +60,7 @@ export interface PaginatedVideosResponse {
   totalPages: number;
   channels: string[];
   enabledChannels: EnabledChannel[];
+  // How many deleted videos the deleted filter hid; null unless it excludes them.
+  hiddenDeletedCount?: number | null;
+  libraryWarning?: LibraryWarning | null;
 }

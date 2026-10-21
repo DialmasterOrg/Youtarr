@@ -3,9 +3,10 @@ import { PlaylistSortOrder } from '../../../hooks/usePlaylistDetail';
 import { Button, Card, CardContent, Checkbox, Chip, Tooltip, Typography } from '../../ui';
 import { PlaylistVideo } from '../../../types/playlist';
 import { formatDurationClock } from '../../../utils';
-import { isDownloadable, statusLabel, PlaylistVideoDates, toDownloadFileProps } from './playlistVideoHelpers';
+import { isSelectable, statusLabel, PlaylistVideoDates, toDownloadFileProps } from './playlistVideoHelpers';
 import DownloadFormatIndicator from '../../shared/DownloadFormatIndicator';
 import WatchedChip from '../../shared/WatchedChip';
+import { REMOVAL_TOOLTIP_CLASS } from '../../shared/RemovalDescription';
 import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_COMPACT_CHIP_OVERRIDES } from '../../shared/chipStyles';
 
 const compactStatusChipStyle: React.CSSProperties = {
@@ -35,7 +36,7 @@ const PlaylistVideoCard: React.FC<PlaylistVideoCardProps> = ({
   onToggle,
 }) => {
   const status = statusLabel(video);
-  const selectable = isDownloadable(video);
+  const selectable = isSelectable(video);
   const isPending = pendingId === video.youtube_id;
 
   return (
@@ -88,6 +89,10 @@ const PlaylistVideoCard: React.FC<PlaylistVideoCardProps> = ({
                 <Chip label={status.label} color={status.color} size="small" style={compactStatusChipStyle} />
               )}
             </>
+          ) : status.tooltip ? (
+            <Tooltip title={status.tooltip} enterTouchDelay={0} className={REMOVAL_TOOLTIP_CLASS}>
+              <Chip label={status.label} color={status.color} size="small" style={compactStatusChipStyle} />
+            </Tooltip>
           ) : (
             <Chip label={status.label} color={status.color} size="small" style={compactStatusChipStyle} />
           )}

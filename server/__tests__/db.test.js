@@ -111,7 +111,8 @@ describe('db.js', () => {
           dialectOptions: {
             charset: 'utf8mb4',
             supportBigNumbers: true,
-            bigNumberStrings: true
+            bigNumberStrings: true,
+            stream: expect.any(Function)
           },
           define: {
             charset: 'utf8mb4',
@@ -122,6 +123,14 @@ describe('db.js', () => {
           }
         })
       );
+    });
+
+    it('opens database sockets through databaseSocket', () => {
+      db = require('../db');
+      const databaseSocket = require('../modules/databaseSocket');
+
+      const callArgs = SequelizeMock.mock.calls[0][3];
+      expect(callArgs.dialectOptions.stream).toBe(databaseSocket.connect);
     });
 
     it('should use environment variables when set', () => {

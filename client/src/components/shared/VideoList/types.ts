@@ -29,30 +29,43 @@ export type FilterConfig =
       value: string;
       onChange: (value: string) => void;
     }
+  // Status chips rest at `defaultValue` (off unless given): a chip at its
+  // resting value is not "active", and clearing filters returns it there.
   | {
       id: 'protected';
       value: ChipFilterMode;
       onChange: (value: ChipFilterMode) => void;
+      defaultValue?: ChipFilterMode;
     }
   | {
       id: 'missing';
       value: ChipFilterMode;
       onChange: (value: ChipFilterMode) => void;
+      defaultValue?: ChipFilterMode;
+    }
+  | {
+      id: 'deleted';
+      value: ChipFilterMode;
+      onChange: (value: ChipFilterMode) => void;
+      defaultValue?: ChipFilterMode;
     }
   | {
       id: 'ignored';
       value: ChipFilterMode;
       onChange: (value: ChipFilterMode) => void;
+      defaultValue?: ChipFilterMode;
     }
   | {
       id: 'downloaded';
       value: ChipFilterMode;
       onChange: (value: ChipFilterMode) => void;
+      defaultValue?: ChipFilterMode;
     }
   | {
       id: 'watched';
       value: ChipFilterMode;
       onChange: (value: ChipFilterMode) => void;
+      defaultValue?: ChipFilterMode;
     }
   | {
       id: 'duration';
@@ -74,6 +87,9 @@ export type FilterConfig =
 export interface SortOption {
   key: string;
   label: string;
+  // An order with no direction (e.g. the source's own ranking): the button
+  // shows no arrow for it and re-choosing it changes nothing.
+  undirected?: boolean;
 }
 
 export interface SortConfig {

@@ -584,6 +584,22 @@ describe('server routes - session management', () => {
       expect(res.statusCode).toBe(200);
       expect(res.body).toHaveLength(1);
     });
+
+    test('answers 500 when sessions cannot be loaded', async () => {
+      const { app, dbMock } = await createServerModule();
+      dbMock.Session.findAll.mockRejectedValueOnce(new Error('connect ETIMEDOUT'));
+
+      const handlers = findRouteHandlers(app, 'get', '/auth/sessions');
+      const sessionsHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({ username: 'tester' });
+      const res = createMockResponse();
+
+      await sessionsHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to load sessions' });
+    });
   });
 
   describe('DELETE /auth/sessions/:id', () => {
@@ -631,6 +647,22 @@ describe('server routes - session management', () => {
 
       expect(res.statusCode).toBe(404);
       expect(res.body).toEqual({ error: 'Session not found' });
+    });
+
+    test('answers 500 when the session cannot be ended', async () => {
+      const { app, dbMock } = await createServerModule();
+      dbMock.Session.update.mockRejectedValueOnce(new Error('connect ETIMEDOUT'));
+
+      const handlers = findRouteHandlers(app, 'delete', '/auth/sessions/:id');
+      const deleteHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({ params: { id: '123' }, username: 'tester' });
+      const res = createMockResponse();
+
+      await deleteHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to end session' });
     });
   });
 
@@ -725,6 +757,24 @@ describe('server routes - session management', () => {
 
       expect(res.statusCode).toBe(400);
       expect(res.body).toEqual({ error: 'New password is too long' });
+    });
+
+    test('answers 500 when the current password cannot be checked', async () => {
+      const { app, bcryptMock } = await createServerModule();
+      bcryptMock.compare.mockRejectedValueOnce(new Error('Illegal arguments: string, undefined'));
+
+      const handlers = findRouteHandlers(app, 'post', '/auth/change-password');
+      const changePasswordHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { currentPassword: 'old-password', newPassword: 'new-password-123' }
+      });
+      const res = createMockResponse();
+
+      await changePasswordHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to change password' });
     });
   });
 

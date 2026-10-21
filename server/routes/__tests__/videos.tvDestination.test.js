@@ -35,6 +35,7 @@ describe('POST /triggerspecificdownloads into a TV folder', () => {
       downloadModule,
       storageGuard: { isPausedError: () => false },
       layoutGuards,
+      youtubeUrlParser: require('../../modules/youtubeUrlParser'),
     }));
   });
 

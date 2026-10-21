@@ -4,6 +4,9 @@ const { Video } = require('../models');
 const { VIDEO_EXTENSIONS, AUDIO_EXTENSIONS, APPLEDOUBLE_FILE_PATTERN } = require('./filesystem/constants');
 const { isFileForVideo } = require('./filesystem/pathBuilder');
 const createLimiter = require('./subscriptionImport/concurrencyLimiter');
+const { REMOVAL_REASONS, REMOVAL_COLUMNS, removedColumns, presentColumns } = require('./videoRemovalState');
+const { checkLibraryRoot, isRowUnderLibraryCheck } = require('./libraryRootCheck');
+const configModule = require('./configModule');
 
 // Per-video checks run concurrently up to this bound: each stat costs a full
 // round trip on network-backed mounts (NAS, WSL drvfs), so checking a
@@ -92,6 +95,12 @@ class FileCheckModule {
     return { exists: false, statusKnown: true };
   }
 
+  /**
+   * @returns {Promise<{videos: Array, updates: Array, libraryWarning: (Object|null)}>}
+   *   libraryWarning is set when rows would have been marked missing but the
+   *   downloads folder, or the subfolder they are stored in, looks unmounted
+   *   (see libraryRootCheck): those rows are left as they are and counted in `heldBack`.
+   */
   async checkVideoFiles(videos) {
     const updatedVideos = [...videos];
     const limit = createLimiter(MAX_CONCURRENT_FILE_CHECKS);
@@ -100,6 +109,16 @@ class FileCheckModule {
     const updateSlots = new Array(updatedVideos.length).fill(null);
     // Missing files of one folder share its listing.
     const listings = new Map();
+
+    // An unmounted drive makes every file look gone, so the folder itself is
+    // checked before the first row is marked missing: once per pass, and only
+    // when a pass would mark something.
+    let libraryCheckPromise = null;
+    const getLibraryCheck = () => {
+      libraryCheckPromise ??= checkLibraryRoot(configModule.directoryPath);
+      return libraryCheckPromise;
+    };
+    let heldBack = 0;
 
     await Promise.all(updatedVideos.map((video, i) => limit(async () => {
       const update = { id: video.id };
@@ -155,11 +174,19 @@ class FileCheckModule {
 
       if (hasAnyPath && canDetermineRemovedStatus) {
         if (hasAnyFile && video.removed) {
-          update.removed = false;
+          Object.assign(update, presentColumns());
           hasUpdates = true;
         } else if (!hasAnyFile && !video.removed) {
-          update.removed = true;
-          hasUpdates = true;
+          // A row that is already removed (deleted in Youtarr, or marked as
+          // deleted) is left as it is: only a present row becomes missing.
+          // A failing subfolder holds back only the rows stored under it.
+          const libraryCheck = await getLibraryCheck();
+          if (!isRowUnderLibraryCheck(libraryCheck, video)) {
+            Object.assign(update, removedColumns(REMOVAL_REASONS.NOT_FOUND));
+            hasUpdates = true;
+          } else {
+            heldBack++;
+          }
         }
       }
 
@@ -171,12 +198,14 @@ class FileCheckModule {
           ...(update.fileSize !== undefined && { fileSize: update.fileSize.toString() }),
           ...(update.audioFilePath !== undefined && { audioFilePath: update.audioFilePath }),
           ...(update.audioFileSize !== undefined && { audioFileSize: update.audioFileSize.toString() }),
-          ...(update.removed !== undefined && { removed: update.removed })
+          ...(update.removed !== undefined && Object.fromEntries(REMOVAL_COLUMNS.map((column) => [column, update[column]])))
         };
       }
     })));
 
-    return { videos: updatedVideos, updates: updateSlots.filter(Boolean) };
+    const libraryWarning = heldBack > 0 ? { ...(await getLibraryCheck()), heldBack } : null;
+    if (libraryWarning) delete libraryWarning.ok;
+    return { videos: updatedVideos, updates: updateSlots.filter(Boolean), libraryWarning };
   }
 
   async applyVideoUpdates(updates) {
@@ -187,10 +216,18 @@ class FileCheckModule {
         audioFilePath: update.audioFilePath,
         audioFileSize: update.audioFileSize,
         removed: update.removed,
+        removed_reason: update.removed_reason,
+        removed_at: update.removed_at,
+        removed_detail: update.removed_detail,
       };
 
       if (Object.values(attributes).some((v) => v !== undefined)) {
-        await Video.update(attributes, { where: { id: update.id } });
+        // Only a present row becomes missing and only a removed row is
+        // restored, so a delete that lands between the check's read and this
+        // write keeps its reason instead of being overwritten with not_found.
+        const where = { id: update.id };
+        if (update.removed !== undefined) where.removed = !update.removed;
+        await Video.update(attributes, { where });
       }
     }
   }

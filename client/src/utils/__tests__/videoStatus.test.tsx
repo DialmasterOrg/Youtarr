@@ -4,13 +4,17 @@ import {
   getStatusColor,
   getStatusIcon,
   getStatusLabel,
+  getStatusChipVariant,
+  getStatusChipStyle,
   getMediaTypeInfo,
+  isRemovedStatus,
   VideoStatus,
 } from '../videoStatus';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import {
   CheckCircle as CheckCircleIcon,
   CloudOff as CloudOffIcon,
+  Trash2 as Trash2Icon,
   Lock as LockIcon,
   Block as BlockIcon,
   NewReleases as NewReleasesIcon,
@@ -79,11 +83,22 @@ describe('videoStatus Utility', () => {
       expect(getVideoStatus(neverDownloadedVideo)).toBe('never_downloaded');
     });
 
-    test('returns "missing" when video was added but has been removed', () => {
+    test('returns "deleted" when Youtarr removed the video\'s file', () => {
+      expect(getVideoStatus({ ...baseMockVideo, added: true, removed: true, removed_reason: 'user_deleted' })).toBe('deleted');
+      expect(getVideoStatus({ ...baseMockVideo, added: true, removed: true, removed_reason: 'auto_removal' })).toBe('deleted');
+      expect(getVideoStatus({ ...baseMockVideo, added: true, removed: true, removed_reason: 'marked_deleted' })).toBe('deleted');
+    });
+
+    test('returns "deleted" for a video removed before Youtarr recorded why', () => {
+      expect(getVideoStatus({ ...baseMockVideo, added: true, removed: true })).toBe('deleted');
+    });
+
+    test('returns "missing" when video was added but its file was not found', () => {
       const missingVideo = {
         ...baseMockVideo,
         added: true,
         removed: true,
+        removed_reason: 'not_found' as const,
       };
       expect(getVideoStatus(missingVideo)).toBe('missing');
     });
@@ -215,7 +230,7 @@ describe('videoStatus Utility', () => {
     });
 
     test('all icons have correct size prop', () => {
-      const statuses: VideoStatus[] = ['downloaded', 'missing', 'members_only', 'ignored', 'never_downloaded'];
+      const statuses: VideoStatus[] = ['downloaded', 'missing', 'deleted', 'members_only', 'ignored', 'never_downloaded'];
       statuses.forEach(status => {
         const icon = getStatusIcon(status);
         expect(icon.props.size).toBe(16);
@@ -323,7 +338,7 @@ describe('videoStatus Utility', () => {
     });
 
     test('missing video returns correct color, icon, and label', () => {
-      const missingVideo = { ...baseMockVideo, added: true, removed: true };
+      const missingVideo = { ...baseMockVideo, added: true, removed: true, removed_reason: 'not_found' as const };
       const status = getVideoStatus(missingVideo);
 
       expect(status).toBe('missing');
@@ -331,6 +346,24 @@ describe('videoStatus Utility', () => {
       expect(getStatusLabel(status)).toBe('Missing');
       expect(getStatusIcon(status).type).toBe(CloudOffIcon);
       expect(getStatusIcon(status).props.size).toBe(16);
+    });
+
+    test('deleted video is neutral, not an error: default color, trash icon, outlined chip', () => {
+      const status = getVideoStatus({ ...baseMockVideo, added: true, removed: true, removed_reason: 'auto_removal' });
+
+      expect(status).toBe('deleted');
+      expect(getStatusColor(status)).toBe('default');
+      expect(getStatusLabel(status)).toBe('Deleted');
+      expect(getStatusIcon(status).type).toBe(Trash2Icon);
+      expect(getStatusChipVariant(status)).toBe('outlined');
+      expect(getStatusChipStyle(status)).toEqual({ backgroundColor: 'transparent', color: 'var(--muted-foreground)' });
+    });
+
+    test('isRemovedStatus is true for missing and deleted only', () => {
+      expect(isRemovedStatus('missing')).toBe(true);
+      expect(isRemovedStatus('deleted')).toBe(true);
+      expect(isRemovedStatus('downloaded')).toBe(false);
+      expect(isRemovedStatus('never_downloaded')).toBe(false);
     });
 
     test('members only video returns correct color, icon, and label', () => {

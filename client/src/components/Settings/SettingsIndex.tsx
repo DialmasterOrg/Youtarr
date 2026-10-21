@@ -33,7 +33,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
   { key: 'core', title: 'Core', group: 'downloads', description: 'Automatic downloads, quality, subtitles, metadata and naming.' },
   { key: 'library', title: 'Library folders', navLabel: 'Library', group: 'downloads', description: 'Folders, their Videos or TV shows layout, and the media server library for each.' },
   { key: 'downloading', title: 'YT-DLP', group: 'downloads', description: 'yt-dlp backend settings for downloads and reliability.' },
-  { key: 'api-keys', title: 'API Keys', group: 'system', description: 'API key settings and rate limits.' },
+  { key: 'api-keys', title: 'API Keys & Bookmarklet', group: 'system', description: 'One-click "Send to Youtarr" bookmarklet and phone shortcuts.' },
   { key: 'appearance', title: 'Appearance', group: 'system', description: 'Theme, animations, and visual preferences.' },
   { key: 'autoremove', title: 'Auto Removal', group: 'automation', description: 'Automated cleanup and retention policies.' },
   { key: 'storage-limits', title: 'Storage Limits', group: 'automation', description: 'Pause downloads when storage is full or over a size limit.' },

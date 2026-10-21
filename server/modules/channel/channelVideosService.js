@@ -13,6 +13,9 @@ const fetchRegistry = require('./fetchRegistry');
 const tabState = require('./tabState');
 const ratingMapper = require('../ratingMapper');
 const archiveModule = require('../archiveModule');
+const youtubeExistenceCheck = require('../youtubeExistenceCheck');
+
+const { EXISTENCE } = youtubeExistenceCheck;
 
 // Maximum number of videos to load when user clicks "Load More"
 // Limit set here because some channels have tens or hundreds of thousands of videos...
@@ -132,13 +135,15 @@ class ChannelVideosService {
    * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Object>} - Response object with videos and metadata
    */
-  async getChannelVideos(channelId, page = 1, pageSize = 50, downloadedFilter = 'off', searchQuery = '', sortBy = 'date', sortOrder = 'desc', tabType = TAB_TYPES.VIDEOS, minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = 'off', missingFilter = 'off', ignoredFilter = 'off', watchedFilter = 'off', maxRating = null, showId = null) {
+  async getChannelVideos(channelId, page = 1, pageSize = 50, downloadedFilter = 'off', searchQuery = '', sortBy = 'date', sortOrder = 'desc', tabType = TAB_TYPES.VIDEOS, minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = 'off', missingFilter = 'off', ignoredFilter = 'off', watchedFilter = 'off', maxRating = null, showId = null, deletedFilter = 'off') {
     const channel = await Channel.findOne({
       where: { channel_id: channelId },
     });
 
     if (!channel) {
-      throw new Error('Channel not found');
+      const error = new Error('Channel not found');
+      error.code = 'CHANNEL_NOT_FOUND';
+      throw error;
     }
 
     // Convert tabType to mediaType for database filtering
@@ -201,10 +206,9 @@ class ChannelVideosService {
 
       // Now fetch the requested page of videos with file checking enabled
       const offset = (page - 1) * pageSize;
-      const paginatedVideos = await channelVideoQuery.fetchNewestVideosFromDb(channelId, pageSize, offset, downloadedFilter, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, ratingFilter, showFilter);
+      const paginatedVideos = await channelVideoQuery.fetchNewestVideosFromDb(channelId, pageSize, offset, downloadedFilter, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, ratingFilter, showFilter, deletedFilter);
 
       // Check if videos still exist on YouTube and mark as removed if they don't
-      const videoValidationModule = require('../videoValidationModule');
       const updates = [];
       const timestampUpdates = [];
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -221,10 +225,13 @@ class ChannelVideosService {
         }
 
         if (youtubeId) {
-          const exists = await videoValidationModule.checkVideoExistsOnYoutube(youtubeId);
+          const existence = await youtubeExistenceCheck.check(youtubeId);
+          if (existence === EXISTENCE.UNKNOWN) {
+            return null;
+          }
           const now = new Date();
 
-          if (!exists) {
+          if (existence === EXISTENCE.REMOVED) {
             logger.info({ youtubeId, channelId }, 'Video no longer exists on YouTube, marking as removed');
             video.youtube_removed = true;
             video.youtube_removed_checked_at = now;
@@ -271,7 +278,7 @@ class ChannelVideosService {
       }
 
       // Get stats for the response
-      const stats = await channelVideoQuery.getChannelVideoStats(channelId, downloadedFilter, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, ratingFilter, showFilter);
+      const stats = await channelVideoQuery.getChannelVideoStats(channelId, downloadedFilter, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, ratingFilter, showFilter, deletedFilter);
 
       return {
         ...this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType),
@@ -281,8 +288,8 @@ class ChannelVideosService {
     } catch (error) {
       logger.error({ err: error, channelId }, 'Error fetching channel videos');
       const offset = (page - 1) * pageSize;
-      const cachedVideos = await channelVideoQuery.fetchNewestVideosFromDb(channelId, pageSize, offset, downloadedFilter, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, ratingFilter, showFilter);
-      const stats = await channelVideoQuery.getChannelVideoStats(channelId, downloadedFilter, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, ratingFilter, showFilter);
+      const cachedVideos = await channelVideoQuery.fetchNewestVideosFromDb(channelId, pageSize, offset, downloadedFilter, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, ratingFilter, showFilter, deletedFilter);
+      const stats = await channelVideoQuery.getChannelVideoStats(channelId, downloadedFilter, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, ratingFilter, showFilter, deletedFilter);
       const response = this.buildChannelVideosResponse(cachedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
       // Only surface a user-visible error when we have nothing to show.
       // Silent recovery when cached results exist; the filter-aware empty

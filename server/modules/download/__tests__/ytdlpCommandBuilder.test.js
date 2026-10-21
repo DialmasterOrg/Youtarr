@@ -476,46 +476,104 @@ describe('YtdlpCommandBuilder', () => {
       expect(result).toEqual([]);
     });
 
+    // yt-dlp matches every --sub-langs entry as a case-insensitive full regex,
+    // so a bare code must be expanded to also accept YouTube's Script and
+    // REGION subtags (en-GB, zh-Hans, zh-Hans-SG, es-419). The subtag groups
+    // switch case-sensitivity back on so "en-orig" (original auto captions)
+    // and the machine translations of uploaded tracks, named
+    // "<target>-<source>" (en-fr, en-zh-SG), stay out. These tests pin the
+    // string handed to yt-dlp; Node 20 cannot evaluate the (?-i:...) groups,
+    // so the matching itself was checked against yt-dlp's own matcher
+    // (orderedSet_from_options with use_regex=True). Do the same after
+    // changing the suffix.
+    const VARIANT_SUFFIX = '(-(?-i:[A-Z][a-z]{3}))?(-(?-i:[A-Z]{2}|[0-9]{3}))?';
+
+    const subLangsOf = (result) => result[result.indexOf('--sub-langs') + 1];
+
     it('should include subtitle args when enabled with default language', () => {
       const config = { subtitlesEnabled: true };
       const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
       expect(result).toEqual([
         '--write-sub',
         '--write-auto-sub',
-        '--sub-langs', 'en',
+        '--sub-langs', `en${VARIANT_SUFFIX}`,
         '--convert-subs', 'srt',
         '--sleep-subtitles', '5'
       ]);
     });
 
-    it('should use custom subtitle language when specified', () => {
+    it('expands a selected language so its regional and script variants match', () => {
       const config = {
         subtitlesEnabled: true,
         subtitleLanguage: 'es'
       };
       const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
-      expect(result).toEqual([
-        '--write-sub',
-        '--write-auto-sub',
-        '--sub-langs', 'es',
-        '--convert-subs', 'srt',
-        '--sleep-subtitles', '5'
-      ]);
+      expect(subLangsOf(result)).toBe(`es${VARIANT_SUFFIX}`);
     });
 
-    it('should use custom subtitle language for multiple languages', () => {
+    it('expands every selected language when several are configured', () => {
       const config = {
         subtitlesEnabled: true,
         subtitleLanguage: 'en,es,fr'
       };
       const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
-      expect(result).toEqual([
-        '--write-sub',
-        '--write-auto-sub',
-        '--sub-langs', 'en,es,fr',
-        '--convert-subs', 'srt',
-        '--sleep-subtitles', '5'
-      ]);
+      expect(subLangsOf(result)).toBe(
+        `en${VARIANT_SUFFIX},es${VARIANT_SUFFIX},fr${VARIANT_SUFFIX}`
+      );
+    });
+
+    it('expands three-letter language codes too', () => {
+      const config = {
+        subtitlesEnabled: true,
+        subtitleLanguage: 'fil'
+      };
+      const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
+      expect(subLangsOf(result)).toBe(`fil${VARIANT_SUFFIX}`);
+    });
+
+    it('keeps the Original/Uploaded option as an exact match', () => {
+      const config = {
+        subtitlesEnabled: true,
+        subtitleLanguage: 'en,en-orig'
+      };
+      const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
+      expect(subLangsOf(result)).toBe(`en${VARIANT_SUFFIX},en-orig`);
+    });
+
+    it('passes hand-edited regional codes and patterns through unchanged', () => {
+      const config = {
+        subtitlesEnabled: true,
+        subtitleLanguage: 'pt-BR,en.*'
+      };
+      const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
+      expect(subLangsOf(result)).toBe('pt-BR,en.*');
+    });
+
+    it('passes the yt-dlp "all" alias through unchanged', () => {
+      const config = {
+        subtitlesEnabled: true,
+        subtitleLanguage: 'all'
+      };
+      const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
+      expect(subLangsOf(result)).toBe('all');
+    });
+
+    it('keeps "all" combined with an exclusion as yt-dlp expects it', () => {
+      const config = {
+        subtitlesEnabled: true,
+        subtitleLanguage: 'all,-live_chat'
+      };
+      const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
+      expect(subLangsOf(result)).toBe('all,-live_chat');
+    });
+
+    it('trims whitespace around hand-edited language codes', () => {
+      const config = {
+        subtitlesEnabled: true,
+        subtitleLanguage: 'en, zh'
+      };
+      const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
+      expect(subLangsOf(result)).toBe(`en${VARIANT_SUFFIX},zh${VARIANT_SUFFIX}`);
     });
 
     it('should default to en when language is not specified', () => {
@@ -524,9 +582,16 @@ describe('YtdlpCommandBuilder', () => {
         subtitleLanguage: null
       };
       const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
-      expect(result).toContain('--sub-langs');
-      const langIndex = result.indexOf('--sub-langs');
-      expect(result[langIndex + 1]).toBe('en');
+      expect(subLangsOf(result)).toBe(`en${VARIANT_SUFFIX}`);
+    });
+
+    it('defaults to en when the value holds only separators and spaces', () => {
+      const config = {
+        subtitlesEnabled: true,
+        subtitleLanguage: ' , '
+      };
+      const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
+      expect(subLangsOf(result)).toBe(`en${VARIANT_SUFFIX}`);
     });
   });
 
@@ -1325,16 +1390,37 @@ describe('YtdlpCommandBuilder', () => {
       ).toEqual(['--concurrent-fragments', '4']);
     });
 
-    test('silently drops a denylisted flag and logs a warning', () => {
+    test('drops a blocked flag but keeps the allowed flags around it, and warns', () => {
       const logger = require('../../../logger');
       const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
-      const result = YtdlpCommandBuilder.buildCustomArgs({ ytdlpCustomArgs: '--exec rm' });
-      expect(result).toEqual([]);
+      const result = YtdlpCommandBuilder.buildCustomArgs({
+        ytdlpCustomArgs: '--concurrent-fragments 4 --exec rm --retries 5',
+      });
+      expect(result).toEqual(['--concurrent-fragments', '4', '--retries', '5']);
       expect(warnSpy).toHaveBeenCalled();
       warnSpy.mockRestore();
     });
 
-    test('silently drops args with unterminated quote and logs a warning', () => {
+    test('the warn log names the skipped option but never its value', () => {
+      const logger = require('../../../logger');
+      const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+      YtdlpCommandBuilder.buildCustomArgs({ ytdlpCustomArgs: '--exec SECRETCMD123' });
+      const logged = JSON.stringify(warnSpy.mock.calls);
+      expect(logged).toContain('--exec');
+      expect(logged).not.toContain('SECRETCMD123');
+      warnSpy.mockRestore();
+    });
+
+    test('the warn log never includes a stray token that follows an unknown option', () => {
+      const logger = require('../../../logger');
+      const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+      YtdlpCommandBuilder.buildCustomArgs({ ytdlpCustomArgs: '--made-up-opt hunter2SECRET' });
+      const logged = JSON.stringify(warnSpy.mock.calls);
+      expect(logged).not.toContain('hunter2SECRET');
+      warnSpy.mockRestore();
+    });
+
+    test('drops args with an unterminated quote and logs a warning', () => {
       const logger = require('../../../logger');
       const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
       const result = YtdlpCommandBuilder.buildCustomArgs({
@@ -1345,7 +1431,7 @@ describe('YtdlpCommandBuilder', () => {
       warnSpy.mockRestore();
     });
 
-    test('silently drops args that bypass the denylist via --flag=value form', () => {
+    test('drops a flag that bypassed the old denylist via --flag=value form', () => {
       const logger = require('../../../logger');
       const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
       const result = YtdlpCommandBuilder.buildCustomArgs({
@@ -1354,6 +1440,12 @@ describe('YtdlpCommandBuilder', () => {
       expect(result).toEqual([]);
       expect(warnSpy).toHaveBeenCalled();
       warnSpy.mockRestore();
+    });
+
+    test('resolves an abbreviated allowed flag to its canonical name', () => {
+      expect(
+        YtdlpCommandBuilder.buildCustomArgs({ ytdlpCustomArgs: '-N 4 --embed-th' })
+      ).toEqual(['--concurrent-fragments', '4', '--embed-thumbnail']);
     });
   });
 

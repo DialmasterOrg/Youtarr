@@ -6,8 +6,12 @@ import { PlaylistVideo } from '../../../types/playlist';
 import PlaylistVideoTable from './PlaylistVideoTable';
 import PlaylistVideoCard from './PlaylistVideoCard';
 
-// Account for the sidebar and page gutters, not just the viewport breakpoint.
-const MIN_TABLE_WIDTH = 1200;
+// Measured on the list itself, so the sidebar and page gutters are accounted
+// for. Below this the title column gets too narrow and cards read better.
+const MIN_TABLE_WIDTH = 720;
+// Used only until the list is measured: roughly the viewport width below
+// which the list is narrower than MIN_TABLE_WIDTH with the top navigation.
+const NARROW_VIEWPORT_QUERY = '(max-width: 899px)';
 
 interface PlaylistVideoListProps {
   sortOrder?: PlaylistSortOrder;
@@ -36,7 +40,7 @@ const PlaylistVideoList: React.FC<PlaylistVideoListProps> = ({
   onSelectAll,
   onClearSelection,
 }) => {
-  const isNarrowViewport = useMediaQuery('(max-width: 1279px)');
+  const isNarrowViewport = useMediaQuery(NARROW_VIEWPORT_QUERY);
   const listRef = useRef<HTMLDivElement>(null);
   const [isNarrowList, setIsNarrowList] = useState<boolean | null>(null);
   const showEmpty = !loading && videos.length === 0;

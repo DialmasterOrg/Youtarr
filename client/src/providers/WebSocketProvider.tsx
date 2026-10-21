@@ -3,6 +3,14 @@ import WebSocketContext from '../contexts/WebSocketContext';
 import { locationUtils } from '../utils/location';
 
 interface WebSocketProviderProps {
+  // Session token the server requires on the handshake; no connection is
+  // opened while it is null.
+  token: string | null;
+  // Called when the connection suggests the session has ended, so the app can
+  // check the token: on a session-ended close, and on every
+  // FAILED_CONNECTS_BEFORE_SESSION_CHECK-th attempt in a row that never opens,
+  // so a check that could not reach the server is retried.
+  onSessionCheckNeeded?: () => void;
   children: ReactNode;
 }
 
@@ -23,6 +31,16 @@ interface WebSocketMessage {
 
 const MAX_BACKOFF_MS = 30 * 1000;
 const INITIAL_BACKOFF_MS = 1000;
+// Browsers cannot set headers on a WebSocket handshake, so the session token
+// travels as a second subprotocol. Must match server/modules/webSocketAuth.js.
+const WEBSOCKET_PROTOCOL = 'youtarr';
+const AUTH_PROTOCOL_PREFIX = 'youtarr.auth.';
+// The server closes a socket with this code once its session has expired or
+// been revoked. Must match server/modules/webSocketServer.js.
+const SESSION_ENDED_CLOSE_CODE = 1008;
+// A refused handshake looks like any network failure to the browser, so a run
+// of attempts that never open is the only sign the session may be gone.
+const FAILED_CONNECTS_BEFORE_SESSION_CHECK = 3;
 
 const buildWebSocketUrl = () => {
   const protocol = locationUtils.getProtocol() === 'https:' ? 'wss' : 'ws';
@@ -66,7 +84,11 @@ const showDownloadCompleteNotification = async (videos: unknown[]) => {
   }
 };
 
-const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
+const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
+  token,
+  onSessionCheckNeeded,
+  children,
+}) => {
   // Informational only: nothing may drive effects off this state, or a swap
   // mid-reconnect tears down the fresh socket.
   const [socket, setSocket] = useState<WebSocket | null>(null);
@@ -77,6 +99,13 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
   const mountedRef = useRef(false);
   const hasConnectedOnceRef = useRef(false);
   const subscriptionsRef = useRef<Subscription[]>([]);
+  const failedConnectsRef = useRef(0);
+  // Read through a ref so a new callback identity never reconnects the socket
+  const onSessionCheckNeededRef = useRef(onSessionCheckNeeded);
+
+  useEffect(() => {
+    onSessionCheckNeededRef.current = onSessionCheckNeeded;
+  }, [onSessionCheckNeeded]);
 
   const subscribe = useCallback(
     (filter: (message: any) => boolean, callback: (data: any) => void) => {
@@ -107,7 +136,7 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
   }, []);
 
   const connect = useCallback(() => {
-    if (!mountedRef.current) {
+    if (!mountedRef.current || !token) {
       return;
     }
     const existing = socketRef.current;
@@ -119,11 +148,25 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
       return;
     }
 
-    const ws = new WebSocket(buildWebSocketUrl());
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(buildWebSocketUrl(), [
+        WEBSOCKET_PROTOCOL,
+        `${AUTH_PROTOCOL_PREFIX}${token}`,
+      ]);
+    } catch (error) {
+      // The browser rejects a token that is not a valid subprotocol; retrying
+      // the same token cannot succeed, and a new token reconnects.
+      console.error('Could not open WebSocket connection:', error);
+      return;
+    }
     socketRef.current = ws;
+    let opened = false;
 
     ws.onopen = () => {
+      opened = true;
       retriesRef.current = 0;
+      failedConnectsRef.current = 0;
       if (hasConnectedOnceRef.current) {
         // Synthetic local message: WS replay only carries final states, so
         // data hooks re-probe REST state when the connection comes back.
@@ -144,10 +187,18 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
       dispatchMessage(message);
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event: CloseEvent) => {
       // Ignore closes of superseded sockets and closes during unmount
       if (!mountedRef.current || socketRef.current !== ws) {
         return;
+      }
+      if (event.code === SESSION_ENDED_CLOSE_CODE) {
+        onSessionCheckNeededRef.current?.();
+      } else if (!opened) {
+        failedConnectsRef.current += 1;
+        if (failedConnectsRef.current % FAILED_CONNECTS_BEFORE_SESSION_CHECK === 0) {
+          onSessionCheckNeededRef.current?.();
+        }
       }
       // Dead socket must not gate the next connect() attempt, and consumers
       // must not see the closed instance as a live connection
@@ -163,10 +214,11 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
     };
 
     setSocket(ws);
-  }, [dispatchMessage]);
+  }, [dispatchMessage, token]);
 
   useEffect(() => {
     mountedRef.current = true;
+    failedConnectsRef.current = 0;
     connect();
 
     // Sleep/wake and network blips leave a dead socket with a long pending
@@ -209,6 +261,7 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
         socketRef.current.close();
         socketRef.current = null;
       }
+      setSocket(null);
     };
   }, [connect]);
 

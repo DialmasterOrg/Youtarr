@@ -22,7 +22,7 @@ import useMediaQuery from '../../hooks/useMediaQuery';
 import { DownloadSettings } from '../DownloadManager/ManualDownload/types';
 import { useVideoDeletion } from '../shared/useVideoDeletion';
 import { useVideoProtection } from '../shared/useVideoProtection';
-import { getVideoStatus } from '../../utils/videoStatus';
+import { getVideoStatus, isRemovedStatus } from '../../utils/videoStatus';
 import VideoCard from './VideoCard';
 import VideoListItem from './VideoListItem';
 import VideoTableView from './VideoTableView';
@@ -144,6 +144,7 @@ function ChannelVideos({
   const [maxRating, setMaxRating] = useState('');
   const [protectedFilter, setProtectedFilter] = useState<ChipFilterMode>('off');
   const [missingFilter, setMissingFilter] = useState<ChipFilterMode>('off');
+  const [deletedFilter, setDeletedFilter] = useState<ChipFilterMode>('off');
   const [ignoredFilter, setIgnoredFilter] = useState<ChipFilterMode>('off');
   const [watchedFilter, setWatchedFilter] = useState<ChipFilterMode>('off');
   // One title show's episodes, and the show whose missing episodes are shown.
@@ -306,6 +307,7 @@ function ChannelVideos({
         filters.dateTo ? filters.dateTo.toISOString() : '',
         protectedFilter,
         missingFilter,
+        deletedFilter,
         ignoredFilter,
         watchedFilter,
         showFilter ?? '',
@@ -325,6 +327,7 @@ function ChannelVideos({
       filters.dateTo,
       protectedFilter,
       missingFilter,
+      deletedFilter,
       ignoredFilter,
       watchedFilter,
       showFilter,
@@ -359,6 +362,7 @@ function ChannelVideos({
     resetKey,
     protectedFilter,
     missingFilter,
+    deletedFilter,
     ignoredFilter,
     watchedFilter,
     showId: showFilter,
@@ -421,6 +425,7 @@ function ChannelVideos({
     maxRating,
     protectedFilter,
     missingFilter,
+    deletedFilter,
     ignoredFilter,
     watchedFilter,
     showFilter,
@@ -539,6 +544,7 @@ function ChannelVideos({
     maxRating,
     protectedFilter,
     missingFilter,
+    deletedFilter,
     ignoredFilter,
     watchedFilter,
     downloadedFilter,
@@ -559,7 +565,7 @@ function ChannelVideos({
     const downloadable = paginatedVideos
       .filter((video) => {
         const status = getVideoStatus(video);
-        return status === 'never_downloaded' || status === 'missing' || status === 'ignored';
+        return status === 'never_downloaded' || isRemovedStatus(status) || status === 'ignored';
       })
       .map((video) => video.youtube_id);
     setCheckedBoxes((prev) => {
@@ -582,7 +588,7 @@ function ChannelVideos({
     const ids = paginatedVideos
       .filter((video) => {
         const status = getVideoStatus(video);
-        return status === 'never_downloaded' || status === 'missing' || status === 'ignored';
+        return status === 'never_downloaded' || isRemovedStatus(status) || status === 'ignored';
       })
       .map((video) => video.youtube_id);
     setCheckedBoxes((prev) => {
@@ -897,6 +903,7 @@ function ChannelVideos({
       { id: 'maxRating', value: maxRating, onChange: setMaxRating },
       { id: 'protected', value: protectedFilter, onChange: setProtectedFilter },
       { id: 'missing', value: missingFilter, onChange: setMissingFilter },
+      { id: 'deleted', value: deletedFilter, onChange: setDeletedFilter },
       { id: 'ignored', value: ignoredFilter, onChange: setIgnoredFilter },
       { id: 'downloaded', value: downloadedFilter, onChange: setDownloadedFilter },
       { id: 'watched', value: watchedFilter, onChange: setWatchedFilter },
@@ -916,6 +923,7 @@ function ChannelVideos({
     maxRating,
     protectedFilter,
     missingFilter,
+    deletedFilter,
     ignoredFilter,
     watchedFilter,
     downloadedFilter,
@@ -1095,7 +1103,7 @@ function ChannelVideos({
   // The summary already gives the tab's size; the list count only adds
   // something while a search or filter narrows the list.
   const listIsFiltered = Boolean(listState.search) || hasDurationOrDateFilter || maxRating !== '' || showFilter !== null
-    || [downloadedFilter, protectedFilter, missingFilter, ignoredFilter, watchedFilter].some((mode) => mode !== 'off');
+    || [downloadedFilter, protectedFilter, missingFilter, deletedFilter, ignoredFilter, watchedFilter].some((mode) => mode !== 'off');
   let countChipLabel: string | null = null;
   if (totalCount > 0 && listIsFiltered) {
     countChipLabel = `${totalCount} ${totalCount === 1 ? 'match' : 'matches'}`;
@@ -1277,7 +1285,7 @@ function ChannelVideos({
         disabled={
           paginatedVideos.filter((video) => {
             const status = getVideoStatus(video);
-            return status === 'never_downloaded' || status === 'missing' || status === 'ignored';
+            return status === 'never_downloaded' || isRemovedStatus(status) || status === 'ignored';
           }).length === 0
         }
         className="intent-warning"

@@ -34,14 +34,19 @@ jest.mock('../channelModule', () => ({
   generateChannelsFile: jest.fn(),
   getEnabledChannelDownloadUrls: jest.fn(),
 }));
-jest.mock('../../models/channel', () => ({
-  findOne: jest.fn()
-}));
+jest.mock('../../models/channel', () => {
+  const Channel = jest.requireActual('../../models/channel');
+  Channel.findOne = jest.fn();
+  return Channel;
+});
 jest.mock('../../models/channelvideo', () => ({
   findAll: jest.fn()
 }));
 jest.mock('../videoValidationModule', () => ({ getCachedChannelId: jest.fn(() => null) }));
-jest.mock('../archiveModule', () => ({ removeVideoFromArchive: jest.fn().mockResolvedValue(true) }));
+jest.mock('../archiveModule', () => ({
+  removeVideoFromArchive: jest.fn().mockResolvedValue(true),
+  filterArchivedVideoIds: jest.fn(() => new Set()),
+}));
 jest.mock('../tvShows/episodeConflicts', () => ({ noteArchiveLinesRemoved: jest.fn().mockResolvedValue() }));
 jest.mock('../channelDownloadGrouper', () => ({
   generateDownloadGroups: jest.fn()

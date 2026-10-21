@@ -1,6 +1,6 @@
 /* eslint-env jest */
 const loggerMock = require('../__mocks__/logger');
-const { findRouteHandler } = require('./testUtils');
+const { findRouteHandler, runRouteHandlers } = require('./testUtils');
 
 const createMockRequest = (overrides = {}) => ({
   params: {},
@@ -92,7 +92,7 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
   jest.doMock('../logger', () => loggerMock);
   jest.doMock('child_process', () => childProcessMock);
   jest.doMock('pino-http', () => pinoHttpMock);
-  jest.doMock('../db', () => ({
+  const dbMock = {
     initializeDatabase: jest.fn().mockResolvedValue(),
     reinitializeDatabase: jest.fn().mockResolvedValue({
       connected: true,
@@ -107,7 +107,8 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
       destroy: jest.fn().mockResolvedValue(0)
     },
     Sequelize: { Op: { gt: Symbol('gt'), lt: Symbol('lt'), or: Symbol('or') } }
-  }));
+  };
+  jest.doMock('../db', () => dbMock);
 
   jest.doMock('../modules/configModule', () => configModuleMock);
   jest.doMock('../modules/plexModule', () => plexModuleMock);
@@ -234,9 +235,16 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
   return {
     app: serverModule.app,
     configModuleMock,
+    dbMock,
     plexModuleMock
   };
 };
+
+const signedInSession = () => ({
+  id: 1,
+  username: 'tester',
+  update: jest.fn().mockResolvedValue()
+});
 
 describe('Plex authentication routes', () => {
   afterEach(() => {
@@ -247,11 +255,10 @@ describe('Plex authentication routes', () => {
   test('bypasses password requirement when platform manages auth', async () => {
     const { app, plexModuleMock } = await setupServer({ authEnabled: 'false', passwordHash: null });
 
-    const handler = findRouteHandler(app, 'get', '/plex/auth-url');
     const req = createMockRequest({ path: '/plex/auth-url' });
     const res = createMockResponse();
 
-    await handler(req, res);
+    await runRouteHandlers(app, 'get', '/plex/auth-url', req, res);
 
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ url: 'https://plex.example/auth' });
@@ -261,11 +268,10 @@ describe('Plex authentication routes', () => {
   test('blocks Plex auth when local auth not configured', async () => {
     const { app, plexModuleMock } = await setupServer({ authEnabled: 'true', passwordHash: null });
 
-    const handler = findRouteHandler(app, 'get', '/plex/auth-url');
     const req = createMockRequest({ path: '/plex/auth-url' });
     const res = createMockResponse();
 
-    await handler(req, res);
+    await runRouteHandlers(app, 'get', '/plex/auth-url', req, res);
 
     expect(res.statusCode).toBe(503);
     expect(res.body).toEqual({
@@ -276,17 +282,62 @@ describe('Plex authentication routes', () => {
     expect(plexModuleMock.getAuthUrl).not.toHaveBeenCalled();
   });
 
+  test('rejects an anonymous Plex auth URL request once local auth is configured', async () => {
+    const { app, plexModuleMock } = await setupServer({ authEnabled: 'true', passwordHash: 'hash' });
+
+    const req = createMockRequest({ path: '/plex/auth-url' });
+    const res = createMockResponse();
+
+    await runRouteHandlers(app, 'get', '/plex/auth-url', req, res);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toEqual({ error: 'No token provided' });
+    expect(plexModuleMock.getAuthUrl).not.toHaveBeenCalled();
+  });
+
+  test('rejects a Plex auth URL request with an unknown session token', async () => {
+    const { app, plexModuleMock } = await setupServer({ authEnabled: 'true', passwordHash: 'hash' });
+
+    const req = createMockRequest({
+      path: '/plex/auth-url',
+      headers: { 'x-access-token': 'stale-token' }
+    });
+    const res = createMockResponse();
+
+    await runRouteHandlers(app, 'get', '/plex/auth-url', req, res);
+
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toEqual({ error: 'Invalid or expired token' });
+    expect(plexModuleMock.getAuthUrl).not.toHaveBeenCalled();
+  });
+
+  test('returns the Plex auth URL to a signed-in session', async () => {
+    const { app, dbMock, plexModuleMock } = await setupServer({ authEnabled: 'true', passwordHash: 'hash' });
+    dbMock.Session.findOne.mockResolvedValueOnce(signedInSession());
+
+    const req = createMockRequest({
+      path: '/plex/auth-url',
+      headers: { 'x-access-token': 'session-token' }
+    });
+    const res = createMockResponse();
+
+    await runRouteHandlers(app, 'get', '/plex/auth-url', req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ url: 'https://plex.example/auth' });
+    expect(plexModuleMock.getAuthUrl).toHaveBeenCalledTimes(1);
+  });
+
   test('allows Plex PIN checks when platform manages auth', async () => {
     const { app, plexModuleMock } = await setupServer({ authEnabled: 'false', passwordHash: null });
 
-    const handler = findRouteHandler(app, 'get', '/plex/check-pin/:pinId');
     const req = createMockRequest({
       path: '/plex/check-pin/sample',
       params: { pinId: 'sample' }
     });
     const res = createMockResponse();
 
-    await handler(req, res);
+    await runRouteHandlers(app, 'get', '/plex/check-pin/:pinId', req, res);
 
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ authenticated: true });
@@ -296,14 +347,13 @@ describe('Plex authentication routes', () => {
   test('blocks Plex PIN checks when local auth required but missing', async () => {
     const { app, plexModuleMock } = await setupServer({ authEnabled: 'true', passwordHash: null });
 
-    const handler = findRouteHandler(app, 'get', '/plex/check-pin/:pinId');
     const req = createMockRequest({
       path: '/plex/check-pin/sample',
       params: { pinId: 'sample' }
     });
     const res = createMockResponse();
 
-    await handler(req, res);
+    await runRouteHandlers(app, 'get', '/plex/check-pin/:pinId', req, res);
 
     expect(res.statusCode).toBe(503);
     expect(res.body).toEqual({
@@ -312,6 +362,40 @@ describe('Plex authentication routes', () => {
       message: 'Please complete initial setup first'
     });
     expect(plexModuleMock.checkPin).not.toHaveBeenCalled();
+  });
+
+  test('rejects an anonymous Plex PIN check once local auth is configured', async () => {
+    const { app, plexModuleMock } = await setupServer({ authEnabled: 'true', passwordHash: 'hash' });
+
+    const req = createMockRequest({
+      path: '/plex/check-pin/sample',
+      params: { pinId: 'sample' }
+    });
+    const res = createMockResponse();
+
+    await runRouteHandlers(app, 'get', '/plex/check-pin/:pinId', req, res);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toEqual({ error: 'No token provided' });
+    expect(plexModuleMock.checkPin).not.toHaveBeenCalled();
+  });
+
+  test('checks the Plex PIN for a signed-in session', async () => {
+    const { app, dbMock, plexModuleMock } = await setupServer({ authEnabled: 'true', passwordHash: 'hash' });
+    dbMock.Session.findOne.mockResolvedValueOnce(signedInSession());
+
+    const req = createMockRequest({
+      path: '/plex/check-pin/sample',
+      params: { pinId: 'sample' },
+      headers: { 'x-access-token': 'session-token' }
+    });
+    const res = createMockResponse();
+
+    await runRouteHandlers(app, 'get', '/plex/check-pin/:pinId', req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ authenticated: true });
+    expect(plexModuleMock.checkPin).toHaveBeenCalledWith('sample');
   });
 
   test('auto-saves Plex API key without overwriting managed URL IP', async () => {

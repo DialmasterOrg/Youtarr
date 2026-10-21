@@ -958,17 +958,93 @@ describe('API Key Authentication - Security Tests', () => {
       expect(res.body.error).toContain('YouTube');
     });
 
-    test('rejects playlist URLs - single video only', async () => {
+    test('rejects a non-string URL as an invalid format', async () => {
       const apiKeyModuleMock = createApiKeyModuleMock();
       const created = await apiKeyModuleMock.createApiKey('Download Key');
-      
+
       const { app } = await createServerModule({ apiKeyModuleMock });
 
       const handlers = findRouteHandlers(app, 'post', '/api/videos/download');
       const downloadHandler = handlers[handlers.length - 1];
 
       const req = createMockRequest({
-        body: { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf' },
+        body: { url: 12345 },
+        headers: { 'x-api-key': created.key },
+        authType: 'api_key',
+        apiKeyId: created.id
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(res.body.error).toBe('Invalid YouTube URL format');
+    });
+
+    test('queues only the video when a watch URL also names a playlist', async () => {
+      const apiKeyModuleMock = createApiKeyModuleMock();
+      const created = await apiKeyModuleMock.createApiKey('Download Key');
+
+      const { app, downloadModuleMock } = await createServerModule({ apiKeyModuleMock });
+
+      const handlers = findRouteHandlers(app, 'post', '/api/videos/download');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf&index=3' },
+        headers: { 'x-api-key': created.key },
+        authType: 'api_key',
+        apiKeyId: created.id
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(downloadModuleMock.doGroupedManualDownloads).toHaveBeenCalledWith({
+        body: expect.objectContaining({ urls: ['https://www.youtube.com/watch?v=dQw4w9WgXcQ'] })
+      });
+    });
+
+    test.each([
+      'https://m.youtube.com/watch?v=dQw4w9WgXcQ',
+      'https://music.youtube.com/watch?v=dQw4w9WgXcQ&list=RDAMVMdQw4w9WgXcQ',
+      'https://youtu.be/dQw4w9WgXcQ?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf',
+      'https://www.youtube.com/live/dQw4w9WgXcQ',
+      'https://www.youtube.com/embed/dQw4w9WgXcQ',
+    ])('queues the canonical watch URL for %s', async (url) => {
+      const apiKeyModuleMock = createApiKeyModuleMock();
+      const created = await apiKeyModuleMock.createApiKey('Download Key');
+
+      const { app, downloadModuleMock } = await createServerModule({ apiKeyModuleMock });
+
+      const handlers = findRouteHandlers(app, 'post', '/api/videos/download');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { url },
+        headers: { 'x-api-key': created.key },
+        authType: 'api_key',
+        apiKeyId: created.id
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(downloadModuleMock.doGroupedManualDownloads).toHaveBeenCalledWith({
+        body: expect.objectContaining({ urls: ['https://www.youtube.com/watch?v=dQw4w9WgXcQ'] })
+      });
+    });
+
+    test('rejects playlist page URLs - single video only', async () => {
+      const apiKeyModuleMock = createApiKeyModuleMock();
+      const created = await apiKeyModuleMock.createApiKey('Download Key');
+
+      const { app } = await createServerModule({ apiKeyModuleMock });
+
+      const handlers = findRouteHandlers(app, 'post', '/api/videos/download');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { url: 'https://www.youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf' },
         headers: { 'x-api-key': created.key },
         authType: 'api_key',
         apiKeyId: created.id
@@ -990,7 +1066,6 @@ describe('API Key Authentication - Security Tests', () => {
       const handlers = findRouteHandlers(app, 'post', '/api/videos/download');
       const downloadHandler = handlers[handlers.length - 1];
 
-      // Channel URLs don't match the video URL pattern, so they're rejected
       const req = createMockRequest({
         body: { url: 'https://www.youtube.com/@LinusTechTips' },
         headers: { 'x-api-key': created.key },
@@ -1002,8 +1077,7 @@ describe('API Key Authentication - Security Tests', () => {
       await downloadHandler(req, res);
 
       expect(res.statusCode).toBe(400);
-      // Channel URLs fail the video URL regex validation
-      expect(res.body.error).toContain('YouTube URL');
+      expect(res.body.error).toContain('single video');
     });
 
     test('accepts various valid YouTube URL formats', async () => {

@@ -28,6 +28,7 @@ describe('DELETE /api/videos while a reorganize runs', () => {
       storageGuard: { isPausedError: () => false },
       layoutGuards: {},
       reorganizeLock,
+      youtubeUrlParser: require('../../modules/youtubeUrlParser'),
     }));
   });
 

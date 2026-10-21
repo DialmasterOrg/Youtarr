@@ -125,6 +125,7 @@ const plexModule = require('../../plexModule');
 const jobModule = require('../../jobModule');
 const MessageEmitter = require('../../messageEmitter');
 const archiveModule = require('../../archiveModule');
+const archiveAccess = require('../archiveAccess');
 const notificationModule = require('../../notificationModule');
 const channelModule = require('../../channelModule');
 const DownloadProgressMonitor = require('../DownloadProgressMonitor');
@@ -297,6 +298,50 @@ describe('DownloadExecutor', () => {
 
       // unlink should have been called twice: once in the main flow, once in the finally cleanup
       expect(mockFsPromises.unlink).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('archive access during downloads', () => {
+    it('defers startup until the purge releases the archive', async () => {
+      const release = archiveAccess.acquirePurge();
+      // Released in finally too: a failed assertion must not leave the lock
+      // held, or every later download in this file would wait forever.
+      let released = false;
+      const releasePurge = () => {
+        if (released) return;
+        released = true;
+        release();
+      };
+      try {
+        const download = executor.doDownload([], 'job-123', 'Channel Downloads');
+        await Promise.resolve();
+        expect(archiveModule.readCompleteListLines).not.toHaveBeenCalled();
+        expect(mockSpawn).not.toHaveBeenCalled();
+        releasePurge();
+        await new Promise((resolve) => setImmediate(resolve));
+        expect(mockSpawn).toHaveBeenCalled();
+        endProcess(0, null);
+        await download;
+      } finally {
+        releasePurge();
+      }
+    });
+
+    it('blocks archive removal through finalization and releases it afterward', async () => {
+      let finishMetadata;
+      VideoMetadataProcessor.processVideoMetadata.mockImplementationOnce(
+        () => new Promise((resolve) => { finishMetadata = resolve; })
+      );
+      const download = executor.doDownload([], 'job-123', 'Channel Downloads');
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(() => archiveAccess.acquirePurge()).toThrow(/active downloads/);
+      endProcess(0, null);
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(() => archiveAccess.acquirePurge()).toThrow(/active downloads/);
+      finishMetadata([]);
+      await download;
+      const release = archiveAccess.acquirePurge();
+      release();
     });
   });
 

@@ -2,6 +2,7 @@ const { QueryTypes } = require('sequelize');
 const playlistSelection = require('./download/playlistAutoSelection');
 const logger = require('../logger');
 const videoActivity = require('./download/videoActivity');
+const { findArchiveOnlyIds } = require('./archiveOnlyIds');
 
 // Raw SQL: one grouped count for a whole page of playlists. "Downloaded" means
 // a usable file on disk, the same predicate as the playlist videos listing's
@@ -34,8 +35,14 @@ class PlaylistDownloadModule {
       attributes: ['youtubeId', 'filePath', 'audioFilePath'],
     }) : [];
     const downloaded = new Set(existing.map((video) => video.youtubeId));
+    // Without a re-download, yt-dlp also skips what the archive lists without a
+    // row (e.g. emptied from the trash with its archive entry kept); queued, such
+    // a video would never download and would be picked again on every sweep.
+    const archiveOnly = allowRedownload ? new Set() : await findArchiveOnlyIds(
+      candidates.map((row) => row.youtube_id).filter((id) => !downloaded.has(id))
+    );
     return { candidates: candidates.filter((row) => !downloaded.has(row.youtube_id) &&
-      (!excludeActive || !videoActivity.isActive(row.youtube_id))), existing };
+      !archiveOnly.has(row.youtube_id) && (!excludeActive || !videoActivity.isActive(row.youtube_id))), existing };
   }
 
   /**

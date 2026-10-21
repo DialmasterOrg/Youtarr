@@ -22,6 +22,9 @@ const WatchStatusHold = require('./watchstatushold');
 const TvShowPattern = require('./tvshowpattern');
 const TvShowSeason = require('./tvshowseason');
 const EpisodeConflict = require('./episodeconflict');
+const ApiKeyChannelGrant = require('./apikeychannelgrant');
+const ExternalRequest = require('./externalrequest');
+const ExternalApiUsageBucket = require('./externalapiusagebucket');
 
 Job.hasMany(JobVideo, { foreignKey: 'job_id', as: 'jobVideos' });
 Job.hasMany(JobVideoDownload, { foreignKey: 'job_id', as: 'jobVideoDownloads' });
@@ -52,6 +55,19 @@ TvShowSeason.belongsTo(TvShow, { foreignKey: 'show_id', as: 'show' });
 TvReorganizeOperation.hasMany(TvReorganizeItem, { foreignKey: 'operation_id', as: 'items' });
 TvReorganizeItem.belongsTo(TvReorganizeOperation, { foreignKey: 'operation_id', as: 'operation' });
 
+ApiKey.hasMany(ApiKeyChannelGrant, { foreignKey: 'api_key_id', as: 'channelGrants' });
+ApiKeyChannelGrant.belongsTo(ApiKey, { foreignKey: 'api_key_id', as: 'apiKey' });
+Channel.hasMany(ApiKeyChannelGrant, { foreignKey: 'channel_id', as: 'apiKeyGrants' });
+ApiKeyChannelGrant.belongsTo(Channel, { foreignKey: 'channel_id', as: 'channel' });
+ApiKey.hasMany(ExternalRequest, { foreignKey: 'api_key_id', as: 'externalRequests' });
+ExternalRequest.belongsTo(ApiKey, { foreignKey: 'api_key_id', as: 'apiKey' });
+Channel.hasMany(ExternalRequest, { foreignKey: 'channel_id', as: 'externalRequests' });
+ExternalRequest.belongsTo(Channel, { foreignKey: 'channel_id', as: 'channel' });
+Job.hasMany(ExternalRequest, { foreignKey: 'job_id', as: 'externalRequests' });
+ExternalRequest.belongsTo(Job, { foreignKey: 'job_id', as: 'job' });
+ApiKey.hasMany(ExternalApiUsageBucket, { foreignKey: 'api_key_id', as: 'usageBuckets' });
+ExternalApiUsageBucket.belongsTo(ApiKey, { foreignKey: 'api_key_id', as: 'apiKey' });
+
 module.exports = {
   Job,
   JobVideo,
@@ -76,4 +92,7 @@ module.exports = {
   TvShowPattern,
   TvShowSeason,
   EpisodeConflict,
+  ApiKeyChannelGrant,
+  ExternalRequest,
+  ExternalApiUsageBucket,
 };

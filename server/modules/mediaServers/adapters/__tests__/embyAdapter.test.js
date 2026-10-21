@@ -182,6 +182,17 @@ describe('EmbyAdapter', () => {
     expect(result).toEqual({ id: 'new-pl-id' });
   });
 
+  test('replacePlaylistItems with no items deletes the playlist instead of creating an empty one', async () => {
+    axios.delete.mockResolvedValueOnce({});
+    const adapter = new EmbyAdapter(cfg);
+
+    const result = await adapter.replacePlaylistItems('old-pl-id', [], { name: 'YT: Something' });
+
+    expect(axios.delete).toHaveBeenCalledWith(expect.stringContaining('/Items/old-pl-id'), expect.any(Object));
+    expect(axios.post).not.toHaveBeenCalled();
+    expect(result).toEqual({ id: null });
+  });
+
   test('replacePlaylistItems still creates a fresh playlist when DELETE of stored id fails', async () => {
     axios.delete.mockRejectedValueOnce({ response: { status: 400 } });
     axios.post.mockResolvedValueOnce({ data: { Id: 'new-pl-id' } });

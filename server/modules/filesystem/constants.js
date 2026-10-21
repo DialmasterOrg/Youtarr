@@ -199,8 +199,22 @@ const TV_SEASON_IGNORABLE_FILE_PATTERN = /^(season\.nfo|(poster|folder|banner|fa
  */
 const TV_SHOW_IGNORABLE_FILE_PATTERN = /^(tvshow\.nfo|\.plexignore|(poster|folder|banner|fanart|backdrop|landscape|logo|clearlogo|clearart|thumb)\.(jpe?g|png|webp|tbn)|season(\d+|-specials|-all)(-(poster|banner|fanart|landscape))?\.(jpe?g|png|webp|tbn))$/i;
 
+/**
+ * Entries Youtarr itself creates at the top of the downloads folder: the
+ * local temp folder, the playlist m3u folder, and the write test the download
+ * preflight leaves behind if it is interrupted. Youtarr may create them on a
+ * bare mount point while a share is down, so the library check ignores them
+ * when deciding whether the folder looks mounted.
+ */
+const LOCAL_TEMP_DIR_NAME = '.youtarr_tmp';
+const M3U_FOLDER_NAME = '__playlists__';
+const HEALTHCHECK_FILE_PREFIX = '.youtarr_healthcheck_';
+
 module.exports = {
   SUBFOLDER_PREFIX,
+  LOCAL_TEMP_DIR_NAME,
+  M3U_FOLDER_NAME,
+  HEALTHCHECK_FILE_PREFIX,
   GLOBAL_DEFAULT_SENTINEL,
   ROOT_SENTINEL,
   VIDEO_EXTENSIONS,

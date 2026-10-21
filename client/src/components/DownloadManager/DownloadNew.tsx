@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Alert,
   Button,
@@ -7,12 +7,15 @@ import {
   Grid,
   Tabs,
   Tab,
+  Typography,
 } from '../ui';
 import ManualDownload from './ManualDownload/ManualDownload';
 import DownloadSettingsDialog from './ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from './ManualDownload/types';
 import ErrorBoundary from '../ErrorBoundary';
 import { useConfig } from '../../hooks/useConfig';
+
+const API_KEYS_SETTINGS_PATH = '/settings/api-keys';
 
 interface DownloadNewProps {
   videoUrls: string;
@@ -142,6 +145,13 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
               token={token}
               defaultResolution={defaultResolution}
             />
+            <Typography variant="body2" color="text.secondary" className="mb-4">
+              Tip: queue videos right from YouTube with the "Send to Youtarr" browser bookmarklet or a phone
+              shortcut.{' '}
+              <Link className="underline font-medium" to={API_KEYS_SETTINGS_PATH}>
+                Set up the bookmarklet
+              </Link>
+            </Typography>
           </ErrorBoundary>
         ) : (
           <ErrorBoundary

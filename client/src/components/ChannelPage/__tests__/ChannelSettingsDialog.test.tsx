@@ -153,8 +153,10 @@ describe('ChannelSettingsDialog', () => {
       isWsl: false,
     },
     loggingStatus: null,
+    customArgsCheck: null,
     setConfig: jest.fn(),
     setInitialConfig: jest.fn(),
+    setCustomArgsCheck: jest.fn(),
   });
 
   type FetchCall = [input: RequestInfo | URL, init?: RequestInit];
@@ -440,8 +442,10 @@ describe('ChannelSettingsDialog', () => {
           isWsl: false,
         },
         loggingStatus: null,
+        customArgsCheck: null,
         setConfig: jest.fn(),
         setInitialConfig: jest.fn(),
+        setCustomArgsCheck: jest.fn(),
       });
 
       mockFetch

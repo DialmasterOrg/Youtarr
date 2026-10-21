@@ -21,11 +21,14 @@ const baseParams = {
   maxRatingFilter: '',
   protectedFilter: 'off' as const,
   missingFilter: 'off' as const,
+  deletedFilter: 'off' as const,
   watchedFilter: 'off' as const,
   useInfiniteScroll: false,
 };
 
-const buildResponse = (videos: { id: number; youtubeId: string }[]) => ({
+const buildResponse = (videos: { id: number; youtubeId: string }[]): {
+  data: Record<string, unknown> & { hiddenDeletedCount?: number | null; libraryWarning?: Record<string, unknown> | null };
+} => ({
   data: {
     videos: videos.map((v) => ({
       ...v,
@@ -72,12 +75,14 @@ describe('useVideosData', () => {
         maxRatingFilter: 'TV-MA',
         protectedFilter: 'only',
         missingFilter: 'exclude',
+        deletedFilter: 'exclude',
         watchedFilter: 'exclude',
       })
     );
 
     await waitFor(() => expect(axios.get).toHaveBeenCalledTimes(1));
     const url = axios.get.mock.calls[0][0] as string;
+    expect(url).toContain('deletedFilter=exclude');
     expect(url).toContain('page=2');
     expect(url).toContain('limit=12');
     expect(url).toContain('sortBy=published');
@@ -98,8 +103,32 @@ describe('useVideosData', () => {
     await waitFor(() => expect(axios.get).toHaveBeenCalledTimes(1));
     const url = axios.get.mock.calls[0][0] as string;
     expect(url).not.toContain('missingFilter');
+    expect(url).not.toContain('deletedFilter');
     expect(url).not.toContain('protectedFilter');
     expect(url).not.toContain('watchedFilter');
+  });
+
+  test('exposes the hidden deleted count and the library warning from the response', async () => {
+    const response = buildResponse([{ id: 1, youtubeId: 'a' }]);
+    response.data.hiddenDeletedCount = 4;
+    response.data.libraryWarning = { reason: 'empty', path: '/d', message: 'The downloads folder is empty.', heldBack: 2 };
+    axios.get.mockResolvedValueOnce(response);
+
+    const { result } = renderHook(() => useVideosData(baseParams));
+
+    await waitFor(() => expect(result.current.hiddenDeletedCount).toBe(4));
+    expect(result.current.libraryWarning).toEqual({ reason: 'empty', path: '/d', message: 'The downloads folder is empty.', heldBack: 2 });
+  });
+
+  test('reports no hidden deleted count and no warning when the response has none', async () => {
+    axios.get.mockResolvedValueOnce(buildResponse([{ id: 1, youtubeId: 'a' }]));
+
+    const { result } = renderHook(() => useVideosData(baseParams));
+
+    await waitFor(() => expect(axios.get).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.hiddenDeletedCount).toBeNull();
+    expect(result.current.libraryWarning).toBeNull();
   });
 
   test('replaces videos when not using infinite scroll', async () => {
