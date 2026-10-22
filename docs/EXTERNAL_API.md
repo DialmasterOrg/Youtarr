@@ -45,6 +45,7 @@ Every external key has:
   permission is enabled;
 - durable workload ceilings, defaulting to 5 active jobs, 30 accepted writes
   per UTC hour, and 200 per UTC day (administrators may select lower values);
+  active jobs are the key's `approved` and `processing` requests;
 - an explicit set of granted Youtarr channel database IDs.
 
 The HTTP contract uses a compact `maxRatingLevel` value with these rating ceilings:
@@ -96,7 +97,7 @@ request bodies are not accepted. CORS is disabled.
 
 The sanitized cross-client decoding fixture is
 `fixtures/external-api-v1/contract.json`; its reviewable checksum is recorded
-beside it in `SHA256SUMS`. Fixture version 3 covers capabilities, channels,
+beside it in `SHA256SUMS`. Fixture version 5 covers capabilities, channels,
 cursor-paginated mixed-media catalog pages, rich and sparse video details,
 every request type and status, video-request outcomes, and forward-compatible
 unknown enum samples. The fixture contains no credentials or private
@@ -210,10 +211,13 @@ Returns one policy-filtered video with the catalog identity and request status
 plus the full curated metadata used by Youtarr's video detail modal. This
 includes the complete description, engagement counts, tags, categories,
 availability, upload data, technical video fields, related-file summaries, and
-available resolutions. The lookup is intentionally one video at a time and may
-populate Youtarr's metadata cache when no cached `.info.json` exists. These
-lookups share Youtarr's bounded external-work queue and return 503 when that
-queue is full.
+available resolutions. Metadata is read only from Youtarr's local cache (the
+`.info.json` written when the video was downloaded or opened in Youtarr); this
+endpoint never contacts YouTube and never writes to Youtarr's database. When
+nothing is cached, `metadata` contains only the stored description, or is
+`null` when there is none. The lookup is intentionally one video at a time,
+shares Youtarr's bounded external-work queue, and returns 503 when that queue
+is full.
 
 Downloaded-video details include timestamps, sizes, protection state, and
 resolution. Youtarr filesystem paths are never exposed because they are neither
@@ -267,11 +271,16 @@ POST /external-api/v1/requests/channels
 ```
 
 Only canonical YouTube handle, `/channel/`, `/c/`, and `/user/` URLs are
-accepted. Approval provisions/enables the channel. By default it also grants
-the resulting channel to the requesting key; the administrator may turn that
-off during approval. That decision is stored with the request so an
-idempotent recovery cannot broaden the grant after interrupted execution.
-Uncached channel metadata resolution terminates after two minutes.
+accepted. Approval provisions the channel, or re-enables it when it was
+previously unsubscribed, and keeps its saved settings. By default it also
+grants the resulting channel to the requesting key; the administrator may turn
+that off during approval. That decision is stored with the request so an
+idempotent recovery cannot broaden the grant after interrupted execution. A
+key with channel auto-approval skips the administrator entirely: its requests
+are subscribed, re-enabled, and granted to the key with no review, so enable
+it only for fully trusted clients. A channel YouTube reports as terminated
+fails with `Channel is unavailable`. Uncached channel metadata resolution
+terminates after two minutes.
 
 Downloaded-video deletion:
 
@@ -288,12 +297,17 @@ POST /external-api/v1/requests/delete-videos
 ```
 
 Deletion applies only to the downloaded video asset. It never removes or
-disables a channel subscription. Missing and already-removed targets complete
-idempotently and retain a terminal request record for audit.
+disables a channel subscription. A video that is not currently downloaded
+returns 404. If the video is removed by other means before the request runs,
+the request completes with `Video is already deleted` and keeps its record for
+audit.
 
-Created requests return HTTP 202 and `outcome: "created"`. Duplicates and
-already-terminal targets return HTTP 200 with `duplicate`,
-`already_downloaded`, or `already_deleted`.
+Created requests return HTTP 202 and `outcome: "created"`, with status
+`approved` when the key auto-approves that request type and `pending`
+otherwise. Duplicates return HTTP 200 with `duplicate`, and a video request
+for a video that is already downloaded returns HTTP 200 with
+`already_downloaded`. Reusing an `idempotencyKey` for a different target
+returns 409.
 
 ### Owner-scoped request reads
 
@@ -305,25 +319,49 @@ an opaque `cursor` or the compatible `page` parameter, is limited to 100 rows,
 rejects pages beyond 100, and accepts an exact `status` filter.
 
 Statuses are `pending`, `approved`, `processing`, `completed`, `rejected`,
-`failed`, or `cancelled`. Youtarr reconciles downloader state before returning
-results. A terminal downloader job without a produced video becomes `failed`;
-it does not remain stuck in `processing`. Video deletion is reconciled to
-completed when the asset is already absent. Interrupted channel/deletion
-execution can be reclaimed after a five-minute stale window and rerun through
-its idempotent operation.
+`failed`, or `cancelled`. Reads never change a request; they report the state
+Youtarr's background executor has recorded.
+
+The lifecycle is:
+
+1. `pending`: waiting for an administrator (keys without auto-approval).
+2. `approved`: approved by the key's auto-approval or by an administrator, and
+   waiting for the background executor. The executor runs about once a minute
+   and immediately after each approval.
+3. `processing`: the executor has claimed the request. A video request is
+   queued as a normal Youtarr download job; channel and deletion requests run
+   in the bounded external-work queue.
+4. `completed` or `failed`: a video request completes when its job ends with
+   the video on disk, and fails with `Download did not complete` otherwise.
+
+An approved request can stay `approved` with an explanatory `message` while it
+waits: `Waiting for downloads to resume` while Youtarr's storage guard has
+paused downloads, and `Waiting for another download of this video to finish`
+when the video is already in another download. Before running, the executor
+reloads the key and target; a request whose key, permission, grant, or policy
+no longer allows it fails with `Request is no longer eligible`. Requests
+interrupted by a restart return to `approved` after a five-minute stale window
+and rerun through their idempotent operation.
 
 ## Administrator review
 
-Administrator clients use session-only endpoints under `/api/external-requests`:
+Administrator clients use endpoints under `/api/external-requests`. They use
+Youtarr's normal admin authentication and reject every API key, including
+external keys, with 403:
 
 - list with `status`, `requestType`, and `apiKeyId` filters;
 - request detail;
 - approve;
 - reject with a 1–300 character reason.
 
-Approval locks the key before the request, reloads the current key policy, and
-revalidates authorization and target state immediately before execution.
-Revocation or a policy/grant change therefore takes effect immediately.
+Approval locks the key before the request, reloads the current key policy,
+checks the key's active-job capacity, and revalidates the target. It then marks
+the request `approved` and hands it to the background executor, so the
+approve call returns without waiting for a download, channel fetch, or
+deletion. Approving an already-approved request again is a no-op; approving it
+with a different channel-grant decision returns 409. The executor revalidates
+authorization and target state again immediately before running, so
+revocation or a policy/grant change still takes effect before any work starts.
 
 ## Rate limits
 

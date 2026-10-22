@@ -115,6 +115,22 @@ origin port private and publish only the exact v1 path through a TLS reverse
 proxy. Exposing the complete port also exposes unrelated application routes; see
 [Youtarr External API](EXTERNAL_API.md).
 
+### EXTERNAL_API_WORK_CONCURRENCY
+**Required**: No
+**Default**: `2`
+**Options**: `1` or `2` (larger values are capped at `2`)
+**Description**: How many expensive External API tasks run at once: video-detail
+lookups, channel provisioning, and video deletion. Download jobs are queued
+separately through Youtarr's normal download queue.
+
+### EXTERNAL_API_WORK_QUEUE
+**Required**: No
+**Default**: `20`
+**Options**: `0`-`100` (larger values are capped at `100`)
+**Description**: How many External API tasks may wait for a free slot. When the
+queue is full, video-detail lookups return 503 and approved requests stay
+`approved` until the next background sweep.
+
 ### AUTH_PRESET_USERNAME
 **Required**: No
 **Default**: None

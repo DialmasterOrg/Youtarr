@@ -19,7 +19,7 @@ describe('external API shared contract fixture', () => {
   });
 
   test('covers the complete Plinx-consumed v1 surface', () => {
-    expect(fixture.fixtureVersion).toBe(4);
+    expect(fixture.fixtureVersion).toBe(5);
     expect(fixture.capabilities).toEqual(expect.objectContaining({
       apiVersion: '1',
       policy: expect.objectContaining({
