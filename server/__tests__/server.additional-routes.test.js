@@ -1472,6 +1472,6 @@ describe('external API capability consistency', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.isPlatformManaged.externalApiEnabled).toBe(expected);
-    expect(require('../modules/externalApiConfig').isExternalApiEnabled()).toBe(expected);
+    expect(require('../modules/externalApi/externalApiConfig').isExternalApiEnabled()).toBe(expected);
   });
 });
