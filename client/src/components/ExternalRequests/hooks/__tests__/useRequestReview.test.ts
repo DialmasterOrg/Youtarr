@@ -45,13 +45,14 @@ test('a shrinking queue clamps to its final page and fetches that page', async (
   expect(result.current.requests).toEqual([request]);
 });
 
-test('duplicate submission is prevented and an approved channel retry retains a false grant', async () => {
+test('duplicate submission is prevented and a declined channel grant is sent', async () => {
   api.get.mockResolvedValue({ data: page([request]) });
   const pending = deferred<ExternalRequestReview>();
   api.post.mockReturnValueOnce(pending.promise);
   const { result } = renderHook(() => useExternalRequests('session'));
   await waitFor(() => expect(result.current.loading).toBe(false));
-  act(() => result.current.beginInlineAction({ ...request, status: 'approved', grantToRequestingKey: false }, 'approve'));
+  act(() => result.current.beginInlineAction(request, 'approve'));
+  act(() => result.current.setGrantToRequestingKey(false));
   act(() => { void result.current.submitAction(); void result.current.submitAction(); result.current.cancelAction(); });
   expect(api.post).toHaveBeenCalledTimes(1);
   expect(api.post).toHaveBeenCalledWith('/api/external-requests/request-1/approve',

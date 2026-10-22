@@ -54,10 +54,10 @@ describe('RequestActions', () => {
     expect(onDetails).toHaveBeenCalled();
   });
 
-  test('offers a retry for an approved request without a job', () => {
+  test('disables approval once a request is approved', () => {
     renderActions({ request: { ...request, status: 'approved' } });
 
-    expect(screen.getByRole('button', { name: 'Retry approval' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Approve request' })).toBeDisabled();
   });
 
   test('disables decisions for a completed request', () => {

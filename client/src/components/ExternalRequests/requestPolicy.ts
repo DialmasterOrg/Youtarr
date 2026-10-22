@@ -3,8 +3,9 @@ import { ExternalRequestReview, ExternalRequestStatus } from '../../types/extern
 
 export type ReviewAction = 'approve' | 'reject';
 
-export const canApproveRequest = (request: ExternalRequestReview) =>
-  request.status === 'pending' || (request.status === 'approved' && !request.job);
+// Approval only queues the work; a background executor moves approved requests
+// on to processing and a final status, so only pending requests take a decision.
+export const canApproveRequest = (request: ExternalRequestReview) => request.status === 'pending';
 
 export const canRejectRequest = (request: ExternalRequestReview) => request.status === 'pending';
 

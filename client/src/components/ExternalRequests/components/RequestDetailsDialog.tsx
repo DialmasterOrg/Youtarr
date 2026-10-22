@@ -78,6 +78,12 @@ export default function RequestDetailsDialog({
                   ? `${request.requester.name} (${request.requester.keyPrefix})`
                   : 'Unavailable key'}
               </dd>
+              {request.approvalSource && (
+                <>
+                  <dt className="font-medium">Approved</dt>
+                  <dd>{request.approvalSource === 'auto' ? 'Automatically, by the key policy' : 'By an administrator'}</dd>
+                </>
+              )}
               <dt className="font-medium">Submitted</dt>
               <dd>{dateLabel(request.createdAt)}</dd>
               <dt className="font-medium">Last updated</dt>
@@ -122,7 +128,7 @@ export default function RequestDetailsDialog({
                 color="primary"
                 onClick={() => onAction('approve')}
               >
-                {request.status === 'approved' ? 'Retry approval' : 'Approve'}
+                Approve
               </Button>
             </>
           )}

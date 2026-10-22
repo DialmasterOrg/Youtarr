@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import axios from 'axios';
@@ -281,16 +281,58 @@ describe('RequestsPage', () => {
       `/api/external-requests/${other.id}/approve`, {}, expect.anything()
     ));
   });
-  test('offers a retry for approved requests without a job and locks the original channel grant', async () => {
-    const approved: ExternalRequestReview = { ...pendingRequest, type: 'channel', status: 'approved', grantToRequestingKey: false };
-    mockedAxios.get.mockResolvedValueOnce(axiosResponse(page([approved])));
+  test('does not offer another approval for a request already approved', async () => {
+    const approved: ExternalRequestReview = { ...pendingRequest, status: 'approved' };
+    mockedAxios.get.mockResolvedValue(axiosResponse(page([approved])));
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: 'Approve request' })).toBeDisabled();
+  });
+
+  test('refreshes the queue on its own while a request is still being worked on', async () => {
+    jest.useFakeTimers();
+    try {
+      const approved: ExternalRequestReview = { ...pendingRequest, status: 'approved' };
+      mockedAxios.get
+        .mockResolvedValueOnce(axiosResponse(page([approved])))
+        .mockResolvedValue(axiosResponse(page([{ ...approved, status: 'completed', updatedAt: '2026-07-26T12:05:00.000Z' }])));
+      renderPage();
+      await screen.findByText('Approved');
+
+      await act(async () => { jest.advanceTimersByTime(5000); });
+
+      expect(await screen.findByText('Completed')).toBeInTheDocument();
+    } finally {
+      jest.runOnlyPendingTimers();
+      jest.useRealTimers();
+    }
+  });
+
+  test('stops refreshing once nothing is in flight', async () => {
+    jest.useFakeTimers();
+    try {
+      mockedAxios.get.mockResolvedValue(axiosResponse(page()));
+      renderPage();
+      await screen.findByText('Safe video');
+
+      await act(async () => { jest.advanceTimersByTime(15000); });
+
+      expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.runOnlyPendingTimers();
+      jest.useRealTimers();
+    }
+  });
+
+  test('shows who approved a request in its details', async () => {
+    const approved: ExternalRequestReview = { ...pendingRequest, status: 'completed', approvalSource: 'auto' };
+    mockedAxios.get.mockResolvedValueOnce(axiosResponse(page([approved]))).mockResolvedValueOnce(axiosResponse(approved));
     const user = userEvent.setup();
     renderPage();
-    await user.click(await screen.findByRole('button', { name: 'Retry approval' }));
-    expect(screen.getByLabelText('Grant the provisioned channel to the requesting key')).not.toBeChecked();
-    expect(screen.getByLabelText('Grant the provisioned channel to the requesting key')).toBeDisabled();
-    await user.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await user.click(await screen.findByRole('button', { name: 'Details' }));
+
+    expect(await screen.findByText('Automatically, by the key policy')).toBeInTheDocument();
   });
 
   test('does not offer decisions using stale details after a permission failure', async () => {

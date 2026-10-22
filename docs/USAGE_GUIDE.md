@@ -695,7 +695,11 @@ Open **Requests** in the main navigation to review what external clients submitt
 
 - **Approve** rechecks the requester's current role and policy, its current
   channel grant, the enabled cached catalog entry, media type, rating, and
-  downloaded/duplicate state before it queues anything.
+  downloaded/duplicate state, then hands the work to a background runner. The
+  request shows **Approved** until the work starts, then **Processing**, then
+  **Completed** or **Failed**; the page refreshes itself while any request on
+  it is approved or processing. A request held while downloads are paused
+  stays Approved with a note saying what it is waiting for.
 - **Reject** requires a short reason. Rejection is final for that request, but
   clears the active dedupe record so the client can submit a new request later.
 - Requests that are no longer safe or whose downloader job cannot be queued

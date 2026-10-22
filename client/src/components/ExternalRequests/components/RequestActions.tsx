@@ -19,8 +19,7 @@ export default function RequestActions({
   onDetails,
   onAction,
 }: Props) {
-  const approveLabel =
-    request.status === 'approved' ? 'Retry approval' : 'Approve request';
+  const approveLabel = 'Approve request';
   return (
     <div className="flex items-center justify-end gap-1">
       <IconButton

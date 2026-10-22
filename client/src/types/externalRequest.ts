@@ -45,6 +45,7 @@ export interface ExternalRequestReview {
   completedAt?: string;
   message?: string;
   grantToRequestingKey?: boolean;
+  approvalSource?: 'auto' | 'admin' | null;
 }
 
 export interface ExternalRequestReviewPage {

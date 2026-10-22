@@ -46,10 +46,10 @@ export default function RequestActionDialog({
         <DialogContentText>
           {action === 'approve'
             ? request.type === 'channel'
-              ? 'Youtarr will recheck the requester, resolve and provision the channel, then optionally grant it to that key.'
+              ? 'Youtarr rechecks the requester now, then adds the channel in the background and optionally grants it to that key.'
               : request.type === 'delete_video'
-                ? 'Youtarr will recheck policy before deleting the local video files.'
-                : 'Youtarr will recheck policy before accepting the download.'
+                ? 'Youtarr rechecks policy now, then deletes the local video files in the background.'
+                : 'Youtarr rechecks policy now, then downloads the video in the background.'
             : 'Rejecting this request is final. The client may submit a new request later.'}
         </DialogContentText>
         {action === 'reject' && (
@@ -69,7 +69,7 @@ export default function RequestActionDialog({
           <FormControlLabel
             control={
               <Checkbox
-                disabled={submitting || request.status === 'approved'}
+                disabled={submitting}
                 checked={grant}
                 onChange={(event) => setGrant(event.target.checked)}
               />
@@ -77,10 +77,8 @@ export default function RequestActionDialog({
             label="Grant the provisioned channel to the requesting key"
           />
         )}
-        {request.status === 'approved' && (
-          <Alert severity="info">
-            Retrying preserves the original approval and channel grant choice.
-          </Alert>
+        {action === 'approve' && (
+          <DialogContentText>The status on this page updates as the work runs.</DialogContentText>
         )}
         {error && <Alert severity="error">{error}</Alert>}
       </DialogContentBody>

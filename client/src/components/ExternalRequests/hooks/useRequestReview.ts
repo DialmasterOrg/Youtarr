@@ -30,10 +30,6 @@ const EMPTY_REVIEW: ReviewState = {
 const canTakeAction = (request: ExternalRequestReview, action: ReviewAction) =>
   action === 'approve' ? canApproveRequest(request) : canRejectRequest(request);
 
-// A retry of an already-approved request keeps the grant choice made at approval time.
-const initialGrant = (request: ExternalRequestReview) =>
-  request.status === 'approved' ? request.grantToRequestingKey !== false : true;
-
 export function useRequestReview(token: string, refresh: () => void) {
   const [review, setReview] = useState(EMPTY_REVIEW);
   const sequence = useRef(0);
@@ -75,7 +71,7 @@ export function useRequestReview(token: string, refresh: () => void) {
   const beginInlineAction = useCallback((request: ExternalRequestReview, action: ReviewAction) => {
     if (submitting.current || !canTakeAction(request, action)) return;
     ++sequence.current;
-    setReview({ ...EMPTY_REVIEW, selected: request, action, grantToRequestingKey: initialGrant(request) });
+    setReview({ ...EMPTY_REVIEW, selected: request, action, grantToRequestingKey: true });
   }, []);
 
   const beginDetailAction = useCallback((action: ReviewAction) => {
@@ -88,7 +84,7 @@ export function useRequestReview(token: string, refresh: () => void) {
         actionFromDetails: true,
         reason: '',
         actionError: null,
-        grantToRequestingKey: initialGrant(state.selected),
+        grantToRequestingKey: true,
       };
     });
   }, []);
@@ -142,6 +138,15 @@ export function useRequestReview(token: string, refresh: () => void) {
     }
   }, [refresh, review, token]);
 
+  // Keeps an open details dialog in step with the queue's background refreshes.
+  const syncFromList = useCallback((requests: ExternalRequestReview[]) => {
+    setReview((state) => {
+      if (!state.selected || state.action || state.submitting || state.detailLoading) return state;
+      const fresh = requests.find((request) => request.id === state.selected?.id);
+      return fresh && fresh.updatedAt !== state.selected.updatedAt ? { ...state, selected: fresh } : state;
+    });
+  }, []);
+
   const setReason = useCallback((reason: string) => setReview((state) => ({ ...state, reason })), []);
   const setGrantToRequestingKey = useCallback(
     (grantToRequestingKey: boolean) => setReview((state) => ({ ...state, grantToRequestingKey })),
@@ -156,6 +161,7 @@ export function useRequestReview(token: string, refresh: () => void) {
     closeDetails,
     cancelAction,
     submitAction,
+    syncFromList,
     setReason,
     setGrantToRequestingKey,
   };
