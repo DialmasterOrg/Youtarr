@@ -10,9 +10,9 @@ import {
   DialogTitle,
   FormControlLabel,
   TextField,
-} from '../ui';
-import { ExternalRequestReview } from '../../types/externalRequest';
-import { ReviewAction } from './requestPolicy';
+} from '../../ui';
+import { ExternalRequestReview } from '../../../types/externalRequest';
+import { ReviewAction } from '../requestPolicy';
 
 export default function RequestActionDialog({
   request,

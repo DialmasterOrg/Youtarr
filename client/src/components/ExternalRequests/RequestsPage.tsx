@@ -23,9 +23,12 @@ import {
   ExternalRequestReview,
   ExternalRequestStatus,
 } from '../../types/externalRequest';
-import RequestActions from './RequestActions';
-import RequestTarget, { RequestStatus } from './RequestTarget';
-import { ReviewAction, useExternalRequests } from './hooks/useExternalRequests';
+import RequestActions from './components/RequestActions';
+import RequestActionDialog from './components/RequestActionDialog';
+import RequestDetailsDialog from './components/RequestDetailsDialog';
+import RequestTarget, { RequestStatus } from './components/RequestTarget';
+import { useExternalRequests } from './hooks/useExternalRequests';
+import { requestDateLabel as dateLabel, requestStatusLabel } from './requestPolicy';
 
 const STATUSES: ExternalRequestStatus[] = [
   'pending',
@@ -36,9 +39,7 @@ const STATUSES: ExternalRequestStatus[] = [
   'failed',
   'cancelled',
 ];
-import { requestDateLabel as dateLabel } from './requestPolicy';
-import RequestDetailsDialog from './RequestDetailsDialog';
-import RequestActionDialog from './RequestActionDialog';
+
 interface RequestsPageProps {
   token: string;
 }
@@ -62,9 +63,6 @@ const RequestsPage: React.FC<RequestsPageProps> = ({ token }) => {
     submitting,
     grantToRequestingKey,
   } = state;
-  const chooseAction = (next: ReviewAction) => {
-    if (selected) state.beginInlineAction(selected, next);
-  };
   const controls = (request: ExternalRequestReview) => (
     <RequestActions
       request={request}
@@ -106,7 +104,7 @@ const RequestsPage: React.FC<RequestsPageProps> = ({ token }) => {
                 <MenuItem value="">All statuses</MenuItem>
                 {STATUSES.map((value) => (
                   <MenuItem key={value} value={value}>
-                    {value}
+                    {requestStatusLabel(value)}
                   </MenuItem>
                 ))}
               </Select>
@@ -258,7 +256,7 @@ const RequestsPage: React.FC<RequestsPageProps> = ({ token }) => {
           loading={detailLoading}
           error={actionError}
           onClose={state.closeDetails}
-          onAction={chooseAction}
+          onAction={state.beginDetailAction}
         />
       )}
       {selected && action !== null && (

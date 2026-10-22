@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { ExternalRequestReview } from '../../types/externalRequest';
+import { ExternalRequestReview, ExternalRequestStatus } from '../../types/externalRequest';
 
 export type ReviewAction = 'approve' | 'reject';
 
@@ -25,3 +25,6 @@ export const requestDateLabel = (value?: string) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString();
 };
+
+export const requestStatusLabel = (status: ExternalRequestStatus) =>
+  status.charAt(0).toUpperCase() + status.slice(1);

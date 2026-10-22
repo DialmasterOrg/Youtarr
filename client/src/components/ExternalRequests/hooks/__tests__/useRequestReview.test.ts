@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import axios from 'axios';
-import { useExternalRequests } from './useExternalRequests';
-import { ExternalRequestReview, ExternalRequestReviewPage } from '../../../types/externalRequest';
+import { useExternalRequests } from '../useExternalRequests';
+import { ExternalRequestReview, ExternalRequestReviewPage } from '../../../../types/externalRequest';
 
 jest.mock('axios', () => ({ get: jest.fn(), post: jest.fn(), isCancel: () => false,
   isAxiosError: (error: unknown) => Boolean((error as { response?: unknown })?.response) }));
@@ -93,5 +93,38 @@ test('changing session discards pending details and a cancelled approval resets 
   act(() => result.current.cancelAction());
   expect(result.current.selected).toBeNull();
   act(() => result.current.beginInlineAction(request, 'approve'));
+  expect(result.current.grantToRequestingKey).toBe(true);
+});
+
+test('cancelling an action started from the details dialog returns to those details', async () => {
+  api.get.mockResolvedValueOnce({ data: page([request]) }).mockResolvedValueOnce({ data: request });
+  const { result } = renderHook(() => useExternalRequests('session'));
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  await act(async () => result.current.openDetail(request));
+  act(() => result.current.beginDetailAction('approve'));
+  expect(result.current.action).toBe('approve');
+  act(() => result.current.cancelAction());
+  expect(result.current.action).toBeNull();
+  expect(result.current.selected?.id).toBe('request-1');
+});
+
+test('cancelling an inline action returns to the list', async () => {
+  api.get.mockResolvedValueOnce({ data: page([request]) });
+  const { result } = renderHook(() => useExternalRequests('session'));
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  act(() => result.current.beginInlineAction(request, 'reject'));
+  act(() => result.current.cancelAction());
+  expect(result.current.selected).toBeNull();
+});
+
+test('an action started from details resets the grant choice', async () => {
+  api.get.mockResolvedValueOnce({ data: page([request]) }).mockResolvedValueOnce({ data: request });
+  const { result } = renderHook(() => useExternalRequests('session'));
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  await act(async () => result.current.openDetail(request));
+  act(() => result.current.beginDetailAction('approve'));
+  act(() => result.current.setGrantToRequestingKey(false));
+  act(() => result.current.cancelAction());
+  act(() => result.current.beginDetailAction('approve'));
   expect(result.current.grantToRequestingKey).toBe(true);
 });

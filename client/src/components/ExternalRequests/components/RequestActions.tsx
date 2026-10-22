@@ -1,12 +1,12 @@
 import React from 'react';
 import { Info, ThumbsDown, ThumbsUp } from 'lucide-react';
-import { IconButton } from '../ui';
-import { ExternalRequestReview } from '../../types/externalRequest';
+import { IconButton } from '../../ui';
+import { ExternalRequestReview } from '../../../types/externalRequest';
 import {
   canApproveRequest,
   canRejectRequest,
   ReviewAction,
-} from './requestPolicy';
+} from '../requestPolicy';
 interface Props {
   request: ExternalRequestReview;
   submitting: boolean;

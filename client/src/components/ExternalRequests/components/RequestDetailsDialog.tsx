@@ -8,8 +8,8 @@ import {
   DialogActions,
   DialogContentBody,
   DialogTitle,
-} from '../ui';
-import { ExternalRequestReview } from '../../types/externalRequest';
+} from '../../ui';
+import { ExternalRequestReview } from '../../../types/externalRequest';
 import RequestTarget, {
   requestChannelLabel,
   RequestStatus,
@@ -17,9 +17,9 @@ import RequestTarget, {
 import {
   canApproveRequest,
   canRejectRequest,
+  requestDateLabel as dateLabel,
   ReviewAction,
-} from './requestPolicy';
-import { requestDateLabel as dateLabel } from './requestPolicy';
+} from '../requestPolicy';
 
 export default function RequestDetailsDialog({
   request,
