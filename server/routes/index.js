@@ -62,7 +62,9 @@ const { isExternalApiEnabled } = require('../modules/externalApi/externalApiConf
  * @param {Object} deps - Dependencies to inject into route modules
  */
 function registerRoutes(app, deps) {
-  const externalRequestService = createExternalRequestService();
+  // server.js owns the request service so it can wire the background
+  // executor to job completion; standalone callers get their own.
+  const externalRequestService = deps.externalRequestService || createExternalRequestService();
   const externalQuotaService = createExternalQuotaService();
   const {
     verifyToken,

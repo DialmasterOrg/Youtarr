@@ -30,7 +30,7 @@ function service() {
       filterOptions: { requesters: [] },
     }),
     getAdminRequest: jest.fn().mockResolvedValue({ id: requestId, status: 'pending' }),
-    reviewVideoRequest: jest.fn().mockResolvedValue({ id: requestId, status: 'processing' }),
+    reviewRequest: jest.fn().mockResolvedValue({ id: requestId, status: 'processing' }),
   };
 }
 
@@ -88,17 +88,17 @@ describe('external request administrator routes', () => {
       .expect(200);
 
     expect(reviewLimiter).toHaveBeenCalledTimes(2);
-    expect(requestService.reviewVideoRequest).toHaveBeenNthCalledWith(
+    expect(requestService.reviewRequest).toHaveBeenNthCalledWith(
       1, requestId, 'approve', {}
     );
-    expect(requestService.reviewVideoRequest).toHaveBeenNthCalledWith(
+    expect(requestService.reviewRequest).toHaveBeenNthCalledWith(
       2, requestId, 'reject', { reason: 'Not approved' }
     );
   });
 
   test('returns bounded service errors without exposing internal failures', async () => {
     const requestService = service();
-    requestService.reviewVideoRequest.mockRejectedValueOnce(
+    requestService.reviewRequest.mockRejectedValueOnce(
       Object.assign(new Error('Only pending requests can be approved'), {
         name: 'RequestError',
         status: 409,

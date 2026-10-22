@@ -1,3 +1,4 @@
+const { Op } = require('sequelize');
 const {
   createExternalQuotaService,
   QuotaError,
@@ -119,23 +120,8 @@ describe('external API durable quotas', () => {
     ).rejects.toBeInstanceOf(QuotaError);
   });
 
-  test('reconciles completed downloads before reporting active capacity', async () => {
-    const completedRequest = {
-      id: 'request-1',
-      request_type: 'video',
-      youtube_id: 'abcdefghijk',
-      job_id: 'job-1',
-      status: 'processing',
-      update: jest.fn(async function update(values) {
-        Object.assign(this, values);
-      }),
-    };
-    const { service, models } = fixture({ active: 1 });
-    models.ExternalRequest.findAll.mockResolvedValue([completedRequest]);
-    models.Video.findAll.mockResolvedValue([{ youtubeId: 'abcdefghijk' }]);
-    models.ExternalRequest.count.mockImplementation(async () =>
-      completedRequest.status === 'processing' ? 1 : 0
-    );
+  test('counts approved and processing requests as active without modifying them', async () => {
+    const { service, models } = fixture({ active: 2 });
 
     const result = await service.status({
       id: 4,
@@ -144,9 +130,9 @@ describe('external API durable quotas', () => {
       dailyWriteLimit: 200,
     });
 
-    expect(completedRequest.update).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'completed', active_dedupe_key: null })
-    );
-    expect(result.remaining.activeJobs).toBe(5);
+    expect(models.ExternalRequest.count).toHaveBeenCalledWith({
+      where: { api_key_id: 4, status: { [Op.in]: ['approved', 'processing'] } },
+    });
+    expect(result.remaining.activeJobs).toBe(3);
   });
 });

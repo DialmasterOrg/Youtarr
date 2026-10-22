@@ -17,7 +17,7 @@ const { isAuthConfigured } = require('./modules/authState');
 const STARTUP_TAB_COUNT_REFRESH_DELAY_MS = 2 * 60 * 1000;
 const { createExternalApiAuth } = require('./middleware/externalApiAuth');
 const { sendExternalError } = require('./modules/externalApi/externalApiResponse');
-const { isExternalApiPath } = require('./modules/externalApi/externalApiConfig');
+const { isExternalApiEnabled, isExternalApiPath } = require('./modules/externalApi/externalApiConfig');
 const app = express();
 app.set('trust proxy', parseTrustProxySetting(process.env.TRUST_PROXY));
 if (process.env.TRUST_PROXY === undefined || process.env.TRUST_PROXY === '') {
@@ -285,6 +285,7 @@ const initialize = async () => {
     const downloadRunTracker = require('./modules/download/downloadRunTracker');
     const { Channel } = require('./models');
     const { registerRoutes } = require('./routes');
+    const { createExternalRequestService } = require('./modules/externalApi/externalRequestService');
     const scheduledTaskRuns = require('./modules/scheduledTaskRuns');
     const scheduledTaskManager = require('./modules/scheduledTaskManager');
     const storageGuard = require('./modules/storageGuard');
@@ -301,6 +302,12 @@ const initialize = async () => {
     // Every final status, whichever path set it, so a run never waits on a
     // job that ended without reporting its results.
     jobModule.onJobEnded((event) => downloadRunTracker.handleJobEnded(event));
+    // External API requests run in the background: approvals wake the
+    // executor, its sweep retries held work, and finished downloads close
+    // their requests through the job-ended hook.
+    const externalRequestService = createExternalRequestService();
+    jobModule.onJobEnded((event) => externalRequestService.handleJobEnded(event));
+    if (isExternalApiEnabled()) externalRequestService.startExecutor();
 
     // Cache yt-dlp version once during startup to keep the version endpoint fast
     refreshYtDlpVersionCache();
@@ -821,6 +828,7 @@ const initialize = async () => {
 
     // Register all modular routes
     registerRoutes(app, {
+      externalRequestService,
       verifyToken,
       loginLimiter,
       setupCreateAuthLimiter,

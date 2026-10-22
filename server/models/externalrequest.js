@@ -14,6 +14,7 @@ ExternalRequest.init({
   active_dedupe_key: { type: DataTypes.STRING(191), allowNull: true },
   idempotency_hash: { type: DataTypes.STRING(64), allowNull: true },
   job_id: { type: DataTypes.UUID, allowNull: true },
+  approval_source: { type: DataTypes.STRING(10), allowNull: true, validate: { isIn: [['auto', 'admin']] } },
   message: { type: DataTypes.STRING(500), allowNull: true },
   created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },

@@ -1,61 +1,80 @@
-function createExternalRequestReconciliation({ models, now }) {
-  const { Video, Job } = models;
-  async function reconcile(records, transaction = null) {
-    const processing = records.filter((record) => record.status === 'processing');
-    const mediaRequests = processing.filter(
-      (record) => ['video', 'delete_video'].includes(record.request_type)
-    );
-    const youtubeIds = [...new Set(mediaRequests.map((record) => record.youtube_id))];
-    if (youtubeIds.length === 0) return records;
-    const videos = await Video.findAll({
-      where: { youtubeId: youtubeIds, removed: false },
-      attributes: ['youtubeId'],
-      ...(transaction ? { transaction } : {}),
-    });
-    const completed = new Set(videos.map((video) => video.youtubeId));
-    const completedAt = now();
-    const completedRecords = mediaRequests.filter((record) =>
-      (record.request_type === 'video' && completed.has(record.youtube_id)) ||
-      (record.request_type === 'delete_video' && !completed.has(record.youtube_id))
-    );
-    await Promise.all(completedRecords.map(async (record) => {
-      await record.update({
-        status: 'completed',
-        active_dedupe_key: null,
-        completed_at: completedAt,
-        updated_at: completedAt,
-      }, ...(transaction ? [{ transaction }] : []));
-    }));
-    const unresolved = mediaRequests.filter(
-      (record) => record.request_type === 'video' &&
-        !completed.has(record.youtube_id) && record.job_id
-    );
-    if (unresolved.length > 0) {
-      const jobs = await Job.findAll({
-        where: { id: [...new Set(unresolved.map((record) => record.job_id))] },
-        attributes: ['id', 'status'],
-        ...(transaction ? { transaction } : {}),
-      });
-      const terminalFailures = new Set(
-        jobs
-          .filter((job) => [
-            'Error', 'Killed', 'Terminated', 'Complete', 'Complete with Warnings',
-          ].includes(job.status))
-          .map((job) => job.id)
-      );
-      await Promise.all(unresolved
-        .filter((record) => terminalFailures.has(record.job_id))
-        .map((record) => record.update({
-          status: 'failed',
-          active_dedupe_key: null,
-          message: 'Download did not complete',
-          updated_at: completedAt,
-        }, ...(transaction ? [{ transaction }] : []))));
+const { Op } = require('sequelize');
+
+const FINAL_JOB_STATUSES = new Set([
+  'Complete', 'Complete with Warnings', 'Error', 'Failed', 'Terminated', 'Killed',
+]);
+
+/**
+ * Closes processing video requests whose download job has ended: completed
+ * when the video is now on disk, failed otherwise. Runs from the job-ended
+ * hook and the executor's sweep, never from reads, so a request's status does
+ * not depend on who happens to read it.
+ */
+function createExternalRequestReconciliation({ models, now, jobLookup = () => null }) {
+  const { ExternalRequest, Video, Job } = models;
+
+  async function endedJobIdsFor(records, knownEnded) {
+    const ended = new Set(knownEnded);
+    const unknown = [];
+    for (const record of records) {
+      const jobId = record.job_id || record.id;
+      if (ended.has(jobId)) continue;
+      const liveJob = jobLookup(jobId);
+      if (liveJob) {
+        if (FINAL_JOB_STATUSES.has(liveJob.status)) ended.add(jobId);
+      } else {
+        unknown.push(jobId);
+      }
     }
-    return records;
+    if (unknown.length === 0) return ended;
+    const stored = await Job.findAll({
+      where: { id: { [Op.in]: [...new Set(unknown)] } },
+      attributes: ['id', 'status'],
+    });
+    const storedById = new Map(stored.map((job) => [job.id, job.status]));
+    for (const jobId of unknown) {
+      // A job neither running nor stored was lost (for example, with a
+      // restart before it was saved); its request can never complete.
+      if (!storedById.has(jobId) || FINAL_JOB_STATUSES.has(storedById.get(jobId))) {
+        ended.add(jobId);
+      }
+    }
+    return ended;
   }
 
-  return reconcile;
+  async function resolveVideoRequests(records, { endedJobIds = [] } = {}) {
+    const processing = records.filter(
+      (record) => record.request_type === 'video' && record.status === 'processing'
+    );
+    if (processing.length === 0) return [];
+    const videos = await Video.findAll({
+      where: { youtubeId: [...new Set(processing.map((record) => record.youtube_id))], removed: false },
+      attributes: ['youtubeId'],
+    });
+    const downloaded = new Set(videos.map((video) => video.youtubeId));
+    const ended = await endedJobIdsFor(
+      processing.filter((record) => !downloaded.has(record.youtube_id)),
+      endedJobIds
+    );
+    const resolved = [];
+    for (const record of processing) {
+      const finishedAt = now();
+      const values = downloaded.has(record.youtube_id)
+        ? { status: 'completed', completed_at: finishedAt }
+        : ended.has(record.job_id || record.id)
+          ? { status: 'failed', message: 'Download did not complete' }
+          : null;
+      if (!values) continue;
+      const [updated] = await ExternalRequest.update(
+        { ...values, active_dedupe_key: null, updated_at: finishedAt },
+        { where: { id: record.id, status: 'processing' } }
+      );
+      if (updated === 1) resolved.push(record.id);
+    }
+    return resolved;
+  }
+
+  return { resolveVideoRequests };
 }
 
-module.exports = { createExternalRequestReconciliation };
+module.exports = { createExternalRequestReconciliation, FINAL_JOB_STATUSES };

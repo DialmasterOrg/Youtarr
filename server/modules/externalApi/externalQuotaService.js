@@ -1,5 +1,4 @@
 const { Op } = require('sequelize');
-const { createExternalRequestReconciliation } = require('./externalRequestReconciliation');
 const { normalizeExternalApiKey } = require('../../middleware/externalApiAuth');
 const { hasExternalScope } = require('./externalPermissions');
 
@@ -38,7 +37,6 @@ function createExternalQuotaService({
   now = () => new Date(),
 } = {}) {
   const { ApiKey, ExternalRequest, ExternalApiUsageBucket } = models;
-  const reconcile = createExternalRequestReconciliation({ models, now });
 
   async function reloadAuthorizedKey(keyId, requiredScope, transaction = null) {
     const record = await ApiKey.findByPk(keyId, {
@@ -51,28 +49,13 @@ function createExternalQuotaService({
     return key;
   }
 
+  // Approved and processing requests hold an active slot until they finish.
   async function activeJobs(keyId, transaction = null, excludeRequestId = null) {
-    const processing = await ExternalRequest.findAll({
-      where: {
-        api_key_id: keyId,
-        status: 'processing',
-        request_type: { [Op.in]: ['video', 'delete_video'] },
-      },
-      attributes: [
-        'id', 'request_type', 'youtube_id', 'job_id', 'status',
-        'active_dedupe_key',
-      ],
-      ...(transaction ? { transaction, lock: transaction.LOCK.UPDATE } : {}),
-    });
-    await reconcile(processing, transaction);
     return ExternalRequest.count({
       where: {
         api_key_id: keyId,
         ...(excludeRequestId ? { id: { [Op.ne]: excludeRequestId } } : {}),
-        [Op.or]: [
-          { status: { [Op.in]: ['approved', 'processing'] } },
-          { status: 'pending', decided_at: { [Op.ne]: null } },
-        ],
+        status: { [Op.in]: ['approved', 'processing'] },
       },
       ...(transaction ? { transaction } : {}),
     });

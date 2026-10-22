@@ -93,6 +93,10 @@ function createExternalRequestReviewRoutes({
    * /api/external-requests/{id}/approve:
    *   post:
    *     summary: Revalidate and approve a pending external request
+   *     description: >
+   *       Records the approval and returns immediately with status approved;
+   *       the request then runs in the background. Approving an already
+   *       approved or processing request is a no-op.
    *     tags: [External Requests]
    *     security: [{ SessionAuth: [] }]
    *     parameters:
@@ -114,7 +118,7 @@ function createExternalRequestReviewRoutes({
    *       200: { description: Updated request }
    *       403: { description: API keys cannot review external requests }
    *       404: { description: Request not found }
-   *       409: { description: Request is not pending }
+   *       409: { description: Request already finished, or a retried approval changes the grant decision }
    *       429: { description: Review action rate limit exceeded }
    */
   router.post(
@@ -124,9 +128,7 @@ function createExternalRequestReviewRoutes({
     reviewLimiter,
     async (req, res) => {
       try {
-        const service = requests();
-        const review = service.reviewRequest || service.reviewVideoRequest;
-        return res.json(await review.call(service, req.params.id, 'approve', req.body));
+        return res.json(await requests().reviewRequest(req.params.id, 'approve', req.body));
       } catch (error) {
         return sendError(req, res, error);
       }
@@ -169,9 +171,7 @@ function createExternalRequestReviewRoutes({
     reviewLimiter,
     async (req, res) => {
       try {
-        const service = requests();
-        const review = service.reviewRequest || service.reviewVideoRequest;
-        return res.json(await review.call(service, req.params.id, 'reject', req.body));
+        return res.json(await requests().reviewRequest(req.params.id, 'reject', req.body));
       } catch (error) {
         return sendError(req, res, error);
       }

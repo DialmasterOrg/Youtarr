@@ -3,7 +3,7 @@ const { fixture, record, youtubeId } = require('./fixtures/externalRequests');
 
 describe('external request service', () => {
   test('persists a pending request without executing a download', async () => {
-    const { service, models, executor, key, transaction, quotaService } = fixture();
+    const { service, models, downloader, key, transaction, quotaService } = fixture();
     const result = await service.createVideoRequest(key, { youtubeId, channelId: 8 });
     expect(result).toMatchObject({
       outcome: 'created',
@@ -19,7 +19,22 @@ describe('external request service', () => {
       'video:request',
       transaction
     );
-    expect(executor).not.toHaveBeenCalled();
+    expect(downloader).not.toHaveBeenCalled();
+  });
+
+  test('records an auto-approved request as approved without running it inline', async () => {
+    const auto = fixture({ key: { autoApproveVideoRequests: true } });
+    const result = await auto.service.createVideoRequest(auto.key, {
+      youtubeId, channelId: 8, idempotencyKey: 'external-client-1',
+    });
+    expect(auto.models.ExternalRequest.create).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'approved',
+      approval_source: 'auto',
+      decided_at: expect.any(Date),
+      idempotency_hash: expect.stringMatching(/^[a-f0-9]{64}$/),
+    }), { transaction: auto.transaction });
+    expect(result).toMatchObject({ outcome: 'created', request: { status: 'approved' } });
+    expect(auto.downloader).not.toHaveBeenCalled();
   });
 
   test('fails closed for missing grants, unknown media, and ratings above policy', async () => {
@@ -143,32 +158,22 @@ describe('external request service', () => {
       channelId: 8,
     })).rejects.toMatchObject({ status: 404, message: 'Video not found' });
     expect(absent.models.ExternalRequest.create).not.toHaveBeenCalled();
-    expect(absent.videoDeleter.deleteVideoById).not.toHaveBeenCalled();
+    expect(absent.videoDeleter.deleteVideos).not.toHaveBeenCalled();
   });
 
-  test.each(['Error', 'Killed', 'Terminated', 'Complete', 'Complete with Warnings'])(
-    'reconciles a %s downloader job to a retryable failed request',
-    async (jobStatus) => {
-      const processing = record({ status: 'processing', job_id: 'job-123' });
-      const own = fixture();
-      own.models.ExternalRequest.findAndCountAll.mockResolvedValue({ rows: [processing], count: 1 });
-      own.models.Job.findAll.mockResolvedValue([{ id: 'job-123', status: jobStatus }]);
-      const result = await own.service.listRequests(own.key, {});
-      expect(own.models.Job.findAll).toHaveBeenCalledWith({
-        where: { id: ['job-123'] },
-        attributes: ['id', 'status'],
-      });
-      expect(processing.update).toHaveBeenCalledWith(expect.objectContaining({
-        status: 'failed',
-        active_dedupe_key: null,
-        message: 'Download did not complete',
-      }));
-      expect(result.data[0]).toMatchObject({
-        status: 'failed',
-        message: 'Download did not complete',
-      });
-    }
-  );
+  test('reads report stored status without reconciling or writing', async () => {
+    const processing = record({ status: 'processing', job_id: 'job-123' });
+    const own = fixture();
+    own.models.ExternalRequest.findAndCountAll.mockResolvedValue({ rows: [processing], count: 1 });
+    own.models.ExternalRequest.findOne.mockResolvedValue(processing);
+
+    await own.service.listRequests(own.key, { status: 'completed' });
+    await own.service.getRequest(own.key, processing.id);
+
+    expect(processing.update).not.toHaveBeenCalled();
+    expect(own.models.ExternalRequest.update).not.toHaveBeenCalled();
+    expect(own.models.ExternalRequest.findAndCountAll).toHaveBeenCalledTimes(1);
+  });
 
   test('validates scope, body fields, paging, and status allowlists', async () => {
     const { service, key } = fixture();
@@ -189,9 +194,11 @@ describe('external request service', () => {
       key, { youtubeId, channelId: 8, resolution: '2160' }
     )).rejects.toThrow('unsupported');
     await expect(service.createVideoRequest(key, { youtubeId })).rejects.toThrow('channelId is required');
+    await expect(service.createDeleteVideoRequest(
+      { ...key, role: 'delete', allowDeleteVideoRequests: true }, { youtubeId }
+    )).rejects.toThrow('channelId is required');
     await expect(service.listRequests(key, { status: 'DROP TABLE' })).rejects.toThrow('status');
     await expect(service.listRequests(key, { pageSize: '101' })).rejects.toThrow('pageSize');
   });
-
 
 });

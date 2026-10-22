@@ -48,7 +48,9 @@ async function run() {
  await sequelize.query('ANALYZE TABLE channels,channelvideos,external_requests');
 
     const key = { id: 1, role: 'admin', maxRatingLevel: 4, allowUnrated: true, allowedMediaTypes: ['video'] };
-    const requests = createExternalRequestService({ executor: () => {}, videoDeleter: {} });
+    const requests = createExternalRequestService({
+      downloader: () => {}, channelProvisioner: {}, videoDeleter: {}, storageGuard: {},
+    });
     const reads = async () => [
       await catalog.listChannels(key),
       await catalog.listVideos(key, { pageSize: '50' }),

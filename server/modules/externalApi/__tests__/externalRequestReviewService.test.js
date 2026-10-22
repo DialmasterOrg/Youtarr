@@ -64,67 +64,96 @@ describe('external request reviewservice', () => {
     });
   });
 
-  test('approves a pending request only after current policy revalidation and queue acceptance', async () => {
-    const pending = record();
-    const hydrated = Object.assign(pending, {
+  function hydrate(pending, apiKey = {}) {
+    return Object.assign(pending, {
       apiKey: {
         id: 4, name: 'External Client', key_prefix: 'abcd1234', role: 'request',
-        is_active: true, revoked_at: null,
+        is_active: true, revoked_at: null, ...apiKey,
       },
-      channel: {
-        id: 8, channel_id: 'UC1234567890123456789012', title: 'Safe Channel',
-      },
-      job: {
-        id: pending.id, status: 'In Progress', jobType: 'External video request',
-        timeCreated: timestamp, timeInitiated: timestamp,
-      },
+      channel: { id: 8, channel_id: 'UC1234567890123456789012', title: 'Safe Channel' },
+      job: null,
     });
-    const approved = fixture();
-    approved.models.ExternalRequest.findOne
-      .mockResolvedValueOnce(pending)
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(hydrated);
-    approved.models.ChannelVideo.findAll.mockResolvedValue([{
-      youtube_id: youtubeId,
-      channel_id: 'UC1234567890123456789012',
-      title: 'Safe video',
-      media_type: 'video',
-    }]);
+  }
 
-    const result = await approved.service.reviewVideoRequest(pending.id, 'approve', {});
+  function reviewing(pending, overrides = {}) {
+    const review = fixture(overrides);
+    review.models.ExternalRequest.findByPk.mockResolvedValue(pending);
+    review.models.ExternalRequest.findOne.mockResolvedValue(hydrate(pending));
+    return review;
+  }
+
+  test('approval records the decision and returns without running the request', async () => {
+    const pending = record();
+    const approved = reviewing(pending);
+
+    const result = await approved.service.reviewRequest(pending.id, 'approve', {});
 
     expect(approved.models.ApiKey.findByPk).toHaveBeenCalledWith(4, expect.objectContaining({
       transaction: approved.transaction,
       lock: 'UPDATE',
       attributes: expect.not.arrayContaining(['key_hash']),
     }));
-    expect(approved.executor).toHaveBeenCalledWith({
-      body: expect.objectContaining({
-        urls: [`https://www.youtube.com/watch?v=${youtubeId}`],
-        channelId: 'UC1234567890123456789012',
-        externalRequestId: pending.id,
-      }),
+    expect(pending.update).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'approved',
+      approval_source: 'admin',
+      decided_at: timestamp,
+    }), { transaction: approved.transaction });
+    expect(approved.downloader).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ status: 'approved', approvalSource: 'admin' });
+  });
+
+  test('approval completes a video request whose video was downloaded meanwhile', async () => {
+    const pending = record();
+    const approved = reviewing(pending);
+    approved.models.Video.findOne.mockResolvedValue({
+      id: 91, youtubeId, normalized_rating: 'TV-Y', removed: false,
     });
-    expect(pending.update.mock.calls.map(([values]) => values.status)).toEqual([
-      'approved', 'processing',
-    ]);
-    expect(result.status).toBe('processing');
-    expect(result.job.id).toBe(pending.id);
+
+    const result = await approved.service.reviewRequest(pending.id, 'approve', {});
+
+    expect(result).toMatchObject({ status: 'completed', message: 'Video is already downloaded' });
+  });
+
+  test('approving an already approved request is a no-op', async () => {
+    const pending = record({ status: 'approved', decided_at: timestamp });
+    const repeated = reviewing(pending);
+
+    const result = await repeated.service.reviewRequest(pending.id, 'approve', {});
+
+    expect(pending.update).not.toHaveBeenCalled();
+    expect(result.status).toBe('approved');
+  });
+
+  test('a repeated channel approval may not change the grant decision', async () => {
+    const pending = record({
+      request_type: 'channel', status: 'approved', channel_id: null, youtube_id: null,
+      channel_url: 'https://www.youtube.com/@safe', grant_to_requesting_key: true,
+    });
+    const repeated = reviewing(pending);
+
+    await expect(repeated.service.reviewRequest(
+      pending.id, 'approve', { grantToRequestingKey: false }
+    )).rejects.toMatchObject({ status: 409 });
+  });
+
+  test('channel approval records the grant decision', async () => {
+    const pending = record({
+      request_type: 'channel', channel_id: null, youtube_id: null,
+      channel_url: 'https://www.youtube.com/@safe',
+    });
+    const approved = reviewing(pending);
+
+    await approved.service.reviewRequest(pending.id, 'approve', { grantToRequestingKey: false });
+
+    expect(pending.update).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'approved', grant_to_requesting_key: false,
+    }), { transaction: approved.transaction });
+    expect(approved.channelProvisioner.getChannelInfo).not.toHaveBeenCalled();
   });
 
   test('fails approval closed when the requester key is revoked', async () => {
     const pending = record();
-    const hydrated = Object.assign(pending, {
-      apiKey: {
-        id: 4, name: 'External Client', key_prefix: 'abcd1234', role: 'request',
-        is_active: false, revoked_at: timestamp,
-      },
-      channel: {
-        id: 8, channel_id: 'UC1234567890123456789012', title: 'Safe Channel',
-      },
-      job: null,
-    });
-    const revoked = fixture();
+    const revoked = reviewing(pending);
     revoked.models.ApiKey.findByPk.mockResolvedValue({
       id: 4,
       name: 'External Client',
@@ -135,14 +164,9 @@ describe('external request reviewservice', () => {
       allow_unrated: false,
       allowed_media_types: ['video'],
     });
-    revoked.models.ExternalRequest.findOne
-      .mockResolvedValueOnce(pending)
-      .mockResolvedValueOnce(hydrated);
-    revoked.models.ChannelVideo.findAll.mockResolvedValue([]);
 
-    const result = await revoked.service.reviewVideoRequest(pending.id, 'approve', {});
+    const result = await revoked.service.reviewRequest(pending.id, 'approve', {});
 
-    expect(revoked.executor).not.toHaveBeenCalled();
     expect(pending.update).toHaveBeenCalledWith(expect.objectContaining({
       status: 'failed',
       active_dedupe_key: null,
@@ -153,23 +177,9 @@ describe('external request reviewservice', () => {
 
   test('rejects pending requests with a bounded sanitized reason and clears dedupe', async () => {
     const pending = record();
-    const hydrated = Object.assign(pending, {
-      apiKey: {
-        id: 4, name: 'External Client', key_prefix: 'abcd1234', role: 'request',
-        is_active: true, revoked_at: null,
-      },
-      channel: {
-        id: 8, channel_id: 'UC1234567890123456789012', title: 'Safe Channel',
-      },
-      job: null,
-    });
-    const rejected = fixture();
-    rejected.models.ExternalRequest.findOne
-      .mockResolvedValueOnce(pending)
-      .mockResolvedValueOnce(hydrated);
-    rejected.models.ChannelVideo.findAll.mockResolvedValue([]);
+    const rejected = reviewing(pending);
 
-    const result = await rejected.service.reviewVideoRequest(
+    const result = await rejected.service.reviewRequest(
       pending.id,
       'reject',
       { reason: '  Not\u0000 eligible \n right now.  ' }
@@ -185,14 +195,13 @@ describe('external request reviewservice', () => {
   });
 
   test('rejects non-monotonic review transitions and malformed reasons', async () => {
-    const completed = fixture();
-    completed.models.ExternalRequest.findOne.mockResolvedValue(record({ status: 'completed' }));
-    await expect(completed.service.reviewVideoRequest(
+    const completed = reviewing(record({ status: 'completed' }));
+    await expect(completed.service.reviewRequest(
       '9b89e5bc-8c90-4e72-b245-270fed2eacc2',
       'approve',
       {}
     )).rejects.toMatchObject({ status: 409 });
-    await expect(completed.service.reviewVideoRequest(
+    await expect(completed.service.reviewRequest(
       '9b89e5bc-8c90-4e72-b245-270fed2eacc2',
       'reject',
       { reason: 'x'.repeat(301) }
