@@ -4,6 +4,7 @@ const path = require('path');
 const configModule = require('../configModule');
 const logger = require('../../logger');
 const { probeVideoDimensions } = require('../resolutionTier');
+const { presentColumns } = require('../videoRemovalState');
 
 class VideoMetadataProcessor {
   static normalizeChannelName(value) {
@@ -184,7 +185,7 @@ class VideoMetadataProcessor {
           fileSize: null,
           audioFilePath: null,
           audioFileSize: null,
-          removed: false,
+          ...presentColumns(),
           video_resolution: null,
         };
 

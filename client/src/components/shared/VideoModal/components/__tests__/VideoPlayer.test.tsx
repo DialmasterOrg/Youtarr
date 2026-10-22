@@ -20,6 +20,7 @@ jest.mock('../../../../../lib/icons', () => {
     Close: createIcon('CloseIcon'),
     WarningAmber: createIcon('WarningAmberIcon'),
     Lock: createIcon('LockIcon'),
+    Trash2: createIcon('Trash2Icon'),
   };
 });
 
@@ -119,6 +120,30 @@ describe('VideoPlayer', () => {
     expect(screen.getByText('File Missing')).toBeInTheDocument();
     expect(screen.getByTestId('WarningAmberIcon')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /re-download video/i })).toBeInTheDocument();
+  });
+
+  test('renders "deleted file" state with a re-download button and no player', () => {
+    renderPlayer({
+      status: 'deleted',
+      isDownloaded: true,
+    });
+
+    expect(screen.getByText('File Deleted')).toBeInTheDocument();
+    expect(screen.queryByText('File Missing')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /re-download video/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Play video' })).not.toBeInTheDocument();
+  });
+
+  // The label sits on an arbitrary thumbnail, so it must be white with a shadow,
+  // never the page's text color.
+  test('labels a removed file in white so it reads on any thumbnail', () => {
+    renderPlayer({ status: 'deleted', isDownloaded: true });
+    expect(screen.getByText('File Deleted')).toHaveStyle({ color: 'rgb(255, 255, 255)' });
+  });
+
+  test('uses a smaller re-download button on phones, leaving room for the label', () => {
+    renderPlayer({ status: 'deleted', isDownloaded: true }, { isMobile: true });
+    expect(screen.getByRole('button', { name: /re-download video/i })).toHaveStyle({ width: '56px', height: '56px' });
   });
 
   test('renders "members only" state with lock icon and no download button', () => {

@@ -130,7 +130,7 @@ export default function CreateKeyDialog({
     <Dialog open onClose={close} maxWidth="sm" fullWidth>
       <DialogTitle>
         {createKeyType === 'legacy'
-          ? 'Create Legacy Download Key'
+          ? 'Create API Key'
           : 'Create External Access Key'}
       </DialogTitle>
       <DialogContent>
@@ -152,7 +152,7 @@ export default function CreateKeyDialog({
           label="Key Name"
           placeholder={
             createKeyType === 'legacy'
-              ? 'e.g., Bookmarklet'
+              ? 'e.g., iPhone Shortcut, Bookmarklet'
               : 'e.g., External Client'
           }
           fullWidth
@@ -161,6 +161,12 @@ export default function CreateKeyDialog({
           inputProps={{ maxLength: 100 }}
           helperText="A descriptive name to identify this key"
         />
+        {createKeyType === 'legacy' && (
+          <Typography variant="body2" color="secondary" className="mt-2">
+            Next you'll get your key, the Send to Youtarr button, and the details for phone shortcuts. They're
+            shown only once.
+          </Typography>
+        )}
         {createKeyType === 'external' && (
           <>
             <Typography variant="subtitle2" className="mt-4 mb-2">

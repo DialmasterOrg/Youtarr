@@ -592,9 +592,45 @@ describe('server routes - authentication', () => {
       expect(res.statusCode).toBe(503);
       expect(res.body.error).toBe('Authentication not configured');
     });
+
+    test('answers 500 when the session cannot be saved', async () => {
+      const { app, dbMock } = await createServerModule();
+      dbMock.Session.create.mockRejectedValueOnce(new Error('connect ETIMEDOUT'));
+
+      const handlers = findRouteHandlers(app, 'post', '/auth/login');
+      const loginHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { username: 'tester', password: 'password123' }
+      });
+      const res = createMockResponse();
+
+      await loginHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({ error: 'Login failed' });
+    });
   });
 
   describe('POST /auth/logout', () => {
+    test('answers 500 when the session cannot be ended', async () => {
+      const { app, dbMock } = await createServerModule();
+      dbMock.Session.update.mockRejectedValueOnce(new Error('connect ETIMEDOUT'));
+
+      const handlers = findRouteHandlers(app, 'post', '/auth/logout');
+      const logoutHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        headers: { 'x-access-token': 'valid-token' }
+      });
+      const res = createMockResponse();
+
+      await logoutHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to log out' });
+    });
+
     test('successful logout with valid token', async () => {
       const { app, dbMock } = await createServerModule();
 
@@ -754,7 +790,7 @@ describe('server routes - configuration', () => {
         })
       );
       expect(res.statusCode).toBe(200);
-      expect(res.body).toEqual({ status: 'success' });
+      expect(res.body).toEqual({ status: 'success', customArgsCheck: null });
     });
 
     test('accepts update even with different data types', async () => {
@@ -1060,7 +1096,8 @@ describe('server routes - channels', () => {
         'off', // default missingFilter
         'off', // default ignoredFilter
         'off', // default watchedFilter
-        null // default maxRating
+        null, // default maxRating
+        'off' // default deletedFilter
       );
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -1106,7 +1143,8 @@ describe('server routes - channels', () => {
           searchQuery: 'test search',
           sortBy: 'title',
           sortOrder: 'asc',
-          watchedFilter: 'only'
+          watchedFilter: 'only',
+          deletedFilter: 'only'
         }
       });
       const res = createMockResponse();
@@ -1130,7 +1168,8 @@ describe('server routes - channels', () => {
         'off', // default missingFilter
         'off', // default ignoredFilter
         'only', // watchedFilter
-        null // default maxRating
+        null, // default maxRating
+        'only' // deletedFilter
       );
       expect(res.statusCode).toBe(200);
     });
@@ -1174,7 +1213,8 @@ describe('server routes - channels', () => {
         'off', // default missingFilter
         'off', // default ignoredFilter
         'off', // default watchedFilter
-        null // default maxRating
+        null, // default maxRating
+        'off' // default deletedFilter
       );
       expect(res.statusCode).toBe(200);
     });
@@ -1194,7 +1234,8 @@ describe('server routes - channels', () => {
       await getVideosHandler(req, res);
 
       const args = channelModuleMock.getChannelVideos.mock.calls[0];
-      expect(args[args.length - 1]).toBe('TV-14');
+      // maxRating is the 17th argument; deletedFilter follows it.
+      expect(args[16]).toBe('TV-14');
     });
 
     test('rejects an unknown maxRating with 400', async () => {
@@ -1214,6 +1255,40 @@ describe('server routes - channels', () => {
       expect(res.statusCode).toBe(400);
       expect(res.body).toEqual({ error: 'Invalid maxRating' });
       expect(channelModuleMock.getChannelVideos).not.toHaveBeenCalled();
+    });
+
+    test('answers 404 for an unknown channel', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+      channelModuleMock.getChannelVideos.mockRejectedValueOnce(
+        Object.assign(new Error('Channel not found'), { code: 'CHANNEL_NOT_FOUND' })
+      );
+
+      const handlers = findRouteHandlers(app, 'get', '/getchannelvideos/:channelId');
+      const getVideosHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({ params: { channelId: 'UCmissing' }, query: {} });
+      const res = createMockResponse();
+
+      await getVideosHandler(req, res);
+
+      expect(res.statusCode).toBe(404);
+      expect(res.body).toEqual({ error: 'Channel not found' });
+    });
+
+    test('answers 500 when the videos cannot be loaded', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+      channelModuleMock.getChannelVideos.mockRejectedValueOnce(new Error('connect ETIMEDOUT'));
+
+      const handlers = findRouteHandlers(app, 'get', '/getchannelvideos/:channelId');
+      const getVideosHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({ params: { channelId: 'channel-1' }, query: {} });
+      const res = createMockResponse();
+
+      await getVideosHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to get channel videos' });
     });
   });
 
@@ -1537,6 +1612,7 @@ describe('server routes - videos', () => {
         channelFilter: '',
         protectedFilter: 'off',
         missingFilter: 'off',
+        deletedFilter: 'off',
         watchedFilter: 'off',
         maxRating: null,
       });
@@ -1589,6 +1665,7 @@ describe('server routes - videos', () => {
         channelFilter: 'channel123',
         protectedFilter: 'off',
         missingFilter: 'off',
+        deletedFilter: 'off',
         watchedFilter: 'exclude',
         maxRating: null,
       });
@@ -2017,7 +2094,7 @@ describe('server routes - downloads', () => {
 
       const req = createMockRequest({
         body: {
-          urls: ['https://youtube.com/watch?v=1'],
+          urls: ['https://youtube.com/watch?v=dQw4w9WgXcQ'],
           overrideSettings: { resolution: '1080' }
         }
       });
@@ -2028,6 +2105,69 @@ describe('server routes - downloads', () => {
       expect(downloadModuleMock.doGroupedManualDownloads).toHaveBeenCalledWith(req);
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({ status: 'success' });
+    });
+
+    test('forwards only the video for a share link opened from a playlist', async () => {
+      const { app, downloadModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/triggerspecificdownloads');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { urls: ['https://youtu.be/dQw4w9WgXcQ?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf'] }
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(downloadModuleMock.doGroupedManualDownloads).toHaveBeenCalledWith(expect.objectContaining({
+        body: expect.objectContaining({ urls: ['https://www.youtube.com/watch?v=dQw4w9WgXcQ'] })
+      }));
+    });
+
+    test('rejects a URL that is not a single video', async () => {
+      const { app, downloadModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/triggerspecificdownloads');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: {
+          urls: [
+            'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+            'https://www.youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf'
+          ]
+        }
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(downloadModuleMock.doGroupedManualDownloads).not.toHaveBeenCalled();
+    });
+
+    test('names the rejected URL and its position in the error', async () => {
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/triggerspecificdownloads');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: {
+          urls: [
+            'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+            'https://www.youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf'
+          ]
+        }
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(res.body.error).toBe(
+        'URL 2 is not a single YouTube video: https://www.youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf'
+      );
     });
 
     test('rejects invalid resolution in override settings', async () => {
@@ -2078,7 +2218,7 @@ describe('server routes - downloads', () => {
 
       const req = createMockRequest({
         body: {
-          urls: ['https://youtube.com/watch?v=1'],
+          urls: ['https://youtube.com/watch?v=dQw4w9WgXcQ'],
           overrideSettings: { rating: ' nr ' }
         }
       });
@@ -2140,7 +2280,7 @@ describe('server routes - downloads', () => {
 
       const req = createMockRequest({
         body: {
-          urls: ['https://youtube.com/watch?v=1'],
+          urls: ['https://youtube.com/watch?v=dQw4w9WgXcQ'],
           overrideSettings: { subfolderFallback: 'PlaylistFolder' }
         }
       });

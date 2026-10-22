@@ -38,6 +38,7 @@ describe('POST /api/videos/download subfolder registration', () => {
       downloadModule,
       videoOembedEnricher: {},
       storageGuard: { isPausedError: (err) => Boolean(err && err.code === 'DOWNLOADS_PAUSED') },
+      youtubeUrlParser: require('../../modules/youtubeUrlParser'),
     }));
   });
 

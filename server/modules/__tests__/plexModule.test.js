@@ -766,7 +766,7 @@ describe('plexModule', () => {
   });
 
   describe('checkPin', () => {
-    test('sets token when no existing token', async () => {
+    test('returns the token without saving it when no key is stored', async () => {
       config.plexApiKey = '';
 
       axios.get.mockResolvedValueOnce({
@@ -785,12 +785,21 @@ describe('plexModule', () => {
           }
         }
       );
-      expect(configModule.updateConfig).toHaveBeenCalledWith(
-        expect.objectContaining({
-          plexApiKey: 'new-token-123'
-        })
-      );
       expect(result).toEqual({ authToken: 'new-token-123' });
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+
+    test('returns null while the PIN is unclaimed and no key is stored', async () => {
+      config.plexApiKey = '';
+
+      axios.get.mockResolvedValueOnce({
+        data: { authToken: null }
+      });
+
+      const result = await plexModule.checkPin('pin-123');
+
+      expect(result).toEqual({ authToken: null });
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
     });
 
     test('validates token when existing token matches', async () => {
@@ -956,11 +965,7 @@ describe('plexModule', () => {
 
       const pinResult = await plexModule.checkPin(authResult.pinId);
       expect(pinResult).toEqual({ authToken: 'auth-token-456' });
-      expect(configModule.updateConfig).toHaveBeenCalledWith(
-        expect.objectContaining({
-          plexApiKey: 'auth-token-456'
-        })
-      );
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
     });
 
     test('library refresh after configuration', async () => {

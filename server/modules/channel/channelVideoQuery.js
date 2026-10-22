@@ -3,6 +3,7 @@ const watchStatusQueries = require('../mediaServers/watchStatusQueries');
 const fileCheckModule = require('../fileCheckModule');
 const ratingMapper = require('../ratingMapper');
 const { PUBLISHED_AT_SOURCE } = require('../constants/publishedAtSource');
+const { REMOVAL_STATES, removalState } = require('../videoRemovalState');
 
 class ChannelVideoQuery {
   /**
@@ -26,6 +27,9 @@ class ChannelVideoQuery {
         'id',
         'youtubeId',
         'removed',
+        'removed_reason',
+        'removed_at',
+        'removed_detail',
         'fileSize',
         'filePath',
         'audioFilePath',
@@ -35,7 +39,11 @@ class ChannelVideoQuery {
         'protected',
         'last_downloaded_at',
         'video_resolution'
-      ]
+      ],
+      // Plain rows: the file check spreads these ({ ...video }) to build its
+      // updated copies, and spreading a Sequelize instance drops the attribute
+      // getters, so the updated rows would never match the status map below.
+      raw: true
     });
 
     // Create Maps for O(1) lookup of download status
@@ -43,16 +51,20 @@ class ChannelVideoQuery {
     const videosToCheck = [];
 
     downloadedVideos.forEach(v => {
+      // Plain rows carry TINYINT flags as 0/1; keep the listing's booleans.
       downloadStatusMap.set(v.youtubeId, {
         id: v.id,
         added: true,
-        removed: v.removed,
+        removed: Boolean(v.removed),
+        removed_reason: v.removed_reason ?? null,
+        removed_at: v.removed_at ?? null,
+        removed_detail: v.removed_detail ?? null,
         fileSize: v.fileSize,
         filePath: v.filePath,
         audioFilePath: v.audioFilePath,
         audioFileSize: v.audioFileSize,
         normalized_rating: v.normalized_rating,
-        protected: v.protected,
+        protected: Boolean(v.protected),
         last_downloaded_at: v.last_downloaded_at,
         video_resolution: v.video_resolution
       });
@@ -71,7 +83,10 @@ class ChannelVideoQuery {
       checkedVideos.forEach(v => {
         const status = downloadStatusMap.get(v.youtubeId);
         if (status) {
-          status.removed = v.removed;
+          status.removed = Boolean(v.removed);
+          status.removed_reason = v.removed_reason ?? null;
+          status.removed_at = v.removed_at ?? null;
+          status.removed_detail = v.removed_detail ?? null;
           status.fileSize = v.fileSize;
           status.audioFileSize = v.audioFileSize;
         }
@@ -100,6 +115,9 @@ class ChannelVideoQuery {
         // Video exists in database
         plainVideoObject.added = true;
         plainVideoObject.removed = status.removed;
+        plainVideoObject.removed_reason = status.removed_reason;
+        plainVideoObject.removed_at = status.removed_at;
+        plainVideoObject.removed_detail = status.removed_detail;
         plainVideoObject.fileSize = status.fileSize;
         plainVideoObject.filePath = status.filePath;
         plainVideoObject.audioFilePath = status.audioFilePath;
@@ -118,6 +136,9 @@ class ChannelVideoQuery {
         // Video never downloaded
         plainVideoObject.added = false;
         plainVideoObject.removed = false;
+        plainVideoObject.removed_reason = null;
+        plainVideoObject.removed_at = null;
+        plainVideoObject.removed_detail = null;
         plainVideoObject.fileSize = null;
         plainVideoObject.filePath = null;
         plainVideoObject.audioFilePath = null;
@@ -202,9 +223,11 @@ class ChannelVideoQuery {
   }
 
   /**
-   * Apply tri-state status filters (protected / missing / ignored / watched).
+   * Apply tri-state status filters (protected / missing / ignored / watched / deleted).
    * Mode is 'off' (no filtering), 'only' (keep matches), or 'exclude' (drop matches).
-   * Missing is "previously downloaded, file no longer present".
+   * Missing is "previously downloaded, a file was expected and not found";
+   * deleted is "previously downloaded, removed by Youtarr or marked as deleted"
+   * (see videoRemovalState).
    * Watched is "has a watched-by entry under the configured watched rule";
    * never-downloaded videos are never watched.
    * @param {Array} videos - Array of enriched videos
@@ -212,9 +235,10 @@ class ChannelVideoQuery {
    * @param {string} missingMode - 'off' | 'only' | 'exclude'
    * @param {string} ignoredMode - 'off' | 'only' | 'exclude'
    * @param {string} watchedMode - 'off' | 'only' | 'exclude'
+   * @param {string} deletedMode - 'off' | 'only' | 'exclude'
    * @returns {Array} - Filtered array of videos
    */
-  _applyStatusFilters(videos, protectedMode, missingMode, ignoredMode, watchedMode) {
+  _applyStatusFilters(videos, protectedMode, missingMode, ignoredMode, watchedMode, deletedMode = 'off') {
     let filtered = videos;
 
     if (protectedMode === 'only') {
@@ -223,10 +247,13 @@ class ChannelVideoQuery {
       filtered = filtered.filter(video => !video.protected);
     }
 
-    if (missingMode === 'only') {
-      filtered = filtered.filter(video => video.added === true && video.removed === true);
-    } else if (missingMode === 'exclude') {
-      filtered = filtered.filter(video => !(video.added === true && video.removed === true));
+    const inState = (video, state) => video.added === true && removalState(video) === state;
+    for (const [mode, state] of [[missingMode, REMOVAL_STATES.MISSING], [deletedMode, REMOVAL_STATES.DELETED]]) {
+      if (mode === 'only') {
+        filtered = filtered.filter(video => inState(video, state));
+      } else if (mode === 'exclude') {
+        filtered = filtered.filter(video => !inState(video, state));
+      }
     }
 
     if (ignoredMode === 'only') {
@@ -260,9 +287,10 @@ class ChannelVideoQuery {
    * @param {number|null} maxDuration - Maximum duration in seconds (default null)
    * @param {string|null} dateFrom - Filter videos from this date (ISO string, default null)
    * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
+   * @param {string} deletedFilter - Tri-state filter on videos Youtarr deleted: 'off' | 'only' | 'exclude' (default 'off')
    * @returns {Promise<Array>} - Array of video objects with download status
    */
-  async fetchNewestVideosFromDb(channelId, limit = 50, offset = 0, downloadedFilter = 'off', searchQuery = '', sortBy = 'date', sortOrder = 'desc', checkFiles = false, mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = 'off', missingFilter = 'off', ignoredFilter = 'off', watchedFilter = 'off', ratingFilter = null) {
+  async fetchNewestVideosFromDb(channelId, limit = 50, offset = 0, downloadedFilter = 'off', searchQuery = '', sortBy = 'date', sortOrder = 'desc', checkFiles = false, mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = 'off', missingFilter = 'off', ignoredFilter = 'off', watchedFilter = 'off', ratingFilter = null, deletedFilter = 'off') {
     // First get all videos to enrich with download status
     const allChannelVideos = await ChannelVideo.findAll({
       where: {
@@ -295,7 +323,7 @@ class ChannelVideoQuery {
     // Apply duration and date filters
     filteredVideos = this._applyDurationAndDateFilters(filteredVideos, minDuration, maxDuration, dateFrom, dateTo);
 
-    filteredVideos = this._applyStatusFilters(filteredVideos, protectedFilter, missingFilter, ignoredFilter, watchedFilter);
+    filteredVideos = this._applyStatusFilters(filteredVideos, protectedFilter, missingFilter, ignoredFilter, watchedFilter, deletedFilter);
 
     filteredVideos = this._applyRatingFilter(filteredVideos, ratingFilter);
 
@@ -350,6 +378,9 @@ class ChannelVideoQuery {
         if (checkedVideos[i]) {
           paginatedVideos[i].added = checkedVideos[i].added;
           paginatedVideos[i].removed = checkedVideos[i].removed;
+          paginatedVideos[i].removed_reason = checkedVideos[i].removed_reason;
+          paginatedVideos[i].removed_at = checkedVideos[i].removed_at;
+          paginatedVideos[i].removed_detail = checkedVideos[i].removed_detail;
           paginatedVideos[i].fileSize = checkedVideos[i].fileSize;
           paginatedVideos[i].thumbnail = checkedVideos[i].thumbnail;
         }
@@ -381,11 +412,12 @@ class ChannelVideoQuery {
    * @param {number|null} maxDuration - Maximum duration in seconds (default null)
    * @param {string|null} dateFrom - Filter videos from this date (ISO string, default null)
    * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
+   * @param {string} deletedFilter - Tri-state filter on videos Youtarr deleted: 'off' | 'only' | 'exclude' (default 'off')
    * @returns {Promise<Object>} - Object with totalCount and oldestVideoDate
    */
-  async getChannelVideoStats(channelId, downloadedFilter = 'off', searchQuery = '', mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = 'off', missingFilter = 'off', ignoredFilter = 'off', watchedFilter = 'off', ratingFilter = null) {
+  async getChannelVideoStats(channelId, downloadedFilter = 'off', searchQuery = '', mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = 'off', missingFilter = 'off', ignoredFilter = 'off', watchedFilter = 'off', ratingFilter = null, deletedFilter = 'off') {
     // If we have search or filter, we need to get all videos
-    if (downloadedFilter !== 'off' || searchQuery || minDuration !== null || maxDuration !== null || dateFrom || dateTo || protectedFilter !== 'off' || missingFilter !== 'off' || ignoredFilter !== 'off' || watchedFilter !== 'off' || ratingFilter) {
+    if (downloadedFilter !== 'off' || searchQuery || minDuration !== null || maxDuration !== null || dateFrom || dateTo || protectedFilter !== 'off' || missingFilter !== 'off' || ignoredFilter !== 'off' || watchedFilter !== 'off' || ratingFilter || deletedFilter !== 'off') {
       // Need to filter by download status and/or search
       const allChannelVideos = await ChannelVideo.findAll({
         where: {
@@ -417,7 +449,7 @@ class ChannelVideoQuery {
       // Apply duration and date filters
       filteredVideos = this._applyDurationAndDateFilters(filteredVideos, minDuration, maxDuration, dateFrom, dateTo);
 
-      filteredVideos = this._applyStatusFilters(filteredVideos, protectedFilter, missingFilter, ignoredFilter, watchedFilter);
+      filteredVideos = this._applyStatusFilters(filteredVideos, protectedFilter, missingFilter, ignoredFilter, watchedFilter, deletedFilter);
 
       filteredVideos = this._applyRatingFilter(filteredVideos, ratingFilter);
 

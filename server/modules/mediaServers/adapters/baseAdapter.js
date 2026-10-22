@@ -28,7 +28,13 @@ class BaseAdapter {
     return results;
   }
   async createPlaylist(/* name, itemIds, opts */) { throw new Error('not implemented'); }
-  async replacePlaylistItems(/* id, itemIds */) { throw new Error('not implemented'); }
+  /**
+   * Replace a playlist's items; resolves { id } of the playlist now holding
+   * them, which may be a recreated one. An empty itemIds never creates a
+   * playlist (servers reject empty creation): it resolves { id: null } when no
+   * playlist is left on the server.
+   */
+  async replacePlaylistItems(/* id, itemIds, opts: { name, public, mediaType } */) { throw new Error('not implemented'); }
 
   /**
    * Watch state for file-backed items in the libraries the adapter tracks for

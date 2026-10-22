@@ -16,6 +16,7 @@ interface PlexAuthDialogProps {
   onClose: () => void;
   onSuccess: (apiKey: string) => void;
   currentApiKey?: string;
+  token: string | null;
 }
 
 const PlexAuthDialog: React.FC<PlexAuthDialogProps> = ({
@@ -23,6 +24,7 @@ const PlexAuthDialog: React.FC<PlexAuthDialogProps> = ({
   onClose,
   onSuccess,
   currentApiKey,
+  token,
 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,9 +46,11 @@ const PlexAuthDialog: React.FC<PlexAuthDialogProps> = ({
     setError(null);
     setSuccess(false);
 
+    const authHeaders = { headers: { 'x-access-token': token || '' } };
+
     try {
       // Request the server to generate a PIN and get the auth URL
-      const res = await fetch('/plex/auth-url');
+      const res = await fetch('/plex/auth-url', authHeaders);
       if (!res.ok) {
         throw new Error('Failed to get Plex authentication URL');
       }
@@ -64,7 +68,10 @@ const PlexAuthDialog: React.FC<PlexAuthDialogProps> = ({
       // Poll the server every 5 seconds to check if the PIN is claimed
       const intervalId = setInterval(async () => {
         try {
-          const checkRes = await fetch(`/plex/check-pin/${pinId}`);
+          const checkRes = await fetch(`/plex/check-pin/${pinId}`, authHeaders);
+          if (!checkRes.ok) {
+            throw new Error(`PIN check failed with status ${checkRes.status}`);
+          }
           const { authToken } = await checkRes.json();
           
           if (authToken) {
@@ -129,7 +136,7 @@ const PlexAuthDialog: React.FC<PlexAuthDialogProps> = ({
               Plex API Key obtained successfully!
             </Typography>
             <Typography variant="body1" style={{ marginTop: 16 }}>
-              Your API key has been added to the configuration.
+              Your API key has been filled in on the Plex settings form.
             </Typography>
             <Alert severity="info" style={{ marginTop: 16, textAlign: 'left' }}>
               <strong>Next step:</strong>

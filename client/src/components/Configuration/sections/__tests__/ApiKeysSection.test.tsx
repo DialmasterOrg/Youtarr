@@ -170,15 +170,52 @@ describe('ApiKeysSection', () => {
     expect(onShowRequestsNavLinkChange).toHaveBeenCalledWith(false);
   });
 
-  test('renders the external section before the legacy section', async () => {
+  test('puts the bookmarklet steps before the external access section', async () => {
     renderWithProviders(<ApiKeysSection {...props()} />);
 
-    expect(await screen.findByText('External access keys')).toBeInTheDocument();
-    const externalHeading = screen.getByText('External access keys');
-    const legacyHeading = screen.getByText('Legacy download keys');
-    expect(externalHeading.compareDocumentPosition(legacyHeading) &
+    const externalHeading = await screen.findByText('External access keys');
+    const bookmarkletHeading = screen.getByText('Get the "Send to Youtarr" button');
+    expect(bookmarkletHeading.compareDocumentPosition(externalHeading) &
       Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByText('/external-api/v1')).toBeInTheDocument();
+  });
+
+  test('names the section after the bookmarklet', async () => {
+    renderWithProviders(<ApiKeysSection {...props()} />);
+
+    expect(await screen.findByRole('heading', { name: /API Keys & Bookmarklet/i })).toBeInTheDocument();
+  });
+
+  test('first setup step includes the Create click that opens the button window', async () => {
+    renderWithProviders(<ApiKeysSection {...props()} />);
+
+    expect(await screen.findByText(/give it a name like "Laptop browser", and click/i)).toBeInTheDocument();
+  });
+
+  test('warns that the Send to Youtarr button is only shown once', async () => {
+    renderWithProviders(<ApiKeysSection {...props()} />);
+
+    expect(await screen.findByText(/The button is only shown once/i)).toBeInTheDocument();
+  });
+
+  test('hides the external access section when the external API is disabled', async () => {
+    renderWithProviders(<ApiKeysSection {...props()} externalApiEnabled={false} />);
+
+    await screen.findByLabelText('Bookmarklet API key rows');
+    expect(screen.queryByText('External access keys')).not.toBeInTheDocument();
+  });
+
+  test('hides the Requests navigation toggle when the external API is disabled', async () => {
+    renderWithProviders(<ApiKeysSection {...props()} externalApiEnabled={false} />);
+
+    await screen.findByLabelText('Bookmarklet API key rows');
+    expect(screen.queryByTestId('requests-nav-link-switch')).not.toBeInTheDocument();
+  });
+
+  test('lists bookmarklet keys even when the external API is disabled', async () => {
+    renderWithProviders(<ApiKeysSection {...props()} externalApiEnabled={false} />);
+
+    const rows = await screen.findByLabelText('Bookmarklet API key rows');
+    expect(within(rows).getByText('My Bookmarklet')).toBeInTheDocument();
   });
 
   test('uses compact cards with rating and permission chips but no key prefix', async () => {
@@ -262,22 +299,33 @@ describe('ApiKeysSection', () => {
     expect(within(cards).queryByText('Alpha Client')).not.toBeInTheDocument();
   });
 
-  test('keeps legacy controls and keys in the bottom section', async () => {
+  test('lists bookmarklet keys with their key prefix', async () => {
     renderWithProviders(<ApiKeysSection {...props()} />);
 
-    const legacyRows = await screen.findByLabelText('Legacy API key rows');
-    expect(within(legacyRows).getByText('My Bookmarklet')).toBeInTheDocument();
-    expect(within(legacyRows).getByText('Legacy download')).toBeInTheDocument();
-    expect(screen.getByLabelText('Legacy rate limit (requests/min)')).toHaveValue(10);
+    const rows = await screen.findByLabelText('Bookmarklet API key rows');
+    expect(within(rows).getByText('abc12345...')).toBeInTheDocument();
   });
 
-  test('shows separate empty states for external and legacy keys', async () => {
+  test('keeps external keys out of the bookmarklet list', async () => {
+    renderWithProviders(<ApiKeysSection {...props()} />);
+
+    const rows = await screen.findByLabelText('Bookmarklet API key rows');
+    expect(within(rows).queryByText('External Client')).not.toBeInTheDocument();
+  });
+
+  test('shows the rate limit below the bookmarklet keys', async () => {
+    renderWithProviders(<ApiKeysSection {...props()} />);
+
+    expect(await screen.findByLabelText('Rate Limit (requests/min)')).toHaveValue(10);
+  });
+
+  test('shows separate empty states for external and bookmarklet keys', async () => {
     installDefaultFetch([]);
     installApiKeyHook();
     renderWithProviders(<ApiKeysSection {...props()} />);
 
     expect(await screen.findByText('No external access keys yet.')).toBeInTheDocument();
-    expect(screen.getByText('No legacy download keys.')).toBeInTheDocument();
+    expect(screen.getByText('No API keys yet. Create one to get your Send to Youtarr button.')).toBeInTheDocument();
   });
 
   test('shows auto-approve only after its permission is enabled', async () => {
@@ -424,37 +472,61 @@ describe('ApiKeysSection', () => {
     expect(await screen.findByText(/API Key Created/)).toBeInTheDocument();
   });
 
-  test('creates legacy keys without an external policy', async () => {
+  const createBookmarkletKey = async () => {
     installDefaultFetch([]);
     installApiKeyHook();
     const user = userEvent.setup();
     renderWithProviders(<ApiKeysSection {...props()} />);
 
-    await user.click(await screen.findByRole('button', { name: 'Create legacy key' }));
-    expect(screen.getByText('Create Legacy Download Key')).toBeInTheDocument();
-    expect(screen.queryByText('Request permissions')).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Create Key' }));
     await user.type(screen.getByLabelText('Key Name'), 'Bookmarklet');
     await user.click(screen.getByRole('button', { name: /^Create$/ }));
+    return screen.findByRole('dialog', { name: /API Key Created/i });
+  };
 
-    await waitFor(() => {
-      const call = mockFetch.mock.calls.find(([url, init]) =>
-        url === '/api/keys' && init?.method === 'POST'
-      );
-      expect(JSON.parse(call?.[1]?.body as string)).toEqual({ name: 'Bookmarklet' });
-    });
-    expect(await screen.findByText(/API endpoint:/)).toBeInTheDocument();
-    expect(screen.getByText(`${window.location.origin}/api/videos/download`)).toBeInTheDocument();
-    expect(screen.queryByText(/Add to Bookmarks/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/bookmarklet code/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Mobile \/ Shortcuts/)).not.toBeInTheDocument();
+  test('create dialog says the Send to Youtarr button comes next', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ApiKeysSection {...props()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Create Key' }));
+
+    expect(screen.getByText(/Next you'll get your key, the Send to Youtarr button/i)).toBeInTheDocument();
   });
 
-  test('changes the legacy rate limit', async () => {
+  test('create dialog for a bookmarklet key has no external policy', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ApiKeysSection {...props()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Create Key' }));
+
+    expect(screen.queryByText('Request permissions')).not.toBeInTheDocument();
+  });
+
+  test('creates bookmarklet keys without an external policy', async () => {
+    await createBookmarkletKey();
+
+    const call = mockFetch.mock.calls.find(([url, init]) => url === '/api/keys' && init?.method === 'POST');
+    expect(JSON.parse(call?.[1]?.body as string)).toEqual({ name: 'Bookmarklet' });
+  });
+
+  test('shows the draggable Send to Youtarr button after creating a bookmarklet key', async () => {
+    const dialog = await createBookmarkletKey();
+
+    expect(within(dialog).getByText(/Send to Youtarr/i)).toHaveAttribute('href', expect.stringMatching(/^javascript:/));
+  });
+
+  test('shows the phone shortcut details after creating a bookmarklet key', async () => {
+    const dialog = await createBookmarkletKey();
+
+    expect(within(dialog).getByText(/Mobile \/ Shortcuts/)).toBeInTheDocument();
+  });
+
+  test('changes the bookmarklet rate limit', async () => {
     const onRateLimitChange = jest.fn();
     const user = userEvent.setup();
     renderWithProviders(<ApiKeysSection {...props()} onRateLimitChange={onRateLimitChange} />);
 
-    const input = await screen.findByLabelText('Legacy rate limit (requests/min)');
+    const input = await screen.findByLabelText('Rate Limit (requests/min)');
     await user.tripleClick(input);
     await user.keyboard('15');
     expect(onRateLimitChange).toHaveBeenCalled();

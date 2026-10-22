@@ -1,75 +1,31 @@
 import {
   MAX_CUSTOM_ARGS_LENGTH,
-  BLOCKED_FLAGS,
-  normalizeFlag,
-  tokenizeForDenylistCheck,
-  getBlockedFlagInArgs,
+  tokenizeArgs,
   getPositionalTokenInArgs,
   validateRateLimit,
 } from '../ytdlpOptionsHelpers';
 
 describe('ytdlpOptionsHelpers', () => {
-  describe('tokenizeForDenylistCheck', () => {
+  test('exports MAX_CUSTOM_ARGS_LENGTH = 2000', () => {
+    expect(MAX_CUSTOM_ARGS_LENGTH).toBe(2000);
+  });
+
+  describe('tokenizeArgs', () => {
     test('returns empty array for empty input', () => {
-      expect(tokenizeForDenylistCheck('')).toEqual([]);
-      expect(tokenizeForDenylistCheck('   ')).toEqual([]);
+      expect(tokenizeArgs('')).toEqual([]);
+      expect(tokenizeArgs('   ')).toEqual([]);
     });
 
     test('preserves quoted multi-word values as one token', () => {
-      expect(tokenizeForDenylistCheck('--user-agent "Mozilla 5.0"'))
+      expect(tokenizeArgs('--user-agent "Mozilla 5.0"'))
         .toEqual(['--user-agent', 'Mozilla 5.0']);
-      expect(tokenizeForDenylistCheck("--match-title 'foo bar baz'"))
+      expect(tokenizeArgs("--match-title 'foo bar baz'"))
         .toEqual(['--match-title', 'foo bar baz']);
     });
 
     test('handles escaped spaces outside single quotes', () => {
-      expect(tokenizeForDenylistCheck('--match-title hello\\ world'))
+      expect(tokenizeArgs('--match-title hello\\ world'))
         .toEqual(['--match-title', 'hello world']);
-    });
-  });
-
-  describe('normalizeFlag', () => {
-    test('strips values from long --flag=value tokens', () => {
-      expect(normalizeFlag('--exec=rm')).toBe('--exec');
-      expect(normalizeFlag('--external-downloader=curl')).toBe('--external-downloader');
-    });
-
-    test('strips attached values from known short flags only', () => {
-      expect(normalizeFlag('-o/tmp/x')).toBe('-o');
-      expect(normalizeFlag('-P/tmp/dir')).toBe('-P');
-      expect(normalizeFlag('-4')).toBe('-4');
-      expect(normalizeFlag('-bogus')).toBe('-bogus');
-    });
-
-    test('returns non-flag tokens unchanged', () => {
-      expect(normalizeFlag('foo')).toBe('foo');
-      expect(normalizeFlag('')).toBe('');
-    });
-  });
-
-  describe('getBlockedFlagInArgs', () => {
-    test.each([
-      ['--exec foo', '--exec'],
-      ['--netrc-cmd "id"', '--netrc-cmd'],
-      ['--external-downloader curl', '--external-downloader'],
-      ['--downloader curl', '--downloader'],
-      ['--external-downloader-args curl:--foo', '--external-downloader-args'],
-      ['--downloader-args curl:--foo', '--downloader-args'],
-      ['--print-to-file=__t__ /tmp/x', '--print-to-file'],
-      ['--output=/tmp/x', '--output'],
-      ['-o/tmp/x', '-o'],
-    ])('returns %s for denylisted input', (input, expected) => {
-      expect(getBlockedFlagInArgs(input)).toBe(expected);
-    });
-
-    test('returns null for allowed input', () => {
-      expect(getBlockedFlagInArgs('--no-mtime --retries 5')).toBeNull();
-    });
-
-    test('exports BLOCKED_FLAGS and MAX_CUSTOM_ARGS_LENGTH', () => {
-      expect(BLOCKED_FLAGS).toBeInstanceOf(Set);
-      expect(BLOCKED_FLAGS.has('--netrc-cmd')).toBe(true);
-      expect(MAX_CUSTOM_ARGS_LENGTH).toBe(2000);
     });
   });
 

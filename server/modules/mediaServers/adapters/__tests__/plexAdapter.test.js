@@ -385,6 +385,43 @@ describe('PlexAdapter', () => {
     expect(result).toEqual({ id: '100' });
   });
 
+  describe('replacePlaylistItems with no items', () => {
+    test('empties the playlist in place without sending an empty item list', async () => {
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [{ ratingKey: '100' }] } } });
+      axios.delete.mockResolvedValueOnce({});
+      const adapter = new PlexAdapter(cfg);
+
+      const result = await adapter.replacePlaylistItems('100', [], { name: 'PL' });
+
+      expect(axios.delete).toHaveBeenCalledWith(expect.stringContaining('/playlists/100/items'), expect.any(Object));
+      expect(axios.put).not.toHaveBeenCalled();
+      expect(result).toEqual({ id: '100' });
+    });
+
+    test('reports no playlist instead of creating an empty one when the stored id is gone', async () => {
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [{ ratingKey: 'stale-id' }] } } });
+      axios.delete.mockRejectedValueOnce({ response: { status: 404 } });
+      const adapter = new PlexAdapter(cfg);
+
+      const result = await adapter.replacePlaylistItems('stale-id', [], { name: 'PL' });
+
+      expect(axios.post).not.toHaveBeenCalled();
+      expect(result).toEqual({ id: null });
+    });
+
+    test('removes a stranded playlist without creating an empty one', async () => {
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [{ ratingKey: '999', title: 'Other' }] } } });
+      axios.delete.mockResolvedValueOnce({});
+      const adapter = new PlexAdapter(cfg);
+
+      const result = await adapter.replacePlaylistItems('stranded-id', [], { name: 'PL' });
+
+      expect(axios.delete).toHaveBeenCalledWith(expect.stringContaining('/playlists/stranded-id'), expect.any(Object));
+      expect(axios.post).not.toHaveBeenCalled();
+      expect(result).toEqual({ id: null });
+    });
+  });
+
   test('replacePlaylistItems falls back to create-fresh when stored id returns 404', async () => {
     // Visibility check: id present, so we attempt the in-place replace.
     axios.get.mockResolvedValueOnce({

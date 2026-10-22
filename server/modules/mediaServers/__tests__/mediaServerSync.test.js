@@ -677,6 +677,144 @@ describe('mediaServerSync', () => {
     expect(updateMock).not.toHaveBeenCalled();
   });
 
+  test('leaves out videos whose files were deleted', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'PL',
+      sync_to_plex: true, sync_to_jellyfin: false, sync_to_emby: false,
+      public_on_servers: false,
+    });
+    PlaylistVideo.findAll.mockResolvedValue([
+      { youtube_id: 'v1', position: 1, ignored: false },
+      { youtube_id: 'v2', position: 2, ignored: false },
+    ]);
+    Video.findAll.mockResolvedValue([
+      { youtubeId: 'v1', filePath: '/youtube/A/v1.mp4', removed: true, removed_reason: 'user_deleted' },
+      { youtubeId: 'v2', filePath: '/youtube/B/v2.mp4', removed: false },
+    ]);
+    PlaylistSyncState.findOne.mockResolvedValue({ server_playlist_id: 'existingid', update: jest.fn() });
+
+    const plexAdapter = makeAdapter('PlexAdapter', {
+      resolveItemIdByFilepath: jest.fn((p) => Promise.resolve(p === '/youtube/A/v1.mp4' ? 'rk1' : 'rk2')),
+      replacePlaylistItems: jest.fn().mockResolvedValue({ id: 'existingid' }),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
+
+    await mediaServerSync.syncPlaylist(1);
+
+    expect(plexAdapter.replacePlaylistItems).toHaveBeenCalledWith('existingid', ['rk2'], expect.any(Object));
+  });
+
+  test('empties an existing server playlist once every downloaded file is deleted', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'PL',
+      sync_to_plex: true, sync_to_jellyfin: false, sync_to_emby: false,
+      public_on_servers: false,
+    });
+    PlaylistVideo.findAll.mockResolvedValue([
+      { youtube_id: 'v1', position: 1, ignored: false },
+      { youtube_id: 'v2', position: 2, ignored: false },
+    ]);
+    Video.findAll.mockResolvedValue([{ youtubeId: 'v1', filePath: '/youtube/A/v1.mp4', removed: true, removed_reason: 'auto_removal' }]);
+    PlaylistSyncState.findOne.mockResolvedValue({ server_playlist_id: 'existingid', update: jest.fn() });
+
+    const plexAdapter = makeAdapter('PlexAdapter', {
+      replacePlaylistItems: jest.fn().mockResolvedValue({ id: 'existingid' }),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
+
+    await mediaServerSync.syncPlaylist(1);
+
+    expect(plexAdapter.replacePlaylistItems).toHaveBeenCalledWith('existingid', [], expect.any(Object));
+  });
+
+  test('forgets the server playlist when emptying it leaves none on the server', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'PL',
+      sync_to_plex: false, sync_to_jellyfin: true, sync_to_emby: false,
+      public_on_servers: false,
+    });
+    PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'v1', position: 1, ignored: false }]);
+    Video.findAll.mockResolvedValue([{ youtubeId: 'v1', filePath: '/youtube/A/v1.mp4', removed: true, removed_reason: 'user_deleted' }]);
+    const updateMock = jest.fn();
+    PlaylistSyncState.findOne.mockResolvedValue({ server_playlist_id: 'existingid', update: updateMock });
+
+    const jellyfinAdapter = makeAdapter('JellyfinAdapter', {
+      replacePlaylistItems: jest.fn().mockResolvedValue({ id: null }),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([jellyfinAdapter]);
+
+    await mediaServerSync.syncPlaylist(1);
+
+    expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ server_playlist_id: null, last_error: null }));
+  });
+
+  test('creates no server playlist when every downloaded file is deleted before the first sync', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'PL',
+      sync_to_plex: true, sync_to_jellyfin: false, sync_to_emby: false,
+      public_on_servers: false,
+    });
+    PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'v1', position: 1, ignored: false }]);
+    Video.findAll.mockResolvedValue([{ youtubeId: 'v1', filePath: '/youtube/A/v1.mp4', removed: true, removed_reason: 'user_deleted' }]);
+    PlaylistSyncState.findOne.mockResolvedValue(null);
+
+    const plexAdapter = makeAdapter('PlexAdapter');
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
+
+    await mediaServerSync.syncPlaylist(1);
+
+    expect(plexAdapter.createPlaylist).not.toHaveBeenCalled();
+  });
+
+  test('keeps syncing a missing video, whose file may come back', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'PL',
+      sync_to_plex: true, sync_to_jellyfin: false, sync_to_emby: false,
+      public_on_servers: false,
+    });
+    PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'v1', position: 1, ignored: false }]);
+    Video.findAll.mockResolvedValue([{ youtubeId: 'v1', filePath: '/youtube/A/v1.mp4', removed: true, removed_reason: 'not_found' }]);
+    PlaylistSyncState.findOne.mockResolvedValue({ server_playlist_id: 'existingid', update: jest.fn() });
+
+    const plexAdapter = makeAdapter('PlexAdapter', {
+      resolveItemIdByFilepath: jest.fn().mockResolvedValue('rk1'),
+      replacePlaylistItems: jest.fn().mockResolvedValue({ id: 'existingid' }),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
+
+    await mediaServerSync.syncPlaylist(1);
+
+    expect(plexAdapter.replacePlaylistItems).toHaveBeenCalledWith('existingid', ['rk1'], expect.any(Object));
+  });
+
+  test('does not empty a server playlist whose files are only missing', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'PL',
+      sync_to_plex: true, sync_to_jellyfin: false, sync_to_emby: false,
+      public_on_servers: false,
+    });
+    PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'v1', position: 1, ignored: false }]);
+    Video.findAll.mockResolvedValue([{ youtubeId: 'v1', filePath: '/youtube/A/v1.mp4', removed: true, removed_reason: 'not_found' }]);
+    PlaylistSyncState.findOne.mockResolvedValue({ server_playlist_id: 'existingid', update: jest.fn() });
+
+    const plexAdapter = makeAdapter('PlexAdapter', {
+      resolveItemIdByFilepath: jest.fn().mockResolvedValue(null),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
+
+    const setTimeoutSpy = jest.spyOn(global, 'setTimeout').mockImplementation((cb) => {
+      cb();
+      return 0;
+    });
+    try {
+      await mediaServerSync.syncPlaylist(1);
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
+
+    expect(plexAdapter.replacePlaylistItems).not.toHaveBeenCalled();
+  });
+
   test('reversed sort order queries positions descending and syncs items in that order', async () => {
     Playlist.findByPk.mockResolvedValue({
       id: 1, playlist_id: 'PL1', title: 'PL', sort_order: 'reversed',

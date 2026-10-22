@@ -1,15 +1,5 @@
 import React from 'react';
 import { Checkbox, Typography, Chip } from '../../ui';
-import { CalendarToday as CalendarTodayIcon } from '../../../lib/icons';
-import {
-  getStatusColor,
-  getStatusIcon,
-  getStatusLabel,
-  getStatusChipVariant,
-  getStatusChipStyle,
-  VideoStatus,
-} from '../../../utils/videoStatus';
-import { SHARED_THEMED_CHIP_SMALL_STYLE } from '../../shared/chipStyles';
 import { formatDurationClock } from '../../../utils';
 import {
   isSelectableForDownload,
@@ -18,44 +8,33 @@ import {
   THUMB_WIDTH,
   THUMB_HEIGHT,
 } from '../types';
-
-function StatusChip({ status }: { status: VideoStatus }) {
-  return (
-    <Chip
-      icon={getStatusIcon(status)}
-      label={getStatusLabel(status)}
-      size="small"
-      color={getStatusColor(status)}
-      variant={getStatusChipVariant(status)}
-      style={{
-        ...SHARED_THEMED_CHIP_SMALL_STYLE,
-        ...getStatusChipStyle(status),
-      }}
-    />
-  );
-}
+import {
+  AddChannelHandler,
+  DownloadButton,
+  PublishedDate,
+  ResultChannel,
+  ResultStatusChip,
+  ShortBadge,
+  ViewCount,
+} from './resultParts';
 
 interface ResultsListMobileProps {
   results: SearchResult[];
   onResultClick: (result: SearchResult) => void;
   selection?: ResultSelection;
+  onAddChannel?: AddChannelHandler;
+  onDownloadOne?: (result: SearchResult) => void;
 }
 
-export default function ResultsListMobile({ results, onResultClick, selection }: ResultsListMobileProps) {
+export default function ResultsListMobile({
+  results, onResultClick, selection, onAddChannel, onDownloadOne,
+}: ResultsListMobileProps) {
   return (
     <div className="flex flex-col">
       {results.map((result) => {
-        const status: VideoStatus = result.status;
         const durationLabel = formatDurationClock(result.duration);
         const selectable = Boolean(selection) && isSelectableForDownload(result.status);
         const checked = selectable && selection!.isChecked(result.youtubeId);
-        const published = result.publishedAt
-          ? new Date(result.publishedAt).toLocaleDateString(undefined, {
-              month: 'short',
-              day: 'numeric',
-              year: '2-digit',
-            })
-          : null;
         return (
           <div
             key={result.youtubeId}
@@ -122,25 +101,24 @@ export default function ResultsListMobile({ results, onResultClick, selection }:
               >
                 {result.title}
               </Typography>
-              <Typography
+              <ResultChannel
+                result={result}
                 variant="caption"
                 className="text-muted-foreground block truncate text-xs"
-              >
-                {result.channelName}
-              </Typography>
-              <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                {published && (
-                  <Typography
-                    variant="caption"
-                    className="text-muted-foreground inline-flex items-center gap-0.5 text-[0.7rem]"
-                  >
-                    <CalendarTodayIcon size={11} />
-                    {published}
-                  </Typography>
-                )}
-                <StatusChip status={status} />
+                onAddChannel={onAddChannel}
+              />
+              <div className="flex items-center gap-2 flex-wrap mt-0.5 text-[0.7rem] text-muted-foreground">
+                <PublishedDate publishedAt={result.publishedAt} iconSize={11} />
+                <ViewCount viewCount={result.viewCount} iconSize={11} />
+                <ShortBadge duration={result.duration} />
+                <ResultStatusChip status={result.status} />
               </div>
             </div>
+            {onDownloadOne && (
+              <div className="shrink-0 self-center">
+                <DownloadButton result={result} onDownload={onDownloadOne} />
+              </div>
+            )}
           </div>
         );
       })}

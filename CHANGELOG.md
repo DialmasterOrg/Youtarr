@@ -1,5 +1,117 @@
 # Changelog
 
+## [v1.90.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.90.0) - 2026-10-20
+
+### Features
+
+* add library cleanup hints and path tooltips ([84fb3c8](https://github.com/DialmasterOrg/Youtarr/commit/84fb3c891af4eb71064b1be48f0ea36b95146a1c)), closes [#670](https://github.com/DialmasterOrg/Youtarr/issues/670)
+* delete videos from the playlist page ([a2f601f](https://github.com/DialmasterOrg/Youtarr/commit/a2f601fe17d5deaa47a38021c957f48904180d5a))
+* separate deleted videos from missing ones ([3e3ba5a](https://github.com/DialmasterOrg/Youtarr/commit/3e3ba5a4e1c55c2f3cf760b3cba3a93b07999b5a)), closes [#670](https://github.com/DialmasterOrg/Youtarr/issues/670)
+* **find-videos:** make YouTube search easier to use ([a1bca45](https://github.com/DialmasterOrg/Youtarr/commit/a1bca45ad55b56735195050f1404a9b8c72aec73))
+
+
+### Bug Fixes
+
+* harden the unmounted-drive guard and trash UI ([ffc6d89](https://github.com/DialmasterOrg/Youtarr/commit/ffc6d89410031eff62580ff72ec3cf920dda3473)), closes [#670](https://github.com/DialmasterOrg/Youtarr/issues/670)
+* hide filter chips while inline panel is open ([630c175](https://github.com/DialmasterOrg/Youtarr/commit/630c1758d4cdbc6e24efa383a3ff6861805b8590))
+* keep video list button text readable on hover ([b16e7f4](https://github.com/DialmasterOrg/Youtarr/commit/b16e7f4649cec8d91c0893a0b4304a7b6b941557))
+* scope the unmounted-drive guard by subfolder ([0eb698a](https://github.com/DialmasterOrg/Youtarr/commit/0eb698ad23efa3023150bf600f6a37954bae9ae5)), closes [#670](https://github.com/DialmasterOrg/Youtarr/issues/670)
+* tidy trash wording and label mark as deleted ([006bb04](https://github.com/DialmasterOrg/Youtarr/commit/006bb04bdecab63c47317a6afd9eb92d8f40ff35)), closes [#670](https://github.com/DialmasterOrg/Youtarr/issues/670)
+* **deps:** bump follow-redirects to 1.16.1 ([3394eae](https://github.com/DialmasterOrg/Youtarr/commit/3394eaea78a87a05655b284b1bcd69c41e96422a))
+
+
+### Documentation
+
+* update CHANGELOG for v1.89.0 [skip ci] ([d8379ea](https://github.com/DialmasterOrg/Youtarr/commit/d8379ea0648e0903b985bc06020ed6dae3a0571d))
+
+
+### Continuous Integration
+
+* bump anthropics/claude-code-action ([fa7b3b6](https://github.com/DialmasterOrg/Youtarr/commit/fa7b3b6d34b8ac1dbf1b7aaca1bd0b57a611812b))
+* bump the github-actions group with 15 updates ([a501516](https://github.com/DialmasterOrg/Youtarr/commit/a501516cd02297e92d43536a2cd45bc6b51abf64))
+* correct action version comments ([dbbd962](https://github.com/DialmasterOrg/Youtarr/commit/dbbd96281fc7c5afd8ae13e82200af7ccb6fd809))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.89.0...v1.90.0
+
+## [v1.89.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.89.0) - 2026-10-17
+
+### Features
+
+* make the bookmarklet easier to find ([4bb98fc](https://github.com/DialmasterOrg/Youtarr/commit/4bb98fcf322b619148a1cf8b51adeea66b264aad))
+
+
+### Bug Fixes
+
+* accept video urls opened from a playlist ([c1dbe18](https://github.com/DialmasterOrg/Youtarr/commit/c1dbe18d7083fa7ec9b12e84537c6a81853d9ed4)), closes [#937](https://github.com/DialmasterOrg/Youtarr/issues/937)
+* download regional subtitle language variants ([cf333d7](https://github.com/DialmasterOrg/Youtarr/commit/cf333d717f9997fdc10bc99dc2cd6dc16502e363)), closes [#914](https://github.com/DialmasterOrg/Youtarr/issues/914)
+* replace custom args denylist with allowlist ([bf2471d](https://github.com/DialmasterOrg/Youtarr/commit/bf2471dea42e54983a0446f412fdf5c949dd2794))
+* require a session for WebSocket connections ([b5cee60](https://github.com/DialmasterOrg/Youtarr/commit/b5cee606245ebb457f76ebf270681977b146d5db))
+
+
+### Continuous Integration
+
+* Add dependabot to repo ([7469cdb](https://github.com/DialmasterOrg/Youtarr/commit/7469cdbba0f901c4e9320aee6e48b7a332cdb47c))
+
+
+### Documentation
+
+* update CHANGELOG for v1.88.0 [skip ci] ([d7938d5](https://github.com/DialmasterOrg/Youtarr/commit/d7938d552a13dbf4bbc76f7e2b8f18d3d22cf2b6))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.88.0...v1.89.0
+
+## [v1.88.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.88.0) - 2026-10-13
+
+### Features
+
+* add external API persistence foundation ([59cafaf](https://github.com/DialmasterOrg/Youtarr/commit/59cafaf79f5e038aa346a517e5e533aa6eac236a))
+
+
+### Bug Fixes
+
+* address final external API foundation review ([afe59f9](https://github.com/DialmasterOrg/Youtarr/commit/afe59f93315d0ba4cba3747aba8bfb0fd64cbdf1))
+* keep the app up through an internet outage ([cab55bd](https://github.com/DialmasterOrg/Youtarr/commit/cab55bde2029b54509dc9f37761787890a6b5153)), closes [#921](https://github.com/DialmasterOrg/Youtarr/issues/921)
+* require a session for the Plex PIN routes ([9c9d957](https://github.com/DialmasterOrg/Youtarr/commit/9c9d9570e51c21a08d49a41ad291d383ae53cc8e))
+* show each video once, update proxy-addr ([3c981b4](https://github.com/DialmasterOrg/Youtarr/commit/3c981b4738f51f87ba4b58e7c0ec0b291208d67e)), closes [#922](https://github.com/DialmasterOrg/Youtarr/issues/922)
+* use portable JSON literal in API key migration ([18a5c52](https://github.com/DialmasterOrg/Youtarr/commit/18a5c520c6de246f77b607bf816b43e209e16e5d))
+
+
+### Documentation
+
+* update CHANGELOG for v1.87.1 [skip ci] ([6d76c9a](https://github.com/DialmasterOrg/Youtarr/commit/6d76c9a7d53eedde88471d61e40b63c5cf989b2c))
+
+
+### Tests
+
+* keep channel model mocks association-compatible ([e2d0a7f](https://github.com/DialmasterOrg/Youtarr/commit/e2d0a7fa6b47d310fef13fbf0bb90ce987f742e1))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.87.1...v1.88.0
+
+## [v1.87.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.87.1) - 2026-10-03
+
+### Bug Fixes
+
+* apply the max rating filter on video lists ([b89a546](https://github.com/DialmasterOrg/Youtarr/commit/b89a5462fa35dbd9c2cfd8ccefd7856f65bbd7c1))
+* correct re-download and skip job counts ([2f4a154](https://github.com/DialmasterOrg/Youtarr/commit/2f4a1540fee5574120cc4e0595e2d87c5a879ae1))
+* fail flat deletes that leave files behind ([e8c70e0](https://github.com/DialmasterOrg/Youtarr/commit/e8c70e0f8163fc92039a074fd2cdbcc566bd44f0))
+* free disk space after a failed download ([87df455](https://github.com/DialmasterOrg/Youtarr/commit/87df455f8fba4e989d5cc3493eef4452b835ef44))
+* match video files by their trailing id ([73fca90](https://github.com/DialmasterOrg/Youtarr/commit/73fca905c5ed936aa43cad609454296b8e254926))
+* stop flat deletes removing the channel folder ([7c17eb1](https://github.com/DialmasterOrg/Youtarr/commit/7c17eb1fbae63e3b361aa690cc75cd1d410e882c))
+* stop silently skipping some downloads ([f08351d](https://github.com/DialmasterOrg/Youtarr/commit/f08351d01678cd7fa17a9962626fda9821a3e6a6)), closes [#909](https://github.com/DialmasterOrg/Youtarr/issues/909)
+* surface manual download start failures ([5622d08](https://github.com/DialmasterOrg/Youtarr/commit/5622d08ca5dfb3c98909654266c5ddff4a72e6e4))
+
+
+### Documentation
+
+* Add contributor Big Flubba for documentation fixes ([771f0bb](https://github.com/DialmasterOrg/Youtarr/commit/771f0bb132610b09248f86c9b6e7f0d07f92f338))
+* add portainer setup guide ([a495cce](https://github.com/DialmasterOrg/Youtarr/commit/a495cce16cd0c210e30fc4d59249e3b076dfd419))
+* clarify portainer guide from review ([6675d60](https://github.com/DialmasterOrg/Youtarr/commit/6675d60bef5ca608b4c85b41022c2817a5a6f345))
+* correct stale setup, backup, and API docs ([89740fd](https://github.com/DialmasterOrg/Youtarr/commit/89740fd0028f01ad8513b51657c40bf3063f890e))
+* document CIFS share override setup ([a8802bb](https://github.com/DialmasterOrg/Youtarr/commit/a8802bb0e11d3d8d29933e4e2282488ad698d155))
+* keep override file when pinning COMPOSE_FILE ([a9f60c8](https://github.com/DialmasterOrg/Youtarr/commit/a9f60c8b9596788f8339f0ce3c92b7e1cd8b5ff7))
+* update CHANGELOG for v1.87.0 [skip ci] ([7ac5eb7](https://github.com/DialmasterOrg/Youtarr/commit/7ac5eb75f9a16740732bbd89c5ac3778edec693c))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.87.0...v1.87.1
+
 ## [v1.87.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.87.0) - 2026-09-29
 
 ### Features

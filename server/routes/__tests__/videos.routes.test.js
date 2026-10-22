@@ -6,6 +6,17 @@ jest.mock('../../modules/videoDeletionModule', () => ({
   performAutomaticCleanup: jest.fn(),
 }));
 const videoDeletionModuleShared = require('../../modules/videoDeletionModule');
+const youtubeUrlParser = require('../../modules/youtubeUrlParser');
+
+describe('createVideoRoutes', () => {
+  test('throws when built without the YouTube URL parser', () => {
+    expect(() => createVideoRoutes({
+      verifyToken: (req, res, next) => next(),
+      videosModule: {},
+      downloadModule: {},
+    })).toThrow('youtubeUrlParser dependency is required');
+  });
+});
 
 describe('POST /api/videos/rating', () => {
   const loggerMock = {
@@ -24,7 +35,8 @@ describe('POST /api/videos/rating', () => {
     const router = createVideoRoutes({
       verifyToken: (req, res, next) => next(),
       videosModule: videosModuleMock,
-      downloadModule: {}
+      downloadModule: {},
+      youtubeUrlParser,
     });
 
     const app = express();
@@ -97,7 +109,8 @@ describe('POST /api/auto-removal/dry-run', () => {
     const router = createVideoRoutes({
       verifyToken: (req, res, next) => next(),
       videosModule: {},
-      downloadModule: {}
+      downloadModule: {},
+      youtubeUrlParser,
     });
     const app = express();
     app.use(router);
@@ -211,6 +224,7 @@ describe('POST /api/bulkEnrichVideos', () => {
       videosModule: {},
       downloadModule: {},
       videoOembedEnricher: enricherStub,
+      youtubeUrlParser,
     });
     const app = express();
     app.use(express.json());
@@ -285,7 +299,8 @@ describe('PATCH /api/videos/:id/protected', () => {
     const router = createVideoRoutes({
       verifyToken: (req, res, next) => next(),
       videosModule: videosModuleMock,
-      downloadModule: {}
+      downloadModule: {},
+      youtubeUrlParser,
     });
 
     const app = express();
@@ -443,6 +458,7 @@ describe('POST /triggerchanneldownloads', () => {
       videosModule: {},
       downloadModule: {},
       scheduledTaskManager: scheduledTaskManagerMock,
+      youtubeUrlParser,
     });
     const app = express();
     app.use(express.json());
@@ -531,5 +547,54 @@ describe('POST /triggerchanneldownloads', () => {
     await handler({ body: {}, log: loggerMock }, res);
 
     expect(res.status).toHaveBeenCalledWith(500);
+  });
+});
+
+describe('GET /getVideos', () => {
+  const loggerMock = { info: jest.fn(), error: jest.fn() };
+
+  const createResponse = () => {
+    const res = {};
+    res.status = jest.fn(() => res);
+    res.json = jest.fn(() => res);
+    return res;
+  };
+
+  const getHandler = (videosModuleMock) => {
+    const router = createVideoRoutes({
+      verifyToken: (req, res, next) => next(),
+      videosModule: videosModuleMock,
+      downloadModule: {},
+      ratingMapper: require('../../modules/ratingMapper'),
+      youtubeUrlParser,
+    });
+    const app = express();
+    app.use(router);
+    return findRouteHandler(app, 'get', '/getVideos');
+  };
+
+  test('passes the missing and deleted tri-state filters to the listing', async () => {
+    const videosModuleMock = { getVideosPaginated: jest.fn().mockResolvedValue({ videos: [] }) };
+    const handler = getHandler(videosModuleMock);
+    const res = createResponse();
+
+    await handler({ query: { missingFilter: 'only', deletedFilter: 'exclude' }, log: loggerMock }, res);
+
+    expect(videosModuleMock.getVideosPaginated).toHaveBeenCalledWith(expect.objectContaining({
+      missingFilter: 'only',
+      deletedFilter: 'exclude',
+    }));
+    expect(res.json).toHaveBeenCalledWith({ videos: [] });
+  });
+
+  test('treats an unknown deleted filter value as off', async () => {
+    const videosModuleMock = { getVideosPaginated: jest.fn().mockResolvedValue({ videos: [] }) };
+    const handler = getHandler(videosModuleMock);
+
+    await handler({ query: { deletedFilter: 'bogus' }, log: loggerMock }, createResponse());
+
+    expect(videosModuleMock.getVideosPaginated).toHaveBeenCalledWith(expect.objectContaining({
+      deletedFilter: 'off',
+    }));
   });
 });

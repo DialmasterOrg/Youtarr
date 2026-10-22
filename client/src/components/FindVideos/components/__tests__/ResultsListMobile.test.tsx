@@ -75,4 +75,29 @@ describe('ResultsListMobile', () => {
     const card = screen.getByRole('button', { name: /open alpha/i });
     expect(within(card).queryByText('-')).not.toBeInTheDocument();
   });
+
+  test('shows the relative date, view count, and Short badge in the meta line', () => {
+    const publishedAt = new Date(Date.now() - 14 * 86_400_000).toISOString();
+    const results = [makeResult({ youtubeId: 'a', title: 'Alpha', publishedAt, viewCount: 2_000_000, duration: 30 })];
+    render(<ResultsListMobile results={results} onResultClick={() => {}} />);
+    const card = screen.getByRole('button', { name: /open alpha/i });
+    expect(within(card).getByText('2 weeks ago')).toBeInTheDocument();
+    expect(within(card).getByText('2M')).toBeInTheDocument();
+    expect(within(card).getByText('Short')).toBeInTheDocument();
+  });
+
+  test('shows no Not Downloaded chip', () => {
+    render(<ResultsListMobile results={[makeResult()]} onResultClick={() => {}} />);
+    expect(screen.queryByText('Not Downloaded')).not.toBeInTheDocument();
+  });
+
+  test('the download button queues the video without opening it', () => {
+    const onDownloadOne = jest.fn();
+    const onResultClick = jest.fn();
+    const results = [makeResult({ youtubeId: 'a', title: 'Alpha' })];
+    render(<ResultsListMobile results={results} onResultClick={onResultClick} onDownloadOne={onDownloadOne} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Download Alpha' }));
+    expect(onDownloadOne).toHaveBeenCalledWith(results[0]);
+    expect(onResultClick).not.toHaveBeenCalled();
+  });
 });

@@ -310,12 +310,12 @@ describe('API key dialog lifecycle', () => {
     expect(screen.queryByText('synthetic-only-secret')).not.toBeInTheDocument();
   });
 
-  it('shows legacy creation errors inside the dialog when external access is disabled', async () => {
+  it('shows bookmarklet key creation errors inside the dialog when external access is disabled', async () => {
     const api = mockedUseApiKeys('test-token');
     (api.createApiKey as jest.Mock).mockRejectedValue(new Error('Creation failed'));
     const user = userEvent.setup();
     renderWithProviders(<ApiKeysSection {...props()} externalApiEnabled={false} />);
-    await user.click(await screen.findByRole('button', { name: 'Create legacy key' }));
+    await user.click(await screen.findByRole('button', { name: 'Create Key' }));
     await user.type(screen.getByLabelText('Key Name'), 'Bookmarklet');
     await user.click(screen.getByRole('button', { name: 'Create' }));
     expect(await screen.findByText('Creation failed')).toBeInTheDocument();
@@ -341,7 +341,7 @@ describe('API key dialog lifecycle', () => {
 
   it('fails closed when effective feature availability has not been supplied', async () => {
     renderWithProviders(<ApiKeysSection {...props()} externalApiEnabled={undefined} />);
-    expect(await screen.findByText(/External API access is disabled/)).toBeInTheDocument();
+    await screen.findByRole('button', { name: 'Create Key' });
     expect(screen.queryByRole('button', { name: 'Create external key' })).not.toBeInTheDocument();
   });
 });

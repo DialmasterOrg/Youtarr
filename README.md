@@ -26,6 +26,7 @@ https://github.com/user-attachments/assets/a80548fc-bcf9-4ad0-889c-dbd5aac250ee
 ## Key Features
 
 - **Smart Downloads**: Pre-validate manually pasted URLs with metadata preview before downloading
+- **Send to Youtarr Bookmarklet**: Queue the YouTube video you're watching with one click from your browser's bookmarks bar, or from your phone with Apple Shortcuts or Tasker. Set it up in Settings -> API Keys & Bookmarklet ([guide](docs/API_INTEGRATION.md#bookmarklet-setup))
 - **Channel Subscriptions**: Subscribe to channels and auto-download new videos, shorts, and streams with per-tab controls
 - **Playlist Subscriptions**: Subscribe to YouTube playlists and auto-download their videos into the right channel folders; Youtarr mirrors each playlist into Plex, Jellyfin, and Emby as a native playlist and writes a universal `.m3u` file for any other player
 - **Browse Channels**: View and search all videos from subscribed channels with advanced filtering, tabbed views for Videos/Shorts/Streams, and contextual publish date accuracy tips

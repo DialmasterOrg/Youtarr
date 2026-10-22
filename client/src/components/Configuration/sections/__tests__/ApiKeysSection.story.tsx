@@ -79,7 +79,7 @@ export const ResponsiveKeyCards: Story = {
   },
 };
 
-export const LegacyKeysAtBottom: Story = {
+export const BookmarkletKeysFirst: Story = {
   parameters: {
     msw: {
       handlers: [
@@ -112,6 +112,6 @@ export const LegacyKeysAtBottom: Story = {
     const canvas = within(canvasElement);
     await expect(await canvas.findByText('No external access keys yet.')).toBeInTheDocument();
     await expect(await canvas.findByText('Old Bookmarklet')).toBeInTheDocument();
-    await expect(await canvas.findByText('Legacy download')).toBeInTheDocument();
+    await expect(await canvas.findByText('legacy12...')).toBeInTheDocument();
   },
 };

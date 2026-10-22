@@ -67,9 +67,11 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
     isPlatformManaged,
     deploymentEnvironment,
     loggingStatus,
+    customArgsCheck,
     loading: isLoading,
     setConfig,
     setInitialConfig,
+    setCustomArgsCheck,
   } = useConfig(token);
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -138,6 +140,7 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
     token,
     config,
     setInitialConfig,
+    setCustomArgsCheck,
     setSnackbar,
     hasPlexServerConfigured,
     checkPlexConnection,
@@ -442,6 +445,7 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
                   onConfigChange={handleConfigChange}
                   onMobileTooltipClick={setMobileTooltip}
                   token={token}
+                  savedCustomArgsCheck={customArgsCheck}
                 />
               </>
             }
@@ -544,6 +548,7 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
         open={openPlexAuthDialog}
         onClose={() => setOpenPlexAuthDialog(false)}
         onSuccess={handlePlexAuthSuccess}
+        token={token}
       />
 
       <Snackbar
