@@ -16,7 +16,7 @@ const { isAuthConfigured } = require('./modules/authState');
 // Start the channel tab count catch-up after the startup rescan has begun.
 const STARTUP_TAB_COUNT_REFRESH_DELAY_MS = 2 * 60 * 1000;
 const { createExternalApiAuth } = require('./middleware/externalApiAuth');
-const { sendExternalError } = require('./modules/externalApiResponse');
+const { sendExternalError } = require('./modules/externalApi/externalApiResponse');
 const app = express();
 app.set('trust proxy', parseTrustProxySetting(process.env.TRUST_PROXY));
 if (process.env.TRUST_PROXY === undefined || process.env.TRUST_PROXY === '') {

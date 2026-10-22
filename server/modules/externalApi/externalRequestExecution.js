@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { MANUAL_DOWNLOAD_LABEL } = require('./download/jobTypes');
+const { MANUAL_DOWNLOAD_LABEL } = require('../download/jobTypes');
 const {
   AUXILIARY_RECOVERY_DELAY_MS, requireCurrentAutoApproval, rethrowWorkLimit,
 } = require('./externalRequestPrimitives');
@@ -115,7 +115,7 @@ function createExternalRequestExecution({
         if (requireAutoApproval) {
           requireCurrentAutoApproval(currentKey, 'channel');
         }
-        const provisioner = channelProvisioner || require('./channel/channelProvisioning');
+        const provisioner = channelProvisioner || require('../channel/channelProvisioning');
         const result = await provisioner.getChannelInfo(
           record.channel_url,
           false,

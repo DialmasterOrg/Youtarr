@@ -15,10 +15,10 @@ if (!['127.0.0.1', 'localhost', '::1'].includes(host)) {
 process.env.DB_NAME = databaseName;
 process.env.DB_HOST = host;
 const { sequelize } = require('../server/db');
-const catalog = require('../server/modules/externalCatalogService');
+const catalog = require('../server/modules/externalApi/externalCatalogService');
 const config = require('../server/modules/configModule');
 const logger = require('../server/logger');
-const { createExternalRequestService } = require('../server/modules/externalRequestService');
+const { createExternalRequestService } = require('../server/modules/externalApi/externalRequestService');
 const migration = require('../migrations/20261007041058-add-external-api-runtime-indexes');
 
 async function run() {

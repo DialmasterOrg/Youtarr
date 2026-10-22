@@ -3,8 +3,8 @@ const path = require('path');
 const crypto = require('crypto');
 const { attachRequestStatuses } = require('./externalCatalogRequests');
 const { QueryTypes } = require('sequelize');
-const { sequelize } = require('../db');
-const configModule = require('./configModule');
+const { sequelize } = require('../../db');
+const configModule = require('../configModule');
 const { normalizePolicy, ratingPolicy } = require('./externalEligibility');
 const { publicVideoThumbnail } = require('./externalThumbnailProxy');
 const {
@@ -609,7 +609,7 @@ async function getVideoDetail(key, youtubeId, metadataService = null) {
   if (!row) throw new CatalogError('Video not found', 404);
   await attachRequestStatuses(key, [row]);
 
-  const metadataProvider = metadataService || require('./videoMetadataModule');
+  const metadataProvider = metadataService || require('../videoMetadataModule');
   const metadata = await metadataProvider.getVideoMetadata(youtubeId);
   const isDownloaded = Boolean(row.downloaded_id) && !row.downloaded_removed;
   return {

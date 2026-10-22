@@ -1,10 +1,10 @@
 const EXTERNAL_ROLES = ['view', 'request', 'delete', 'admin'];
 const ALLOWED_MEDIA_TYPES = ['video', 'short', 'livestream'];
-const { sendExternalError } = require('../modules/externalApiResponse');
+const { sendExternalError } = require('../modules/externalApi/externalApiResponse');
 const {
   normalizeExternalPermissions,
   roleForExternalPermissions,
-} = require('../modules/externalPermissions');
+} = require('../modules/externalApi/externalPermissions');
 
 function normalizeAllowedMediaTypes(value) {
   if (!Array.isArray(value)) return null;

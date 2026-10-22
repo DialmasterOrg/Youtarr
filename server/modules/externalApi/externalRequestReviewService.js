@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { MANUAL_DOWNLOAD_LABEL } = require('./download/jobTypes');
+const { MANUAL_DOWNLOAD_LABEL } = require('../download/jobTypes');
 const { hasExternalScope } = require('./externalPermissions');
 const {
   RequestError, REQUEST_STATUSES, ACTIVE_STATUSES, normalizeStoredKey,

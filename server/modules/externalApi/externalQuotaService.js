@@ -1,6 +1,6 @@
 const { Op } = require('sequelize');
 const { createExternalRequestReconciliation } = require('./externalRequestReconciliation');
-const { normalizeExternalApiKey } = require('../middleware/externalApiAuth');
+const { normalizeExternalApiKey } = require('../../middleware/externalApiAuth');
 const { hasExternalScope } = require('./externalPermissions');
 
 class QuotaError extends Error {
@@ -33,8 +33,8 @@ function limitsFor(key) {
 }
 
 function createExternalQuotaService({
-  models = require('../models'),
-  sequelize = require('../db').sequelize,
+  models = require('../../models'),
+  sequelize = require('../../db').sequelize,
   now = () => new Date(),
 } = {}) {
   const { ApiKey, ExternalRequest, ExternalApiUsageBucket } = models;

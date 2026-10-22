@@ -12,12 +12,12 @@ const { createExternalRequestReviewService } = require('./externalRequestReviewS
 const { createExternalRequestReconciliation } = require('./externalRequestReconciliation');
 
 function createExternalRequestService({
-  models = require('../models'),
-  executor = (jobData) => require('./downloadModule').doGroupedManualDownloads(jobData),
+  models = require('../../models'),
+  executor = (jobData) => require('../downloadModule').doGroupedManualDownloads(jobData),
   channelProvisioner = null,
-  videoDeleter = require('./videoDeletionModule'),
+  videoDeleter = require('../videoDeletionModule'),
   now = () => new Date(),
-  sequelize = require('../db').sequelize,
+  sequelize = require('../../db').sequelize,
   quotaService = null,
   workLimiter = require('./externalWorkLimiter').sharedExternalWorkLimiter,
 } = {}) {

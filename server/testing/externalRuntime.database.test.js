@@ -8,11 +8,11 @@ process.env.DB_NAME = `youtarr_runtime_test_${process.pid}`;
 const { sequelize } = require('../db');
 const models = require('../models');
 const { normalizeExternalApiKey } = require('../middleware/externalApiAuth');
-const { createExternalRequestService } = require('../modules/externalRequestService');
-const { createExternalQuotaService } = require('../modules/externalQuotaService');
-const { createExternalWorkLimiter } = require('../modules/externalWorkLimiter');
+const { createExternalRequestService } = require('../modules/externalApi/externalRequestService');
+const { createExternalQuotaService } = require('../modules/externalApi/externalQuotaService');
+const { createExternalWorkLimiter } = require('../modules/externalApi/externalWorkLimiter');
 const { isSpecificUrlDownloadJob } = require('../modules/download/jobTypes');
-const catalog = require('../modules/externalCatalogService');
+const catalog = require('../modules/externalApi/externalCatalogService');
 const configModule = require('../modules/configModule');
 
 const youtubeId = 'abcdefghijk';

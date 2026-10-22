@@ -4,8 +4,8 @@ const logger = require('../logger');
 const {
   normalizeExternalPermissions,
   roleForExternalPermissions,
-} = require('./externalPermissions');
-const { getEffectiveChannelGrantCounts } = require('./apiKeyChannelGrantModule');
+} = require('./externalApi/externalPermissions');
+const { getEffectiveChannelGrantCounts } = require('./externalApi/apiKeyChannelGrantModule');
 
 const MAX_API_KEYS = 20;
 const ROLES = ['legacy_download', 'view', 'request', 'delete', 'admin'];

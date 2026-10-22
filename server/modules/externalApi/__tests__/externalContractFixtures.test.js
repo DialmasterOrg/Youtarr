@@ -3,11 +3,11 @@ const path = require('path');
 const crypto = require('crypto');
 const { externalErrorBody } = require('../externalApiResponse');
 const { dto } = require('../externalRequestService');
-const configModule = require('../configModule');
+const configModule = require('../../configModule');
 
 const fixtureDirectory = path.join(
   __dirname,
-  '../../../fixtures/external-api-v1'
+  '../../../../fixtures/external-api-v1'
 );
 const fixtureBytes = fs.readFileSync(path.join(fixtureDirectory, 'contract.json'));
 const canonicalFixtureBytes = Buffer.from(fixtureBytes.toString('utf8').replace(/\r\n/g, '\n'));

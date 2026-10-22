@@ -2,8 +2,8 @@ const express = require('express');
 const {
   sendExternalError,
   setExternalSecurityHeaders,
-} = require('../modules/externalApiResponse');
-const { scopesForExternalKey } = require('../modules/externalPermissions');
+} = require('../modules/externalApi/externalApiResponse');
+const { scopesForExternalKey } = require('../modules/externalApi/externalPermissions');
 
 function createExternalApiRoutes({
   externalApiAuth,

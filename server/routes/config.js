@@ -4,7 +4,7 @@ const { SCHEDULES, getScheduleError, getSchedule } = require('../modules/schedul
 const customArgsParser = require('../modules/download/customArgsParser');
 const filenamePreview = require('../modules/filenamePreview');
 const { getExternalCookiesPath } = require('../modules/externalCookies');
-const { isExternalApiEnabled } = require('../modules/externalApiConfig');
+const { isExternalApiEnabled } = require('../modules/externalApi/externalApiConfig');
 const { isValidLevelSetting } = require('../logging/logLevel');
 
 // Summarize the allowlist check of a saved custom-args string for the client,
