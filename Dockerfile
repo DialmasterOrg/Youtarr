@@ -1,5 +1,5 @@
 # ---- Base Node ----
-FROM node:20-slim AS base
+FROM node:22-bookworm-slim AS base
 WORKDIR /app
 # Pin npm >= 11.10 so it honors min-release-age/engine-strict from .npmrc.
 # Pick a release older than the 5-day cooldown (this global install isn't
@@ -22,7 +22,7 @@ COPY client/build/ ./client/build/
 COPY migrations/ ./migrations/
 
 # ---- Python deps for the runtime image ----
-# Keep this on the same Python minor as node:20-slim's python3 (bookworm -> 3.11);
+# Keep this on the same Python minor as node:22-bookworm-slim's python3 (3.11);
 # curl_cffi ships compiled extensions.
 FROM python:3.11-slim AS apprise
 RUN pip install --no-cache-dir --target=/opt/apprise apprise
@@ -33,7 +33,7 @@ RUN pip install --no-cache-dir --target=/opt/apprise apprise
 RUN pip install --no-cache-dir --target=/opt/curl_cffi "curl-cffi>=0.10,<0.16"
 
 # ---- Release ----
-FROM node:20-slim AS release
+FROM node:22-bookworm-slim AS release
 WORKDIR /app
 
 # Lets tools like Renovate resolve the source repo (and CHANGELOG) for this image

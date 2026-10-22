@@ -58,7 +58,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Prepare release notes
         if: ${{ steps.calculate_version.outputs.new_tag != '' && steps.calculate_version.outputs.release_type != 'none' }}
