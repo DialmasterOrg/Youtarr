@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ConfigState, PlatformManagedState, DeploymentEnvironment, LoggingStatus } from '../components/Configuration/types';
+import { ConfigState, PlatformManagedState, DeploymentEnvironment, LoggingStatus, CustomArgsCheck } from '../components/Configuration/types';
 import { DEFAULT_CONFIG } from '../config/configSchema';
 
 export const CONFIG_UPDATED_EVENT = 'config-updated';
@@ -10,11 +10,13 @@ interface UseConfigResult {
   isPlatformManaged: PlatformManagedState;
   deploymentEnvironment: DeploymentEnvironment;
   loggingStatus: LoggingStatus | null;
+  customArgsCheck: CustomArgsCheck | null;
   loading: boolean;
   error: Error | null;
   refetch: () => Promise<void>;
   setConfig: React.Dispatch<React.SetStateAction<ConfigState>>;
   setInitialConfig: React.Dispatch<React.SetStateAction<ConfigState | null>>;
+  setCustomArgsCheck: React.Dispatch<React.SetStateAction<CustomArgsCheck | null>>;
 }
 
 export function useConfig(token: string | null): UseConfigResult {
@@ -31,6 +33,7 @@ export function useConfig(token: string | null): UseConfigResult {
     isWsl: false,
   });
   const [loggingStatus, setLoggingStatus] = useState<LoggingStatus | null>(null);
+  const [customArgsCheck, setCustomArgsCheck] = useState<CustomArgsCheck | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -81,6 +84,9 @@ export function useConfig(token: string | null): UseConfigResult {
       // Read-only server status; never part of the config that gets saved
       setLoggingStatus(data.logging ?? null);
       delete data.logging;
+
+      setCustomArgsCheck(data.customArgsCheck ?? null);
+      delete data.customArgsCheck;
 
       // Spread DEFAULT_CONFIG first so fields missing from the server response
       // (stale config pre-dating a new field) fall back to defaults instead of undefined.
@@ -139,10 +145,12 @@ export function useConfig(token: string | null): UseConfigResult {
     isPlatformManaged,
     deploymentEnvironment,
     loggingStatus,
+    customArgsCheck,
     loading,
     error,
     refetch: fetchConfig,
     setConfig,
     setInitialConfig,
+    setCustomArgsCheck,
   };
 }

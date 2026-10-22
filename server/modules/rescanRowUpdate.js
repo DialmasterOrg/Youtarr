@@ -6,6 +6,8 @@
 // stat of each format's files at write time (resolveRescanUpdate), and the
 // caller writes it only if the row is still as read.
 
+const { REMOVAL_REASONS, removedColumns, presentColumns } = require('./videoRemovalState');
+
 const PRESENT = 'present';
 const MISSING = 'missing';
 const UNKNOWN = 'unknown';
@@ -87,7 +89,9 @@ async function resolveRescanUpdate(row, fileInfo, probedResolution, stat) {
     // Nothing on disk and one format unchecked: can't tell, so write nothing.
     if (!statusKnown) return null;
     // Keep the stored paths: page-load checks look there for a returning file.
-    return row.removed ? null : { removed: true };
+    // A row already removed (deleted in Youtarr, or marked as deleted) stays
+    // as recorded; only a present row becomes missing.
+    return row.removed ? null : removedColumns(REMOVAL_REASONS.NOT_FOUND);
   }
 
   const desired = {};
@@ -121,10 +125,10 @@ async function resolveRescanUpdate(row, fileInfo, probedResolution, stat) {
   }
 
   // A file is present, so the row isn't missing, even if the other format
-  // couldn't be checked (that format is left as stored above).
+  // couldn't be checked (that format is left as stored above). Clearing why
+  // it was removed comes with the flag.
   if (Object.keys(changes).length === 0 && !row.removed) return null;
-  changes.removed = false;
-  return changes;
+  return Object.assign(changes, presentColumns());
 }
 
 module.exports = { isRescanCandidate, resolveRescanUpdate };

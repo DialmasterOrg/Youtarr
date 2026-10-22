@@ -190,10 +190,7 @@ function createExternalRequestExecution({
           transaction
         );
         const result = target.downloaded
-          ? await videoDeleter.deleteVideoById(
-            target.downloaded.id,
-            { transaction, video: target.downloaded }
-          )
+          ? await videoDeleter.deleteVideoById(target.downloaded.id)
           : { success: false, error: 'Video is already removed' };
         const alreadyAbsent = result?.success === false &&
           /not found|already (?:marked as )?removed/i.test(result?.error || '');

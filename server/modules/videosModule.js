@@ -17,6 +17,11 @@ const { probeVideoDimensions } = require('./resolutionTier');
 const createLimiter = require('./subscriptionImport/concurrencyLimiter');
 const { isRescanCandidate, resolveRescanUpdate } = require('./rescanRowUpdate');
 const { unchangedSinceRead, GUARDED_COLUMNS } = require('./videoRowGuard');
+const youtubeExistenceCheck = require('./youtubeExistenceCheck');
+const { LIBRARY_CHECK_REASONS, checkLibraryRoot, isRowUnderLibraryCheck, libraryCheckCoversRows } = require('./libraryRootCheck');
+const { REMOVAL_STATES, stateWhere, notStateWhere } = require('./videoRemovalState');
+
+const { EXISTENCE } = youtubeExistenceCheck;
 
 // Backfill row updates are applied in parameterized batches of this size,
 // and flushed mid-chunk at the same cadence so completed work survives a
@@ -49,6 +54,7 @@ class VideosModule {
       channelFilter = '',
       protectedFilter = 'off',
       missingFilter = 'off',
+      deletedFilter = 'off',
       watchedFilter = 'off',
       maxRating = null,
     } = options;
@@ -87,10 +93,18 @@ class VideosModule {
         where.protected = false;
       }
 
-      if (missingFilter === 'only') {
-        where.removed = true;
-      } else if (missingFilter === 'exclude') {
-        where.removed = false;
+      // Missing (file not found) and deleted (removed by Youtarr, or before
+      // the reason was recorded) are both `removed` rows; see videoRemovalState.
+      const stateFilter = (mode, state) => {
+        if (mode !== 'only' && mode !== 'exclude') return null;
+        return mode === 'only' ? stateWhere(state) : notStateWhere(state);
+      };
+      const missingWhere = stateFilter(missingFilter, REMOVAL_STATES.MISSING);
+      const deletedWhere = stateFilter(deletedFilter, REMOVAL_STATES.DELETED);
+      for (const clause of [missingWhere, deletedWhere]) {
+        if (!clause) continue;
+        where[Sequelize.Op.and] ??= [];
+        where[Sequelize.Op.and].push(clause);
       }
 
       if (watchedFilter === 'only' || watchedFilter === 'exclude') {
@@ -131,6 +145,18 @@ class VideosModule {
         distinct: true,
       });
 
+      // How many deleted videos the default view hides, for the "N deleted
+      // hidden" note: the same filters with "deleted only" in place of the
+      // exclusion.
+      let hiddenDeletedCount = null;
+      if (deletedFilter === 'exclude') {
+        const hiddenWhere = {
+          ...where,
+          [Sequelize.Op.and]: where[Sequelize.Op.and].map((clause) => (clause === deletedWhere ? stateWhere(REMOVAL_STATES.DELETED) : clause)),
+        };
+        hiddenDeletedCount = await Video.count({ ...options, where: hiddenWhere, distinct: true });
+      }
+
       // Define attributes
       options.attributes = {
         include: [
@@ -138,13 +164,17 @@ class VideosModule {
             sequelize.fn(
               'COALESCE',
               sequelize.col('Video.last_downloaded_at'),
-              sequelize.col('jobVideos->job.time_created'),
+              sequelize.fn('MAX', sequelize.col('jobVideos->job.time_created')),
               sequelize.fn('STR_TO_DATE', sequelize.col('Video.original_date'), '%Y%m%d'),
             ),
             'timeCreated',
           ],
         ],
       };
+
+      // A video downloaded by more than one job has a jobvideos row per job;
+      // without grouping, each of those rows became a listing row (#922).
+      options.group = 'Video.id';
 
       // Add ordering
       let orderByColumn;
@@ -165,7 +195,7 @@ class VideosModule {
       // Real-time file check for videos that have a known file path
       // Only check videos with an existing filePath to avoid incorrectly marking videos as removed
       // Videos without a filePath will be handled by the backfill process
-      const { videos: checkedVideos, updates } = await fileCheckModule.checkVideoFiles(videos);
+      const { videos: checkedVideos, updates, libraryWarning } = await fileCheckModule.checkVideoFiles(videos);
 
       // Update the videos array with the checked results
       for (let i = 0; i < videos.length; i++) {
@@ -176,7 +206,6 @@ class VideosModule {
       await fileCheckModule.applyVideoUpdates(updates);
 
       // Check if videos still exist on YouTube and mark as removed if they don't
-      const videoValidationModule = require('./videoValidationModule');
       const youtubeUpdates = [];
       const timestampUpdates = [];
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -194,9 +223,12 @@ class VideosModule {
         }
 
         if (video.youtubeId) {
-          const exists = await videoValidationModule.checkVideoExistsOnYoutube(video.youtubeId);
+          const existence = await youtubeExistenceCheck.check(video.youtubeId);
+          if (existence === EXISTENCE.UNKNOWN) {
+            return null;
+          }
 
-          if (!exists) {
+          if (existence === EXISTENCE.REMOVED) {
             logger.info({ youtubeId: video.youtubeId }, 'Video no longer exists on YouTube, marking as removed');
             video.youtube_removed = true;
             video.youtube_removed_checked_at = checkedAt;
@@ -261,7 +293,10 @@ class VideosModule {
         page,
         totalPages: Math.ceil(total / limit),
         channels,
-        enabledChannels: enabledChannels.map(ch => ({ channel_id: ch.channel_id, uploader: ch.uploader }))
+        enabledChannels: enabledChannels.map(ch => ({ channel_id: ch.channel_id, uploader: ch.uploader })),
+        // Set when rows were not marked missing because the downloads folder looks unmounted.
+        libraryWarning,
+        hiddenDeletedCount
       };
     } catch (err) {
       logger.error({ err }, 'Error in getVideosPaginated');
@@ -489,10 +524,13 @@ class VideosModule {
    * Deliberately does not check the run's time limit: once started, a slice's
    * writes complete, so the expensive work already done is never discarded.
    * @param {Array<{row: Object, fileInfo: Object|undefined, probedResolution: string|null}>} candidates
-   * @returns {Promise<{updated: number, removed: number, kept: number, skipped: number, failed: number}>}
+   * @param {{holdBackMissing?: function(Object): boolean}} [options] - holdBackMissing: true for a row
+   *   stored where the downloads folder looks partly unmounted; if it would be marked missing it is
+   *   left alone and counted
+   * @returns {Promise<{updated: number, removed: number, kept: number, skipped: number, failed: number, notMarkedMissing: number}>}
    */
-  async _applyRescanUpdates(candidates) {
-    const counts = { updated: 0, removed: 0, kept: 0, skipped: 0, failed: 0 };
+  async _applyRescanUpdates(candidates, { holdBackMissing = () => false } = {}) {
+    const counts = { updated: 0, removed: 0, kept: 0, skipped: 0, failed: 0, notMarkedMissing: 0 };
     const limit = createLimiter(RESCAN_WRITE_CONCURRENCY);
     await Promise.all(candidates.map(({ row, fileInfo, probedResolution }) => limit(async () => {
       try {
@@ -501,6 +539,10 @@ class VideosModule {
         // checked. Counted so rows re-checked every run are visible.
         if (!changes) {
           counts.kept++;
+          return;
+        }
+        if (changes.removed === true && holdBackMissing(row)) {
+          counts.notMarkedMissing++;
           return;
         }
         const [affected] = await Video.update(changes, { where: unchangedSinceRead(row) });
@@ -523,6 +565,8 @@ class VideosModule {
     const opts = typeof arg === 'number' ? { timeLimit: arg } : arg;
     const timeLimit = opts.timeLimit ?? 5 * 60 * 1000;
     const trigger = opts.trigger ?? 'scheduled';
+    // Rescan anyway: a manual run over a folder the user emptied on purpose.
+    const ignoreLibraryCheck = opts.ignoreLibraryCheck === true;
 
     if (this._backfillRunning) {
       logger.info({ trigger }, 'Backfill already running, skipping');
@@ -543,8 +587,12 @@ class VideosModule {
     let totalKept = 0;
     let totalSkipped = 0;
     let totalFailed = 0;
+    let totalNotMarkedMissing = 0;
     let fileMapSize = 0;
     let unreadableOnDisk = 0;
+    // Set when the downloads folder looks partly unmounted: the scan runs, but
+    // nothing is marked missing (see libraryRootCheck).
+    let libraryCheckMessage = null;
     let result;
 
     try {
@@ -561,6 +609,44 @@ class VideosModule {
       if (!outputDir) {
         logger.info('No YouTube output directory configured, skipping backfill');
         return;
+      }
+
+      // An unmounted drive or share would make every present video look
+      // gone. With no present rows under the failing folder there is nothing
+      // to protect (a fresh install, or an empty subfolder nothing is stored
+      // in), so the scan simply runs.
+      let holdBackMissing = () => false;
+      if (ignoreLibraryCheck) logger.warn({ trigger }, 'Rescan is skipping the downloads folder check by request');
+      const libraryCheck = ignoreLibraryCheck ? { ok: true } : await checkLibraryRoot(outputDir);
+      if (await libraryCheckCoversRows(libraryCheck, Video, { removed: false })) {
+        const subfolderOnly = libraryCheck.reason === LIBRARY_CHECK_REASONS.SUBFOLDER_EMPTY
+          || libraryCheck.reason === LIBRARY_CHECK_REASONS.SUBFOLDER_UNREADABLE;
+        if (subfolderOnly) {
+          // Only the rows stored under that subfolder are in doubt.
+          holdBackMissing = (row) => isRowUnderLibraryCheck(libraryCheck, row);
+          libraryCheckMessage = libraryCheck.message;
+          logger.warn({ libraryCheck }, 'A subfolder looks unmounted or unreadable; the rescan will not mark videos in it missing');
+        } else {
+          logger.warn({ libraryCheck }, 'The downloads folder looks unmounted; skipping the rescan');
+          result = {
+            trigger,
+            startedAt: startedAtIso,
+            completedAt: new Date().toISOString(),
+            status: 'error',
+            errorMessage: `${libraryCheck.message} Nothing was marked missing; is the drive mounted?`,
+            libraryCheckMessage: libraryCheck.message,
+            processed: 0,
+            filesOnDisk: 0,
+            unreadableOnDisk: 0,
+            updated: 0,
+            removed: 0,
+            kept: 0,
+            skippedChanged: 0,
+            failed: 0,
+            notMarkedMissing: 0
+          };
+          return result;
+        }
       }
 
       // Check time limit before expensive operations
@@ -654,12 +740,13 @@ class VideosModule {
           // re-probed next run and never converge.
           if (candidates.length > 0) {
             logProgress(`Checking ${candidates.length} records (chunk ${Math.floor(offset / VIDEO_CHUNK_SIZE) + 1})...`);
-            const counts = await this._applyRescanUpdates(candidates);
+            const counts = await this._applyRescanUpdates(candidates, { holdBackMissing });
             totalUpdated += counts.updated;
             totalRemoved += counts.removed;
             totalKept += counts.kept;
             totalSkipped += counts.skipped;
             totalFailed += counts.failed;
+            totalNotMarkedMissing += counts.notMarkedMissing;
           }
         }
 
@@ -682,7 +769,8 @@ class VideosModule {
         removed: totalRemoved,
         kept: totalKept,
         skippedChanged: totalSkipped,
-        failed: totalFailed
+        failed: totalFailed,
+        notMarkedMissing: totalNotMarkedMissing
       }, 'Video metadata backfill completed');
 
       result = {
@@ -694,6 +782,9 @@ class VideosModule {
         kept: totalKept,
         skippedChanged: totalSkipped,
         failed: totalFailed,
+        notMarkedMissing: totalNotMarkedMissing,
+        libraryCheckMessage,
+        libraryCheckSkipped: ignoreLibraryCheck,
         timeElapsed: elapsed,
         trigger,
         startedAt: startedAtIso,
@@ -719,7 +810,10 @@ class VideosModule {
           removed: totalRemoved,
           kept: totalKept,
           skippedChanged: totalSkipped,
-          failed: totalFailed
+          failed: totalFailed,
+          notMarkedMissing: totalNotMarkedMissing,
+          libraryCheckMessage,
+          libraryCheckSkipped: ignoreLibraryCheck
         };
         return result;
       }
@@ -737,7 +831,10 @@ class VideosModule {
         removed: totalRemoved,
         kept: totalKept,
         skippedChanged: totalSkipped,
-        failed: totalFailed
+        failed: totalFailed,
+        notMarkedMissing: totalNotMarkedMissing,
+        libraryCheckMessage,
+        libraryCheckSkipped: ignoreLibraryCheck
       };
       // Resolve with the failure and the counters it reached rather than
       // rethrow, so every caller and the run history keep the partial progress.

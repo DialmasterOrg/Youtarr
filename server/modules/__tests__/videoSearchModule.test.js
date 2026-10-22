@@ -4,6 +4,7 @@ jest.mock('../download/ytdlpCommandBuilder', () => ({
 }));
 jest.mock('../../models', () => ({
   Video: { findAll: jest.fn().mockResolvedValue([]) },
+  Channel: { findAll: jest.fn().mockResolvedValue([]) },
 }));
 jest.mock('../../models/channelvideo', () => ({ findAll: jest.fn().mockResolvedValue([]) }));
 jest.mock('../archiveModule', () => ({ filterArchivedVideoIds: jest.fn(() => new Set()) }));
@@ -106,7 +107,7 @@ describe('videoSearchModule', () => {
     test('marks results as downloaded, missing, or never_downloaded based on DB state', async () => {
       Video.findAll.mockResolvedValueOnce([
         { youtubeId: 'aaaaaaaaaaa', removed: false },
-        { youtubeId: 'bbbbbbbbbbb', removed: true },
+        { youtubeId: 'bbbbbbbbbbb', removed: true, removed_reason: 'not_found' },
       ]);
 
       const ndjson =
@@ -244,8 +245,8 @@ describe('videoSearchModule', () => {
     });
   });
 
-  describe('sorting', () => {
-    test('sorts results newest-to-oldest by publishedAt, with nulls last', async () => {
+  describe('ordering', () => {
+    test('keeps results in the order yt-dlp returned them (YouTube relevance), whatever their dates', async () => {
       const ndjson =
         JSON.stringify({ id: 'old', title: 'Old', timestamp: 1_600_000_000 }) + '\n' +
         JSON.stringify({ id: 'nodate', title: 'NoDate' }) + '\n' +
@@ -254,7 +255,21 @@ describe('videoSearchModule', () => {
       ytDlpRunner.run.mockResolvedValueOnce(ndjson);
 
       const results = await videoSearchModule.searchVideos('test', 10, {});
-      expect(results.map(r => r.youtubeId)).toEqual(['new', 'mid', 'old', 'nodate']);
+      expect(results.map(r => r.youtubeId)).toEqual(['old', 'nodate', 'new', 'mid']);
+    });
+  });
+
+  describe('live streams', () => {
+    test('drops live and upcoming streams but keeps a video that merely lacks a duration', async () => {
+      const ndjson =
+        JSON.stringify({ id: 'live0000000', title: 'Radio', live_status: 'is_live', duration: null }) + '\n' +
+        JSON.stringify({ id: 'soon0000000', title: 'Premiere', live_status: 'is_upcoming', duration: null }) + '\n' +
+        JSON.stringify({ id: 'nodur000000', title: 'No duration', live_status: null, duration: null }) + '\n' +
+        JSON.stringify({ id: 'vod00000000', title: 'VOD', live_status: 'was_live', duration: 3600 }) + '\n';
+      ytDlpRunner.run.mockResolvedValueOnce(ndjson);
+
+      const results = await videoSearchModule.searchVideos('radio', 10, {});
+      expect(results.map(r => r.youtubeId)).toEqual(['nodur000000', 'vod00000000']);
     });
   });
 });
@@ -285,6 +300,7 @@ describe('videoSearchModule.searchVideos - API-first path', () => {
     jest.doMock('../configModule', () => ({ getCookiesPath: jest.fn(() => null) }));
     jest.doMock('../../models', () => ({
       Video: { findAll: jest.fn().mockResolvedValue([]) },
+      Channel: { findAll: jest.fn().mockResolvedValue([]) },
     }));
     jest.doMock('../../logger', () => ({
       info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn(),
@@ -292,6 +308,20 @@ describe('videoSearchModule.searchVideos - API-first path', () => {
 
     youtubeApi = require('../youtubeApi');
     videoSearchModule = require('../videoSearchModule');
+  });
+
+  test('keeps the API results in the order YouTube ranked them', async () => {
+    const apiResult = (youtubeId, publishedAt) => ({
+      youtubeId, title: youtubeId, channelName: 'C', channelId: null, duration: 60,
+      thumbnailUrl: null, publishedAt, viewCount: null, status: 'never_downloaded',
+    });
+    youtubeApi.client.searchVideos.mockResolvedValueOnce([
+      apiResult('older000000', '2020-01-01T00:00:00.000Z'),
+      apiResult('newer000000', '2025-01-01T00:00:00.000Z'),
+    ]);
+
+    const results = await videoSearchModule.searchVideos('test', 10);
+    expect(results.map(r => r.youtubeId)).toEqual(['older000000', 'newer000000']);
   });
 
   test('uses API when available; yt-dlp is not called', async () => {

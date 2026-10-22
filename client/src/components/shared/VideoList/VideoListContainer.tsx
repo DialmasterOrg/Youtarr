@@ -85,6 +85,9 @@ function VideoListContainer<IdType extends string | number>({
   const hasFilters = activeCount > 0;
   const hasSearch = Boolean(state.search);
   const hasContent = itemCount > 0;
+  // The open inline panel already shows every active filter. The mobile drawer
+  // covers the page, so its chips stay put rather than shifting the content behind it.
+  const showSummaryChips = hasFilters && (isMobile || !state.filterPanelOpen);
 
   return (
     <div data-testid="video-list-container">
@@ -116,7 +119,7 @@ function VideoListContainer<IdType extends string | number>({
         customFilters={customFilters}
       />
 
-      {activeCount > 0 && (
+      {showSummaryChips && (
         <div
           style={{ padding: isMobile ? '0 10px 6px 10px' : '0 16px 8px 16px' }}
         >

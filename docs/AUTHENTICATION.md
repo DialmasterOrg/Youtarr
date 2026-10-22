@@ -131,11 +131,12 @@ API Keys provide persistent authentication for external integrations like bookma
 ### Current Limitations
 - API keys can only download **individual videos**
 - Playlists, channels, and batch operations require the web UI
+- API keys cannot open the live-update WebSocket connection
 - Maximum of 20 active API keys per instance
 
 ### Creating API Keys
 
-1. Navigate to **Settings -> API Keys** in the web UI
+1. Navigate to **Settings -> API Keys & Bookmarklet** in the web UI
 2. Click **Create Key**
 3. Enter a descriptive name (e.g., "iPhone Shortcut", "Bookmarklet")
 4. **Important**: Copy and save the key immediately - it will not be shown again!
@@ -161,7 +162,7 @@ curl -X POST https://your-server.com/api/videos/download \
 ### API Key Management
 
 #### Via Web UI
-- View all keys in Settings -> API Keys
+- View all keys in Settings -> API Keys & Bookmarklet
 - Delete keys by clicking the trash icon
 - See last usage time for each key
 
@@ -189,6 +190,7 @@ For detailed API documentation and examples (bookmarklets, mobile shortcuts, Pyt
 - **Storage**: Database table `sessions`
 - **Browser storage**: Token persisted as `authToken` in `localStorage`
 - **Client header**: Token forwarded on each API request via `x-access-token`
+- **Live updates**: The WebSocket connection (`/ws`) carries the same token as a subprotocol (`youtarr.auth.<token>`) and is refused without an active session; an open connection is closed within 5 minutes of its session expiring or being revoked, and the web UI then confirms the session with the server and returns to the login screen
 
 ### Session Security
 - Sessions expire after 7 days

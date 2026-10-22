@@ -39,7 +39,7 @@ function createVideoSearchRoutes({ verifyToken, videoSearchModule }) {
    * /api/videos/search:
    *   post:
    *     summary: Search YouTube by free text
-   *     description: Search YouTube via yt-dlp and return a list of matching videos, sorted newest-to-oldest by publishedAt (entries without a timestamp sort last). Results are ephemeral; nothing is persisted. Each result includes a `status` field (`downloaded`, `missing`, or `never_downloaded`) describing the video's state in the local Video table.
+   *     description: Search YouTube (YouTube Data API when a key is configured, otherwise yt-dlp) and return matching videos in YouTube's relevance order. Live and upcoming streams are left out. Results are ephemeral; nothing is persisted. Each result includes a `status` field (`downloaded`, `deleted`, `missing`, or `never_downloaded`) describing the video's state in the local Video table, and `channelSubscribed` says whether the video's channel is an enabled subscription.
    *     tags: [Videos]
    *     requestBody:
    *       required: true
@@ -84,7 +84,8 @@ function createVideoSearchRoutes({ verifyToken, videoSearchModule }) {
    *                       viewCount: { type: integer, nullable: true }
    *                       status:
    *                         type: string
-   *                         enum: [downloaded, missing, never_downloaded]
+   *                         enum: [downloaded, deleted, missing, never_downloaded]
+   *                       channelSubscribed: { type: boolean, description: "True when the video's channel is an enabled subscription." }
    *                       databaseId: { type: integer, nullable: true, description: "Video row id when status is downloaded or missing." }
    *                       filePath: { type: string, nullable: true }
    *                       fileSize: { type: integer, nullable: true }

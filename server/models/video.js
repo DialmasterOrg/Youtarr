@@ -63,6 +63,23 @@ Video.init(
       allowNull: false,
       defaultValue: false,
     },
+    // See modules/videoRemovalState.js: why a removed row has no file.
+    // NULL on a removed row = removed before the reason was recorded.
+    removed_reason: {
+      type: DataTypes.STRING(32),
+      allowNull: true,
+      defaultValue: null,
+    },
+    removed_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null,
+    },
+    removed_detail: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      defaultValue: null,
+    },
     media_type: {
       type: DataTypes.STRING,
       allowNull: false,

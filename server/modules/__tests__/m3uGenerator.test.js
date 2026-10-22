@@ -115,6 +115,32 @@ describe('m3uGenerator', () => {
     }));
   });
 
+  describe('removed videos', () => {
+    const rowFor = (id, removal) => ({
+      filePath: `/youtube/Chan/${id}/${id}.mp4`, duration: 60, youTubeVideoName: id, youTubeChannelName: 'Chan', ...removal,
+    });
+
+    const contentsFor = async (removal) => {
+      Playlist.findByPk.mockResolvedValue({ id: 1, playlist_id: 'PL1', title: 'PL' });
+      PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'v1', position: 1, ignored: false }]);
+      Video.findOne.mockResolvedValue(rowFor('v1', removal));
+      await m3uGenerator.generatePlaylistM3U(1);
+      return fs.writeFileSync.mock.calls.find((c) => String(c[0]).endsWith('.m3u'))[1];
+    };
+
+    test('leaves out a video whose file was deleted', async () => {
+      expect(await contentsFor({ removed: true, removed_reason: 'user_deleted' })).not.toContain('v1.mp4');
+    });
+
+    test('leaves out a video removed before its reason was recorded', async () => {
+      expect(await contentsFor({ removed: true, removed_reason: null })).not.toContain('v1.mp4');
+    });
+
+    test('keeps a missing video, whose file may come back', async () => {
+      expect(await contentsFor({ removed: true, removed_reason: 'not_found' })).toContain('v1.mp4');
+    });
+  });
+
   test('includes audio-only entries via audioFilePath and prefers filePath when both exist', async () => {
     Playlist.findByPk.mockResolvedValue({ id: 1, playlist_id: 'PL1', title: 'Audio PL' });
     PlaylistVideo.findAll.mockResolvedValue([

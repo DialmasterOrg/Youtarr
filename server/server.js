@@ -115,6 +115,7 @@ const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
 const db = require('./db');
+const sessionAuth = require('./modules/sessionAuth');
 const databaseHealth = require('./modules/databaseHealthModule');
 const http = require('http');
 const bcrypt = require('bcrypt');
@@ -534,16 +535,7 @@ const initialize = async () => {
       }
 
       try {
-        // Look up session in database
-        const session = await db.Session.findOne({
-          where: {
-            session_token: token,
-            is_active: true,
-            expires_at: {
-              [db.Sequelize.Op.gt]: new Date()
-            }
-          }
-        });
+        const session = await sessionAuth.findActiveSession(token);
 
         if (!session) {
           return res.status(401).json({ error: 'Invalid or expired token' });
@@ -940,6 +932,13 @@ const initialize = async () => {
 };
 
 if (process.env.NODE_ENV !== 'test') {
+  // Log a rejected promise nothing handled instead of exiting: one failed
+  // request or background task must not take down running downloads and
+  // every other request with it (issue #921).
+  process.on('unhandledRejection', (reason) => {
+    logger.error({ err: reason }, 'Unhandled promise rejection');
+  });
+
   initialize();
 
   // Graceful shutdown handlers

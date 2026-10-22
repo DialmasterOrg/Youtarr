@@ -1,55 +1,18 @@
 export const MAX_CUSTOM_ARGS_LENGTH = 2000;
 const RATE_LIMIT_REGEX = /^\d+(\.\d+)?[KkMmGg]?$/;
 
-// KEEP IN SYNC: server/modules/download/customArgsParser.js
-export const BLOCKED_FLAGS = new Set<string>([
-  '--exec', '--exec-before-download', '--netrc-cmd',
-  '-o', '--output',
-  '-P', '--paths',
-  '--print-to-file',
-  '--external-downloader', '--downloader',
-  '--external-downloader-args', '--downloader-args',
-  '--config-location', '--config-locations',
-  '--batch-file',
-  '--load-info-json',
-  '--cookies', '--cookies-from-browser',
-  '--download-archive',
-  '--ffmpeg-location',
-  '--proxy',
-  '-4', '--force-ipv4', '-6', '--force-ipv6',
-  '--limit-rate',
-  '--sleep-requests',
-]);
-
-const ATTACHED_VALUE_SHORT_FLAGS = new Set<string>(['-o', '-P']);
+// Whether a custom-args option is allowed is decided ONLY by the server
+// (server/modules/download/ytdlpOptionTable.js); the client never carries that
+// list. The helpers below are table-free structural checks that give fast
+// as-you-type feedback for the common mistakes (stray words, bad rate format);
+// the authoritative allow/deny result arrives as `customArgsCheck` from
+// /getconfig and from the Validate / Save responses.
 
 /**
- * Mirror of server-side normalizeFlag in customArgsParser.js. Reduces a token
- * to its comparable flag name so `--exec=rm` and `-o/tmp/x` are caught.
- */
-export function normalizeFlag(token: string): string {
-  if (!token || !token.startsWith('-')) return token;
-
-  if (token.startsWith('--')) {
-    const eqIdx = token.indexOf('=');
-    return eqIdx >= 0 ? token.slice(0, eqIdx) : token;
-  }
-
-  if (token.length > 2) {
-    const shortHead = token.slice(0, 2);
-    if (ATTACHED_VALUE_SHORT_FLAGS.has(shortHead)) {
-      return shortHead;
-    }
-  }
-
-  return token;
-}
-
-/**
- * Lightweight shell-style tokenizer for inline validation. Mirrors the server
+ * Lightweight shell-style tokenizer for inline checks. Mirrors the server
  * tokenizer enough to avoid false positional errors for quoted values.
  */
-export function tokenizeForDenylistCheck(input: string): string[] {
+export function tokenizeArgs(input: string): string[] {
   if (!input.trim()) return [];
 
   const tokens: string[] = [];
@@ -95,14 +58,6 @@ export function tokenizeForDenylistCheck(input: string): string[] {
   return tokens;
 }
 
-export function getBlockedFlagInArgs(input: string): string | null {
-  for (const token of tokenizeForDenylistCheck(input)) {
-    const normalized = normalizeFlag(token);
-    if (BLOCKED_FLAGS.has(normalized)) return normalized;
-  }
-  return null;
-}
-
 /**
  * Validate the download rate-limit string against yt-dlp's --limit-rate format.
  * Empty input is valid (means "no limit"). Single source of truth shared by
@@ -120,14 +75,14 @@ export function validateRateLimit(value: string | null | undefined): string | nu
 }
 
 /**
- * Detect a stray positional token (non-flag NOT preceded by a flag).
- * Mirrors the server-side customArgsParser.validate heuristic so the user
- * sees the inline error before clicking Save or Validate.
+ * Detect a stray positional token (a non-flag NOT preceded by a flag), the
+ * common "typed a value where a flag goes" mistake. This is structural and
+ * needs no option table, so the client can flag it inline before Save.
  *
  * Returns the offending token if any, else null.
  */
 export function getPositionalTokenInArgs(input: string): string | null {
-  const tokens = tokenizeForDenylistCheck(input);
+  const tokens = tokenizeArgs(input);
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
     if (token.startsWith('-')) continue;

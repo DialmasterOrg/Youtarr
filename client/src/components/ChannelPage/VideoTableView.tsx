@@ -3,6 +3,7 @@ import {
   Checkbox,
   Typography,
   Chip,
+  Tooltip,
 } from '../ui';
 import { ArrowUpward as ArrowUpwardIcon, ArrowDownward as ArrowDownwardIcon, Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon, Delete as DeleteIcon } from '../../lib/icons';
 import ProtectionShieldButton from '../shared/ProtectionShieldButton';
@@ -10,7 +11,8 @@ import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml, formatAddedDateParts } from '../../utils/formatters';
-import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle } from '../../utils/videoStatus';
+import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle, isRemovedStatus } from '../../utils/videoStatus';
+import RemovalDescription, { REMOVAL_TOOLTIP_CLASS } from '../shared/RemovalDescription';
 import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
@@ -64,7 +66,7 @@ function VideoTableView({
     if (isDeleteMode) {
       return video.added && !video.removed && !isStillLive;
     }
-    return (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !video.youtube_removed && !isStillLive;
+    return (status === 'never_downloaded' || isRemovedStatus(status) || status === 'ignored') && !video.youtube_removed && !isStillLive;
   });
 
   return (
@@ -128,7 +130,7 @@ function VideoTableView({
             const status = getVideoStatus(video);
             const statusLabel = status === 'downloaded' ? 'Available' : getStatusLabel(status);
             const isStillLive = video.live_status && video.live_status !== 'was_live';
-            const isDownloadSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !video.youtube_removed && !isStillLive;
+            const isDownloadSelectable = (status === 'never_downloaded' || isRemovedStatus(status) || status === 'ignored') && !video.youtube_removed && !isStillLive;
             const isDeleteSelectable = video.added && !video.removed && !isStillLive;
             const isDownloadAllowed = selectionMode !== 'delete';
             const isDeleteAllowed = selectionMode !== 'download';
@@ -328,7 +330,7 @@ function VideoTableView({
                   />
                 </td>
                 <td style={{ whiteSpace: 'nowrap', padding: '8px 4px' }}>
-                  {(video.filePath || video.audioFilePath) ? (
+                  {!video.removed && (video.filePath || video.audioFilePath) ? (
                     <DownloadFormatIndicator
                       filePath={video.filePath}
                       audioFilePath={video.audioFilePath}
@@ -352,14 +354,20 @@ function VideoTableView({
                       />
                     )}
                     <WatchedChip watchedBy={video.watchedBy || []} />
-                    <Chip
-                      icon={getStatusIcon(status)}
-                      label={statusLabel}
-                      size="small"
-                      color={getStatusColor(status)}
-                      variant={getStatusChipVariant(status)}
-                      style={{ ...SHARED_THEMED_CHIP_SMALL_STYLE, ...getStatusChipStyle(status) }}
-                    />
+                    <Tooltip
+                      title={isRemovedStatus(status) ? <RemovalDescription row={video} /> : ''}
+                      enterTouchDelay={0}
+                      className={REMOVAL_TOOLTIP_CLASS}
+                    >
+                      <Chip
+                        icon={getStatusIcon(status)}
+                        label={statusLabel}
+                        size="small"
+                        color={getStatusColor(status)}
+                        variant={getStatusChipVariant(status)}
+                        style={{ ...SHARED_THEMED_CHIP_SMALL_STYLE, ...getStatusChipStyle(status) }}
+                      />
+                    </Tooltip>
                   </div>
                 </td>
               </tr>
