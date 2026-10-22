@@ -668,16 +668,30 @@ Unrated videos are always shown, since most YouTube videos carry no rating. On a
 ## External Access with API Keys
 Send videos to Youtarr from anywhere using API keys. This enables one-click downloads from browser bookmarklets, mobile shortcuts, and automation tools.
 
-> **Legacy key note**: Bookmarklet keys support single direct video downloads.
-> Constrained external keys use `/external-api/v1` for approved catalog access
-> and approval-backed video, channel, and deletion requests.
+> **Note**: API keys currently support **single video downloads only**. Playlists and channels require the web UI.
 
-### Review external requests
+### Create an API Key
 
-Open **Requests** in Youtarr's main navigation to review requests submitted by
-external clients. The page supports type, status, and requester filters, bounded
-paging, request/job details, loading and retry states, and explicit
-confirmation before approval or rejection.
+1. **Open Settings -> API Keys & Bookmarklet**
+   - Click "Settings" in the navigation menu, then open the **API Keys & Bookmarklet** page
+
+2. **Create a new key**
+   - Click "Create Key"
+   - Enter a descriptive name (e.g., "iPhone Shortcut", "Work Laptop")
+   - Click "Create"
+
+3. **Save the key immediately**
+   - The full key is shown only once
+   - Copy it to a secure location before closing the dialog
+
+### Versioned external API keys and the Requests page
+
+When the server runs with `EXTERNAL_API_ENABLED=true` (see [External API](EXTERNAL_API.md)), the same settings page gains an **External access keys** section below the bookmarklet keys. These keys use `/external-api/v1` for approved catalog access and approval-backed video, channel, and deletion requests. Bookmarklet keys cannot use `/external-api/v1`, and external keys cannot use the bookmarklet endpoint. With the variable unset, neither the section nor the Requests page appears.
+
+1. Click **Create external key**, name it, choose its permissions and content policy, and select the channels it may see.
+2. To change grants later, use the edit action on the key's card. Youtarr asks for confirmation before saving a change that widens what the key can see or request.
+
+Open **Requests** in the main navigation to review what external clients submitted. The page filters by status, requester, and type, and every approval or rejection is confirmed first. The **Show Requests in navigation** switch on the API keys page hides the link without turning the API off; the page stays reachable at `/requests`.
 
 - **Approve** rechecks the requester's current role and policy, its current
   channel grant, the enabled cached catalog entry, media type, rating, and
@@ -690,28 +704,7 @@ confirmation before approval or rejection.
   requester by default. Video deletion approval removes only the downloaded
   asset; it never removes the channel subscription.
 
-The Requests area uses the logged-in Youtarr session. External API keys cannot
-access the administrator queue or review actions.
-
-### Create an API Key
-
-1. **Open Settings -> API Keys & Bookmarklet**
-   - Click "Settings" in the navigation menu, then open the **API Keys & Bookmarklet** page
-
-2. **Create a new key**
-   - Click "Create Key"
-   - Enter a descriptive name (e.g., "iPhone Shortcut", "Work Laptop")
-   - Choose a legacy download key or an external role and exact content policy
-   - Click "Create"
-
-3. **Save the key immediately**
-   - The full key is shown only once
-   - Copy it to a secure location before closing the dialog
-
-4. **Grant channels for external keys**
-   - Use the edit action beside the key
-   - Search and select only the channels this integration may see
-   - Confirm any privilege increase and save
+The Requests page uses your Youtarr login (or no login when `AUTH_ENABLED=false`). External API keys cannot reach the review queue or its actions.
 
 ### Install a Browser Bookmarklet
 
