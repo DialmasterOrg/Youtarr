@@ -8,9 +8,12 @@ function createExternalRequestReviewRoutes({
   const router = express.Router();
   const requests = () => requestService;
 
-  const sessionOnly = (req, res, next) => {
-    if (req.authType !== 'session') {
-      return res.status(403).json({ error: 'Session authentication is required' });
+  // AUTH_ENABLED=false skips verifyToken's session check entirely (access is
+  // delegated to the deployment's proxy), so deny API keys rather than
+  // requiring a session; apikeys.js guards key management the same way.
+  const rejectApiKeys = (req, res, next) => {
+    if (req.headers['x-api-key'] || req.authType === 'api_key') {
+      return res.status(403).json({ error: 'API keys cannot review external requests' });
     }
     return next();
   };
@@ -50,9 +53,9 @@ function createExternalRequestReviewRoutes({
    *         schema: { type: string, enum: [video, channel, delete_video] }
    *     responses:
    *       200: { description: Paginated requests and safe requester filter metadata }
-   *       403: { description: Session authentication is required }
+   *       403: { description: API keys cannot review external requests }
    */
-  router.get('/api/external-requests', verifyToken, sessionOnly, async (req, res) => {
+  router.get('/api/external-requests', verifyToken, rejectApiKeys, async (req, res) => {
     try {
       return res.json(await requests().listAdminRequests(req.query));
     } catch (error) {
@@ -74,10 +77,10 @@ function createExternalRequestReviewRoutes({
    *         schema: { type: string, format: uuid }
    *     responses:
    *       200: { description: Safe requester, target, and job metadata }
-   *       403: { description: Session authentication is required }
+   *       403: { description: API keys cannot review external requests }
    *       404: { description: Request not found }
    */
-  router.get('/api/external-requests/:id', verifyToken, sessionOnly, async (req, res) => {
+  router.get('/api/external-requests/:id', verifyToken, rejectApiKeys, async (req, res) => {
     try {
       return res.json(await requests().getAdminRequest(req.params.id));
     } catch (error) {
@@ -109,7 +112,7 @@ function createExternalRequestReviewRoutes({
    *                 description: Channel requests only.
    *     responses:
    *       200: { description: Updated request }
-   *       403: { description: Session authentication is required }
+   *       403: { description: API keys cannot review external requests }
    *       404: { description: Request not found }
    *       409: { description: Request is not pending }
    *       429: { description: Review action rate limit exceeded }
@@ -117,7 +120,7 @@ function createExternalRequestReviewRoutes({
   router.post(
     '/api/external-requests/:id/approve',
     verifyToken,
-    sessionOnly,
+    rejectApiKeys,
     reviewLimiter,
     async (req, res) => {
       try {
@@ -154,7 +157,7 @@ function createExternalRequestReviewRoutes({
    *     responses:
    *       200: { description: Rejected request }
    *       400: { description: Invalid reason }
-   *       403: { description: Session authentication is required }
+   *       403: { description: API keys cannot review external requests }
    *       404: { description: Request not found }
    *       409: { description: Request is not pending }
    *       429: { description: Review action rate limit exceeded }
@@ -162,7 +165,7 @@ function createExternalRequestReviewRoutes({
   router.post(
     '/api/external-requests/:id/reject',
     verifyToken,
-    sessionOnly,
+    rejectApiKeys,
     reviewLimiter,
     async (req, res) => {
       try {

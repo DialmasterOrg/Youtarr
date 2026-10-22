@@ -58,6 +58,15 @@ function createExternalApiRoutes({
         requestId: req.id,
       });
     }
+    // RFC 8259 requires UTF-8 for JSON exchanged between systems. body-parser
+    // would otherwise decode other utf-* charsets and report a parse error.
+    const charset = /;\s*charset\s*=\s*"?([^";\s]+)/i.exec(req.get('content-type') || '')?.[1];
+    if (charset && charset.toLowerCase() !== 'utf-8') {
+      return sendExternalError(res, 415, 'Request body must be UTF-8 encoded JSON', {
+        code: 'unsupported_media_type',
+        requestId: req.id,
+      });
+    }
     return externalApiJsonParser(req, res, (error) => {
       if (!error) return next();
       if (error.type === 'entity.too.large') {
