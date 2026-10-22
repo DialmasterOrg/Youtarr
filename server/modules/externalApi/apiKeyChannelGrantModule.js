@@ -1,6 +1,6 @@
 const { Op } = require('sequelize');
-const { sequelize } = require('../db');
-const { ApiKey, ApiKeyChannelGrant, Channel } = require('../models');
+const { sequelize } = require('../../db');
+const { ApiKey, ApiKeyChannelGrant, Channel } = require('../../models');
 
 class ChannelGrantValidationError extends Error {
   constructor(message) {

@@ -1,5 +1,5 @@
-jest.mock('../../db', () => ({ sequelize: { query: jest.fn() } }));
-const { sequelize } = require('../../db');
+jest.mock('../../../db', () => ({ sequelize: { query: jest.fn() } }));
+const { sequelize } = require('../../../db');
 const { attachRequestStatuses } = require('../externalCatalogRequests');
 
 beforeEach(() => jest.clearAllMocks());

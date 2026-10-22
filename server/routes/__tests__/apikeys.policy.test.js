@@ -6,7 +6,7 @@ jest.mock('../../modules/apiKeyModule', () => ({
   regenerateApiKey: jest.fn(),
   serializeApiKey: jest.fn((key) => ({ id: key.id, name: key.name, key_prefix: key.key_prefix })),
 }));
-jest.mock('../../modules/apiKeyChannelGrantModule', () => ({
+jest.mock('../../modules/externalApi/apiKeyChannelGrantModule', () => ({
   getChannelGrants: jest.fn(),
   replaceChannelGrants: jest.fn(),
 }));
@@ -19,7 +19,7 @@ jest.mock('../../db', () => ({
 const express = require('express');
 const request = require('supertest');
 const apiKeyModule = require('../../modules/apiKeyModule');
-const grantModule = require('../../modules/apiKeyChannelGrantModule');
+const grantModule = require('../../modules/externalApi/apiKeyChannelGrantModule');
 const createApiKeyRoutes = require('../apikeys');
 
 function createApp(authType = 'session') {

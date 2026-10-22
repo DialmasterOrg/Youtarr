@@ -150,6 +150,27 @@ describe('external API capabilities', () => {
       .expect(413);
   });
 
+  test.each(['utf-16', 'iso-8859-1'])('rejects JSON bodies in the %s charset as 415', async (charset) => {
+    const { app } = makeApp({ key: externalKey() });
+    const response = await request(app).post('/external-api/v1/requests/videos')
+      .set('x-api-key', 'test-key')
+      .set('Content-Type', `application/json; charset=${charset}`)
+      .send('{}')
+      .expect(415);
+
+    expect(response.body.error.code).toBe('unsupported_media_type');
+  });
+
+  test('accepts an explicit UTF-8 charset', async () => {
+    const requestService = { createVideoRequest: jest.fn().mockResolvedValue({ outcome: 'created', request: {} }) };
+    const { app } = makeApp({ key: externalKey(), requestService });
+    await request(app).post('/external-api/v1/requests/videos')
+      .set('x-api-key', 'test-key')
+      .set('Content-Type', 'application/json; charset=UTF-8')
+      .send('{}')
+      .expect(202);
+  });
+
   test('keeps unknown v1 paths inside the external JSON contract', async () => {
     const { app } = makeApp({ key: externalKey() });
     const response = await request(app)

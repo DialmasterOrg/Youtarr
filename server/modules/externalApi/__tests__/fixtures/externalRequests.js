@@ -33,6 +33,7 @@ function fixture(overrides = {}) {
       findOne: jest.fn().mockResolvedValue(null),
       findByPk: jest.fn().mockResolvedValue(created),
       findAndCountAll: jest.fn().mockResolvedValue({ rows: [], count: 0 }),
+      findAll: jest.fn().mockResolvedValue([]),
     },
     ApiKeyChannelGrant: {
       findOne: jest.fn().mockResolvedValue({ id: 1 }),
@@ -82,14 +83,18 @@ function fixture(overrides = {}) {
   const sequelize = {
     transaction: jest.fn(async (callback) => callback(transaction)),
   };
-  const executor = jest.fn().mockResolvedValue(undefined);
+  const downloader = jest.fn(async (_jobData, { jobId }) => jobId);
   const channelProvisioner = overrides.channelProvisioner || {
     getChannelInfo: jest.fn().mockResolvedValue({ channel_id: 'UC1234567890123456789012' }),
   };
   const videoDeleter = overrides.videoDeleter || {
-    deleteVideosByYoutubeIds: jest.fn().mockResolvedValue({ success: true, failed: [] }),
-    deleteVideoById: jest.fn().mockResolvedValue({ success: true }),
+    deleteVideos: jest.fn(async (ids) => ({ success: true, deleted: ids, failed: [] })),
   };
+  const storageGuard = overrides.storageGuard || {
+    isPausedError: jest.fn((error) => error?.code === 'DOWNLOADS_PAUSED'),
+  };
+  const jobLookup = overrides.jobLookup || jest.fn(() => null);
+  const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
   const quotaService = overrides.quotaService || {
     reserveWrite: jest.fn(async () => ({
       id: 4,
@@ -137,13 +142,16 @@ function fixture(overrides = {}) {
   };
   const service = createExternalRequestService({
     models,
-    executor: overrides.executor || executor,
+    downloader: overrides.downloader || downloader,
     channelProvisioner,
     videoDeleter,
+    storageGuard,
+    jobLookup,
+    logger,
     now: overrides.now || (() => timestamp),
     sequelize: overrides.sequelize || sequelize,
     quotaService,
-    workLimiter: overrides.workLimiter,
+    workLimiter: overrides.workLimiter || { run: (work) => work() },
   });
   const key = {
     id: 4,
@@ -158,8 +166,8 @@ function fixture(overrides = {}) {
     ...overrides.key,
   };
   return {
-    service, models, executor, key, created, sequelize, transaction,
-    channelProvisioner, videoDeleter, quotaService,
+    service, models, downloader: overrides.downloader || downloader, key, created, sequelize,
+    transaction, channelProvisioner, videoDeleter, quotaService, storageGuard, jobLookup, logger,
   };
 }
 

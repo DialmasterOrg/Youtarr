@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 const { createExternalApiAuth } = require('../middleware/externalApiAuth');
 const { createExternalApiRoutes } = require('../routes/externalApi');
-const { CatalogError, pagination: validatePagination } = require('../modules/externalPagination');
+const { CatalogError, pagination: validatePagination } = require('../modules/externalApi/externalPagination');
 
 const SYNTHETIC_API_KEY = 'plinx-synthetic-key';
 const LANDSCAPE_PNG = Buffer.from(

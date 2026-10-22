@@ -2,8 +2,8 @@ const express = require('express');
 const {
   sendExternalError,
   setExternalSecurityHeaders,
-} = require('../modules/externalApiResponse');
-const { scopesForExternalKey } = require('../modules/externalPermissions');
+} = require('../modules/externalApi/externalApiResponse');
+const { scopesForExternalKey } = require('../modules/externalApi/externalPermissions');
 
 function createExternalApiRoutes({
   externalApiAuth,
@@ -54,6 +54,15 @@ function createExternalApiRoutes({
     }
     if (!req.is('application/json')) {
       return sendExternalError(res, 415, 'Content-Type must be application/json', {
+        code: 'unsupported_media_type',
+        requestId: req.id,
+      });
+    }
+    // RFC 8259 requires UTF-8 for JSON exchanged between systems. body-parser
+    // would otherwise decode other utf-* charsets and report a parse error.
+    const charset = /;\s*charset\s*=\s*"?([^";\s]+)/i.exec(req.get('content-type') || '')?.[1];
+    if (charset && charset.toLowerCase() !== 'utf-8') {
+      return sendExternalError(res, 415, 'Request body must be UTF-8 encoded JSON', {
         code: 'unsupported_media_type',
         requestId: req.id,
       });

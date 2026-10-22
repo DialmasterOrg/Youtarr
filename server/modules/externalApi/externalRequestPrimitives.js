@@ -8,7 +8,6 @@ const REQUEST_STATUSES = [
 ];
 const ACTIVE_STATUSES = ['pending', 'approved', 'processing'];
 const VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
-const AUXILIARY_RECOVERY_DELAY_MS = 5 * 60 * 1000;
 const paginationHelpers = require('./externalPagination');
 
 class RequestError extends Error {
@@ -17,16 +16,6 @@ class RequestError extends Error {
     this.name = 'RequestError';
     this.status = status;
     this.code = code;
-  }
-}
-
-function rethrowWorkLimit(error) {
-  if (error?.name === 'ExternalWorkLimitError') {
-    throw new RequestError(
-      'External API work capacity is temporarily unavailable',
-      503,
-      'work_queue_full'
-    );
   }
 }
 
@@ -157,6 +146,7 @@ function adminDto(record, catalogVideo = null) {
   const job = value.job || null;
   return {
     ...dto(record),
+    approvalSource: value.approval_source || null,
     requester: key ? {
       id: key.id,
       name: key.name,
@@ -187,8 +177,8 @@ function adminDto(record, catalogVideo = null) {
 }
 
 module.exports = {
-  REQUEST_STATUSES, ACTIVE_STATUSES, VIDEO_ID_PATTERN, AUXILIARY_RECOVERY_DELAY_MS,
-  RequestError, rethrowWorkLimit, requireCurrentAutoApproval, parseInteger,
+  REQUEST_STATUSES, ACTIVE_STATUSES, VIDEO_ID_PATTERN,
+  RequestError, requireCurrentAutoApproval, parseInteger,
   requestPagination, requestPaginationDto, normalizeIdempotencyKey, normalizeChannelUrl,
   dto, normalizeStoredKey, sanitizeReason, isUniqueConstraintError, adminDto,
 };

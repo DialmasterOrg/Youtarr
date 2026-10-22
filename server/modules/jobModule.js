@@ -1,4 +1,4 @@
-const { v4: uuidv4 } = require('uuid');
+const { v4: uuidv4, validate: uuidValidate } = require('uuid');
 const fs = require('fs');
 const fsPromises = fs.promises;
 const path = require('path');
@@ -1217,6 +1217,9 @@ class JobModule {
   async addJob(job, preferredJobId = null) {
     // Trusted internal callers may supply a stable UUID so enqueueing can be
     // retried safely across an external-request persistence boundary.
+    if (preferredJobId != null && !uuidValidate(preferredJobId)) {
+      throw new Error('Preferred job id must be a UUID');
+    }
     const jobId = preferredJobId || uuidv4();
     if (isSpecificUrlDownloadJob(job.jobType) && Array.isArray(job.data?.urls)) {
       const admission = videoActivity.claim(jobId, job.data.urls);

@@ -1,13 +1,13 @@
 jest.mock('../../models/apikey', () => ({
   count: jest.fn(), create: jest.fn(), findAll: jest.fn(), findByPk: jest.fn(),
 }));
-jest.mock('../../modules/apiKeyChannelGrantModule', () => ({
+jest.mock('../externalApi/apiKeyChannelGrantModule', () => ({
   getEffectiveChannelGrantCounts: jest.fn(),
 }));
 jest.mock('../../logger', () => ({ info: jest.fn(), debug: jest.fn() }));
 
 const ApiKey = require('../../models/apikey');
-const { getEffectiveChannelGrantCounts } = require('../../modules/apiKeyChannelGrantModule');
+const { getEffectiveChannelGrantCounts } = require('../externalApi/apiKeyChannelGrantModule');
 const apiKeyModule = require('../apiKeyModule');
 
 describe('external API key policies', () => {

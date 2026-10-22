@@ -1,11 +1,11 @@
-jest.mock('../../db', () => ({
+jest.mock('../../../db', () => ({
   sequelize: { query: jest.fn() },
 }));
-jest.mock('../configModule', () => ({
+jest.mock('../../configModule', () => ({
   getImagePath: jest.fn(() => '/safe/images'),
 }));
 
-const { sequelize } = require('../../db');
+const { sequelize } = require('../../../db');
 const catalog = require('../externalCatalogService');
 
 const key = (overrides = {}) => ({

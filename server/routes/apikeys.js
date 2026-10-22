@@ -9,7 +9,7 @@ const express = require('express');
 module.exports = function createApiKeyRoutes({ verifyToken }) {
   const router = express.Router();
   const apiKeyModule = require('../modules/apiKeyModule');
-  const apiKeyChannelGrantModule = require('../modules/apiKeyChannelGrantModule');
+  const apiKeyChannelGrantModule = require('../modules/externalApi/apiKeyChannelGrantModule');
   const { sequelize } = require('../db');
 
   const isPolicyValidationError = (error) =>

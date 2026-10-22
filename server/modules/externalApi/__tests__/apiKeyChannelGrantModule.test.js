@@ -1,10 +1,10 @@
-jest.mock('../../db', () => ({
+jest.mock('../../../db', () => ({
   sequelize: {
     transaction: jest.fn(async (callback) => callback({ id: 'transaction', LOCK: { UPDATE: 'UPDATE' } })),
   },
 }));
 const { Op } = require('sequelize');
-jest.mock('../../models', () => ({
+jest.mock('../../../models', () => ({
   ApiKey: { findByPk: jest.fn() },
   ApiKeyChannelGrant: {
     findAll: jest.fn(),
@@ -14,7 +14,7 @@ jest.mock('../../models', () => ({
   Channel: { count: jest.fn() },
 }));
 
-const { ApiKey, ApiKeyChannelGrant, Channel } = require('../../models');
+const { ApiKey, ApiKeyChannelGrant, Channel } = require('../../../models');
 const grants = require('../apiKeyChannelGrantModule');
 
 describe('API key channel grants', () => {

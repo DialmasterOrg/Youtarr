@@ -80,7 +80,6 @@ const pinoConfig = {
       'embyApiKey',
       'youtubeApiKey',
       'apiKey',
-      'key',
       'key_hash',
       'idempotencyKey',
       'req.body.apiKey',

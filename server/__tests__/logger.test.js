@@ -107,7 +107,7 @@ describe('logger.js', () => {
       expect(config.redact.paths).toContain('plexAuthToken');
       expect(config.redact.paths).toContain('session_token');
       expect(config.redact.paths).toContain('plexApiKey');
-      expect(config.redact.paths).toContain('key');
+      expect(config.redact.paths).not.toContain('key');
       expect(config.redact.paths).toContain('key_hash');
       expect(config.redact.paths).toContain('req.body.idempotencyKey');
     });

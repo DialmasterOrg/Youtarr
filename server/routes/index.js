@@ -22,7 +22,7 @@ const createLogRoutes = require('./logs');
 const createVideoTrashRoutes = require('./videoTrash');
 const createExternalRequestReviewRoutes = require('./externalRequests');
 const { createExternalApiRoutes } = require('./externalApi');
-const { sendExternalError } = require('../modules/externalApiResponse');
+const { sendExternalError } = require('../modules/externalApi/externalApiResponse');
 const videoMetadataModule = require('../modules/videoMetadataModule');
 const videoTrashModule = require('../modules/videoTrashModule');
 const videoOembedEnricher = require('../modules/videoOembedEnricher');
@@ -49,12 +49,12 @@ const cookieDetails = require('../modules/cookieDetails');
 const cookieTest = require('../modules/cookieTest');
 const logger = require('../logger');
 const logFilesModule = require('../modules/logFilesModule');
-const externalCatalogService = require('../modules/externalCatalogService');
-const externalThumbnailProxy = require('../modules/externalThumbnailProxy');
-const { sharedExternalWorkLimiter } = require('../modules/externalWorkLimiter');
-const { createExternalRequestService } = require('../modules/externalRequestService');
-const { createExternalQuotaService } = require('../modules/externalQuotaService');
-const { isExternalApiEnabled } = require('../modules/externalApiConfig');
+const externalCatalogService = require('../modules/externalApi/externalCatalogService');
+const externalThumbnailProxy = require('../modules/externalApi/externalThumbnailProxy');
+const { sharedExternalWorkLimiter } = require('../modules/externalApi/externalWorkLimiter');
+const { createExternalRequestService } = require('../modules/externalApi/externalRequestService');
+const { createExternalQuotaService } = require('../modules/externalApi/externalQuotaService');
+const { isExternalApiEnabled } = require('../modules/externalApi/externalApiConfig');
 
 /**
  * Registers all route modules with the Express app
@@ -62,7 +62,9 @@ const { isExternalApiEnabled } = require('../modules/externalApiConfig');
  * @param {Object} deps - Dependencies to inject into route modules
  */
 function registerRoutes(app, deps) {
-  const externalRequestService = createExternalRequestService();
+  // server.js owns the request service so it can wire the background
+  // executor to job completion; standalone callers get their own.
+  const externalRequestService = deps.externalRequestService || createExternalRequestService();
   const externalQuotaService = createExternalQuotaService();
   const {
     verifyToken,
