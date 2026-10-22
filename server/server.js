@@ -17,6 +17,7 @@ const { isAuthConfigured } = require('./modules/authState');
 const STARTUP_TAB_COUNT_REFRESH_DELAY_MS = 2 * 60 * 1000;
 const { createExternalApiAuth } = require('./middleware/externalApiAuth');
 const { sendExternalError } = require('./modules/externalApi/externalApiResponse');
+const { isExternalApiPath } = require('./modules/externalApi/externalApiConfig');
 const app = express();
 app.set('trust proxy', parseTrustProxySetting(process.env.TRUST_PROXY));
 if (process.env.TRUST_PROXY === undefined || process.env.TRUST_PROXY === '') {
@@ -57,7 +58,7 @@ app.use(pinoHttp({
   genReqId: (req) => {
     // External API envelopes promise a server-generated requestId, so the
     // public namespace never adopts a caller-supplied correlation header.
-    const existingId = req.path.startsWith('/external-api') ? null : req.id || req.headers['x-request-id'];
+    const existingId = isExternalApiPath(req) ? null : req.id || req.headers['x-request-id'];
     if (existingId) return existingId;
     return require('crypto').randomUUID();
   },
@@ -97,13 +98,13 @@ app.use(pinoHttp({
 
 const defaultJsonParser = express.json();
 app.use((req, res, next) => {
-  if (req.path.startsWith('/external-api')) return next();
+  if (isExternalApiPath(req)) return next();
   return defaultJsonParser(req, res, next);
 });
 // Express otherwise renders malformed/oversized JSON as an HTML error. Keep
 // every response in the public external namespace on the versioned envelope.
 app.use((error, req, res, next) => {
-  if (!req.path.startsWith('/external-api')) return next(error);
+  if (!isExternalApiPath(req)) return next(error);
   if (error?.type === 'entity.too.large') {
     return sendExternalError(res, 413, 'Request body is too large', {
       requestId: req.id,
@@ -432,7 +433,7 @@ const initialize = async () => {
           errorMessage = 'A database error has occurred. Please check the logs for details.';
         }
 
-        if (req.path.startsWith('/external-api')) {
+        if (isExternalApiPath(req)) {
           return sendExternalError(res, 503, 'External API is temporarily unavailable', {
             code: 'service_unavailable',
             requestId: req.id,
@@ -853,7 +854,7 @@ const initialize = async () => {
     });
 
     app.use((error, req, res, next) => {
-      if (!req.path.startsWith('/external-api')) return next(error);
+      if (!isExternalApiPath(req)) return next(error);
       req.log?.error({ err: error }, 'Unhandled external API request error');
       return sendExternalError(res, 500, 'External API request failed', {
         requestId: req.id,

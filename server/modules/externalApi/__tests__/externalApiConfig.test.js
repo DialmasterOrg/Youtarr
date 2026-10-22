@@ -1,6 +1,6 @@
 'use strict';
 
-const { isExternalApiEnabled } = require('../externalApiConfig');
+const { isExternalApiEnabled, isExternalApiPath } = require('../externalApiConfig');
 
 describe('isExternalApiEnabled', () => {
   const originalValue = process.env.EXTERNAL_API_ENABLED;
@@ -34,4 +34,20 @@ describe('isExternalApiEnabled', () => {
     process.env.EXTERNAL_API_ENABLED = 'true';
     expect(isExternalApiEnabled()).toBe(true);
   });
+});
+
+describe('isExternalApiPath', () => {
+  test.each(['/external-api', '/external-api/v1/requests', '/EXTERNAL-API/v1/requests', '/External-Api/v1'])(
+    'matches %p like the Express mount does',
+    (path) => {
+      expect(isExternalApiPath({ path })).toBe(true);
+    }
+  );
+
+  test.each(['/api/videos', '/external-apis', '/api/external-api/v1', ''])(
+    'does not match %p',
+    (path) => {
+      expect(isExternalApiPath({ path })).toBe(false);
+    }
+  );
 });
