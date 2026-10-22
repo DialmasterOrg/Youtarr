@@ -123,6 +123,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
           : normalizedValue;
       onChange?.({ target: { value: outputValue, name } } as unknown as SelectChangeEvent<string>);
     };
+
     return (
       <SelectPrimitive.Root
         value={primitiveValue}
