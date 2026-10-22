@@ -264,7 +264,7 @@ function createExternalApiRoutes({
    * /external-api/v1/videos/{youtubeId}:
    *   get:
    *     summary: Read full curated metadata for one eligible cached video
-   *     description: Returns the catalog identity and status plus the metadata used by Youtarr's video detail modal.
+   *     description: Returns the catalog identity and status plus the metadata used by Youtarr's video detail modal. Metadata comes only from Youtarr's local cache and is null when nothing is cached; this endpoint never contacts YouTube.
    *     tags: [External API]
    *     security: [{ ExternalApiKeyAuth: [] }]
    *     parameters:

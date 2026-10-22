@@ -4,8 +4,13 @@ jest.mock('../../../db', () => ({
 jest.mock('../../configModule', () => ({
   getImagePath: jest.fn(() => '/safe/images'),
 }));
+jest.mock('../../../models', () => ({
+  Channel: { findOne: jest.fn() },
+  ApiKeyChannelGrant: {},
+}));
 
 const { sequelize } = require('../../../db');
+const { Channel, ApiKeyChannelGrant } = require('../../../models');
 const catalog = require('../externalCatalogService');
 
 const key = (overrides = {}) => ({
@@ -20,6 +25,7 @@ describe('external cached catalog', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     sequelize.query.mockResolvedValue([]);
+    Channel.findOne.mockResolvedValue(null);
   });
 
   test('lists only granted enabled channels with SQL paging and policy-filtered counts', async () => {
@@ -27,8 +33,8 @@ describe('external cached catalog', () => {
       .mockResolvedValueOnce([{ total: 1 }])
       .mockResolvedValueOnce([{
         id: 8, channel_id: 'UCsafe', title: 'Safe Channel', description: 'Description',
-        sub_folder: 'Kids', lastFetchedByTab: '{"video":"2026-07-20T00:00:00.000Z"}',
-        videoCount: '12', downloadedCount: '3',
+        sub_folder: 'Kids', last_fetched_by_tab: '{"video":"2026-07-20T00:00:00.000Z"}',
+        video_count: '12', downloaded_count: '3',
       }]);
     const result = await catalog.listChannels(key(), {
       page: '2', pageSize: '10', search: 'safe', sortBy: 'videoCount', sortOrder: 'desc',
@@ -40,6 +46,7 @@ describe('external cached catalog', () => {
       thumbnailUrl: '/external-api/v1/assets/channels/8/thumbnail',
       videoCount: 12,
       downloadedCount: 3,
+      lastFetchedAt: '2026-07-20T00:00:00.000Z',
     }));
     expect(result.pagination).toEqual({
       page: 2, pageSize: 10, total: 1, totalPages: 1, nextCursor: null,
@@ -49,6 +56,10 @@ describe('external cached catalog', () => {
     expect(listSql).toContain('INNER JOIN api_key_channel_grants');
     expect(listSql).toContain('g.api_key_id = :keyId');
     expect(listSql).toContain('LIMIT :pageSize OFFSET :offset');
+    expect(listSql).toContain('ORDER BY video_count DESC, c.id ASC');
+    expect(listSql).toContain('POSITION(:search IN LOWER(COALESCE(c.title, c.uploader, \'\'))) > 0');
+    expect(listSql).not.toContain('LOCATE(');
+    expect(listSql).not.toMatch(/ AS [a-z]+[A-Z]/);
     expect(listSql).toContain(
       'COALESCE(NULLIF(v.normalized_rating, \'\'), NULLIF(c.default_rating, \'\'))'
     );
@@ -64,15 +75,15 @@ describe('external cached catalog', () => {
   });
 
   test('enforces grants, media type, rating, duration, date, and deterministic SQL paging', async () => {
+    Channel.findOne.mockResolvedValueOnce({
+      id: 8, channel_id: 'UCsafe', title: 'Safe Channel', uploader: null,
+      lastFetchedByTab: '{"short":"2026-07-20T00:00:00.000Z"}',
+    });
     sequelize.query
-      .mockResolvedValueOnce([{
-        id: 8, channel_id: 'UCsafe', title: 'Safe Channel',
-        lastFetchedByTab: '{"short":"2026-07-20T00:00:00.000Z"}',
-      }])
       .mockResolvedValueOnce([{ total: 1 }])
       .mockResolvedValueOnce([{
         youtube_id: 'abc', title: 'Allowed', thumbnail: 'https://i.ytimg.com/vi/abc/hqdefault.jpg',
-        publishedAt: '2026-07-10T00:00:00.000Z', published_at_source: 'exact',
+        published_at: '2026-07-10T00:00:00.000Z', published_at_source: 'exact',
         duration: 90, media_type: 'short', description: null, downloaded_id: null,
         downloaded_removed: null, rating: 'TV-Y',
       }])
@@ -87,25 +98,28 @@ describe('external cached catalog', () => {
     );
 
     expect(result.data[0]).toEqual(expect.objectContaining({
-      youtubeId: 'abc', rating: 'TV-Y', channelId: 'UCsafe', mediaType: 'short',
+      youtubeId: 'abc', rating: 'TV-Y', channelId: 'UCsafe', channelTitle: 'Safe Channel',
+      mediaType: 'short', publishedAt: '2026-07-10T00:00:00.000Z',
       thumbnailUrl: '/external-api/v1/assets/videos/abc/thumbnail',
       isDownloaded: false, isRequested: true, requestStatus: 'processing',
     }));
     expect(result.isFullyIndexed).toBe(true);
-    const channelSql = sequelize.query.mock.calls[0][0];
-    const listSql = sequelize.query.mock.calls[2][0];
-    expect(channelSql).toContain('INNER JOIN api_key_channel_grants');
-    expect(channelSql).toContain('c.enabled = true');
-    expect(channelSql).toContain('c.terminated_at IS NULL');
+    expect(Channel.findOne).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 8, enabled: true, terminated_at: null },
+      include: [expect.objectContaining({
+        model: ApiKeyChannelGrant, required: true, where: { api_key_id: 4 },
+      })],
+    }));
+    const listSql = sequelize.query.mock.calls[1][0];
     expect(listSql).toContain('cv.media_type = :mediaType');
     expect(listSql).toContain('cv.duration >= :minDuration');
     expect(listSql).toContain('cv.duration <= :maxDuration');
     expect(listSql).toContain('cv.published_at >= :dateFrom');
     expect(listSql).toContain(
-      'ORDER BY COALESCE(cv.published_at, \'\') DESC, c.id ASC, cv.youtube_id ASC'
+      'ORDER BY COALESCE(cv.published_at, \'\') DESC, c.id ASC, cv.youtube_id ASC, cv.id ASC'
     );
     expect(listSql).toContain('LIMIT :fetchLimit OFFSET :offset');
-    expect(sequelize.query.mock.calls[3][1].replacements).toMatchObject({ keyId: 4, youtubeIds: ['abc'] });
+    expect(sequelize.query.mock.calls[2][1].replacements).toMatchObject({ keyId: 4, youtubeIds: ['abc'] });
   });
 
   test('returns the complete deterministic cross-channel catalog beyond the former three-page cap', async () => {
@@ -115,7 +129,7 @@ describe('external cached catalog', () => {
         youtube_id: 'abcdefghijk',
         title: 'Safe candidate',
         thumbnail: '/cached/private-thumbnail.jpg',
-        publishedAt: '2026-07-10T00:00:00.000Z',
+        published_at: '2026-07-10T00:00:00.000Z',
         published_at_source: 'exact',
         duration: 120,
         media_type: 'video',
@@ -153,7 +167,7 @@ describe('external cached catalog', () => {
     expect(listSql).toContain('INNER JOIN api_key_channel_grants');
     expect(listSql).toContain('c.terminated_at IS NULL');
     expect(listSql).toContain(
-      'ORDER BY COALESCE(cv.published_at, \'\') DESC, c.id ASC, cv.youtube_id ASC'
+      'ORDER BY COALESCE(cv.published_at, \'\') DESC, c.id ASC, cv.youtube_id ASC, cv.id ASC'
     );
     expect(listSql).toContain('LIMIT :fetchLimit OFFSET :offset');
     expect(sequelize.query.mock.calls[1][1].replacements).toMatchObject({
@@ -202,7 +216,7 @@ describe('external cached catalog', () => {
     const first = {
       youtube_id: 'aaaaaaaaaaa',
       title: 'Same title',
-      publishedAt: null,
+      published_at: null,
       published_at_source: 'approximate',
       duration: null,
       media_type: 'video',
@@ -210,6 +224,7 @@ describe('external cached catalog', () => {
       downloaded_removed: null,
       rating: 'TV-Y',
       channel_database_id: 8,
+      channel_video_id: 70,
       channel_id: 'UCsafe',
       channel_title: 'Safe Channel',
       request_status: null,
@@ -219,6 +234,7 @@ describe('external cached catalog', () => {
       ...first,
       youtube_id: 'bbbbbbbbbbb',
       channel_database_id: 9,
+      channel_video_id: 71,
       channel_id: 'UCother',
       channel_title: 'Other Channel',
     };
@@ -250,6 +266,10 @@ describe('external cached catalog', () => {
     const seekSql = sequelize.query.mock.calls[1][0];
     expect(seekSql).toContain('COALESCE(cv.published_at, \'\') < :cursorSortValue');
     expect(seekSql).toContain('c.id > :cursorChannelDatabaseId');
+    expect(seekSql).toContain('cv.id > :cursorChannelVideoId');
+    expect(sequelize.query.mock.calls[1][1].replacements).toMatchObject({
+      cursorChannelDatabaseId: 8, cursorYoutubeId: 'aaaaaaaaaaa', cursorChannelVideoId: 70,
+    });
     expect(seekSql).not.toContain('OFFSET :offset');
 
     await expect(catalog.listVideos(key(), {
@@ -263,6 +283,16 @@ describe('external cached catalog', () => {
     })).rejects.toThrow('cursor is invalid');
     await expect(catalog.listVideos(key(), {
       cursor: Buffer.from(JSON.stringify({ v: 1, page: 2 })).toString('base64url'),
+    })).rejects.toThrow('cursor is invalid');
+    const legacyCursor = JSON.parse(
+      Buffer.from(firstPage.pagination.nextCursor, 'base64url').toString('utf8')
+    );
+    delete legacyCursor.channelVideoId;
+    legacyCursor.v = 2;
+    await expect(catalog.listVideos(key(), {
+      pageSize: '1',
+      status: 'all',
+      cursor: Buffer.from(JSON.stringify(legacyCursor)).toString('base64url'),
     })).rejects.toThrow('cursor is invalid');
     await expect(catalog.listVideos(key(), {
       cursor: 'not-a-cursor',
@@ -281,6 +311,7 @@ describe('external cached catalog', () => {
     await expect(catalog.listChannelVideos(key(), '8', { tabType: 'shorts' }))
       .rejects.toMatchObject({ status: 403 });
     expect(sequelize.query).not.toHaveBeenCalled();
+    expect(Channel.findOne).not.toHaveBeenCalled();
   });
 
   test('keeps TV-Y7 in the rated policy branch when unrated content is allowed', async () => {
@@ -296,7 +327,6 @@ describe('external cached catalog', () => {
   });
 
   test('returns the same 404 for missing and ungranted channels', async () => {
-    sequelize.query.mockResolvedValueOnce([]);
     await expect(catalog.listChannelVideos(key(), '99', {}))
       .rejects.toMatchObject({ status: 404, message: 'Channel not found' });
   });
@@ -305,7 +335,7 @@ describe('external cached catalog', () => {
     sequelize.query.mockResolvedValueOnce([{
       youtube_id: 'abcdefghijk',
       title: 'Detailed video',
-      publishedAt: '2026-07-10T00:00:00.000Z',
+      published_at: '2026-07-10T00:00:00.000Z',
       published_at_source: 'exact',
       duration: 120,
       media_type: 'video',
@@ -314,8 +344,8 @@ describe('external cached catalog', () => {
       downloaded_id: 42,
       downloaded_removed: false,
       last_downloaded_at: '2026-07-20T12:00:00.000Z',
-      fileSize: '12345',
-      audioFileSize: '678',
+      file_size: '12345',
+      audio_file_size: '678',
       protected: true,
       rating_source: 'manual',
       video_resolution: '1920x1080',
@@ -326,7 +356,7 @@ describe('external cached catalog', () => {
     }])
       .mockResolvedValueOnce([{ youtube_id: 'abcdefghijk', status: 'approved' }]);
     const metadataService = {
-      getVideoMetadata: jest.fn().mockResolvedValue({
+      getCachedVideoMetadata: jest.fn().mockResolvedValue({
         description: 'full description',
         viewCount: 1000,
         likeCount: 50,
@@ -340,6 +370,7 @@ describe('external cached catalog', () => {
     expect(result).toMatchObject({
       youtubeId: 'abcdefghijk',
       thumbnailUrl: '/external-api/v1/assets/videos/abcdefghijk/thumbnail',
+      publishedAt: '2026-07-10T00:00:00.000Z',
       isDownloaded: true,
       isRequested: true,
       requestStatus: 'approved',
@@ -356,17 +387,17 @@ describe('external cached catalog', () => {
     });
     expect(result).not.toHaveProperty('filePath');
     expect(result).not.toHaveProperty('audioFilePath');
-    expect(metadataService.getVideoMetadata).toHaveBeenCalledWith('abcdefghijk');
+    expect(metadataService.getCachedVideoMetadata).toHaveBeenCalledWith('abcdefghijk');
     expect(sequelize.query.mock.calls[0][0]).toContain('INNER JOIN api_key_channel_grants');
   });
 
   test('returns 404 without fetching metadata when video is not eligible', async () => {
     sequelize.query.mockResolvedValueOnce([]);
-    const metadataService = { getVideoMetadata: jest.fn() };
+    const metadataService = { getCachedVideoMetadata: jest.fn() };
 
     await expect(catalog.getVideoDetail(key(), 'abcdefghijk', metadataService))
       .rejects.toMatchObject({ status: 404, message: 'Video not found' });
-    expect(metadataService.getVideoMetadata).not.toHaveBeenCalled();
+    expect(metadataService.getCachedVideoMetadata).not.toHaveBeenCalled();
   });
 
   test('falls back to the stored description when extended metadata has none', async () => {
@@ -380,17 +411,48 @@ describe('external cached catalog', () => {
       channel_title: 'Safe Channel',
     }]);
     const metadataService = {
-      getVideoMetadata: jest.fn().mockResolvedValue({ description: null }),
+      getCachedVideoMetadata: jest.fn().mockResolvedValue({ description: null }),
     };
 
     const result = await catalog.getVideoDetail(key(), 'abcdefghijk', metadataService);
     expect(result.metadata.description).toBe('database fallback');
   });
 
+  test('keeps the stored description when no metadata is cached', async () => {
+    sequelize.query.mockResolvedValueOnce([{
+      youtube_id: 'abcdefghijk',
+      title: 'Detailed video',
+      media_type: 'video',
+      description: 'database fallback',
+    }]);
+    const metadataService = { getCachedVideoMetadata: jest.fn().mockResolvedValue(null) };
+
+    const result = await catalog.getVideoDetail(key(), 'abcdefghijk', metadataService);
+    expect(result.metadata).toEqual({ description: 'database fallback' });
+  });
+
+  test('returns null metadata when nothing is cached or stored', async () => {
+    sequelize.query.mockResolvedValueOnce([{
+      youtube_id: 'abcdefghijk', title: 'Uncached video', media_type: 'video', description: null,
+    }]);
+    const metadataService = { getCachedVideoMetadata: jest.fn().mockResolvedValue(null) };
+
+    const result = await catalog.getVideoDetail(key(), 'abcdefghijk', metadataService);
+    expect(result.metadata).toBeNull();
+  });
+
   test('rejects unsafe cached thumbnail identifiers without exposing a path', async () => {
-    sequelize.query.mockResolvedValueOnce([{ channel_id: '../../secret' }]);
+    Channel.findOne.mockResolvedValueOnce({ channel_id: '../../secret' });
     await expect(catalog.getChannelThumbnail(key(), '8'))
       .rejects.toMatchObject({ status: 404, message: 'Thumbnail not found' });
+  });
+
+  test('returns 404 for an ungranted channel thumbnail', async () => {
+    await expect(catalog.getChannelThumbnail(key(), '8'))
+      .rejects.toMatchObject({ status: 404, message: 'Thumbnail not found' });
+    expect(Channel.findOne).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 8, enabled: true, terminated_at: null },
+    }));
   });
 
   test('only exposes HTTPS thumbnail URLs from known YouTube image hosts', () => {

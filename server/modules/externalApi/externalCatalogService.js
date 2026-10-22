@@ -5,6 +5,7 @@ const { attachRequestStatuses } = require('./externalCatalogRequests');
 const { QueryTypes } = require('sequelize');
 const { sequelize } = require('../../db');
 const configModule = require('../configModule');
+const { Channel, ApiKeyChannelGrant } = require('../../models');
 const { normalizePolicy, ratingPolicy } = require('./externalEligibility');
 const { publicVideoThumbnail } = require('./externalThumbnailProxy');
 const {
@@ -21,6 +22,7 @@ const ACTIVE_REQUEST_STATUSES = ['pending', 'approved', 'processing'];
 const MAX_PAGE = 100;
 const MAX_DESCRIPTION_LENGTH = 2000;
 const MAX_TITLE_LENGTH = 500;
+const CATALOG_CURSOR_VERSION = 3;
 
 function boundedString(value, maximum) {
   if (value === null || value === undefined) return null;
@@ -76,7 +78,7 @@ function decodeCatalogCursor(value, expected) {
   }
   try {
     const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
-    if (parsed?.v !== 2 ||
+    if (parsed?.v !== CATALOG_CURSOR_VERSION ||
         parsed.endpoint !== expected.endpoint ||
         parsed.sortBy !== expected.sortBy ||
         parsed.sortOrder !== expected.sortOrder ||
@@ -85,6 +87,7 @@ function decodeCatalogCursor(value, expected) {
         !Number.isSafeInteger(parsed.channelDatabaseId) || parsed.channelDatabaseId < 1 ||
         typeof parsed.youtubeId !== 'string' || parsed.youtubeId.length === 0 ||
         parsed.youtubeId.length > 32 ||
+        !Number.isSafeInteger(parsed.channelVideoId) || parsed.channelVideoId < 1 ||
         (expected.sortBy === 'duration'
           ? !Number.isFinite(parsed.sortValue) || parsed.sortValue < -1
           : typeof parsed.sortValue !== 'string' || parsed.sortValue.length > MAX_TITLE_LENGTH)) {
@@ -98,10 +101,10 @@ function decodeCatalogCursor(value, expected) {
 
 function encodeCatalogCursor({
   endpoint, sortBy, sortOrder, fingerprint, page,
-  sortValue, channelDatabaseId, youtubeId,
+  sortValue, channelDatabaseId, youtubeId, channelVideoId,
 }) {
   return Buffer.from(JSON.stringify({
-    v: 2,
+    v: CATALOG_CURSOR_VERSION,
     endpoint,
     sortBy,
     sortOrder,
@@ -110,6 +113,7 @@ function encodeCatalogCursor({
     sortValue,
     channelDatabaseId,
     youtubeId,
+    channelVideoId,
   }), 'utf8').toString('base64url');
 }
 
@@ -136,6 +140,8 @@ function catalogSeekSql(sortExpression, sortOrder, cursor) {
       AND (
         c.id > :cursorChannelDatabaseId
         OR (c.id = :cursorChannelDatabaseId AND cv.youtube_id > :cursorYoutubeId)
+        OR (c.id = :cursorChannelDatabaseId AND cv.youtube_id = :cursorYoutubeId
+          AND cv.id > :cursorChannelVideoId)
       )
     )
   )`;
@@ -156,14 +162,29 @@ function catalogPaginationDto({
         sortValue: lastRow.cursor_sort_value,
         channelDatabaseId: Number(lastRow.channel_database_id),
         youtubeId: lastRow.youtube_id,
+        channelVideoId: Number(lastRow.channel_video_id),
       })
       : null,
   };
 }
 
-function lastFetched(channel, mediaType = null) {
+function findGrantedChannel(keyId, channelDatabaseId, attributes) {
+  return Channel.findOne({
+    where: { id: channelDatabaseId, enabled: true, terminated_at: null },
+    attributes,
+    include: [{
+      model: ApiKeyChannelGrant,
+      as: 'apiKeyGrants',
+      required: true,
+      where: { api_key_id: keyId },
+      attributes: [],
+    }],
+  });
+}
+
+function lastFetched(lastFetchedByTab, mediaType = null) {
   try {
-    const values = JSON.parse(channel.lastFetchedByTab || '{}');
+    const values = JSON.parse(lastFetchedByTab || '{}');
     if (mediaType) return values[mediaType] || null;
     const dates = Object.values(values).filter(Boolean).map((value) => new Date(value));
     if (dates.length === 0 || dates.some((value) => Number.isNaN(value.getTime()))) return null;
@@ -183,8 +204,8 @@ async function listChannels(key, query = {}) {
   const search = normalizeSearch(query.search);
   const sortColumns = {
     title: 'title',
-    videoCount: 'videoCount',
-    downloadedCount: 'downloadedCount',
+    videoCount: 'video_count',
+    downloadedCount: 'downloaded_count',
     id: 'id',
   };
   const sortBy = query.sortBy || 'title';
@@ -201,8 +222,8 @@ async function listChannels(key, query = {}) {
     AND cv.media_type IN (:allowedMediaTypes) AND ${ratings.sql}`;
   const whereSearch = search
     ? `AND (
-      LOCATE(:search, LOWER(COALESCE(c.title, c.uploader, ''))) > 0
-      OR LOCATE(:search, LOWER(COALESCE(c.description, ''))) > 0
+      POSITION(:search IN LOWER(COALESCE(c.title, c.uploader, ''))) > 0
+      OR POSITION(:search IN LOWER(COALESCE(c.description, ''))) > 0
     )`
     : '';
   const subfolder = query.subfolder === undefined || query.subfolder === ''
@@ -227,13 +248,13 @@ async function listChannels(key, query = {}) {
   );
   const rows = await sequelize.query(
     `SELECT c.id, c.channel_id, COALESCE(c.title, c.uploader, '') AS title,
-            c.description, c.sub_folder, c.last_fetched_by_tab AS lastFetchedByTab,
+            c.description, c.sub_folder, c.last_fetched_by_tab,
             (SELECT COUNT(*) FROM channelvideos cv
                LEFT JOIN videos v ON v.youtube_id = cv.youtube_id
-              WHERE cv.channel_id = c.channel_id AND ${videoPolicy}) AS videoCount,
+              WHERE cv.channel_id = c.channel_id AND ${videoPolicy}) AS video_count,
             (SELECT COUNT(*) FROM channelvideos cv
                INNER JOIN videos v ON v.youtube_id = cv.youtube_id AND v.removed = false
-              WHERE cv.channel_id = c.channel_id AND ${videoPolicy}) AS downloadedCount
+              WHERE cv.channel_id = c.channel_id AND ${videoPolicy}) AS downloaded_count
        FROM channels c
        INNER JOIN api_key_channel_grants g
          ON g.channel_id = c.id AND g.api_key_id = :keyId
@@ -251,9 +272,9 @@ async function listChannels(key, query = {}) {
       descriptionSummary: row.description ? row.description.trim().slice(0, 240) : null,
       thumbnailUrl: `/external-api/v1/assets/channels/${row.id}/thumbnail`,
       subfolder: boundedString(row.sub_folder, 255),
-      videoCount: Number(row.videoCount || 0),
-      downloadedCount: Number(row.downloadedCount || 0),
-      lastFetchedAt: lastFetched(row),
+      videoCount: Number(row.video_count || 0),
+      downloadedCount: Number(row.downloaded_count || 0),
+      lastFetchedAt: lastFetched(row.last_fetched_by_tab),
     })),
     pagination: paginationDto(page, pageSize, total),
     dataSource: 'cache',
@@ -308,17 +329,11 @@ async function listChannelVideos(key, channelDatabaseId, query = {}) {
   };
   const { page, pageSize, offset, cursor } = catalogPagination(query, cursorSpec);
 
-  const channelRows = await sequelize.query(
-    `SELECT c.id, c.channel_id, COALESCE(c.title, c.uploader, '') AS title, c.last_fetched_by_tab AS lastFetchedByTab
-       FROM channels c
-       INNER JOIN api_key_channel_grants g
-         ON g.channel_id = c.id AND g.api_key_id = :keyId
-      WHERE c.id = :channelDatabaseId AND c.enabled = true AND c.terminated_at IS NULL
-      LIMIT 1`,
-    { replacements: { keyId: key.id, channelDatabaseId: id }, type: QueryTypes.SELECT }
+  const channel = await findGrantedChannel(
+    key.id, id, ['id', 'channel_id', 'title', 'uploader', 'lastFetchedByTab']
   );
-  if (channelRows.length === 0) throw new CatalogError('Channel not found', 404);
-  const channel = channelRows[0];
+  if (!channel) throw new CatalogError('Channel not found', 404);
+  const channelTitle = channel.title || channel.uploader || '';
   const effectiveRating =
     'COALESCE(NULLIF(v.normalized_rating, \'\'), NULLIF(c.default_rating, \'\'))';
   const ratings = ratingSql(policy, effectiveRating);
@@ -331,7 +346,7 @@ async function listChannelVideos(key, channelDatabaseId, query = {}) {
   ];
   if (minDuration !== null) filters.push('cv.duration >= :minDuration');
   if (maxDuration !== null) filters.push('cv.duration <= :maxDuration');
-  if (search) filters.push('LOCATE(:search, LOWER(COALESCE(cv.title, \'\'))) > 0');
+  if (search) filters.push('POSITION(:search IN LOWER(COALESCE(cv.title, \'\'))) > 0');
   if (dateFrom) filters.push('cv.published_at >= :dateFrom');
   if (dateTo) filters.push('cv.published_at <= :dateTo');
   if (status === 'downloaded') filters.push('v.id IS NOT NULL AND v.removed = false');
@@ -354,6 +369,7 @@ async function listChannelVideos(key, channelDatabaseId, query = {}) {
     cursorSortValue: cursor?.sortValue,
     cursorChannelDatabaseId: cursor?.channelDatabaseId,
     cursorYoutubeId: cursor?.youtubeId,
+    cursorChannelVideoId: cursor?.channelVideoId,
     ...ratings.replacements,
   };
   const from = `FROM channelvideos cv
@@ -366,14 +382,14 @@ async function listChannelVideos(key, channelDatabaseId, query = {}) {
     { replacements, type: QueryTypes.SELECT }
   );
   const fetchedRows = await sequelize.query(
-    `SELECT cv.youtube_id, cv.title, cv.thumbnail, cv.published_at AS publishedAt, cv.published_at_source,
+    `SELECT cv.youtube_id, cv.title, cv.thumbnail, cv.published_at, cv.published_at_source,
             cv.duration, cv.media_type, v.description, v.id AS downloaded_id,
             v.removed AS downloaded_removed, ${effectiveRating} AS rating,
-            c.id AS channel_database_id,
+            c.id AS channel_database_id, cv.id AS channel_video_id,
             ${sortExpressions[sortBy]} AS cursor_sort_value
        ${from}
        ${seekSql}
-      ORDER BY ${sortExpressions[sortBy]} ${sortOrder.toUpperCase()}, c.id ASC, cv.youtube_id ASC
+      ORDER BY ${sortExpressions[sortBy]} ${sortOrder.toUpperCase()}, c.id ASC, cv.youtube_id ASC, cv.id ASC
       LIMIT :fetchLimit${cursor ? '' : ' OFFSET :offset'}`,
     { replacements, type: QueryTypes.SELECT }
   );
@@ -381,13 +397,13 @@ async function listChannelVideos(key, channelDatabaseId, query = {}) {
   const rows = fetchedRows.slice(0, pageSize);
   await attachRequestStatuses(key, rows);
   const total = Number(countRows[0]?.total || 0);
-  const lastIndexedAt = lastFetched(channel, mediaType);
+  const lastIndexedAt = lastFetched(channel.lastFetchedByTab, mediaType);
   return {
     data: rows.map((row) => ({
       youtubeId: row.youtube_id,
       title: boundedString(row.title, MAX_TITLE_LENGTH),
       thumbnailUrl: videoThumbnailUrl(row.youtube_id),
-      publishedAt: row.published_at_source === 'estimated' ? null : row.publishedAt,
+      publishedAt: row.published_at_source === 'estimated' ? null : row.published_at,
       duration: row.duration,
       description: boundedString(row.description, MAX_DESCRIPTION_LENGTH),
       isDownloaded: Boolean(row.downloaded_id) && !row.downloaded_removed,
@@ -395,7 +411,7 @@ async function listChannelVideos(key, channelDatabaseId, query = {}) {
       requestStatus: row.request_status || null,
       rating: row.rating || null,
       channelId: channel.channel_id,
-      channelTitle: channel.title,
+      channelTitle,
       mediaType: row.media_type,
     })),
     pagination: catalogPaginationDto({
@@ -473,7 +489,7 @@ async function listVideos(key, query = {}) {
     ratings.sql,
   ];
   if (mediaType) filters.push('cv.media_type = :mediaType');
-  if (search) filters.push('LOCATE(:search, LOWER(COALESCE(cv.title, \'\'))) > 0');
+  if (search) filters.push('POSITION(:search IN LOWER(COALESCE(cv.title, \'\'))) > 0');
   if (minDuration !== null) filters.push('cv.duration >= :minDuration');
   if (maxDuration !== null) filters.push('cv.duration <= :maxDuration');
   if (dateFrom) filters.push('cv.published_at >= :dateFrom');
@@ -506,6 +522,7 @@ async function listVideos(key, query = {}) {
     cursorSortValue: cursor?.sortValue,
     cursorChannelDatabaseId: cursor?.channelDatabaseId,
     cursorYoutubeId: cursor?.youtubeId,
+    cursorChannelVideoId: cursor?.channelVideoId,
     ...ratings.replacements,
   };
   const from = `FROM channelvideos cv
@@ -520,14 +537,14 @@ async function listVideos(key, query = {}) {
     { replacements, type: QueryTypes.SELECT }
   );
   const fetchedRows = await sequelize.query(
-    `SELECT cv.youtube_id, cv.title, cv.thumbnail, cv.published_at AS publishedAt, cv.published_at_source,
+    `SELECT cv.youtube_id, cv.title, cv.thumbnail, cv.published_at, cv.published_at_source,
             cv.duration, cv.media_type, v.description, v.id AS downloaded_id,
             v.removed AS downloaded_removed, ${effectiveRating} AS rating,
             c.id AS channel_database_id, c.channel_id, COALESCE(c.title, c.uploader, '') AS channel_title,
-            ${sortExpressions[sortBy]} AS cursor_sort_value
+            cv.id AS channel_video_id, ${sortExpressions[sortBy]} AS cursor_sort_value
        ${from}
        ${seekSql}
-      ORDER BY ${sortExpressions[sortBy]} ${sortOrder.toUpperCase()}, c.id ASC, cv.youtube_id ASC
+      ORDER BY ${sortExpressions[sortBy]} ${sortOrder.toUpperCase()}, c.id ASC, cv.youtube_id ASC, cv.id ASC
       LIMIT :fetchLimit${cursor ? '' : ' OFFSET :offset'}`,
     { replacements, type: QueryTypes.SELECT }
   );
@@ -540,7 +557,7 @@ async function listVideos(key, query = {}) {
       youtubeId: row.youtube_id,
       title: boundedString(row.title, MAX_TITLE_LENGTH),
       thumbnailUrl: videoThumbnailUrl(row.youtube_id),
-      publishedAt: row.published_at_source === 'estimated' ? null : row.publishedAt,
+      publishedAt: row.published_at_source === 'estimated' ? null : row.published_at,
       duration: row.duration,
       description: boundedString(row.description, MAX_DESCRIPTION_LENGTH),
       isDownloaded: Boolean(row.downloaded_id) && !row.downloaded_removed,
@@ -576,10 +593,10 @@ async function getVideoDetail(key, youtubeId, metadataService = null) {
     'COALESCE(NULLIF(v.normalized_rating, \'\'), NULLIF(c.default_rating, \'\'))';
   const ratings = ratingSql(policy, effectiveRating);
   const rows = await sequelize.query(
-    `SELECT cv.youtube_id, cv.title, cv.published_at AS publishedAt, cv.published_at_source,
+    `SELECT cv.youtube_id, cv.title, cv.published_at, cv.published_at_source,
             cv.duration, cv.media_type, cv.availability,
             v.description, v.id AS downloaded_id, v.removed AS downloaded_removed,
-            v.last_downloaded_at, v.file_size AS fileSize, v.audio_file_size AS audioFileSize, v.protected,
+            v.last_downloaded_at, v.file_size, v.audio_file_size, v.protected,
             v.rating_source, v.video_resolution, ${effectiveRating} AS rating,
             c.id AS channel_database_id, c.channel_id,
             COALESCE(c.title, c.uploader, '') AS channel_title
@@ -610,13 +627,14 @@ async function getVideoDetail(key, youtubeId, metadataService = null) {
   await attachRequestStatuses(key, [row]);
 
   const metadataProvider = metadataService || require('../videoMetadataModule');
-  const metadata = await metadataProvider.getVideoMetadata(youtubeId);
+  // Cached only: the catalog must never spawn yt-dlp for an external read.
+  const metadata = await metadataProvider.getCachedVideoMetadata(youtubeId);
   const isDownloaded = Boolean(row.downloaded_id) && !row.downloaded_removed;
   return {
     youtubeId: row.youtube_id,
     title: boundedString(row.title, MAX_TITLE_LENGTH),
     thumbnailUrl: videoThumbnailUrl(row.youtube_id),
-    publishedAt: row.published_at_source === 'estimated' ? null : row.publishedAt,
+    publishedAt: row.published_at_source === 'estimated' ? null : row.published_at,
     duration: row.duration,
     isDownloaded,
     isRequested: ACTIVE_REQUEST_STATUSES.includes(row.request_status),
@@ -631,30 +649,21 @@ async function getVideoDetail(key, youtubeId, metadataService = null) {
     downloadedAt: isDownloaded && row.last_downloaded_at
       ? new Date(row.last_downloaded_at).toISOString()
       : null,
-    fileSize: isDownloaded && row.fileSize != null ? Number(row.fileSize) : null,
-    audioFileSize: isDownloaded && row.audioFileSize != null ? Number(row.audioFileSize) : null,
+    fileSize: isDownloaded && row.file_size != null ? Number(row.file_size) : null,
+    audioFileSize: isDownloaded && row.audio_file_size != null ? Number(row.audio_file_size) : null,
     isProtected: isDownloaded ? Boolean(row.protected) : false,
     videoResolution: isDownloaded ? row.video_resolution || null : null,
-    metadata: {
-      ...(metadata || {}),
-      description: metadata?.description ?? row.description ?? null,
-    },
+    metadata: metadata || row.description != null
+      ? { ...(metadata || {}), description: metadata?.description ?? row.description }
+      : null,
   };
 }
 
 async function getChannelThumbnail(key, channelDatabaseId) {
   normalizePolicy(key);
   const id = parseInteger(channelDatabaseId, null, 1, Number.MAX_SAFE_INTEGER, 'channel id');
-  const rows = await sequelize.query(
-    `SELECT c.channel_id
-       FROM channels c
-       INNER JOIN api_key_channel_grants g
-         ON g.channel_id = c.id AND g.api_key_id = :keyId
-      WHERE c.id = :channelDatabaseId AND c.enabled = true AND c.terminated_at IS NULL
-      LIMIT 1`,
-    { replacements: { keyId: key.id, channelDatabaseId: id }, type: QueryTypes.SELECT }
-  );
-  const channelId = rows[0]?.channel_id;
+  const channel = await findGrantedChannel(key.id, id, ['channel_id']);
+  const channelId = channel?.channel_id;
   if (!channelId || !/^[A-Za-z0-9_-]+$/.test(channelId)) throw new CatalogError('Thumbnail not found', 404);
   try {
     const imageDirectory = await fs.realpath(path.resolve(configModule.getImagePath()));

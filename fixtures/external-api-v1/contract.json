@@ -1,5 +1,5 @@
 {
-  "fixtureVersion": 4,
+  "fixtureVersion": 5,
   "capabilities": {
     "apiVersion": "1",
     "serverVersion": "1.77.0",
@@ -526,7 +526,7 @@
       "request": {
         "id": "00000000-0000-4000-8000-000000000010",
         "type": "video",
-        "status": "processing",
+        "status": "approved",
         "target": {
           "youtubeId": "abcdefghijk",
           "channelId": 8,

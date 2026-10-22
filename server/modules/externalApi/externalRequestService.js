@@ -20,9 +20,17 @@ function createExternalRequestService({
   models = require('../../models'),
   downloader = (jobData, options) =>
     require('../downloadModule').doSpecificDownloads(jobData, false, options),
-  channelProvisioner = require('../channel/channelProvisioning'),
-  videoDeleter = require('../videoDeletionModule'),
-  storageGuard = require('../storageGuard'),
+  // Resolved on first use so creating the service at startup does not load
+  // the channel, deletion, and storage modules before they are needed.
+  channelProvisioner = {
+    getChannelInfo: (...args) => require('../channel/channelProvisioning').getChannelInfo(...args),
+  },
+  videoDeleter = {
+    deleteVideos: (...args) => require('../videoDeletionModule').deleteVideos(...args),
+  },
+  storageGuard = {
+    isPausedError: (error) => require('../storageGuard').isPausedError(error),
+  },
   jobLookup = (jobId) => require('../jobModule').getJob(jobId),
   logger = require('../../logger'),
   now = () => new Date(),
