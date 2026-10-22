@@ -18,7 +18,6 @@ const STARTUP_TAB_COUNT_REFRESH_DELAY_MS = 2 * 60 * 1000;
 const { createExternalApiAuth } = require('./middleware/externalApiAuth');
 const { sendExternalError } = require('./modules/externalApiResponse');
 const app = express();
-app.disable('x-powered-by');
 app.set('trust proxy', parseTrustProxySetting(process.env.TRUST_PROXY));
 if (process.env.TRUST_PROXY === undefined || process.env.TRUST_PROXY === '') {
   logger.info('TRUST_PROXY is unset; defaulting Express proxy trust to true for backwards compatibility. Rate limits use the direct peer IP until TRUST_PROXY is explicitly configured.');
@@ -55,7 +54,13 @@ app.use(pinoHttp({
     }
   },
   // Generate unique request ID for correlation
-  genReqId: () => require('crypto').randomUUID(),
+  genReqId: (req) => {
+    // External API envelopes promise a server-generated requestId, so the
+    // public namespace never adopts a caller-supplied correlation header.
+    const existingId = req.path.startsWith('/external-api') ? null : req.id || req.headers['x-request-id'];
+    if (existingId) return existingId;
+    return require('crypto').randomUUID();
+  },
   // Only log warnings and errors at info level, success at debug
   customLogLevel: (req, res, err) => {
     if (res.statusCode >= 400 && res.statusCode < 500) {
@@ -373,7 +378,7 @@ const initialize = async () => {
       subfolderModule,
     });
 
-    logger.info('YouTube downloads directory configured');
+    logger.info({ directoryPath: configModule.directoryPath }, 'YouTube downloads directory configured');
 
     // Degraded mode middleware - checks database health before processing requests
     const checkDatabaseHealth = function(req, res, next) {

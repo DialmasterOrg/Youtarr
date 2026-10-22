@@ -6,7 +6,6 @@ const { pipeline } = require('stream/promises');
 const { v4: uuidv4 } = require('uuid');
 const { spawnYtDlp } = require('../ytdlpProcess');
 const tempPathManager = require('../download/tempPathManager');
-const { redactSensitiveText } = require('../safeCommandLogging');
 
 class ChannelYtdlpExecutor {
   /**
@@ -100,7 +99,7 @@ class ChannelYtdlpExecutor {
 
           const error = new Error(errorMessage);
           error.code = errorCode;
-          error.stderr = redactSensitiveText(stderrBuffer);
+          error.stderr = stderrBuffer;
           finish(reject, error);
         }
       });
