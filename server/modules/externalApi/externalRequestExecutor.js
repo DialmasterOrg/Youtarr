@@ -43,6 +43,9 @@ function createExternalRequestExecutor({
   models, sequelize, now, quotas, validateTarget, workLimiter, downloader,
   channelProvisioner, videoDeleter, storageGuard, jobLookup = () => null, logger,
   sweepIntervalMs = SWEEP_INTERVAL_MS,
+  // How a wake defers its sweep; the database tests pass a no-op so each
+  // sweep runs only when the test asks for it.
+  scheduleWake = setImmediate,
 }) {
   const { ExternalRequest, ApiKeyChannelGrant, Channel, Job } = models;
   const { resolveVideoRequests } = createExternalRequestReconciliation({ models, now, jobLookup });
@@ -288,7 +291,7 @@ function createExternalRequestExecutor({
   function wake() {
     if (wakeScheduled) return;
     wakeScheduled = true;
-    setImmediate(() => {
+    scheduleWake(() => {
       wakeScheduled = false;
       sweep();
     });
