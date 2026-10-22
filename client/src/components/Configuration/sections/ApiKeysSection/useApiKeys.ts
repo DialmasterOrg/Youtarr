@@ -76,14 +76,21 @@ export interface NormalizedPolicyResult {
   error?: string;
 }
 
+// Mirrors the per-key ceilings enforced by server/middleware/externalApiAuth.js.
+export const WORKLOAD_LIMITS = [
+  { field: 'maxActiveJobs', label: 'Active jobs', min: 1, max: 5 },
+  { field: 'hourlyWriteLimit', label: 'Writes per hour', min: 1, max: 30 },
+  { field: 'dailyWriteLimit', label: 'Writes per day', min: 1, max: 200 },
+] as const;
+
+export type WorkloadField = (typeof WORKLOAD_LIMITS)[number]['field'];
+
+export const workloadMax = (field: WorkloadField) =>
+  WORKLOAD_LIMITS.find((limit) => limit.field === field)?.max ?? 1;
+
 export const normalizePolicy = (policy: ApiKeyPolicy): NormalizedPolicyResult => {
-  const fields: Array<[keyof Pick<ApiKeyPolicy, 'maxActiveJobs' | 'hourlyWriteLimit' | 'dailyWriteLimit'>, string, number, number]> = [
-    ['maxActiveJobs', 'Active jobs', 1, 5],
-    ['hourlyWriteLimit', 'Writes per hour', 1, 30],
-    ['dailyWriteLimit', 'Writes per day', 1, 200],
-  ];
   const normalized = { ...policy };
-  for (const [field, label, min, max] of fields) {
+  for (const { field, label, min, max } of WORKLOAD_LIMITS) {
     const value = String(policy[field]).trim();
     if (!/^\d+$/.test(value) || Number(value) < min || Number(value) > max) {
       return { error: `${label} must be an integer from ${min} to ${max}.` };
@@ -92,8 +99,6 @@ export const normalizePolicy = (policy: ApiKeyPolicy): NormalizedPolicyResult =>
   }
   return { policy: normalized as NormalizedApiKeyPolicy };
 };
-
-
 
 export const useApiKeys = (token: string | null) => {
   const headers = useMemo(() => (token ? { 'x-access-token': token } : undefined), [token]);

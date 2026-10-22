@@ -16,8 +16,7 @@ import {
   EXTERNAL_RATING_BANDS,
   formatExternalRatingBand,
 } from '../../../../utils/externalRatingPolicy';
-import { ApiKeyPolicy, MediaType } from './useApiKeys';
-
+import { ApiKeyPolicy, MediaType, WORKLOAD_LIMITS } from './useApiKeys';
 import { roleForPolicy } from './policy';
 
 interface PolicyEditorProps {
@@ -54,11 +53,6 @@ const PolicyEditor: React.FC<PolicyEditorProps> = ({ policy, onChange }) => {
         : [...policy.allowedMediaTypes, mediaType],
     });
   };
-  const workload = [
-    ['maxActiveJobs', 'Active jobs', 1, 5],
-    ['hourlyWriteLimit', 'Writes per hour', 1, 30],
-    ['dailyWriteLimit', 'Writes per day', 1, 200],
-  ] as const;
   return (
     <Box className="mt-4 space-y-5">
       <Box className="space-y-1">
@@ -207,7 +201,7 @@ const PolicyEditor: React.FC<PolicyEditorProps> = ({ policy, onChange }) => {
           defaults.
         </Typography>
         <div className="grid gap-3 sm:grid-cols-3">
-          {workload.map(([field, label, min, max]) => (
+          {WORKLOAD_LIMITS.map(({ field, label, min, max }) => (
             <TextField
               key={field}
               type="number"

@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import axios from 'axios';
-import { normalizePolicy, ApiKeyPolicy, useApiKeys } from './useApiKeys';
+import { normalizePolicy, ApiKeyPolicy, useApiKeys } from '../ApiKeysSection/useApiKeys';
 import type { ChannelListResponse } from '../../../Subscriptions/hooks/useChannelList';
 
 jest.mock('axios', () => ({

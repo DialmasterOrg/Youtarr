@@ -1,4 +1,4 @@
-import { ApiKey, ApiKeyPolicy, ApiKeyRole, NormalizedApiKeyPolicy } from './useApiKeys';
+import { ApiKey, ApiKeyPolicy, ApiKeyRole, NormalizedApiKeyPolicy, workloadMax } from './useApiKeys';
 
 export const defaultPolicy: ApiKeyPolicy = {
   role: 'view',
@@ -11,9 +11,9 @@ export const defaultPolicy: ApiKeyPolicy = {
   maxRatingLevel: 3,
   allowUnrated: false,
   allowedMediaTypes: ['video'],
-  maxActiveJobs: 5,
-  hourlyWriteLimit: 30,
-  dailyWriteLimit: 200,
+  maxActiveJobs: workloadMax('maxActiveJobs'),
+  hourlyWriteLimit: workloadMax('hourlyWriteLimit'),
+  dailyWriteLimit: workloadMax('dailyWriteLimit'),
 };
 
 export const legacyRolePermissions = (role: ApiKeyRole) => ({
@@ -48,9 +48,9 @@ export const policyFromKey = (key: ApiKey): ApiKeyPolicy => ({
   maxRatingLevel: key.max_rating_level,
   allowUnrated: key.allow_unrated,
   allowedMediaTypes: key.allowed_media_types,
-  maxActiveJobs: key.max_active_jobs ?? 5,
-  hourlyWriteLimit: key.hourly_write_limit ?? 30,
-  dailyWriteLimit: key.daily_write_limit ?? 200,
+  maxActiveJobs: key.max_active_jobs ?? workloadMax('maxActiveJobs'),
+  hourlyWriteLimit: key.hourly_write_limit ?? workloadMax('hourlyWriteLimit'),
+  dailyWriteLimit: key.daily_write_limit ?? workloadMax('dailyWriteLimit'),
 });
 
 export function increasesPrivilege(key: ApiKey, policy: NormalizedApiKeyPolicy, channelIds: number[], originalIds: number[]) {
