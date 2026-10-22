@@ -47,6 +47,9 @@ function service(options = {}) {
     storageGuard: { isPausedError: (error) => error?.code === 'DOWNLOADS_PAUSED' },
     jobLookup: () => null,
     logger: { warn: () => {}, error: () => {} },
+    // Background wakes would race the test's own steps; each test runs the
+    // executor explicitly with runExecutorOnce.
+    scheduleWake: () => {},
     ...options,
   });
   services.push(api);
@@ -95,8 +98,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  // Approvals wake the executor in the background; let that work settle
-  // before the next test clears the tables.
+  // Let any work a test started settle before the next test clears the tables.
   await Promise.all(services.splice(0).map((api) => api.runExecutorOnce()));
 });
 

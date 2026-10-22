@@ -38,6 +38,7 @@ function createExternalRequestService({
   quotaService = null,
   workLimiter = require('./externalWorkLimiter').sharedExternalWorkLimiter,
   sweepIntervalMs,
+  scheduleWake,
 } = {}) {
   const { ExternalRequest } = models;
   const quotas = quotaService ||
@@ -46,6 +47,7 @@ function createExternalRequestService({
   const executor = createExternalRequestExecutor({
     models, sequelize, now, quotas, validateTarget, workLimiter, downloader,
     channelProvisioner, videoDeleter, storageGuard, jobLookup, logger, sweepIntervalMs,
+    scheduleWake,
   });
   const reviewService = createExternalRequestReviewService({
     models, sequelize, now, quotas, validateTarget, onApproved: executor.wake,
