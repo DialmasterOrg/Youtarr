@@ -36,8 +36,11 @@ export const CONFIG_FIELDS = {
   // Video settings
   preferredResolution: { default: '1080', trackChanges: true },
   videoCodec: { default: 'default', trackChanges: true },
-  defaultSubfolder: { default: '', trackChanges: true },
+  // Changed through the Library folders API, never through a Settings save.
+  defaultSubfolder: { default: '', trackChanges: false },
   defaultSkipVideoFolder: { default: false, trackChanges: true },
+  // Changed through the library folders API, never through a Settings save.
+  mainFolderLayout: { default: 'videos', trackChanges: false },
   videoFilenamePrefix: {
     default: '%(uploader,channel,uploader_id).80B - %(title).64B',
     trackChanges: true,
@@ -46,9 +49,10 @@ export const CONFIG_FIELDS = {
   // Plex integration
   plexApiKey: { default: '', trackChanges: true },
   plexYoutubeLibraryId: { default: '', trackChanges: true },
+  // Changed through the Library folders API, never through a Settings save.
   plexSubfolderLibraryMappings: {
-    default: [] as Array<{ subfolder: string | null; libraryId: string }>,
-    trackChanges: true,
+    default: [] as Array<{ subfolder: string | null; libraryId: string | null }>,
+    trackChanges: false,
   },
   plexIP: { default: '', trackChanges: true },
   plexPort: { default: '32400', trackChanges: true },
@@ -219,6 +223,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   videoCodec: CONFIG_FIELDS.videoCodec.default,
   defaultSubfolder: CONFIG_FIELDS.defaultSubfolder.default,
   defaultSkipVideoFolder: CONFIG_FIELDS.defaultSkipVideoFolder.default,
+  mainFolderLayout: CONFIG_FIELDS.mainFolderLayout.default,
   videoFilenamePrefix: CONFIG_FIELDS.videoFilenamePrefix.default,
   plexApiKey: CONFIG_FIELDS.plexApiKey.default,
   plexYoutubeLibraryId: CONFIG_FIELDS.plexYoutubeLibraryId.default,

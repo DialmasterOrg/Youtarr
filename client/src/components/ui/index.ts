@@ -16,6 +16,7 @@ export * from './list';
 export * from './menu';
 export * from './paper';
 export * from './progress';
+export * from './segmented-control';
 export * from './select';
 export * from './snackbar';
 export * from './table';

@@ -85,10 +85,10 @@ function PlaylistHelpDialog({ open, onClose, isMobile }: PlaylistHelpDialogProps
             <ul className="list-disc pl-5 flex flex-col gap-1">
               <li>
                 If you&apos;re already subscribed to that channel, the video uses that channel&apos;s
-                subfolder and quality settings.
+                library folder and quality settings.
               </li>
               <li>
-                If you&apos;re not, the video is saved in the playlist&apos;s default subfolder (your
+                If you&apos;re not, the video is saved in the playlist&apos;s default folder (your
                 global default, unless you&apos;ve changed it).
               </li>
             </ul>

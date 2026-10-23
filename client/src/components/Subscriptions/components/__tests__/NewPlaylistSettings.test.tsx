@@ -19,6 +19,17 @@ jest.mock('../../../../hooks/useSubfolders', () => ({
   }),
 }));
 
+// Library folders named here have the TV layout ('' = main folder).
+let mockTvFolders: string[] = [];
+jest.mock('../../../../hooks/useLibraryFolders', () => ({
+  useLibraryFolders: () => ({
+    folders: [],
+    loading: false,
+    error: null,
+    layoutOf: (name: string) => (mockTvFolders.includes(name) ? 'tv' : 'videos'),
+  }),
+}));
+
 const { useConfig } = require('../../../../hooks/useConfig');
 
 const values: NewPlaylistSettingsValues = {
@@ -37,6 +48,7 @@ const renderSettings = (overrides: Partial<React.ComponentProps<typeof NewPlayli
 describe('NewPlaylistSettings', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockTvFolders = [];
     useConfig.mockReturnValue({
       config: { preferredResolution: '1080', defaultSubfolder: null, channelAutoDownload: true },
       loading: false,
@@ -73,6 +85,14 @@ describe('NewPlaylistSettings', () => {
     renderSettings({ values: { ...values, audio_format: 'mp3_only' } });
 
     expect(screen.getByText(/sync to media servers as music playlists/)).toBeInTheDocument();
+  });
+
+  test('keeps a playlist in a TV folder video-only without the TV show note', () => {
+    mockTvFolders = [''];
+    renderSettings();
+
+    expect(screen.getByText('TV folders are video-only.')).toBeInTheDocument();
+    expect(screen.queryByText('Saved as a TV show (season folders and episode NFO files).')).not.toBeInTheDocument();
   });
 
   test('shows saved settings without letting them change when read-only', () => {

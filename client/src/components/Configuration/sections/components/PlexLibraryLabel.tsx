@@ -9,7 +9,7 @@ interface PlexLibraryLabelProps {
   display: PlexLibraryDisplay;
   /**
    * When true, the primary text (title or id) renders with fontWeight 600.
-   * Used by DefaultPlexLibraryDisplay; PlexSubfolderMappings uses the default.
+   * Used by DefaultPlexLibraryDisplay.
    */
   boldPrimary?: boolean;
   primaryVariant?: TypographyVariant;
@@ -19,10 +19,9 @@ interface PlexLibraryLabelProps {
 }
 
 /**
- * Render a `PlexLibraryDisplay` discriminated union once. Both consumers
- * (DefaultPlexLibraryDisplay in PlexIntegrationSection and the mapping table
- * in PlexSubfolderMappings) use this. Adding a fourth display branch only
- * requires editing this file, not every consumer.
+ * Render a `PlexLibraryDisplay` discriminated union once, for
+ * DefaultPlexLibraryDisplay. Adding a fourth display branch only requires
+ * editing this file, not every consumer.
  */
 export const PlexLibraryLabel: React.FC<PlexLibraryLabelProps> = ({
   display,

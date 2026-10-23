@@ -13,6 +13,7 @@
   "videoCodec": "default",
   "defaultSubfolder": "",
   "defaultSkipVideoFolder": false,
+  "mainFolderLayout": "videos",
   "videoFilenamePrefix": "%(uploader,channel,uploader_id).80B - %(title).64B",
   "plexIP": "",
   "plexPort": "32400",

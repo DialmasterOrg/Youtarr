@@ -4,6 +4,7 @@
 // the route file does not pull in the real database.
 jest.mock('../../modules/channelSettingsModule', () => ({
   validateSubFolder: jest.fn().mockReturnValue({ valid: true }),
+  getChannelSettings: jest.fn(),
 }));
 jest.mock('../../models/channelvideo', () => ({}));
 
@@ -131,6 +132,55 @@ describe('GET /api/channels/:channelId/download-all/preview', () => {
 });
 
 describe('POST /api/channels/:channelId/download-all', () => {
+  describe('TV folders', () => {
+    const channelSettingsModule = require('../../modules/channelSettingsModule');
+    const withGuards = () => ({
+      ...buildDeps(),
+      layoutGuards: {
+        isMp3Format: (format) => format === 'mp3_only' || format === 'video_mp3',
+        assertVideoOnlyDestination: jest.fn().mockRejectedValue(
+          Object.assign(new Error('TV folders are video-only.'), { status: 400 })
+        ),
+      },
+    });
+    const send = async (deps, overrideSettings) => {
+      const handler = getHandler('post', DOWNLOAD_PATH, deps);
+      const res = createResponse();
+      await handler({ params: { channelId: 'UC123' }, body: { tabType: 'videos', overrideSettings }, log: loggerMock }, res);
+      return res;
+    };
+
+    test('refuses an MP3 download for a channel in a TV folder', async () => {
+      const deps = withGuards();
+      channelSettingsModule.getChannelSettings.mockResolvedValue({ sub_folder: 'TV' });
+
+      const res = await send(deps, { audioFormat: 'mp3_only' });
+
+      expect(deps.layoutGuards.assertVideoOnlyDestination).toHaveBeenCalledWith({ audioFormat: 'mp3_only', subFolderValue: 'TV' });
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(deps.channelDownloadAllModule.startDownloadAll).not.toHaveBeenCalled();
+    });
+
+    test('checks a destination override instead of the channel folder', async () => {
+      const deps = withGuards();
+
+      await send(deps, { audioFormat: 'video_mp3', subfolder: 'Shows' });
+
+      expect(channelSettingsModule.getChannelSettings).not.toHaveBeenCalled();
+      expect(deps.layoutGuards.assertVideoOnlyDestination).toHaveBeenCalledWith({ audioFormat: 'video_mp3', subFolderValue: 'Shows' });
+    });
+
+    test('does not check video downloads', async () => {
+      const deps = withGuards();
+      deps.channelDownloadAllModule.startDownloadAll.mockResolvedValue({ queued: 1 });
+
+      const res = await send(deps, { resolution: '720' });
+
+      expect(deps.layoutGuards.assertVideoOnlyDestination).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(202);
+    });
+  });
+
   test('starts the download and returns 202 with the queued count', async () => {
     const deps = buildDeps();
     deps.channelDownloadAllModule.startDownloadAll.mockResolvedValue({ queued: 42 });

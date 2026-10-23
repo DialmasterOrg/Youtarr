@@ -154,3 +154,59 @@ describe('resolveFinalSubfolder', () => {
     expect(resolver.resolveFinalSubfolder({ hardOverride: null, channelRecord: null, softFallback: null, globalDefault: 'GD' })).toBe('GD');
   });
 });
+
+describe('predictFinalSubfolder', () => {
+  test('dialog override wins over the channel', () => {
+    expect(resolver.predictFinalSubfolder({
+      override: { subfolder: 'Dialog' }, channel: { sub_folder: 'Kids' }, playlist: {}, globalDefault: 'GD',
+    })).toBe('Dialog');
+  });
+
+  test('resolves a channel on the global default through the default subfolder', () => {
+    expect(resolver.predictFinalSubfolder({
+      override: {}, channel: { sub_folder: GLOBAL_DEFAULT_SENTINEL }, playlist: {}, globalDefault: 'GD',
+    })).toBe('GD');
+  });
+
+  test('an untracked channel falls back to the playlist default', () => {
+    expect(resolver.predictFinalSubfolder({
+      override: {}, channel: null, playlist: { default_sub_folder: 'PL' }, globalDefault: 'GD',
+    })).toBe('PL');
+  });
+
+  test('a playlist saving to root keeps untracked videos out of the global default', () => {
+    expect(resolver.predictFinalSubfolder({
+      override: {}, channel: null, playlist: { default_sub_folder: null }, globalDefault: 'GD',
+    })).toBeNull();
+  });
+
+  test('nothing in context means the global default', () => {
+    expect(resolver.predictFinalSubfolder({ override: {}, channel: null, playlist: {}, globalDefault: 'GD' })).toBe('GD');
+  });
+});
+
+describe('coerceAudioFormatForLayout', () => {
+  const layoutOf = (folder) => (folder === 'TV' || folder === '' ? 'tv' : 'videos');
+
+  test('downgrades MP3 Only to video for a TV subfolder', () => {
+    expect(resolver.coerceAudioFormatForLayout({ audioFormat: 'mp3_only', subfolder: 'TV', layoutOf })).toBeNull();
+  });
+
+  test('downgrades Video + MP3 to video for a TV subfolder', () => {
+    expect(resolver.coerceAudioFormatForLayout({ audioFormat: 'video_mp3', subfolder: 'TV', layoutOf })).toBeNull();
+  });
+
+  test('downgrades MP3 for the main folder when it is TV', () => {
+    expect(resolver.coerceAudioFormatForLayout({ audioFormat: 'mp3_only', subfolder: null, layoutOf })).toBeNull();
+  });
+
+  test('keeps MP3 for a videos subfolder', () => {
+    expect(resolver.coerceAudioFormatForLayout({ audioFormat: 'mp3_only', subfolder: 'Music', layoutOf })).toBe('mp3_only');
+  });
+
+  test('leaves video-only alone without consulting layouts', () => {
+    const spy = jest.fn(layoutOf);
+    expect(resolver.coerceAudioFormatForLayout({ audioFormat: null, subfolder: 'TV', layoutOf: spy })).toBeNull();
+    expect(spy).not.toHaveBeenCalled();
+  });
+});

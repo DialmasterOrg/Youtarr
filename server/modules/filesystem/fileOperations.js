@@ -5,6 +5,7 @@
 
 const fs = require('fs-extra');
 const fsPromises = require('fs').promises;
+const path = require('path');
 const { execFile, execFileSync } = require('child_process');
 const { promisify } = require('util');
 const execFileAsync = promisify(execFile);
@@ -70,6 +71,34 @@ async function moveWithRetries(src, dest, { retries = 5, delayMs = 200, overwrit
       logger.debug({ src, dest, attempt, backoff }, 'Move failed, retrying after backoff');
       await sleep(backoff);
     }
+  }
+}
+
+// Staging name of a file being replaced; yt-dlp's in-progress suffix, which
+// media servers and the library scans ignore.
+const REPLACE_STAGING_SUFFIX = '.part';
+
+/**
+ * Move a file over an existing destination without a moment in which the
+ * destination is missing. fs-extra's overwrite removes the destination before
+ * it copies across filesystems, so a copy that fails (ENOSPC on a NAS) would
+ * lose the file being replaced. The data is moved to a sibling staging file
+ * first and an atomic rename then replaces the destination; on failure the
+ * staging file is removed and the destination is untouched.
+ *
+ * @param {string} src - Source file path
+ * @param {string} dest - Destination file path (may not exist yet)
+ * @param {Object} [options] - moveWithRetries options (retries, delayMs)
+ * @returns {Promise<void>}
+ */
+async function replaceFileWithRetries(src, dest, options = {}) {
+  const staging = `${dest}${REPLACE_STAGING_SUFFIX}`;
+  try {
+    await moveWithRetries(src, staging, { ...options, overwrite: true });
+    await fsPromises.rename(staging, dest);
+  } catch (err) {
+    await safeRemove(staging);
+    throw err;
   }
 }
 
@@ -230,6 +259,186 @@ async function appendFile(filePath, content, encoding = 'utf8') {
   await fsPromises.appendFile(filePath, content, encoding);
 }
 
+// Staging name of a file being copied across filesystems by a move that must
+// never replace an existing file. Distinct from REPLACE_STAGING_SUFFIX, so a
+// leftover of either is never mistaken for the other.
+const NO_CLOBBER_STAGING_SUFFIX = '.reorganize.part';
+// A preserved timestamp passes through a Date (whole milliseconds) and a
+// float of seconds, so a copy's mtime can differ from its source's by a hair.
+const COPY_MTIME_TOLERANCE_MS = 2;
+
+function destinationExistsError(dest) {
+  return Object.assign(new Error(`A file already exists at ${dest}`), { code: 'EEXIST', path: dest });
+}
+
+// Two paths a filesystem that ignores case or accents reads as one.
+function sameIgnoringCaseAndAccents(a, b) {
+  const fold = (value) => value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+  return fold(a) === fold(b);
+}
+
+// A path is absent when it or one of its parent folders is missing, and
+// when a parent turns out to be a file (ENOTDIR).
+async function statOrNull(filePath) {
+  try {
+    return await fsPromises.stat(filePath);
+  } catch (err) {
+    if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return null;
+    throw err;
+  }
+}
+
+// A file another program holds open (Windows hosts, SMB shares) can refuse a
+// rename for a moment; a permission error is not retried.
+const BUSY_RENAME_RETRIES = 3;
+const BUSY_RENAME_DELAY_MS = 500;
+
+async function renameRetryingBusy(src, dest, { busyRetries, busyDelayMs }) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await fsPromises.rename(src, dest);
+      return;
+    } catch (err) {
+      if (err.code !== 'EBUSY' || attempt >= busyRetries) throw err;
+      await sleep(busyDelayMs * Math.pow(2, attempt));
+    }
+  }
+}
+
+async function copyWithFallback(src, dest) {
+  try {
+    await fs.copy(src, dest, { overwrite: true, preserveTimestamps: true });
+  } catch (err) {
+    if (!(err && err.code === 'EPERM' && err.syscall === 'copyfile')) throw err;
+    await fs.remove(dest);
+    await execFileAsync('cp', ['--', src, dest]);
+  }
+}
+
+const CONTENT_COMPARE_CHUNK_BYTES = 1024 * 1024;
+
+// Fills the buffer from the file at the position, short only at the end.
+async function readFully(handle, buffer, position) {
+  let filled = 0;
+  while (filled < buffer.length) {
+    const { bytesRead } = await handle.read(buffer, filled, buffer.length - filled, position + filled);
+    if (bytesRead === 0) break;
+    filled += bytesRead;
+  }
+  return filled;
+}
+
+// Whether two files hold the same bytes (their sizes already match).
+async function sameContents(a, b) {
+  const [left, right] = await Promise.all([fsPromises.open(a, 'r'), fsPromises.open(b, 'r')]);
+  try {
+    const bufferA = Buffer.allocUnsafe(CONTENT_COMPARE_CHUNK_BYTES);
+    const bufferB = Buffer.allocUnsafe(CONTENT_COMPARE_CHUNK_BYTES);
+    for (let position = 0; ; position += CONTENT_COMPARE_CHUNK_BYTES) {
+      const [filledA, filledB] = await Promise.all([readFully(left, bufferA, position), readFully(right, bufferB, position)]);
+      if (filledA !== filledB || !bufferA.subarray(0, filledA).equals(bufferB.subarray(0, filledB))) return false;
+      if (filledA < CONTENT_COMPARE_CHUNK_BYTES) return true;
+    }
+  } finally {
+    await Promise.all([left.close(), right.close()]);
+  }
+}
+
+/**
+ * Move one file to a destination that must not already hold another file.
+ * Safe to call again after an interruption: a leftover staging copy is
+ * removed, a source already moved is reported as such, and a destination
+ * that is a finished copy of the source (same size and modification time,
+ * left when a cross-filesystem move stopped before removing the source)
+ * completes the move, unless the two paths differ only in case or accents.
+ * A destination on another filesystem (`stat.dev` differs) that matches is
+ * taken for that copy. On the same device the match is read byte for byte
+ * first: a rename within one filesystem is atomic, so a matching file there
+ * is normally another file (EEXIST, keeping the source), but two mounts of
+ * one filesystem share a device id while a rename across them is refused, so
+ * a copy left between them is recognized by its contents.
+ *
+ * On one filesystem the move is a rename. Across filesystems (a __subfolder
+ * can be another mount) the file is copied to `<dest>.reorganize.part`,
+ * renamed into place, and only then is the source removed, so no moment
+ * exists in which neither copy is complete.
+ *
+ * @param {string} src - Source file path
+ * @param {string} dest - Destination file path
+ * @param {Object} [options]
+ * @param {number} [options.retries=3] - Attempts for the cross-filesystem copy
+ * @param {number} [options.delayMs=200] - Base backoff between copy attempts
+ * @param {number} [options.busyRetries=3] - Retries of a rename refused with EBUSY
+ * @param {number} [options.busyDelayMs=500] - Base backoff between busy retries
+ * @returns {Promise<'moved'|'already-moved'>}
+ * @throws {Error} code EEXIST when another file holds the destination, ENOENT when neither exists
+ */
+async function moveFileNoClobber(src, dest, {
+  retries = 3,
+  delayMs = 200,
+  busyRetries = BUSY_RENAME_RETRIES,
+  busyDelayMs = BUSY_RENAME_DELAY_MS,
+} = {}) {
+  const staging = `${dest}${NO_CLOBBER_STAGING_SUFFIX}`;
+  await safeRemove(staging);
+
+  const [srcStat, destStat] = await Promise.all([statOrNull(src), statOrNull(dest)]);
+  if (!srcStat) {
+    if (destStat) return 'already-moved';
+    throw Object.assign(new Error(`Source file is missing: ${src}`), { code: 'ENOENT', path: src });
+  }
+  if (destStat) {
+    // The same file under another spelling (a case-only rename on a
+    // case-insensitive filesystem): rename it.
+    if (srcStat.ino === destStat.ino && srcStat.dev === destStat.dev) {
+      await fsPromises.rename(src, dest);
+      return 'moved';
+    }
+    // A spelling that differs only in case or accents may be the source
+    // itself on a filesystem whose inode numbers vary by spelling (SMB
+    // without server inode numbers): never taken for a finished copy, which
+    // would delete the only one.
+    // A finished copy sits on another filesystem, or on another mount of the
+    // same one (same device id, rename refused across): on one device only
+    // matching contents tell it from another file.
+    if (!sameIgnoringCaseAndAccents(src, dest)
+      && srcStat.size === destStat.size && Math.abs(srcStat.mtimeMs - destStat.mtimeMs) < COPY_MTIME_TOLERANCE_MS
+      && (srcStat.dev !== destStat.dev || await sameContents(src, dest))) {
+      await fsPromises.unlink(src);
+      return 'already-moved';
+    }
+    throw destinationExistsError(dest);
+  }
+
+  await fsPromises.mkdir(path.dirname(dest), { recursive: true });
+  try {
+    await renameRetryingBusy(src, dest, { busyRetries, busyDelayMs });
+    return 'moved';
+  } catch (err) {
+    if (err.code !== 'EXDEV') throw err;
+  }
+
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await copyWithFallback(src, staging);
+      break;
+    } catch (err) {
+      await safeRemove(staging);
+      if (attempt >= retries) throw err;
+      await sleep(delayMs * Math.pow(2, attempt));
+    }
+  }
+  try {
+    if (await statOrNull(dest)) throw destinationExistsError(dest);
+    await fsPromises.rename(staging, dest);
+  } catch (err) {
+    await safeRemove(staging);
+    throw err;
+  }
+  await fsPromises.unlink(src);
+  return 'moved';
+}
+
 /**
  * Check if a path is a file
  *
@@ -255,6 +464,9 @@ async function isDirectory(dirPath) {
 module.exports = {
   sleep,
   moveWithRetries,
+  replaceFileWithRetries,
+  moveFileNoClobber,
+  NO_CLOBBER_STAGING_SUFFIX,
   safeRemove,
   safeCopy,
   copySyncWithFallback,

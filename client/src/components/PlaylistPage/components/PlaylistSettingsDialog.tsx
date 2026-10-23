@@ -19,6 +19,8 @@ import { AudioFormatSelect } from '../../shared/AudioFormatSelect';
 import { RatingSelect } from '../../shared/RatingSelect';
 import { useSubfolders } from '../../../hooks/useSubfolders';
 import { useConfig } from '../../../hooks/useConfig';
+import { useLibraryFolders } from '../../../hooks/useLibraryFolders';
+import { effectiveLibraryFolder } from '../../../utils/libraryLayouts';
 import { usePlaylistMutations } from '../../../hooks/usePlaylistMutations';
 import { Playlist, PlaylistSortOrderSetting, PlaylistSubscribeSettings } from '../../../types/playlist';
 
@@ -71,6 +73,8 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
   const { subfolders, loading: subfoldersLoading, createSubfolder } = useSubfolders(token);
   const { config, refetch: refetchConfig } = useConfig(token);
   const { updateSettings, pending, error } = usePlaylistMutations({ token });
+  const { layoutOf } = useLibraryFolders(open ? token : null);
+  const isTvFolder = layoutOf(effectiveLibraryFolder(form.default_sub_folder, config.defaultSubfolder)) === 'tv';
 
   useEffect(() => {
     if (open) {
@@ -141,7 +145,7 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
 
           <div>
             <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
-              Subfolder
+              Library folder
             </Typography>
             <SubfolderAutocomplete
               mode="channel"
@@ -151,8 +155,9 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
               loading={subfoldersLoading}
               createSubfolder={createSubfolder}
               defaultSubfolderDisplay={config.defaultSubfolder || null}
-              label="Default Subfolder"
-              helperText="Where this playlist's videos are saved when the channel has no subfolder of its own."
+              layoutOf={layoutOf}
+              label="Library folder"
+              helperText="Where this playlist's videos are saved when the channel has no library folder of its own."
             />
           </div>
 
@@ -177,8 +182,9 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
             <AudioFormatSelect
               value={form.audio_format}
               onChange={(value) => update('audio_format', value)}
+              videoOnly={isTvFolder}
               helperText={
-                form.audio_format
+                form.audio_format && !isTvFolder
                   ? form.audio_format === 'mp3_only'
                     ? MP3_HELPER_TEXT + MP3_ONLY_SYNC_HINT
                     : MP3_HELPER_TEXT

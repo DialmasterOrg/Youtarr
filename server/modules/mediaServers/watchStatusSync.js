@@ -11,6 +11,9 @@ const {
   WatchStateFetchError,
 } = require('./adapters/baseAdapter');
 const { Video, VideoWatchStatus, MediaServerUser, WatchStatusSyncCursor } = require('../../models');
+const watchStatusHolds = require('./watchStatusHolds');
+const watchStatusPushBack = require('./watchStatusPushBack');
+const libraryLocator = require('./libraryLocator');
 
 // Rows per bulk upsert statement; keeps a 10k-video library from producing one
 // giant INSERT.
@@ -141,11 +144,12 @@ class WatchStatusSync {
       for (const adapter of adapters) {
         const serverType = adapter.serverType;
         try {
-          const opts = serverType === 'plex' ? await this._plexFetchOpts() : {};
+          const opts = serverType === 'plex' ? await this._plexFetchOpts(adapter) : {};
           const { entries, users, historyCursor, completeUserIds } = await adapter.fetchWatchStates(opts);
           const listed = this._matchVideos(videos, entries, { requireCurrentCopy: !!completeUserIds });
           const cleared = await this._clearedMatches(serverType, completeUserIds, videos, listed);
-          const matches = listed.concat(cleared);
+          // Rows a reorganize protects are not downgraded while it settles.
+          const matches = await watchStatusHolds.applyHolds(serverType, listed.concat(cleared));
           const { rowsWritten, changedVideoIds } = await this._persist(serverType, matches);
           // Advance the durable cursor only after rows persisted, and only
           // when the adapter reports a safely-scanned-through time (null means
@@ -183,6 +187,7 @@ class WatchStatusSync {
         }
       }
       summary.totals = { changed: changedIds.size };
+      await this._settleHolds();
       return summary;
     } catch (err) {
       const logErr = err && err.isAxiosError ? describeHttpError(err) : err;
@@ -202,7 +207,9 @@ class WatchStatusSync {
   // account ids so the adapter can detect a new account and backfill it with
   // a full pull. since is null on the first run (full history pull); deleting
   // the cursor row forces a full re-scan.
-  async _plexFetchOpts() {
+  // Plex lists whole sections (every episode of a TV section), so its
+  // listings are limited to the sections that hold Youtarr's folders.
+  async _plexFetchOpts(adapter) {
     const row = await WatchStatusSyncCursor.findOne({ where: { server_type: 'plex' } });
     const since = row && row.cursor
       ? new Date(new Date(row.cursor).getTime() - WATERMARK_OVERLAP_MS)
@@ -212,7 +219,8 @@ class WatchStatusSync {
       attributes: ['server_user_id'],
       raw: true,
     });
-    return { since, knownUserIds: knownUsers.map((u) => u.server_user_id) };
+    const libraryIds = await libraryLocator.scopeFor(adapter);
+    return { since, knownUserIds: knownUsers.map((u) => u.server_user_id), libraryIds };
   }
 
   // Account directory upsert; adapters return [] in single-user mode so
@@ -320,6 +328,17 @@ class WatchStatusSync {
         video: videosById.get(row.video_id),
         entry: { ...CLEARED_WATCH_STATE, serverUserId: row.server_user_id },
       }));
+  }
+
+  // After the servers were read: retry pushing held state the servers still
+  // lack, and mark holds unrestored for too long as failed. Never throws.
+  async _settleHolds() {
+    try {
+      await watchStatusHolds.expireHolds();
+      await watchStatusPushBack.pushPendingHolds();
+    } catch (err) {
+      logger.warn({ err }, 'Could not settle watch-state holds after the sync');
+    }
   }
 
   // Returns the ids of videos with at least one new or changed row. Every row

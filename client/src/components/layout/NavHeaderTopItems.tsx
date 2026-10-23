@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Box, Button, Paper } from '../ui';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
-import { NavItem, isNavItemExpanded, isNavPathActive } from './navigation';
+import { NavItem, isNavItemExpanded, isNavSubItemActive } from './navigation';
 
 interface NavHeaderTopItemsProps {
   navItems: NavItem[];
@@ -110,7 +110,7 @@ export const NavHeaderTopItems: React.FC<NavHeaderTopItemsProps> = ({
               >
                 <Paper style={menuPaperStyle}>
                   {(item.subItems ?? []).map((subItem) => {
-                    const isSubActive = isNavPathActive(location.pathname, subItem.to);
+                    const isSubActive = isNavSubItemActive(location.pathname, subItem);
                     return (
                       <RouterLink
                         key={subItem.key}

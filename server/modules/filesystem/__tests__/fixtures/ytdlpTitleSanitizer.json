@@ -1,0 +1,186 @@
+{
+  "description": "Titles rendered by yt-dlp 2026.07.04 as \"%(title)s [%(id)s].%(ext)s\" with --windows-filenames; expected is the text before the \" [id]\" suffix. Regenerate with scripts/generate-sanitizer-fixtures.js.",
+  "ytDlpVersion": "2026.07.04",
+  "cases": [
+    {
+      "input": "Simple title",
+      "expected": "Simple title"
+    },
+    {
+      "input": "AC/DC - Back In Black",
+      "expected": "AC⧸DC - Back In Black"
+    },
+    {
+      "input": "Back\\slash title",
+      "expected": "Back⧹slash title"
+    },
+    {
+      "input": "Title: Subtitle",
+      "expected": "Title： Subtitle"
+    },
+    {
+      "input": "Live at 12:30:45 tonight",
+      "expected": "Live at 12_30_45 tonight"
+    },
+    {
+      "input": "Score 3:2 final",
+      "expected": "Score 3_2 final"
+    },
+    {
+      "input": "Ratio 16:9:4",
+      "expected": "Ratio 16_9_4"
+    },
+    {
+      "input": "Ends with colon:",
+      "expected": "Ends with colon："
+    },
+    {
+      "input": "1:2:3",
+      "expected": "1_2_3"
+    },
+    {
+      "input": "He said \"hello\"",
+      "expected": "He said ＂hello＂"
+    },
+    {
+      "input": "\"Fully quoted\"",
+      "expected": "＂Fully quoted＂"
+    },
+    {
+      "input": "What? Why?!",
+      "expected": "What？ Why？!"
+    },
+    {
+      "input": "??",
+      "expected": "？？"
+    },
+    {
+      "input": "Wild*card | pipe <angle> brackets",
+      "expected": "Wild＊card ｜ pipe ＜angle＞ brackets"
+    },
+    {
+      "input": "Mixed /\\:*?\"<>| all",
+      "expected": "Mixed ⧸⧹：＊？＂＜＞｜ all"
+    },
+    {
+      "input": "Trailing dot.",
+      "expected": "Trailing dot."
+    },
+    {
+      "input": "Trailing dots...",
+      "expected": "Trailing dots..."
+    },
+    {
+      "input": "Trailing space ",
+      "expected": "Trailing space "
+    },
+    {
+      "input": "  Leading spaces",
+      "expected": "  Leading spaces"
+    },
+    {
+      "input": ".hidden start",
+      "expected": ".hidden start"
+    },
+    {
+      "input": "-dash start",
+      "expected": "-dash start"
+    },
+    {
+      "input": "__double__underscore__",
+      "expected": "__double__underscore__"
+    },
+    {
+      "input": "Line one\nLine two",
+      "expected": "Line one Line two"
+    },
+    {
+      "input": "Repeated \n\n\n newlines",
+      "expected": "Repeated   newlines"
+    },
+    {
+      "input": "\nLeading newline",
+      "expected": "Leading newline"
+    },
+    {
+      "input": "Trailing newline\n",
+      "expected": "Trailing newline"
+    },
+    {
+      "input": "Tab\tseparated",
+      "expected": "Tabseparated"
+    },
+    {
+      "input": "Bell\u0007char",
+      "expected": "Bellchar"
+    },
+    {
+      "input": "Deletechar",
+      "expected": "Deletechar"
+    },
+    {
+      "input": "Zero​width space",
+      "expected": "Zero​width space"
+    },
+    {
+      "input": "Emoji 🎮 gaming 🔥🔥",
+      "expected": "Emoji 🎮 gaming 🔥🔥"
+    },
+    {
+      "input": "Flag 🇺🇸 and family 👨‍👩‍👧",
+      "expected": "Flag 🇺🇸 and family 👨‍👩‍👧"
+    },
+    {
+      "input": "Math 𝓗𝓮𝓵𝓵𝓸 bold",
+      "expected": "Math 𝓗𝓮𝓵𝓵𝓸 bold"
+    },
+    {
+      "input": "Fullwidth ＡＢＣ １２３ ：？",
+      "expected": "Fullwidth ＡＢＣ １２３ ：？"
+    },
+    {
+      "input": "CJK 日本語のタイトル 中文标题 한국어",
+      "expected": "CJK 日本語のタイトル 中文标题 한국어"
+    },
+    {
+      "input": "Accents café naïve Ærøskøbing",
+      "expected": "Accents café naïve Ærøskøbing"
+    },
+    {
+      "input": "RTL עברית العربية",
+      "expected": "RTL עברית العربية"
+    },
+    {
+      "input": "Percent %(title)s literal",
+      "expected": "Percent %(title)s literal"
+    },
+    {
+      "input": "BEYBLADE | Ep.19 Under the Microscope | Ep.20 It's All Relative",
+      "expected": "BEYBLADE ｜ Ep.19 Under the Microscope ｜ Ep.20 It's All Relative"
+    },
+    {
+      "input": "Hermitcraft 10: Episode 43 - THE LAST DAY! (the end of an era, thanks for watching)",
+      "expected": "Hermitcraft 10： Episode 43 - THE LAST DAY! (the end of an era, thanks for watching)"
+    },
+    {
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa??::",
+      "expected": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa？？：："
+    },
+    {
+      "input": "ああああああああああああああああああああああああああああああ",
+      "expected": "ああああああああああああああああああああああああああああああ"
+    },
+    {
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀tail",
+      "expected": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀tail"
+    },
+    {
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaéb",
+      "expected": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaéb"
+    },
+    {
+      "input": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb日本",
+      "expected": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb日本"
+    }
+  ]
+}

@@ -11,17 +11,34 @@ jest.mock('../../../shared/SubfolderAutocomplete', () => ({
   SubfolderAutocomplete: ({
     value,
     onChange,
+    layoutOf,
   }: {
     value: string | null;
     onChange: (value: string | null) => void;
+    layoutOf?: (name: string) => string;
   }) => {
     const React = require('react');
     return React.createElement(
       'button',
-      { 'data-testid': 'subfolder-mock', onClick: () => onChange('Kids') },
+      {
+        'data-testid': 'subfolder-mock',
+        'data-kids-layout': layoutOf ? layoutOf('Kids') : 'none',
+        onClick: () => onChange('Kids'),
+      },
       `subfolder:${value ?? 'null'}`
     );
   },
+}));
+
+// Library folders named here have the TV layout ('' = main folder).
+let mockTvFolders: string[] = [];
+jest.mock('../../../../hooks/useLibraryFolders', () => ({
+  useLibraryFolders: () => ({
+    folders: [],
+    loading: false,
+    error: null,
+    layoutOf: (name: string) => (mockTvFolders.includes(name) ? 'tv' : 'videos'),
+  }),
 }));
 
 // Stable return references: these mirror the real hooks' memoized values.
@@ -89,6 +106,7 @@ function setupDialog(overrides: Partial<React.ComponentProps<typeof PlaylistSett
 
 describe('PlaylistSettingsDialog', () => {
   beforeEach(() => {
+    mockTvFolders = [];
     mockMutationsReturn = {
       updateSettings: jest.fn().mockResolvedValue(true),
       pending: false,
@@ -258,6 +276,39 @@ describe('PlaylistSettingsDialog', () => {
 
     expect(screen.queryByText(/applies the next time this playlist syncs/i)).not.toBeInTheDocument();
   });
+  describe('TV folders', () => {
+    test('passes the folder layouts to the subfolder picker', () => {
+      mockTvFolders = ['Kids'];
+      setupDialog();
+      expect(screen.getByTestId('subfolder-mock')).toHaveAttribute('data-kids-layout', 'tv');
+    });
+
+    test('hides the MP3 download types once a TV subfolder is chosen', async () => {
+      mockTvFolders = ['Kids'];
+      setupDialog();
+
+      fireEvent.click(screen.getByTestId('subfolder-mock'));
+      fireEvent.mouseDown(screen.getByLabelText('Download Type'));
+
+      expect(await screen.findByRole('option', { name: 'Video Only (default)' })).toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: 'MP3 Only' })).not.toBeInTheDocument();
+    });
+
+    test('explains that TV folders are video-only for a playlist saving to a TV main folder', () => {
+      mockTvFolders = [''];
+      setupDialog();
+      expect(screen.getByText('TV folders are video-only.')).toBeInTheDocument();
+    });
+
+    test('keeps the MP3 download types for a Videos folder', async () => {
+      setupDialog();
+
+      fireEvent.mouseDown(screen.getByLabelText('Download Type'));
+
+      expect(await screen.findByRole('option', { name: 'MP3 Only' })).toBeInTheDocument();
+    });
+  });
+
   test('opens reset confirmation from an established starting point', () => {
     const props = setupDialog({
       playlist: { ...basePlaylist, auto_download_baseline_at: '2026-09-01T00:00:00Z' },

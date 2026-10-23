@@ -66,6 +66,25 @@ export const Default: Story = {
         http.get('/api/channels/subfolders', () =>
           HttpResponse.json(['Default', 'MySubFolder'])
         ),
+        http.get('/api/channels/UC_TEST/tv', () =>
+          HttpResponse.json({
+            layout: 'videos',
+            libraryFolder: '',
+            show: null,
+            tvFolders: ['Shows'],
+            defaultFolder: '',
+            defaultFolderLayout: 'videos',
+            hasDownloads: false,
+          })
+        ),
+        http.get('/api/library-folders', () =>
+          HttpResponse.json({
+            folders: [
+              { name: '', layout: 'videos', isDefault: true, hasFiles: true, channels: 1 },
+              { name: 'Shows', layout: 'tv', isDefault: false, hasFiles: false, channels: 0 },
+            ],
+          })
+        ),
         http.get('/api/channels/UC_TEST/filter-preview', () =>
           HttpResponse.json({
             videos: [],

@@ -319,6 +319,18 @@ describe('plexModule', () => {
       expect(plexModule.getLibraryIdForSubfolder('kids')).toBe('2');
       expect(plexModule.getLibraryIdForSubfolder('unknown')).toBe('1');
     });
+
+    test('matches a mapping ignoring case and surrounding spaces', () => {
+      config.plexSubfolderLibraryMappings = [{ subfolder: 'Kids', libraryId: '2' }];
+
+      expect(plexModule.getLibraryIdForSubfolder(' kids ')).toBe('2');
+    });
+
+    test('falls back to the default library for an explicit default entry', () => {
+      config.plexSubfolderLibraryMappings = [{ subfolder: 'Kids', libraryId: null }];
+
+      expect(plexModule.getLibraryIdForSubfolder('Kids')).toBe('1');
+    });
   });
 
   describe('refreshLibrariesForSubfolders', () => {
@@ -655,6 +667,16 @@ describe('plexModule', () => {
         { timeout: 10000 }
       );
       expect(result).toHaveLength(1);
+    });
+
+    test('returns each library type', async () => {
+      axios.get.mockResolvedValue({
+        data: { MediaContainer: { Directory: [{ key: '41', title: 'TV', type: 'show', Location: [] }] } },
+      });
+
+      const result = await plexModule.getLibrariesWithParams('192.168.1.10', 'token', '32400');
+
+      expect(result).toEqual([{ id: '41', title: 'TV', type: 'show', locations: [] }]);
     });
   });
 

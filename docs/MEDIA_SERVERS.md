@@ -31,12 +31,33 @@ Youtarr supports integration with multiple media servers, providing rich metadat
 All media servers receive:
 - **Video Files**: MP4 with embedded metadata
 - **Thumbnails**: Video preview images
-- **NFO Files**: XML metadata for each video if enabled in Settings -> Core (Download Settings section)
-- **Poster Images**: Channel artwork (poster.jpg) if enabled in Settings -> Core (Download Settings section)
+- **NFO Files**: XML metadata for each video if enabled in Settings -> Core -> **Media server files**
+- **Poster Images**: Channel artwork (poster.jpg) if enabled in Settings -> Core -> **Media server files**
 
-Optional artwork, both off by default and enabled in the same Download Settings section:
+Optional artwork, both off by default and enabled in the same **Media server files** section:
 - **Video Fanart**: `<video name>-fanart.jpg` beside each video, from the video thumbnail. Some Plex clients (NVIDIA Shield, for example) use it as the background preview.
 - **Backdrop Images**: `backdrop.jpg` in each channel folder (from the channel banner) plus `<video name>-backdrop.jpg` beside each video, used by Emby and Jellyfin for background art.
+
+## TV Shows
+
+A library folder (the main folder or a `__subfolder`) can use the **TV shows** layout instead of Videos. Youtarr then saves each channel in it as a show: year seasons, episodes numbered by upload time (`S2026E09281530` is September 28, 2026, 15:30 UTC), an episode NFO file for every video, and `tvshow.nfo` plus channel art in the show folder. Set a folder's layout under Settings -> **Library folders**, or switch a channel to **TV show** under Channel Settings -> **TV Show**. See [TV folders](YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md#tv-folders) for the layout, [Save Channels as TV Shows](USAGE_GUIDE.md#save-channels-as-tv-shows) for switching channels that already have downloads, and [Move an existing setup to TV shows](USAGE_GUIDE.md#move-an-existing-setup-to-tv-shows) for changing the libraries you already have.
+
+Give each TV folder its own TV library, pointed at the folder itself:
+
+| Server | Library type | Settings | Guide |
+|--------|--------------|----------|-------|
+| **Plex** | TV Shows | Scanner Plex TV Series, agent **Plex NFO Series** (or Plex Personal Media), local assets on | [Plex](media-servers/plex.md#tv-shows) |
+| **Jellyfin** | Shows | NFO saver off, metadata downloaders and image fetchers off | [Jellyfin](media-servers/jellyfin.md#tv-shows) |
+| **Emby** | TV shows | NFO metadata reader on, NFO saver off, metadata downloaders and image fetchers off | [Emby](media-servers/emby.md#tv-shows) |
+| **Kodi** | TV shows source | Local information only | [Kodi](media-servers/kodi.md#tv-shows) |
+
+Not Jellyfin's `Mixed Movies and Shows` or Emby's `Mixed Content`: those decide per folder whether it holds a movie or a series and behaved inconsistently with Youtarr's files in our testing, so the library check reports them on a TV folder as the wrong type. Use Movies (or Plex's Other Videos) libraries for Videos folders and Shows/TV Shows libraries for TV folders.
+
+**One library per folder once you use TV shows.** While every folder uses Videos, one library on your whole downloads folder shows them all, on every server. Once a `__subfolder` is a TV folder, it needs a library of its own: Jellyfin and Emby show a folder in only one library, so while another library includes your downloads folder a TV library inside it stays empty, and Plex shows the episodes in both libraries instead. So point your video libraries at the Video folders one by one (one library can list several folders) rather than at the downloads folder, and move what is saved directly in the downloads folder into a Video folder (Youtarr offers this when you add a TV show folder). When the main folder itself uses TV shows, one TV library on the downloads folder shows it instead; with other folders in use (Video or TV show folders) that works on Plex only. [Move an existing setup to TV shows](USAGE_GUIDE.md#move-an-existing-setup-to-tv-shows) walks through each starting setup.
+
+**The library check.** Youtarr reads your servers' libraries and shows, in Settings -> **Library folders**, on each folder's page, which libraries hold it and what to fix: no library yet, the wrong library type, the Plex Series agent or a legacy Plex agent, a Jellyfin or Emby library that saves NFO files or looks items up online, another library that includes the same folder, or a missing Plex refresh mapping. Channel Settings -> **TV Show** shows the same for the channel's TV folder, and the review of a move shows it for the TV folders the videos move into.
+
+**Watch state.** Moving a video between a Videos folder and a TV folder makes it a new item on every server. Moving a show to another TV folder keeps its watch state on Plex (with Plex NFO Series) and Jellyfin; Emby keys watch state by file path. Wherever the state didn't carry over, Youtarr restores the played state and resume position once the server has scanned the moved files: for every Jellyfin and Emby user, and for the Plex server owner.
 
 ## Multi-Library Organization
 
@@ -61,7 +82,7 @@ See [YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md](YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.m
 
 ### Essential Settings
 
-Navigate to Settings -> Core, Download Settings section:
+Navigate to Settings -> Core -> **Media server files**:
 
 *The .nfo and poster files are not used by Plex, but it is recommended to leave them enabled since they provide the best compatibility for all media servers*
 
@@ -69,10 +90,10 @@ Disable if you are using Plex-only and want less "clutter" of files
 
 | Setting | Default | Purpose |
 |---------|---------|---------|
-| **Generate video .nfo files** | Enabled | Creates metadata for Kodi/Jellyfin/Emby |
-| **Copy channel poster.jpg files** | Enabled | Adds channel artwork to folders |
-| **Create video fanart files** | Disabled | Writes `-fanart.jpg` per video; some Plex clients use it as the background preview |
-| **Create backdrop images** | Disabled | Writes `backdrop.jpg` per channel and `-backdrop.jpg` per video for Emby/Jellyfin background art |
+| **Video .nfo files** | Enabled | Creates metadata for Kodi/Jellyfin/Emby |
+| **Channel poster.jpg** | Enabled | Adds channel artwork to folders |
+| **Video fanart** | Disabled | Writes `-fanart.jpg` per video; some Plex clients use it as the background preview |
+| **Backdrop images** | Disabled | Writes `backdrop.jpg` per channel and `-backdrop.jpg` per video for Emby/Jellyfin background art |
 
 ### Platform-Specific Settings
 
@@ -117,7 +138,7 @@ See [Youtarr Downloads Folder Structure](YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md)
 **Embedded MP4 Metadata**:
 | Field                | Description                               |
 | -------------------- | ----------------------------------------- |
-| `title`              | `Channel - Title` by default; just the title when **Prefix channel name in embedded video title** is off |
+| `title`              | `Channel - Title` by default; just the title when **Channel name in embedded title** (Settings -> Core -> **Naming**) is off |
 | `artist`             | Channel name                              |
 | `studio`             | Channel name                              |
 | `album`              | Channel name (for collection grouping)    |
@@ -133,7 +154,7 @@ Youtarr can mirror subscribed YouTube playlists into Plex, Jellyfin, and Emby as
 
 ## Watch Status Sync
 
-Youtarr can pull per-video, per-user watch status from Plex, Jellyfin, and Emby, show a Watched chip on its listing pages, and let you filter your library by watched state. The sync is one-way; nothing is written back to your servers. See [Track Watch Status from Media Servers](USAGE_GUIDE.md#track-watch-status-from-media-servers) for the workflow and the [Configuration Reference](CONFIG.md#watch-status-sync) for the config keys.
+Youtarr can pull per-video, per-user watch status from Plex, Jellyfin, and Emby, show a Watched chip on its listing pages, and let you filter your library by watched state. Youtarr writes watch state back to a server only to restore it after Youtarr moves your files (see [TV Shows](#tv-shows)). See [Track Watch Status from Media Servers](USAGE_GUIDE.md#track-watch-status-from-media-servers) for the workflow and the [Configuration Reference](CONFIG.md#watch-status-sync) for the config keys.
 
 ## Quick Start Guides
 
@@ -145,7 +166,7 @@ Youtarr can pull per-video, per-user watch status from Plex, Jellyfin, and Emby,
    - [Kodi Guide](media-servers/kodi.md)
    - [Emby Guide](media-servers/emby.md)
 
-2. **Enable Metadata Generation** in Youtarr (Settings -> Core)
+2. **Enable Metadata Generation** in Youtarr (Settings -> Core -> **Media server files**)
 
 3. **Add Channels** and let Youtarr download with metadata
 
@@ -154,7 +175,7 @@ Youtarr can pull per-video, per-user watch status from Plex, Jellyfin, and Emby,
 ### For Existing Users
 
 If you already have downloaded videos:
-1. Enable metadata generation in Settings -> Core
+1. Enable metadata generation in Settings -> Core -> **Media server files**
 2. New downloads will include metadata
 3. Existing videos won't be retroactively updated
 4. Consider deleting and re-downloading if metadata is important
@@ -170,6 +191,8 @@ If you already have downloaded videos:
 | Library not updating | Check API key (Plex) or trigger manual scan | Plex |
 | Special characters broken | Ensure UTF-8 encoding, update media server | All |
 | Duplicate entries | Check for overlapping library paths | All |
+| TV library is empty | Another library includes the TV folder; point it at your Videos folders instead | Jellyfin, Emby |
+| Episodes show twice | Another library includes the TV folder (for example a library at the downloads folder) | Plex |
 
 ### Getting Help
 

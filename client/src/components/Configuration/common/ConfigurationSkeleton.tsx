@@ -5,7 +5,6 @@ import {
   Skeleton,
   Card,
   CardContent,
-  Grid,
 } from '../../ui';
 
 interface ConfigurationSkeletonProps {
@@ -38,30 +37,19 @@ function ConfigurationSkeleton({ compact = false }: ConfigurationSkeletonProps) 
         </span>
       )}
 
-      {/* Loading skeleton for Core Settings */}
-      <Card elevation={2} style={{ marginBottom: 24, border: '1px solid var(--border)' }}>
-        <CardContent>
-          <Skeleton variant="text" width={150} height={32} style={{ marginBottom: 8 }} />
-          <Skeleton variant="text" width={250} height={20} style={{ marginBottom: 16 }} />
-          <Grid container spacing={2} style={{ marginTop: 8 }}>
-            <Grid item xs={12}>
-              <Skeleton variant="rectangular" height={56} />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Skeleton variant="rectangular" height={42} />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Skeleton variant="rectangular" height={56} />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Skeleton variant="rectangular" height={56} />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Skeleton variant="rectangular" height={56} />
-            </Grid>
-          </Grid>
-        </CardContent>
-      </Card>
+      {/* Loading skeleton for Core: the Library folders card, then two titled sections */}
+      <div className="mb-6 flex flex-col gap-8">
+        <Skeleton variant="rectangular" height={140} />
+        {[1, 2].map((row) => (
+          <div key={row} className="grid gap-2.5 md:grid-cols-[240px_minmax(0,1fr)] md:gap-10">
+            <div>
+              <Skeleton variant="text" width={120} height={22} />
+              <Skeleton variant="text" width={200} height={16} className="mt-1" />
+            </div>
+            <Skeleton variant="rectangular" height={120} />
+          </div>
+        ))}
+      </div>
 
       {/* Loading skeleton for Accordions */}
       {[1, 2, 3, 4, 5].map((index) => (

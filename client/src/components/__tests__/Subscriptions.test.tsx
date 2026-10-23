@@ -171,11 +171,16 @@ jest.mock('../../hooks/usePlaylistMutations', () => ({
   usePlaylistMutations: jest.fn(),
 }));
 
+jest.mock('../../hooks/useLibraryFolders', () => ({
+  useLibraryFolders: jest.fn(),
+}));
+
 const { useChannelList } = require('../Subscriptions/hooks/useChannelList');
 const { useChannelMutations } = require('../Subscriptions/hooks/useChannelMutations');
 const { useConfig } = require('../../hooks/useConfig');
 const { usePlaylistList } = require('../../hooks/usePlaylistList');
 const { usePlaylistMutations } = require('../../hooks/usePlaylistMutations');
+const { useLibraryFolders } = require('../../hooks/useLibraryFolders');
 
 describe('Subscriptions Component', () => {
   const mockToken = 'test-token';
@@ -254,6 +259,13 @@ describe('Subscriptions Component', () => {
       unsubscribe: mockUnsubscribePlaylist,
       error: null,
       pending: false,
+    });
+
+    useLibraryFolders.mockReturnValue({
+      folders: [],
+      loading: false,
+      error: null,
+      layoutOf: () => 'videos',
     });
   });
 
@@ -1406,6 +1418,110 @@ describe('Subscriptions Component', () => {
         expect(useChannelList).toHaveBeenCalledWith(
           expect.objectContaining({ subFolder: undefined })
         );
+      });
+    });
+  });
+
+  describe('TV Filtering', () => {
+    const tvFolder = { name: 'Shows', layout: 'tv', isDefault: false, hasFiles: false, channels: 1 };
+
+    const mockTvFolders = () => {
+      useLibraryFolders.mockReturnValue({
+        folders: [tvFolder],
+        loading: false,
+        error: null,
+        layoutOf: (name: string) => (name === 'Shows' ? 'tv' : 'videos'),
+      });
+    };
+
+    const mockPagedChannels = () => {
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 50,
+        totalPages: 3,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: ['music'],
+      });
+    };
+
+    test('does not offer the TV filter without a TV folder', async () => {
+      const user = userEvent.setup();
+      renderSubscriptions();
+
+      await user.click(screen.getByRole('button', { name: /filter or group by folder/i }));
+
+      await screen.findByRole('menuitem', { name: /all folders/i });
+      expect(screen.queryByRole('menuitem', { name: /tv shows only/i })).not.toBeInTheDocument();
+    });
+
+    test('lists only TV channels when "TV shows only" is selected', async () => {
+      const user = userEvent.setup();
+      mockTvFolders();
+      renderSubscriptions();
+
+      await user.click(screen.getByRole('button', { name: /filter or group by folder/i }));
+      await user.click(await screen.findByRole('menuitem', { name: /tv shows only/i }));
+
+      await waitFor(() => {
+        expect(useChannelList).toHaveBeenLastCalledWith(
+          expect.objectContaining({ layout: 'tv', subFolder: undefined })
+        );
+      });
+    });
+
+    test('resets to the first page when the TV filter is selected', async () => {
+      const user = userEvent.setup();
+      mockTvFolders();
+      mockPagedChannels();
+      renderSubscriptions();
+
+      const [nextButton] = screen.getAllByRole('button', { name: /go to page 2/i });
+      await user.click(nextButton);
+      await waitFor(() => {
+        expect(useChannelList).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 }));
+      });
+
+      await user.click(screen.getByRole('button', { name: /filter or group by folder/i }));
+      await user.click(await screen.findByRole('menuitem', { name: /tv shows only/i }));
+
+      await waitFor(() => {
+        expect(useChannelList).toHaveBeenLastCalledWith(
+          expect.objectContaining({ layout: 'tv', page: 1 })
+        );
+      });
+    });
+
+    test('selecting a folder turns the TV filter off', async () => {
+      const user = userEvent.setup();
+      mockTvFolders();
+      mockPagedChannels();
+      renderSubscriptions();
+
+      await user.click(screen.getByRole('button', { name: /filter or group by folder/i }));
+      await user.click(await screen.findByRole('menuitem', { name: /tv shows only/i }));
+      await user.click(screen.getByRole('button', { name: /filtering by tv shows/i }));
+      await user.click(screen.getByText('__music/'));
+
+      await waitFor(() => {
+        expect(useChannelList).toHaveBeenLastCalledWith(
+          expect.objectContaining({ layout: undefined, subFolder: 'music' })
+        );
+      });
+    });
+
+    test('offers the TV filter in the mobile actions menu', async () => {
+      const user = userEvent.setup();
+      (useMediaQuery as jest.Mock).mockReturnValue(true);
+      mockTvFolders();
+      renderSubscriptions();
+
+      await user.click(screen.getByRole('button', { name: /actions/i }));
+      await user.click(await screen.findByRole('menuitem', { name: /tv shows only/i }));
+
+      await waitFor(() => {
+        expect(useChannelList).toHaveBeenLastCalledWith(expect.objectContaining({ layout: 'tv' }));
       });
     });
   });

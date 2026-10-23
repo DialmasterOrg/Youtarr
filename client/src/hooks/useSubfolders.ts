@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { toRequestError } from '../components/shared/Reorganize/reorganizeErrors';
+import type { LibraryLayout } from '../types/tvShows';
 
 export const SUBFOLDERS_UPDATED_EVENT = 'subfolders-updated';
 
@@ -8,7 +10,7 @@ interface UseSubfoldersResult {
   loading: boolean;
   error: Error | null;
   refetch: () => Promise<void>;
-  createSubfolder: (name: string) => Promise<void>;
+  createSubfolder: (name: string, layout?: LibraryLayout) => Promise<void>;
   deleteSubfolder: (name: string) => Promise<void>;
 }
 
@@ -43,12 +45,13 @@ export function useSubfolders(token: string | null): UseSubfoldersResult {
     }
   }, [token]);
 
-  const createSubfolder = useCallback(async (name: string) => {
+  const createSubfolder = useCallback(async (name: string, layout?: LibraryLayout) => {
     if (!token) return;
     try {
-      await axios.post('/api/subfolders', { name }, { headers: { 'x-access-token': token } });
+      await axios.post('/api/subfolders', layout ? { name, layout } : { name }, { headers: { 'x-access-token': token } });
     } catch (err) {
-      throw new Error(extractErrorMessage(err, 'Failed to create subfolder'));
+      // A reorganize refusal keeps its change for the review.
+      throw toRequestError(err, 'Failed to create subfolder');
     }
     window.dispatchEvent(new Event(SUBFOLDERS_UPDATED_EVENT));
   }, [token]);

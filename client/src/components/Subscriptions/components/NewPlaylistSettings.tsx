@@ -56,8 +56,8 @@ const NewPlaylistSettings: React.FC<NewPlaylistSettingsProps> = ({ token, values
         onChange={onChange}
         globalQuality={config.preferredResolution || '1080'}
         defaultSubfolder={config.defaultSubfolder || null}
-        subfolderLabel="Default Subfolder"
-        subfolderHelperText="Where this playlist's videos are saved when the channel has no subfolder of its own."
+        subfolderLabel="Library folder"
+        subfolderHelperText="Where this playlist's videos are saved when the channel has no library folder of its own."
         mp3OnlyHint={MP3_ONLY_SYNC_HINT}
         disabled={readOnly}
       />

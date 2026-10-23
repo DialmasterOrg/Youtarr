@@ -6,6 +6,8 @@
 export interface PlexLibrary {
   id: string;
   title: string;
+  /** Plex section type: movie, show, artist, photo */
+  type?: string;
 }
 
 /**

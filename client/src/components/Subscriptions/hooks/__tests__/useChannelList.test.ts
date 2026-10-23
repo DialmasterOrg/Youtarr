@@ -653,6 +653,79 @@ describe('useChannelList', () => {
         }),
       });
     });
+
+    test('sends layout=tv when the TV filter is active', async () => {
+      axios.get.mockResolvedValue({
+        data: {
+          channels: [],
+          total: 0,
+          totalPages: 0,
+        },
+      });
+
+      renderHook(() => useChannelList({ ...defaultParams, layout: 'tv' }));
+
+      await waitFor(() => {
+        expect(axios.get).toHaveBeenCalledTimes(1);
+      });
+
+      expect(axios.get).toHaveBeenCalledWith('/getchannels', {
+        headers: expect.any(Object),
+        params: expect.objectContaining({ layout: 'tv' }),
+      });
+    });
+
+    test('omits the layout param when the TV filter is off', async () => {
+      axios.get.mockResolvedValue({
+        data: {
+          channels: [],
+          total: 0,
+          totalPages: 0,
+        },
+      });
+
+      renderHook(() => useChannelList(defaultParams));
+
+      await waitFor(() => {
+        expect(axios.get).toHaveBeenCalledTimes(1);
+      });
+
+      expect(axios.get.mock.calls[0][1].params).not.toHaveProperty('layout');
+    });
+
+    test('refetches when the layout filter changes', async () => {
+      axios.get.mockResolvedValue({
+        data: {
+          channels: [],
+          total: 0,
+          totalPages: 0,
+        },
+      });
+
+      const { rerender } = renderHook(
+        ({ layout }: { layout?: 'tv' }) =>
+          useChannelList({
+            ...defaultParams,
+            layout,
+          }),
+        { initialProps: { layout: undefined as 'tv' | undefined } }
+      );
+
+      await waitFor(() => {
+        expect(axios.get).toHaveBeenCalledTimes(1);
+      });
+
+      rerender({ layout: 'tv' as 'tv' | undefined });
+
+      await waitFor(() => {
+        expect(axios.get).toHaveBeenCalledTimes(2);
+      });
+
+      expect(axios.get).toHaveBeenLastCalledWith('/getchannels', {
+        headers: expect.any(Object),
+        params: expect.objectContaining({ layout: 'tv' }),
+      });
+    });
   });
 
   describe('Loading State Management', () => {

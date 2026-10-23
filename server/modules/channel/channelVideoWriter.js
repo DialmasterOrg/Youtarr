@@ -1,5 +1,8 @@
 const ChannelVideo = require('../../models/channelvideo');
+const Channel = require('../../models/channel');
+const logger = require('../../logger');
 const channelVideoReanchor = require('../channelVideoReanchor');
+const titleShowSaver = require('../tvShows/titleShowSaver');
 const { PUBLISHED_AT_SOURCE } = require('../constants/publishedAtSource');
 
 class ChannelVideoWriter {
@@ -32,6 +35,7 @@ class ChannelVideoWriter {
     // ordering correct around scattered exact dates, since a fetched/existing
     // approximate date newer than a nearby exact date must be clamped below it.
     const entries = [];
+    const createdIds = [];
     for (const video of videos) {
       const [videoRecord, created] = await ChannelVideo.findOrCreate({
         where: {
@@ -47,6 +51,7 @@ class ChannelVideoWriter {
         },
       });
 
+      if (created) createdIds.push(video.youtube_id);
       if (!created) {
         const updates = {
           title: video.title,
@@ -119,6 +124,24 @@ class ChannelVideoWriter {
         if (newSource !== entry.oldSource) fields.published_at_source = newSource;
         await ChannelVideo.update(fields, { where: { id: entry.id } });
       }
+    }
+
+    await this.classifyNewVideos(channelId, createdIds);
+  }
+
+  /**
+   * Put videos a refresh found into the channel's title shows (only new
+   * ones: an existing video keeps its episode whatever its title says now).
+   * Never fails the refresh.
+   */
+  async classifyNewVideos(channelId, youtubeIds) {
+    if (youtubeIds.length === 0) return;
+    try {
+      const channel = await Channel.findOne({ where: { channel_id: channelId } });
+      if (!channel || !channel.enabled) return;
+      await titleShowSaver.classifyNew({ channel, youtubeIds });
+    } catch (err) {
+      logger.warn({ err, channelId }, 'Could not classify new videos into the channel\'s title shows');
     }
   }
 }

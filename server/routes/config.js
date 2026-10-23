@@ -192,7 +192,9 @@ module.exports = function createConfigRoutes({
    * /updateconfig:
    *   post:
    *     summary: Update application configuration
-   *     description: Update the application configuration. Sensitive fields (passwordHash, username) are protected.
+   *     description: |
+   *       Update the application configuration. Sensitive fields (passwordHash, username) are protected.
+   *       defaultSubfolder, plexSubfolderLibraryMappings and mainFolderLayout are kept as stored; change them through PUT /api/library-folders/default, PUT/DELETE /api/library-folders/plex-mapping and PUT /api/library-folders.
    *     tags: [Configuration]
    *     requestBody:
    *       required: true
@@ -379,6 +381,13 @@ module.exports = function createConfigRoutes({
     updateData.ytdlpLastUpdated = currentConfig.ytdlpLastUpdated;
     updateData.ytdlpLastResult = currentConfig.ytdlpLastResult;
     updateData.rescanLastRun = currentConfig.rescanLastRun ?? null;
+    // Owned by the Library folders API; a Settings save sends stale copies.
+    // Read again here: the template check above can wait on yt-dlp while
+    // that API saves.
+    const storedConfig = configModule.getConfig();
+    updateData.mainFolderLayout = storedConfig.mainFolderLayout || 'videos';
+    updateData.defaultSubfolder = storedConfig.defaultSubfolder;
+    updateData.plexSubfolderLibraryMappings = storedConfig.plexSubfolderLibraryMappings;
 
     configModule.updateConfig(updateData);
 

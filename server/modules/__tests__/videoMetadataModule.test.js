@@ -6,6 +6,7 @@ describe('VideoMetadataModule', () => {
   let mockVideo;
   let mockChannelVideo;
   let mockLogger;
+  let mockEpisodeInfo;
   let mockConfigModule;
   let mockYtDlpRunner;
   let mockYoutubeApi;
@@ -85,6 +86,8 @@ describe('VideoMetadataModule', () => {
     jest.doMock('../ytDlpRunner', () => mockYtDlpRunner);
     jest.doMock('../youtubeApi', () => mockYoutubeApi);
     jest.doMock('../channelVideoReanchor', () => mockChannelVideoReanchor);
+    mockEpisodeInfo = { getEpisodeInfoMap: jest.fn().mockResolvedValue(new Map()) };
+    jest.doMock('../tvShows/episodeInfo', () => mockEpisodeInfo);
 
     videoMetadataModule = require('../videoMetadataModule');
   });
@@ -149,6 +152,31 @@ describe('VideoMetadataModule', () => {
       expect(result.formats).toBeUndefined();
       expect(result.automatic_captions).toBeUndefined();
       expect(result.thumbnails).toBeUndefined();
+    });
+
+    test('reports the episode of a downloaded TV episode', async () => {
+      const episode = { showName: 'Show', season: 2024, episode: 3151200, code: 'S2024E03151200' };
+      const filePath = '/tv/Show/Season 2024/S2024E03151200 - T [abc123].mp4';
+      mockFs.access.mockResolvedValue(undefined);
+      mockFs.readFile.mockResolvedValue(JSON.stringify({ upload_date: '20240315', _actual_filepath: filePath }));
+      mockVideo.findOne.mockResolvedValue(null);
+      mockEpisodeInfo.getEpisodeInfoMap.mockResolvedValueOnce(new Map([['abc123', episode]]));
+
+      const result = await videoMetadataModule.getVideoMetadata('abc123');
+
+      expect(mockEpisodeInfo.getEpisodeInfoMap).toHaveBeenCalledWith([{ youtubeId: 'abc123', filePath }]);
+      expect(result.episode).toEqual(episode);
+    });
+
+    test('reports no episode when the episode lookup fails', async () => {
+      mockFs.access.mockResolvedValue(undefined);
+      mockFs.readFile.mockResolvedValue(JSON.stringify({ upload_date: '20240315' }));
+      mockVideo.findOne.mockResolvedValue(null);
+      mockEpisodeInfo.getEpisodeInfoMap.mockRejectedValueOnce(new Error('db'));
+
+      const result = await videoMetadataModule.getVideoMetadata('abc123');
+
+      expect(result.episode).toBeNull();
     });
 
     test('does not include a downloadedTier field (tier is derived client-side)', async () => {

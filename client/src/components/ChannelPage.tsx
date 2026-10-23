@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, CardContent, Grid, Typography, Box, Tooltip, Chip, Popover, Dialog, DialogTitle, DialogContent, Button } from './ui';
 import { Settings as SettingsIcon, Clock as AccessTimeIcon, Filter as FilterAltIcon } from 'lucide-react';
@@ -13,8 +13,13 @@ import SubscriptionsBackButton from './shared/SubscriptionsBackButton';
 import OpenInYouTubeLink, { youtubeChannelUrl } from './shared/OpenInYouTubeLink';
 import SubFolderChip from './Subscriptions/components/chips/SubFolderChip';
 import QualityChip from './Subscriptions/components/chips/QualityChip';
+import TvChip from './Subscriptions/components/chips/TvChip';
+import ShowsChip from './Subscriptions/components/chips/ShowsChip';
 import AutoDownloadTabToggles from './ChannelPage/components/AutoDownloadTabToggles';
 import { useAutoDownloadTabToggle } from './ChannelPage/hooks/useAutoDownloadTabToggle';
+import { useChannelTv } from './ChannelPage/hooks/useChannelTv';
+import { useTitleShows } from './ChannelPage/hooks/useTitleShows';
+import { useDownloadListingsRefresh } from '../hooks/useDownloadListingsRefresh';
 import { SHARED_CHANNEL_META_CHIP_STYLE, SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE } from './shared/chipStyles';
 
 interface ChannelPageProps {
@@ -36,6 +41,20 @@ function ChannelPage({ token }: ChannelPageProps) {
   const { channel_id } = useParams();
   const { config, loading: configLoading } = useConfig(token);
   const globalPreferredResolution = config.preferredResolution || '1080';
+  const { tv: channelTv, refetch: refetchChannelTv } = useChannelTv(channel_id, token);
+  const { data: titleShowsData, refetch: refetchTitleShows } = useTitleShows(channel_id, token);
+  // Closing Channel Settings reloads the video list (show edits change planned episodes).
+  const [videosRefreshKey, setVideosRefreshKey] = useState(0);
+  // The header chips and the show filter follow downloads and reorganizes
+  // (which can end, or be undone, after Channel Settings closed).
+  useDownloadListingsRefresh(() => {
+    void refetchTitleShows();
+    void refetchChannelTv();
+  });
+  const activeTitleShows = useMemo(
+    () => (titleShowsData?.shows ?? []).filter((show) => !show.retired).map(({ id, name }) => ({ id, name })),
+    [titleShowsData]
+  );
 
   const handleSettingsSaved = (updated: {
     sub_folder: string | null;
@@ -76,6 +95,8 @@ function ChannelPage({ token }: ChannelPageProps) {
       }
       return next;
     });
+    // A folder change can switch the channel between Videos and TV.
+    void refetchChannelTv();
   };
 
   // Monotonic request id keeps a slow in-flight /getChannelInfo from
@@ -228,7 +249,13 @@ function ChannelPage({ token }: ChannelPageProps) {
     if (!channel) {
       return null;
     }
-    return <SubFolderChip subFolder={channel.sub_folder} />;
+    return (
+      <Box className="flex flex-wrap items-center gap-1">
+        <SubFolderChip subFolder={channel.sub_folder} />
+        {channelTv?.layout === 'tv' && <TvChip />}
+        <ShowsChip count={activeTitleShows.length} />
+      </Box>
+    );
   };
 
   const handleAutoDownloadTabsChange = useCallback((enabledTabs: string, savedChannelId: string) => {
@@ -663,12 +690,18 @@ function ChannelPage({ token }: ChannelPageProps) {
         channelAudioFormat={channel?.audio_format || null}
         channelAvailableTabs={channel?.available_tabs ?? null}
         onVideosLoaded={handleVideosLoaded}
+        titleShows={activeTitleShows}
+        refreshKey={videosRefreshKey}
       />
 
       {channel && channel_id && (
         <ChannelSettingsDialog
           open={settingsOpen}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => {
+            setSettingsOpen(false);
+            void refetchTitleShows();
+            setVideosRefreshKey((key) => key + 1);
+          }}
           channelId={channel_id}
           channelName={channel.uploader}
           token={token}
