@@ -66,7 +66,9 @@ class ChannelMetadataFetcher {
         skipSleepRequests: true,
       });
       logger.info('fetchChannelMetadata executing yt-dlp with args' + JSON.stringify(args));
-      const content = await channelYtdlpExecutor.executeYtDlpCommand(args, outputFilePath);
+      const content = await channelYtdlpExecutor.executeYtDlpCommand(args, outputFilePath, {
+        timeoutMs: 120000,
+      });
       logger.info('fetchChannelMetadata received yt-dlp output of length ' + content.length);
 
       const metadata = JSON.parse(content);
