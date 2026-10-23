@@ -1,5 +1,19 @@
 # Changelog
 
+## [v1.90.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.90.1) - 2026-10-22
+
+### Bug Fixes
+
+* move image to Node 22 for eMudhra CA distrust ([30f9262](https://github.com/DialmasterOrg/Youtarr/commit/30f9262fdd748f4aac817862798587f9f89aac40))
+* **deps:** bump storybook to 10.6.2 ([489a7fc](https://github.com/DialmasterOrg/Youtarr/commit/489a7fcb127a2b08558c26a95397237aaf191c48))
+
+
+### Documentation
+
+* update CHANGELOG for v1.90.0 [skip ci] ([c6ee0f3](https://github.com/DialmasterOrg/Youtarr/commit/c6ee0f3de34c62a0fd83475f8bdc570f0236ec29))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.90.0...v1.90.1
+
 ## [v1.90.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.90.0) - 2026-10-20
 
 ### Features
