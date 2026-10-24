@@ -484,6 +484,50 @@ describe('DownloadExecutor', () => {
 
   describe('doDownload', () => {
     const mockArgs = ['--format', 'best', 'https://youtube.com/watch?v=test'];
+    it.each([
+      ['stdout', 0, 'Read timed out.'], ['stdout', 1, 'Read timed out.'],
+      ['stderr', 0, 'Read timed out.'], ['stderr', 1, 'Read timed out.'],
+      ['stdout', 0, 'HTTP Error 403: Forbidden'], ['stdout', 1, 'HTTP Error 403: Forbidden'],
+      ['stderr', 0, 'HTTP Error 403: Forbidden'], ['stderr', 1, 'HTTP Error 403: Forbidden']
+    ])('keeps downloaded videos archived after a SponsorBlock error on %s (exit %i): %s', async (source, code, error) => {
+      const video = { youtubeId: 'abc123def45', filePath: '/output/video.mp4', fileSize: '1024' };
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([video]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/abc123def45']);
+      jobModule.getJob.mockReturnValue({ data: {} });
+      mockSpawn.mockImplementationOnce(() => {
+        setImmediate(() => {
+          mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://www.youtube.com/watch?v=abc123def45\n');
+          mockProcess[source].emit('data', `ERROR: Unable to communicate with SponsorBlock API: ${error}\n`);
+          endProcess(code, null);
+        });
+        return mockProcess;
+      });
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(archiveModule.removeVideoFromArchive).not.toHaveBeenCalled();
+      expect(jobModule.updateJob).toHaveBeenCalledWith(mockJobId, expect.objectContaining({
+        status: 'Complete with Warnings',
+        notes: 'SponsorBlock unavailable for 1 video',
+        data: expect.objectContaining({ videos: [video], failedVideos: [] })
+      }));
+      expect(notificationModule.sendDownloadNotification).toHaveBeenCalledWith(expect.objectContaining({
+        finalSummary: expect.objectContaining({ totalDownloaded: 1, totalFailed: 0 }),
+        videoData: [video]
+      }));
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast', null, 'download', 'downloadProgress', expect.objectContaining({
+          text: 'Download completed with warnings: 1 video downloaded, SponsorBlock unavailable for 1 video',
+          warning: true
+        })
+      );
+      expect(MessageEmitter.emitMessage).not.toHaveBeenCalledWith(
+        'broadcast', null, 'download', 'downloadProgress', expect.objectContaining({
+          errorCode: 'COOKIES_RECOMMENDED'
+        })
+      );
+    });
+
     const mockJobId = 'job-123';
     const mockJobType = 'Channel Downloads';
 

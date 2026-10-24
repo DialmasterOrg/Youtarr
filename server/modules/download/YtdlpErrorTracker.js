@@ -1,5 +1,6 @@
 const logger = require('../../logger');
 const ytDlpRunner = require('../ytDlpRunner');
+const { isNonFatalSponsorBlockError } = require('./ytdlpStderrSignals');
 
 function isExpectedYtdlpSkipMessage(message = '') {
   const normalized = String(message);
@@ -69,6 +70,7 @@ class YtdlpErrorTracker {
     // them, so the finalizer needs this to tell a subtitle-only exit 1 from a
     // real partial failure.
     this.subtitleFailureCount = 0;
+    this.sponsorBlockFailedVideoIds = new Set();
     // seenTerminatedChannelIds: sync dedupe across stdout/stderr.
     // terminatedChannelIds: only successful persists; drives hasOnlyHandledErrors.
     // terminatedChannels: rich entries for the summary, populated on success only.
@@ -96,18 +98,32 @@ class YtdlpErrorTracker {
     this.currentVideoId = youtubeId;
   }
 
+  get sponsorBlockFailureCount() {
+    return this.sponsorBlockFailedVideoIds.size;
+  }
+
   recordExpectedSkip(reason, source) {
     this.expectedSkipCount += 1;
     logger.info({ youtubeId: this.currentVideoId, reason, source }, 'Expected video skip from yt-dlp');
   }
 
   // Shared by stdout and stderr. Returns true when the line was consumed
-  // by an expected skip or termination, so the caller can suppress it.
+  // by an expected skip, termination or optional SponsorBlock lookup, so the
+  // caller can suppress it.
   handleErrorLine(line, source) {
     const errorMatch = line.match(/ERROR:\s*(.+)/);
     if (!errorMatch) return false;
 
-    this.lastErrorMessage = errorMatch[1].trim();
+    const errorMessage = errorMatch[1].trim();
+    // With --ignore-errors this lookup can fail while the video still downloads.
+    // A "Preprocessing:" error abandons the video and must remain a failure.
+    if (isNonFatalSponsorBlockError(errorMessage)) {
+      this.sponsorBlockFailedVideoIds.add(this.currentVideoId);
+      logger.warn({ youtubeId: this.currentVideoId, error: errorMessage, source }, 'SponsorBlock lookup failed; video download continues');
+      return true;
+    }
+
+    this.lastErrorMessage = errorMessage;
 
     if (isExpectedYtdlpSkipMessage(this.lastErrorMessage)) {
       this.recordExpectedSkip(this.lastErrorMessage, source);
