@@ -11,7 +11,7 @@ const PO_TOKEN_ADVISORY_PATTERN = /require a GVS PO Token/i;
 const SABR_RESTRICTION_PATTERN = /SABR-only streaming experiment/i;
 
 const HTTP_403_PATTERNS = ['http error 403', '403: forbidden'];
-const SPONSORBLOCK_ERROR_PATTERN = /^(?:ERROR:\s*)?Unable to communicate with SponsorBlock API\b/i;
+const SPONSORBLOCK_ERROR_PATTERN = /^(?:(?:ERROR|WARNING):\s*)?Unable to communicate with SponsorBlock API\b/i;
 
 function isNonFatalSponsorBlockError(line) {
   return SPONSORBLOCK_ERROR_PATTERN.test(String(line).trim());

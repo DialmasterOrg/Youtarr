@@ -808,7 +808,7 @@ Even with impersonation, YouTube's subtitle endpoint is flaky at times. When the
 
 ### SponsorBlock Lookup Fails
 
-If a download logs `ERROR: Unable to communicate with SponsorBlock API`, the video can still download successfully without SponsorBlock segment processing. Youtarr keeps successfully downloaded videos in the archive and marks the job "Complete with Warnings", with a note counting the affected videos. A failed SponsorBlock lookup alone does not cause the video to be downloaded again on the next run.
+If a download logs `ERROR: Unable to communicate with SponsorBlock API`, the video can still download successfully without SponsorBlock segment processing. Youtarr keeps successfully downloaded videos in the archive and marks the job "Complete with Warnings", and the download's completion message says how many videos couldn't reach SponsorBlock. A failed SponsorBlock lookup alone does not cause the video to be downloaded again on the next run.
 
 An error starting with `Preprocessing: Unable to communicate with SponsorBlock API` still counts as a video failure because yt-dlp abandons that video. Other video download failures are also reported normally.
 

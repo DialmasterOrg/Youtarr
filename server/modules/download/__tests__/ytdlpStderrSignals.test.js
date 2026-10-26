@@ -36,12 +36,19 @@ describe('ytdlpStderrSignals', () => {
       expect(containsHttp403('ERROR: Unable to communicate with SponsorBlock API: HTTP Error 403: Forbidden')).toBe(false);
     });
 
+    it.each([1, 2, 3])('ignores SponsorBlock API 403 retry warning %i', (retry) => {
+      expect(containsHttp403(
+        `WARNING: Unable to communicate with SponsorBlock API: HTTP Error 403: Forbidden. Retrying (${retry}/3)...`
+      )).toBe(false);
+    });
+
     it('still detects a fatal SponsorBlock preprocessing 403', () => {
       expect(containsHttp403('ERROR: Preprocessing: Unable to communicate with SponsorBlock API: HTTP Error 403: Forbidden')).toBe(true);
     });
 
     it('still detects a real download 403 alongside a SponsorBlock API 403', () => {
       expect(containsHttp403(
+        'WARNING: Unable to communicate with SponsorBlock API: HTTP Error 403: Forbidden. Retrying (1/3)...\n' +
         'ERROR: Unable to communicate with SponsorBlock API: HTTP Error 403: Forbidden\n' +
         'ERROR: unable to download video data: HTTP Error 403: Forbidden'
       )).toBe(true);
