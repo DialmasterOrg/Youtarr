@@ -46,6 +46,53 @@ describe('YtdlpErrorTracker', () => {
   });
 
   describe('handleErrorLine', () => {
+    it.each(['stdout', 'stderr'])('keeps a video successful when SponsorBlock times out on %s', (source) => {
+      const { tracker } = createTracker();
+      tracker.trackVideoStart('abc123def45');
+
+      const consumed = tracker.handleErrorLine(
+        'ERROR: Unable to communicate with SponsorBlock API: Read timed out.', source
+      );
+
+      expect(consumed).toBe(true);
+      expect(tracker.failedVideos.size).toBe(0);
+      expect(tracker.unexpectedErrorCount).toBe(0);
+      expect(tracker.sponsorBlockFailureCount).toBe(1);
+    });
+
+    it('counts affected videos rather than repeated SponsorBlock error lines', () => {
+      const { tracker } = createTracker();
+      const line = 'ERROR: Unable to communicate with SponsorBlock API: Read timed out.';
+      tracker.trackVideoStart('abc123def45');
+      tracker.handleErrorLine(line, 'stdout');
+      tracker.handleErrorLine(line, 'stderr');
+      tracker.trackVideoStart('def456ghi78');
+      tracker.handleErrorLine(line, 'stderr');
+
+      expect(tracker.sponsorBlockFailureCount).toBe(2);
+    });
+
+    it('still records a SponsorBlock preprocessing error as a video failure', () => {
+      const { tracker } = createTracker();
+      tracker.trackVideoStart('abc123def45');
+      tracker.handleErrorLine(
+        'ERROR: Preprocessing: Unable to communicate with SponsorBlock API: Read timed out.', 'stderr'
+      );
+
+      expect(tracker.failedVideos.has('abc123def45')).toBe(true);
+      expect(tracker.sponsorBlockFailureCount).toBe(0);
+    });
+
+    it('does not erase a real failure when a SponsorBlock error follows it', () => {
+      const { tracker } = createTracker();
+      tracker.trackVideoStart('abc123def45');
+      tracker.handleErrorLine('ERROR: Unable to download video data', 'stderr');
+      tracker.handleErrorLine('ERROR: Unable to communicate with SponsorBlock API: Read timed out.', 'stderr');
+
+      expect(tracker.failedVideos.get('abc123def45').error).toBe('Unable to download video data');
+      expect(tracker.unexpectedErrorCount).toBe(1);
+    });
+
     it('returns false and records nothing for a non-ERROR line', () => {
       const { tracker } = createTracker();
 

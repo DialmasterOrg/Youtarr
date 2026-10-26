@@ -806,6 +806,12 @@ This is the subtitle request (YouTube's timedtext endpoint), not the video: vide
 
 Even with impersonation, YouTube's subtitle endpoint is flaky at times. When the subtitle fetch fails, yt-dlp still downloads the video; Youtarr keeps the video, does not count it as a failed download, and marks the job "Complete with Warnings". If the extra retry time bothers you, disable subtitles in **Settings -> Core** until it settles.
 
+### SponsorBlock Lookup Fails
+
+If a download logs `ERROR: Unable to communicate with SponsorBlock API`, the video can still download successfully without SponsorBlock segment processing. Youtarr keeps successfully downloaded videos in the archive and marks the job "Complete with Warnings", with a note counting the affected videos. A failed SponsorBlock lookup alone does not cause the video to be downloaded again on the next run.
+
+An error starting with `Preprocessing: Unable to communicate with SponsorBlock API` still counts as a video failure because yt-dlp abandons that video. Other video download failures are also reported normally.
+
 ### Downloads Fail with "Conversion failed!" or "No space left on device" {#download-out-of-space}
 
 **Problem**: A video (usually a large one) downloads completely and then fails with `Conversion failed!`, or a job stops with `Out of disk space in the temporary folder`. If the disk is completely full you may also see every list in the app come up empty (no channels, no videos) until space is freed.
