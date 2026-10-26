@@ -575,6 +575,66 @@ describe('DownloadExecutor', () => {
       );
     });
 
+    describe('when YouTube sends an empty subtitle file', () => {
+      const FILE_BASE = '/tmp/youtarr/Channel/Title [9biGuhJUbOQ]';
+
+      // yt-dlp prints the ERROR and moves on without its "Unable to download
+      // video subtitles" WARNING. Output order from the reported run.
+      const runWithEmptySubtitle = async (video) => {
+        VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([video]);
+        archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/9biGuhJUbOQ']);
+        jobModule.getJob.mockReturnValue({ data: {} });
+        mockSpawn.mockImplementationOnce(() => {
+          setImmediate(() => {
+            mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://www.youtube.com/watch?v=9biGuhJUbOQ\n');
+            mockProcess.stdout.emit('data', `[info] Writing video subtitles to: ${FILE_BASE}.en-US.vtt\n`);
+            mockProcess.stdout.emit('data', `[download] Destination: ${FILE_BASE}.en-US.vtt\n`);
+            mockProcess.stdout.emit('data', `[info] Writing video subtitles to: ${FILE_BASE}.en.vtt\n`);
+            mockProcess.stderr.emit('data', '\nERROR: Did not get any data blocks\n');
+            mockProcess.stdout.emit('data', '[info] Downloading video thumbnail 46 ...\n');
+            mockProcess.stdout.emit('data', `[download] Destination: ${FILE_BASE}.f137.mp4\n`);
+            mockProcess.stderr.emit('data', 'WARNING: Skipping embedding en subtitle because the file is missing\n');
+            endProcess(1, null);
+          });
+          return mockProcess;
+        });
+
+        await executor.doDownload(mockArgs, mockJobId, mockJobType);
+      };
+
+      it('keeps the downloaded video in the download archive', async () => {
+        await runWithEmptySubtitle({ youtubeId: '9biGuhJUbOQ', filePath: '/output/video.mp4', fileSize: '1024' });
+
+        expect(archiveModule.removeVideoFromArchive).not.toHaveBeenCalled();
+      });
+
+      it('completes the job with a subtitle warning instead of a failed video', async () => {
+        const video = { youtubeId: '9biGuhJUbOQ', filePath: '/output/video.mp4', fileSize: '1024' };
+
+        await runWithEmptySubtitle(video);
+
+        expect(jobModule.updateJob).toHaveBeenCalledWith(mockJobId, expect.objectContaining({
+          status: 'Complete with Warnings',
+          notes: '1 subtitle download failed; the videos themselves downloaded',
+          data: expect.objectContaining({ videos: [video], failedVideos: [] })
+        }));
+      });
+
+      it('does not report the video as failed in the notification', async () => {
+        await runWithEmptySubtitle({ youtubeId: '9biGuhJUbOQ', filePath: '/output/video.mp4', fileSize: '1024' });
+
+        expect(notificationModule.sendDownloadNotification).toHaveBeenCalledWith(expect.objectContaining({
+          finalSummary: expect.objectContaining({ totalDownloaded: 1, totalFailed: 0 })
+        }));
+      });
+
+      it('still fails the video and frees it for a retry when its file is missing', async () => {
+        await runWithEmptySubtitle({ youtubeId: '9biGuhJUbOQ', filePath: null, fileSize: null });
+
+        expect(archiveModule.removeVideoFromArchive).toHaveBeenCalledWith('9biGuhJUbOQ');
+      });
+    });
+
     const mockJobId = 'job-123';
     const mockJobType = 'Channel Downloads';
 

@@ -60,9 +60,6 @@ function partitionDownloadResults(videoData, errorTracker, urlsToProcess, archiv
       continue;
     }
 
-    // Check if this video was explicitly marked as failed during download
-    const wasMarkedFailed = errorTracker.failedVideos.has(video.youtubeId);
-
     // Check if video or audio file actually exists and has size
     // For video_mp3 mode: both fileSize and audioFileSize will be set
     // For mp3_only mode: only audioFileSize will be set
@@ -70,6 +67,15 @@ function partitionDownloadResults(videoData, errorTracker, urlsToProcess, archiv
     const hasVideoFile = video.fileSize && video.fileSize !== 'null' && video.fileSize !== '0';
     const hasAudioFile = video.audioFileSize && video.audioFileSize !== 'null' && video.audioFileSize !== '0';
     const hasAnyFile = hasVideoFile || hasAudioFile;
+
+    // Errors while yt-dlp wrote subtitles (e.g. an empty subtitle response)
+    // do not fail a video whose file is here.
+    if (hasAnyFile) {
+      errorTracker.dropSubtitleOnlyFailure(video.youtubeId);
+    }
+
+    // Check if this video was explicitly marked as failed during download
+    const wasMarkedFailed = errorTracker.failedVideos.has(video.youtubeId);
 
     if (wasMarkedFailed || !hasAnyFile) {
       const failureInfo = errorTracker.failedVideos.get(video.youtubeId) || {

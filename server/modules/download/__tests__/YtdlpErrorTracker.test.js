@@ -304,6 +304,124 @@ describe('YtdlpErrorTracker', () => {
     });
   });
 
+  describe('dropSubtitleOnlyFailure', () => {
+    const VIDEO_ID = 'vid12345678';
+    const SUBTITLE_PATH = '/tmp/youtarr/Channel/Title [vid12345678].en.vtt';
+    const MEDIA_PATH = '/tmp/youtarr/Channel/Title [vid12345678].f137.mp4';
+    // yt-dlp prints this, with no WARNING after it, when YouTube sends an empty subtitle file
+    const EMPTY_SUBTITLE_ERROR_LINE = 'ERROR: Did not get any data blocks';
+
+    const startVideoWithEmptySubtitle = (tracker) => {
+      tracker.trackVideoStart(VIDEO_ID);
+      tracker.trackSubtitleWrite(SUBTITLE_PATH);
+      tracker.handleErrorLine(EMPTY_SUBTITLE_ERROR_LINE, 'stderr');
+    };
+
+    it('records an ERROR while subtitles are written as a failure until the video file is confirmed', () => {
+      const { tracker } = createTracker();
+      startVideoWithEmptySubtitle(tracker);
+
+      expect(tracker.failedVideos.has(VIDEO_ID)).toBe(true);
+    });
+
+    it('drops the failure when the only errors came while subtitles were written', () => {
+      const { tracker } = createTracker();
+      startVideoWithEmptySubtitle(tracker);
+
+      const dropped = tracker.dropSubtitleOnlyFailure(VIDEO_ID);
+
+      expect(dropped).toBe(true);
+      expect(tracker.failedVideos.has(VIDEO_ID)).toBe(false);
+    });
+
+    it('counts the dropped error as a subtitle failure instead of an unexpected error', () => {
+      const { tracker } = createTracker();
+      startVideoWithEmptySubtitle(tracker);
+
+      tracker.dropSubtitleOnlyFailure(VIDEO_ID);
+
+      expect({
+        unexpectedErrorCount: tracker.unexpectedErrorCount,
+        subtitleFailureCount: tracker.subtitleFailureCount,
+      }).toEqual({ unexpectedErrorCount: 0, subtitleFailureCount: 1 });
+    });
+
+    it('counts every subtitle error of the video', () => {
+      const { tracker } = createTracker();
+      startVideoWithEmptySubtitle(tracker);
+      tracker.trackSubtitleWrite(SUBTITLE_PATH.replace('.en.', '.de.'));
+      tracker.handleErrorLine(EMPTY_SUBTITLE_ERROR_LINE, 'stderr');
+
+      tracker.dropSubtitleOnlyFailure(VIDEO_ID);
+
+      expect({
+        unexpectedErrorCount: tracker.unexpectedErrorCount,
+        subtitleFailureCount: tracker.subtitleFailureCount,
+      }).toEqual({ unexpectedErrorCount: 0, subtitleFailureCount: 2 });
+    });
+
+    it('still treats an ERROR after a subtitle\'s own download destination as a subtitle error', () => {
+      const { tracker } = createTracker();
+      tracker.trackVideoStart(VIDEO_ID);
+      tracker.trackSubtitleWrite(SUBTITLE_PATH);
+      tracker.trackDownloadDestination(SUBTITLE_PATH);
+      tracker.handleErrorLine('ERROR: Read timed out.', 'stderr');
+
+      expect(tracker.dropSubtitleOnlyFailure(VIDEO_ID)).toBe(true);
+    });
+
+    it('does not drop an ERROR that came after the media download started', () => {
+      const { tracker } = createTracker();
+      tracker.trackVideoStart(VIDEO_ID);
+      tracker.trackSubtitleWrite(SUBTITLE_PATH);
+      tracker.trackDownloadDestination(MEDIA_PATH);
+      tracker.handleErrorLine('ERROR: unable to download video data: HTTP Error 403: Forbidden', 'stderr');
+
+      expect(tracker.dropSubtitleOnlyFailure(VIDEO_ID)).toBe(false);
+    });
+
+    it('does not drop an ERROR that came after the next video started', () => {
+      const { tracker } = createTracker();
+      tracker.trackVideoStart(VIDEO_ID);
+      tracker.trackSubtitleWrite(SUBTITLE_PATH);
+      tracker.trackVideoStart('vid87654321');
+      tracker.handleErrorLine('ERROR: Requested format is not available', 'stderr');
+
+      expect(tracker.dropSubtitleOnlyFailure('vid87654321')).toBe(false);
+    });
+
+    it('keeps the video failed when the media download also failed', () => {
+      const { tracker } = createTracker();
+      startVideoWithEmptySubtitle(tracker);
+      tracker.trackDownloadDestination(MEDIA_PATH);
+      tracker.handleErrorLine('ERROR: unable to download video data: HTTP Error 403: Forbidden', 'stderr');
+
+      tracker.dropSubtitleOnlyFailure(VIDEO_ID);
+
+      expect(tracker.failedVideos.has(VIDEO_ID)).toBe(true);
+    });
+
+    it('does not count a subtitle failure twice after its WARNING already dropped it', () => {
+      const { tracker } = createTracker();
+      tracker.trackVideoStart(VIDEO_ID);
+      tracker.trackSubtitleWrite(SUBTITLE_PATH);
+      tracker.handleErrorLine('ERROR: [download] Got error: Read timed out. Giving up after 2 retries', 'stderr');
+      tracker.handleWarningLine('WARNING: Unable to download video subtitles for \'en\': Read timed out.', 'stderr');
+
+      tracker.dropSubtitleOnlyFailure(VIDEO_ID);
+
+      expect(tracker.subtitleFailureCount).toBe(1);
+    });
+
+    it('returns false for a video with no failure', () => {
+      const { tracker } = createTracker();
+      tracker.trackVideoStart(VIDEO_ID);
+      tracker.trackSubtitleWrite(SUBTITLE_PATH);
+
+      expect(tracker.dropSubtitleOnlyFailure(VIDEO_ID)).toBe(false);
+    });
+  });
+
   describe('video tracking', () => {
     it('trackVideoStart clears lastErrorMessage', () => {
       const { tracker } = createTracker();

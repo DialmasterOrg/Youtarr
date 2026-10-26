@@ -70,6 +70,15 @@ class YtdlpErrorTracker {
     // them, so the finalizer needs this to tell a subtitle-only exit 1 from a
     // real partial failure.
     this.subtitleFailureCount = 0;
+    // Path from the latest "[info] Writing video subtitles to:" line, until
+    // the media download starts or the next video does. yt-dlp writes
+    // subtitles before downloading the media, and an empty subtitle response
+    // prints an ERROR with no WARNING after it while the video downloads.
+    this.subtitleWritePath = null;
+    // youtubeId -> number of the video's errors, while every one of them came
+    // during the subtitle step. dropSubtitleOnlyFailure clears them once the
+    // video's file is confirmed.
+    this.subtitleOnlyErrorCounts = new Map();
     this.sponsorBlockFailedVideoIds = new Set();
     // seenTerminatedChannelIds: sync dedupe across stdout/stderr.
     // terminatedChannelIds: only successful persists; drives hasOnlyHandledErrors.
@@ -91,11 +100,24 @@ class YtdlpErrorTracker {
   trackVideoStart(youtubeId) {
     this.currentVideoId = youtubeId;
     this.lastErrorMessage = null;
+    this.subtitleWritePath = null;
   }
 
   // Called when a destination path reveals the video id (does not clear lastErrorMessage).
   trackVideoFromDestination(youtubeId) {
     this.currentVideoId = youtubeId;
+  }
+
+  trackSubtitleWrite(subtitlePath) {
+    this.subtitleWritePath = subtitlePath;
+  }
+
+  // A subtitle download reports its own path as the destination; any other
+  // destination is the media download, which ends the subtitle step.
+  trackDownloadDestination(destPath) {
+    if (destPath !== this.subtitleWritePath) {
+      this.subtitleWritePath = null;
+    }
   }
 
   get sponsorBlockFailureCount() {
@@ -182,6 +204,17 @@ class YtdlpErrorTracker {
       ? 'Error detected in stderr'
       : 'Error detected during download';
     logger.warn({ error: this.lastErrorMessage, currentVideoId: this.currentVideoId }, errorLogMessage);
+    if (this.currentVideoId) {
+      // Undefined once the video has an error from outside the subtitle step.
+      const subtitleErrors = this.failedVideos.has(this.currentVideoId)
+        ? this.subtitleOnlyErrorCounts.get(this.currentVideoId)
+        : 0;
+      if (this.subtitleWritePath !== null && subtitleErrors !== undefined) {
+        this.subtitleOnlyErrorCounts.set(this.currentVideoId, subtitleErrors + 1);
+      } else {
+        this.subtitleOnlyErrorCounts.delete(this.currentVideoId);
+      }
+    }
     if (this.currentVideoId && !this.failedVideos.has(this.currentVideoId)) {
       this.failedVideos.set(this.currentVideoId, {
         youtubeId: this.currentVideoId,
@@ -208,12 +241,32 @@ class YtdlpErrorTracker {
     }
 
     this.failedVideos.delete(this.currentVideoId);
+    this.subtitleOnlyErrorCounts.delete(this.currentVideoId);
     this.unexpectedErrorCount -= 1;
     this.subtitleFailureCount += 1;
     this.lastErrorMessage = null;
     logger.warn(
       { youtubeId: this.currentVideoId, error: failure.error, source },
       'Subtitle download failed; video download continues and is not counted as failed'
+    );
+    return true;
+  }
+
+  // Called once the video's file is known to exist. When every error of the
+  // video came during the subtitle step, drops its failure and counts those
+  // errors as subtitle failures. Returns true when a failure was dropped.
+  dropSubtitleOnlyFailure(youtubeId) {
+    const subtitleErrors = this.subtitleOnlyErrorCounts.get(youtubeId);
+    if (!subtitleErrors) return false;
+
+    const failure = this.failedVideos.get(youtubeId);
+    this.failedVideos.delete(youtubeId);
+    this.subtitleOnlyErrorCounts.delete(youtubeId);
+    this.unexpectedErrorCount -= subtitleErrors;
+    this.subtitleFailureCount += subtitleErrors;
+    logger.warn(
+      { youtubeId, error: failure.error, subtitleErrors },
+      'Subtitle download failed; video downloaded and is not counted as failed'
     );
     return true;
   }
