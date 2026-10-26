@@ -484,6 +484,97 @@ describe('DownloadExecutor', () => {
 
   describe('doDownload', () => {
     const mockArgs = ['--format', 'best', 'https://youtube.com/watch?v=test'];
+    it.each([
+      ['stdout', 0, 'Read timed out.'], ['stdout', 1, 'Read timed out.'],
+      ['stderr', 0, 'Read timed out.'], ['stderr', 1, 'Read timed out.'],
+      ['stdout', 0, 'HTTP Error 403: Forbidden'], ['stdout', 1, 'HTTP Error 403: Forbidden'],
+      ['stderr', 0, 'HTTP Error 403: Forbidden'], ['stderr', 1, 'HTTP Error 403: Forbidden']
+    ])('keeps downloaded videos archived after a SponsorBlock error on %s (exit %i): %s', async (source, code, error) => {
+      const video = { youtubeId: 'abc123def45', filePath: '/output/video.mp4', fileSize: '1024' };
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([video]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/abc123def45']);
+      jobModule.getJob.mockReturnValue({ data: {} });
+      mockSpawn.mockImplementationOnce(() => {
+        setImmediate(() => {
+          mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://www.youtube.com/watch?v=abc123def45\n');
+          for (let i = 1; i <= 3; i += 1) {
+            mockProcess.stderr.emit('data', `WARNING: Unable to communicate with SponsorBlock API: ${error}. Retrying (${i}/3)...\n`);
+          }
+          mockProcess[source].emit('data', `ERROR: Unable to communicate with SponsorBlock API: ${error}\n`);
+          endProcess(code, null);
+        });
+        return mockProcess;
+      });
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(archiveModule.removeVideoFromArchive).not.toHaveBeenCalled();
+      expect(jobModule.updateJob).toHaveBeenCalledWith(mockJobId, expect.objectContaining({
+        status: 'Complete with Warnings',
+        notes: 'SponsorBlock unavailable for 1 video',
+        data: expect.objectContaining({ videos: [video], failedVideos: [] })
+      }));
+      expect(notificationModule.sendDownloadNotification).toHaveBeenCalledWith(expect.objectContaining({
+        finalSummary: expect.objectContaining({ totalDownloaded: 1, totalFailed: 0 }),
+        videoData: [video]
+      }));
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast', null, 'download', 'downloadProgress', expect.objectContaining({
+          text: 'Download completed with warnings: 1 video downloaded, SponsorBlock unavailable for 1 video',
+          warning: true
+        })
+      );
+      expect(MessageEmitter.emitMessage).not.toHaveBeenCalledWith(
+        'broadcast', null, 'download', 'downloadProgress', expect.objectContaining({
+          errorCode: 'COOKIES_RECOMMENDED'
+        })
+      );
+    });
+
+    it('does not retry an unrelated video failure after SponsorBlock retry warnings', async () => {
+      const enqueueAutoRetry = jest.fn().mockResolvedValue();
+      const retryExecutor = new DownloadExecutor({ enqueueAutoRetry });
+      const video = { youtubeId: 'abc123def45', filePath: '/output/video.mp4', fileSize: '1024' };
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([video]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/abc123def45']);
+      jobModule.getJob.mockReturnValue({ data: {} });
+      mockSpawn.mockImplementationOnce(() => {
+        setImmediate(() => {
+          mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://www.youtube.com/watch?v=abc123def45\n');
+          for (let i = 1; i <= 3; i += 1) {
+            mockProcess.stderr.emit('data', `WARNING: Unable to communicate with SponsorBlock API: HTTP Error 403: Forbidden. Retrying (${i}/3)...\n`);
+          }
+          mockProcess.stderr.emit('data', 'ERROR: Unable to communicate with SponsorBlock API: HTTP Error 403: Forbidden\n');
+          mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://www.youtube.com/watch?v=failed12345\n');
+          mockProcess.stderr.emit('data', 'ERROR: unable to download video data: HTTP Error 500: Internal Server Error\n');
+          endProcess(1, null);
+        });
+        return mockProcess;
+      });
+
+      await retryExecutor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(enqueueAutoRetry).not.toHaveBeenCalled();
+      expect(archiveModule.removeVideoFromArchive).not.toHaveBeenCalledWith('abc123def45');
+      expect(jobModule.updateJob).toHaveBeenCalledWith(mockJobId, expect.objectContaining({
+        data: expect.objectContaining({
+          videos: [video],
+          failedVideos: [expect.objectContaining({
+            youtubeId: 'failed12345',
+            error: 'unable to download video data: HTTP Error 500: Internal Server Error'
+          })]
+        })
+      }));
+      expect(notificationModule.sendDownloadNotification).toHaveBeenCalledWith(expect.objectContaining({
+        finalSummary: expect.objectContaining({ totalDownloaded: 1, totalFailed: 1 })
+      }));
+      expect(MessageEmitter.emitMessage).not.toHaveBeenCalledWith(
+        'broadcast', null, 'download', 'downloadProgress', expect.objectContaining({
+          errorCode: 'COOKIES_RECOMMENDED'
+        })
+      );
+    });
+
     const mockJobId = 'job-123';
     const mockJobType = 'Channel Downloads';
 

@@ -1,6 +1,10 @@
 // Pure decision functions for a finished yt-dlp run. No I/O; the executor
 // performs all persistence and emission based on what these return.
 
+function describeSponsorBlockFailures(count) {
+  return `SponsorBlock unavailable for ${count} video${count !== 1 ? 's' : ''}`;
+}
+
 function computeOutcomeFlags({
   code,
   expectedSkipCount,
@@ -9,7 +13,8 @@ function computeOutcomeFlags({
   unexpectedErrorCount,
   botDetected,
   httpForbiddenDetected,
-  subtitleFailureCount = 0
+  subtitleFailureCount = 0,
+  sponsorBlockFailureCount = 0
 }) {
   // yt-dlp exited with code 1 only because every error it emitted was an
   // expected skip (members-only, upcoming live, premiere, etc.). Treat
@@ -19,15 +24,17 @@ function computeOutcomeFlags({
   // would only catch the stdout path.
   const hasOnlyExpectedSkips = code === 1 &&
     expectedSkipCount > 0 &&
+    sponsorBlockFailureCount === 0 &&
     failedCount === 0 &&
     unexpectedErrorCount === 0 &&
     !botDetected &&
     !httpForbiddenDetected;
 
-  // Like hasOnlyExpectedSkips but also admits recognized terminations.
+  // Like hasOnlyExpectedSkips but also admits recognized terminations and
+  // non-fatal SponsorBlock lookups.
   // Mixed failure modes still report as an error.
   const hasOnlyHandledErrors = code === 1 &&
-    (expectedSkipCount > 0 || terminatedChannelCount > 0) &&
+    (expectedSkipCount > 0 || terminatedChannelCount > 0 || sponsorBlockFailureCount > 0) &&
     failedCount === 0 &&
     unexpectedErrorCount === 0 &&
     !botDetected &&
@@ -59,7 +66,8 @@ function describeNonZeroExit({
   anonymousRetry = false,
   flags,
   failureDetails,
-  subtitleFailureCount = 0
+  subtitleFailureCount = 0,
+  sponsorBlockFailureCount = 0
 }) {
   let status = signal === 'SIGKILL' ? 'Killed' : 'Error';
   const hasPartialSuccess = code === 1 && videoDataCount > 0;
@@ -74,9 +82,11 @@ function describeNonZeroExit({
     // Code 1 but every error was recognized: warning-shaped success.
     output = `${videoCount} videos, ${terminatedChannelCount} channel${terminatedChannelCount !== 1 ? 's' : ''} marked terminated.`;
     notes = `${terminatedChannelCount} channel${terminatedChannelCount !== 1 ? 's' : ''} marked terminated by YouTube`;
-  } else if (flags.hasOnlySubtitleFailures) {
+  } else if (flags.hasOnlySubtitleFailures || (flags.hasOnlyHandledErrors && sponsorBlockFailureCount > 0)) {
     output = `${videoCount} videos.`;
-    notes = `${subtitleFailureCount} subtitle download${subtitleFailureCount !== 1 ? 's' : ''} failed; the videos themselves downloaded`;
+    if (subtitleFailureCount > 0) {
+      notes = `${subtitleFailureCount} subtitle download${subtitleFailureCount !== 1 ? 's' : ''} failed; the videos themselves downloaded`;
+    }
   } else if (httpForbiddenDetected) {
     // Failed with 403 errors - likely authentication issue. With cookies
     // already enabled, "configure cookies" is the wrong advice: stale or
@@ -105,6 +115,11 @@ function describeNonZeroExit({
       : `Download failed (${failureReason})`;
   }
 
+  if (sponsorBlockFailureCount > 0) {
+    const sponsorBlockNote = describeSponsorBlockFailures(sponsorBlockFailureCount);
+    notes = notes ? `${notes}; ${sponsorBlockNote}` : sponsorBlockNote;
+  }
+
   return { status, output, notes, errorCode, hasPartialSuccess };
 }
 
@@ -114,7 +129,7 @@ function resolveTerminalStatus({ status, flags, terminatedChannelCount, hasParti
     terminalStatus = 'Complete with Warnings';
   } else if (flags.hasOnlyExpectedSkips) {
     terminalStatus = 'Complete';
-  } else if (hasPartialSuccess || flags.hasOnlySubtitleFailures) {
+  } else if (hasPartialSuccess || flags.hasOnlySubtitleFailures || flags.hasOnlyHandledErrors) {
     terminalStatus = 'Complete with Warnings';
   }
   return terminalStatus;
@@ -142,7 +157,8 @@ function resolveFinalPresentation({
   // Failures already handed off to a queued auto-retry job. Affects only the
   // presented text; state derivation still counts them as failures.
   autoRetryQueuedCount = 0,
-  subtitleFailureCount = 0
+  subtitleFailureCount = 0,
+  sponsorBlockFailureCount = 0
 }) {
   // Consider it successful if:
   // - Exit code is 0 (normal success), OR
@@ -166,12 +182,11 @@ function resolveFinalPresentation({
     !httpForbiddenDetected;
 
   let finalState;
-  if ((flags.hasOnlyHandledErrors && terminatedChannelCount > 0) || hasOnlySuccessfulTerminationsOnCleanExit) {
-    // Warning-shaped when the only detected issue is a handled
-    // terminated channel, including when --ignore-errors exits 0.
+  if ((flags.hasOnlyHandledErrors && (terminatedChannelCount > 0 || sponsorBlockFailureCount > 0)) || hasOnlySuccessfulTerminationsOnCleanExit) {
+    // Handled terminations and optional SponsorBlock lookups are warnings.
     finalState = 'warning';
   } else if (code === 0 || flags.hasOnlyExpectedSkips) {
-    finalState = hasFailures ? 'warning' : 'complete';
+    finalState = hasFailures || sponsorBlockFailureCount > 0 ? 'warning' : 'complete';
   } else if (isWarningOnly || hasNonFatalPartialSuccess) {
     finalState = 'warning';
   } else {
@@ -241,11 +256,15 @@ function resolveFinalPresentation({
     if (subtitleFailureCount > 0) {
       parts.push(`${subtitleFailureCount} subtitle download${subtitleFailureCount !== 1 ? 's' : ''} failed`);
     }
+    if (sponsorBlockFailureCount > 0) {
+      parts.push(describeSponsorBlockFailures(sponsorBlockFailureCount));
+    }
 
     if (parts.length > 0) {
       const statusText = finalState !== 'warning'
         ? 'completed'
-        : flags.hasOnlySubtitleFailures ? 'completed with warnings' : 'completed with errors';
+        : flags.hasOnlySubtitleFailures || (sponsorBlockFailureCount > 0 && !hasFailures && unexpectedErrorCount === 0)
+          ? 'completed with warnings' : 'completed with errors';
       finalText = `Download ${statusText}: ${parts.join(', ')}`;
     } else {
       finalText = 'Download completed: No new videos to download';
@@ -276,6 +295,7 @@ function buildJobDataPayload({ videoData, failedVideosList, terminatedChannels, 
 }
 
 module.exports = {
+  describeSponsorBlockFailures,
   computeOutcomeFlags,
   describeNonZeroExit,
   resolveTerminalStatus,
