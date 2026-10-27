@@ -21,6 +21,7 @@ const tempSpaceProbe = require('./tempSpaceProbe');
 const { containsHttp403 } = require('./ytdlpStderrSignals');
 const { runCompletionSideEffects } = require('./downloadCompletionEffects');
 const {
+  describeSponsorBlockFailures,
   computeOutcomeFlags,
   describeNonZeroExit,
   resolveTerminalStatus,
@@ -199,6 +200,11 @@ async function finalizeDownloadJob({
     // Wait for terminated-channel lookups before deriving finalState.
     await errorTracker.settlePersistence();
 
+    const sponsorBlockFailureCount = errorTracker.sponsorBlockFailureCount || 0;
+    const sponsorBlockNote = sponsorBlockFailureCount > 0
+      ? describeSponsorBlockFailures(sponsorBlockFailureCount)
+      : null;
+
     const urlsToProcess = downloadResultProcessor.resolveUrlsToProcess(jobType, originalUrls, initialCount);
 
     const videoCount = urlsToProcess.length;
@@ -310,7 +316,8 @@ async function finalizeDownloadJob({
       unexpectedErrorCount: errorTracker.unexpectedErrorCount,
       botDetected,
       httpForbiddenDetected,
-      subtitleFailureCount: errorTracker.subtitleFailureCount || 0
+      subtitleFailureCount: errorTracker.subtitleFailureCount || 0,
+      sponsorBlockFailureCount
     });
 
     const dataPayload = buildJobDataPayload({
@@ -406,7 +413,8 @@ async function finalizeDownloadJob({
         anonymousRetry,
         flags,
         failureDetails,
-        subtitleFailureCount: errorTracker.subtitleFailureCount || 0
+        subtitleFailureCount: errorTracker.subtitleFailureCount || 0,
+        sponsorBlockFailureCount
       });
       status = nonZero.status;
       output = nonZero.output;
@@ -447,7 +455,7 @@ async function finalizeDownloadJob({
           ...(nonZero.errorCode ? { error: nonZero.errorCode } : {})
         });
       }
-    } else if (stderrBuffer && !monitor.hasError && !stderrHasOnlyBenignWarnings(stderrBuffer)) {
+    } else if ((stderrBuffer && !monitor.hasError && !stderrHasOnlyBenignWarnings(stderrBuffer)) || sponsorBlockFailureCount > 0) {
       status = 'Complete with Warnings';
       output = `${videoCount} videos.`;
       // Intermediate group: just save videos, don't mark complete yet.
@@ -458,7 +466,7 @@ async function finalizeDownloadJob({
           videoData,
           failedVideosList,
           monitor.videoCount.skipped || 0,
-          {},
+          sponsorBlockNote ? { notes: sponsorBlockNote } : {},
           [...errorTracker.terminatedChannels],
           [...errorTracker.terminationFailures],
           diagnoses
@@ -471,6 +479,7 @@ async function finalizeDownloadJob({
           status: status,
           output: output,
           data: dataPayload,
+          ...(sponsorBlockNote ? { notes: sponsorBlockNote } : {}),
         });
       }
     } else {
@@ -531,7 +540,8 @@ async function finalizeDownloadJob({
       cookiesEnabled,
       anonymousRetry,
       autoRetryQueuedCount,
-      subtitleFailureCount: errorTracker.subtitleFailureCount || 0
+      subtitleFailureCount: errorTracker.subtitleFailureCount || 0,
+      sponsorBlockFailureCount
     });
     const { debugFlags } = presentation;
 

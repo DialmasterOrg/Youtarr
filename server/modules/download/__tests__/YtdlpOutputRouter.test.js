@@ -37,6 +37,8 @@ const makeErrorTracker = () => ({
   currentVideoId: null,
   trackVideoStart: jest.fn(),
   trackVideoFromDestination: jest.fn(),
+  trackSubtitleWrite: jest.fn(),
+  trackDownloadDestination: jest.fn(),
   handleErrorLine: jest.fn().mockReturnValue(false),
   handleWarningLine: jest.fn().mockReturnValue(false)
 });
@@ -138,6 +140,18 @@ describe('YtdlpOutputRouter', () => {
       router.handleStdoutChunk('[youtube] Extracting URL: https://youtube.com/watch?v=abc123XYZ_d\n');
 
       expect(errorTracker.trackVideoStart).toHaveBeenCalledWith('abc123XYZ_d');
+    });
+
+    it('passes the path from subtitle-writing lines to the error tracker', () => {
+      router.handleStdoutChunk('[info] Writing video subtitles to: /tmp/youtarr/Channel/Title [abc123XYZ_d].en.vtt\n');
+
+      expect(errorTracker.trackSubtitleWrite).toHaveBeenCalledWith('/tmp/youtarr/Channel/Title [abc123XYZ_d].en.vtt');
+    });
+
+    it('passes every download destination to the error tracker', () => {
+      router.handleStdoutChunk('[download] Destination: /tmp/youtarr/Channel/Title [abc123XYZ_d].f137.mp4\n');
+
+      expect(errorTracker.trackDownloadDestination).toHaveBeenCalledWith('/tmp/youtarr/Channel/Title [abc123XYZ_d].f137.mp4');
     });
 
     it('records partial destinations and creates a JobVideoDownload tracking entry', () => {
