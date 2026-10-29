@@ -88,7 +88,7 @@ describe('external request executor', () => {
       }, { jobId: requestId });
       expect(models.ExternalRequest.update).toHaveBeenCalledWith(
         expect.objectContaining({ job_id: requestId }),
-        { where: { id: requestId, status: 'processing' } }
+        { where: { id: requestId, status: 'processing', job_id: null } }
       );
     });
 
@@ -263,6 +263,21 @@ describe('external request executor', () => {
       }));
     });
 
+    test('holds an unavailable library and completes after it returns', async () => {
+      const row = deleteRow();
+      row.active_dedupe_key = 'delete-dedupe';
+      const { executor, deps } = setup({ rows: [row], target: downloadedTarget });
+      deps.videoDeleter.deleteVideos.mockResolvedValueOnce({
+        success: false, deleted: [], failed: [{ videoId: 91,
+          code: 'LIBRARY_UNAVAILABLE', error: 'The downloads folder does not exist.' }],
+      });
+      await executor.runOnce();
+      expect(row).toMatchObject({ status: 'approved', active_dedupe_key: 'delete-dedupe',
+        message: 'Waiting for the downloads folder to become available' });
+      await executor.runOnce();
+      expect(row).toMatchObject({ status: 'completed', active_dedupe_key: null });
+    });
+
     test('fails when the deletion is refused', async () => {
       const row = deleteRow();
       const { executor, deps } = setup({ rows: [row], target: downloadedTarget });
@@ -330,7 +345,7 @@ describe('external request executor', () => {
 
       expect(models.ExternalRequest.update).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'completed', active_dedupe_key: null }),
-        { where: { id: requestId, status: 'processing' } }
+        { where: { id: requestId, status: 'processing', job_id: requestId } }
       );
     });
 
@@ -344,8 +359,28 @@ describe('external request executor', () => {
 
       expect(models.ExternalRequest.update).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'failed', message: 'Download did not complete' }),
-        { where: { id: requestId, status: 'processing' } }
+        { where: { id: requestId, status: 'processing', job_id: requestId } }
       );
+    });
+
+    test('the original event hands off to the retry and the retry event completes it', async () => {
+      const processing = record({ status: 'processing', job_id: requestId, active_dedupe_key: 'dedupe' });
+      const { executor, deps, models } = setup();
+      const jobs = {
+        [requestId]: { jobType: EXTERNAL_REQUEST_JOB_LABEL, status: 'Error', data: { failedVideos: [
+          { youtubeId, autoRetryQueued: true, autoRetryJobId: 'retry-1' },
+        ] } },
+        'retry-1': { jobType: 'Auto-retry: 1 video (no cookies)', status: 'Pending' },
+      };
+      deps.jobLookup.mockImplementation(id => jobs[id]);
+      models.ExternalRequest.findAll.mockImplementation(async () => [{ ...processing }]);
+      models.ExternalRequest.update.mockImplementation(async values => { Object.assign(processing, values); return [1]; });
+      await executor.handleJobEnded({ jobId: requestId });
+      expect(processing).toMatchObject({ job_id: 'retry-1', status: 'processing', active_dedupe_key: 'dedupe' });
+      jobs['retry-1'].status = 'Complete';
+      models.Video.findAll.mockResolvedValue([{ youtubeId }]);
+      await executor.handleJobEnded({ jobId: 'retry-1' });
+      expect(processing).toMatchObject({ status: 'completed', active_dedupe_key: null });
     });
 
     test('the sweep closes a download whose job-ended event was missed', async () => {
@@ -360,7 +395,7 @@ describe('external request executor', () => {
 
       expect(models.ExternalRequest.update).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'failed' }),
-        { where: { id: processing.id, status: 'processing' } }
+        { where: { id: processing.id, status: 'processing', job_id: 'job-123' } }
       );
     });
 
@@ -375,7 +410,7 @@ describe('external request executor', () => {
 
       expect(models.ExternalRequest.update).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'failed', message: 'Download did not complete' }),
-        { where: { id: processing.id, status: 'processing' } }
+        { where: { id: processing.id, status: 'processing', job_id: 'job-123' } }
       );
     });
 

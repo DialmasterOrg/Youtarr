@@ -91,8 +91,8 @@ differences.
 
 The standardized statuses are 400 (malformed or invalid request), 401
 (authentication), 403 (missing scope), 404 (unknown or hidden resource), 405
-(method), 413 (body size), 415 (content type), 429 (rate/quota), 500
-(unexpected failure), and 503 (bounded downstream capacity). Compressed
+(method), 409 (idempotency key reused for a different target), 413 (body size),
+415 (content type), 429 (rate/quota), 500 (unexpected failure), and 503 (bounded downstream capacity). Compressed
 request bodies are not accepted. CORS is disabled.
 
 The sanitized cross-client decoding fixture is
@@ -332,16 +332,26 @@ The lifecycle is:
    queued as a normal Youtarr download job; channel and deletion requests run
    in the bounded external-work queue.
 4. `completed` or `failed`: a video request completes when its job ends with
-   the video on disk, and fails with `Download did not complete` otherwise.
+   the video on disk. Transient 403 and cookie-related retries keep the same
+   request `processing`, dedupe key, and quota charge; the executor follows
+   persisted retry job identities, including after a restart. Only the final
+   attempt failing without a downloaded video produces `Download did not complete`.
 
 An approved request can stay `approved` with an explanatory `message` while it
 waits: `Waiting for downloads to resume` while Youtarr's storage guard has
 paused downloads, and `Waiting for another download of this video to finish`
-when the video is already in another download. Before running, the executor
+when the video is already in another download. A deletion refused by the library
+root/subfolder check stays approved with `Waiting for the downloads folder to
+become available`, retaining its dedupe key and quota charge. Held work rotates
+behind other approved work so downloads waiting for storage cannot block
+deletions that free space. Before every attempt, the executor
 reloads the key and target; a request whose key, permission, grant, or policy
 no longer allows it fails with `Request is no longer eligible`. Requests
 interrupted by a restart return to `approved` after a five-minute stale window
 and rerun through their idempotent operation.
+
+The current API Keys & Bookmarklet screen hides revoked keys after deletion;
+management responses retain those records for audit history.
 
 ## Administrator review
 

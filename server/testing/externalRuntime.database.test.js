@@ -430,3 +430,90 @@ test.each(['missing', 'disabled', 'terminated'])('management rejects a %s channe
   await request(app).put(`/api/keys/${key.id}/channels`).send({ channelIds }).expect(400, error);
   expect(await models.ApiKeyChannelGrant.count({ where: { api_key_id: key.id } })).toBe(1);
 });
+
+test('held video batches rotate so a newer deletion can free storage', async () => {
+  await policy({ auto_approve_delete_requests: true });
+  let clock = timestamp;
+  const downloader = jest.fn(async () => {
+    throw Object.assign(new Error('paused'), { code: 'DOWNLOADS_PAUSED' });
+  });
+  const api = service({ now: () => clock, downloader });
+  // Five keys stay within the real per-key cap of five active requests.
+  const downloadKeys = [];
+  for (let index = 0; index < 5; index += 1) {
+    const record = await models.ApiKey.create({ name: `Download key ${index}`, key_hash: `synthetic-${index}`,
+      key_prefix: `syn0000${index}`, created_at: timestamp, role: 'request',
+      allow_video_requests: true, auto_approve_video_requests: true, allow_unrated: true });
+    await models.ApiKeyChannelGrant.create({ api_key_id: record.id, channel_id: channel.id });
+    downloadKeys.push(normalizeExternalApiKey(record));
+  }
+  for (let index = 0; index < 21; index += 1) {
+    const id = `v${String(index).padStart(10, '0')}`;
+    await models.ChannelVideo.create({ youtube_id: id, channel_id: youtubeChannelId, title: id });
+    await api.createVideoRequest(downloadKeys[Math.floor(index / 5)], { youtubeId: id, channelId: channel.id });
+  }
+  clock = new Date(timestamp.getTime() + 1000);
+  const video = await downloadedVideo();
+  const deletion = await api.createDeleteVideoRequest(key, { youtubeId, channelId: channel.id });
+  clock = new Date(timestamp.getTime() + 2000);
+  await api.runExecutorOnce();
+  expect(downloader).toHaveBeenCalledTimes(20);
+  expect((await api.getRequest(key, deletion.request.id)).status).toBe('approved');
+  clock = new Date(timestamp.getTime() + 3000);
+  await api.runExecutorOnce();
+  expect((await api.getRequest(key, deletion.request.id)).status).toBe('completed');
+  expect((await video.reload()).removed).toBe(true);
+  expect(await models.ExternalRequest.count({ where: { request_type: 'video', status: 'approved' } })).toBe(21);
+  expect((await models.ExternalApiUsageBucket.findAll()).reduce((sum, bucket) => sum + bucket.accepted_writes, 0)).toBe(44);
+});
+
+test('an unavailable library retains deletion identity, approval and quota until recovery', async () => {
+  await policy({ auto_approve_delete_requests: true });
+  const video = await downloadedVideo();
+  let mounted = false;
+  const api = service({ videoDeleter: { deleteVideos: async ids => {
+    if (!mounted) return { deleted: [], failed: [{ videoId: ids[0], code: 'LIBRARY_UNAVAILABLE',
+      error: 'The downloads folder does not exist. Nothing was deleted; check that the drive is mounted.' }] };
+    await models.Video.update({ removed: true }, { where: { id: ids } });
+    return { deleted: ids, failed: [] };
+  } } });
+  const input = { youtubeId, channelId: channel.id, idempotencyKey: 'nas-recovery' };
+  const created = await api.createDeleteVideoRequest(key, input);
+  await api.runExecutorOnce();
+  const held = await models.ExternalRequest.findByPk(created.request.id);
+  expect(held).toMatchObject({ status: 'approved', approval_source: 'auto',
+    message: 'Waiting for the downloads folder to become available' });
+  expect(held.active_dedupe_key).toBeTruthy();
+  expect((await video.reload()).removed).toBe(false);
+  const duplicate = await api.createDeleteVideoRequest(key, input);
+  expect(duplicate.request.id).toBe(created.request.id);
+  mounted = true;
+  await api.runExecutorOnce();
+  expect(await held.reload()).toMatchObject({ status: 'completed', active_dedupe_key: null });
+  expect((await models.ExternalApiUsageBucket.findAll()).map(bucket => bucket.accepted_writes)).toEqual([1, 1]);
+});
+
+test.each(['Complete', 'Error'])('persisted retry chain recovers after restart and ends in %s', async status => {
+  await policy({ auto_approve_video_requests: true });
+  const api = service();
+  const created = await api.createVideoRequest(key, { youtubeId, channelId: channel.id });
+  await api.runExecutorOnce();
+  const retryId = require('crypto').randomUUID();
+  await models.Job.update({ status: 'Error', aux_data: JSON.stringify({ failedVideos: [
+    { youtubeId, autoRetryQueued: true, autoRetryJobId: retryId },
+  ] }) }, { where: { id: created.request.id } });
+  await models.Job.create({ id: retryId, status: 'Pending', jobType: 'Auto-retry: 1 video (no cookies)',
+    timeCreated: timestamp, timeInitiated: timestamp });
+  // Fresh service, no live jobs: only persisted history can supply the handoff.
+  const restarted = service();
+  await restarted.runExecutorOnce();
+  expect(await models.ExternalRequest.findByPk(created.request.id)).toMatchObject({
+    status: 'processing', job_id: retryId,
+  });
+  await models.Job.update({ status }, { where: { id: retryId } });
+  if (status === 'Complete') await downloadedVideo();
+  await restarted.runExecutorOnce();
+  expect((await restarted.getRequest(key, created.request.id)).status)
+    .toBe(status === 'Complete' ? 'completed' : 'failed');
+  expect((await models.ExternalApiUsageBucket.findAll()).map(bucket => bucket.accepted_writes)).toEqual([1, 1]);
+});

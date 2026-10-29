@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { MANUAL_DOWNLOAD_LABEL } = require('../download/jobTypes');
+const { MANUAL_DOWNLOAD_LABEL, AUTO_RETRY_LABEL_PREFIX } = require('../download/jobTypes');
 const { requireCurrentAutoApproval } = require('./externalRequestPrimitives');
 const { createExternalRequestReconciliation } = require('./externalRequestReconciliation');
 
@@ -27,6 +27,7 @@ const MESSAGES = {
   channelUnavailable: 'Channel is unavailable',
   channelFailed: 'Channel could not be provisioned',
   deleteFailed: 'Video could not be deleted',
+  libraryUnavailable: 'Waiting for the downloads folder to become available',
 };
 
 function isAuthorityError(error) {
@@ -116,7 +117,7 @@ function createExternalRequestExecutor({
     try {
       await ExternalRequest.update(
         { job_id: jobId, message: null, updated_at: stamp() },
-        { where: { id: record.id, status: 'processing' } }
+        { where: { id: record.id, status: 'processing', job_id: null } }
       );
     } catch (error) {
       logger.warn({ err: error, requestId: record.id, jobId }, 'External request job id was not recorded');
@@ -180,7 +181,9 @@ function createExternalRequestExecutor({
     // and re-evaluates a storage pause, like an in-app deletion.
     const result = await workLimiter.run(() => videoDeleter.deleteVideos([target.downloaded.id]));
     if (result?.deleted?.includes(target.downloaded.id)) return complete(record);
-    const reason = result?.failed?.[0]?.error || '';
+    const failure = result?.failed?.find((item) => item.videoId === target.downloaded.id);
+    if (failure?.code === 'LIBRARY_UNAVAILABLE') return hold(record, MESSAGES.libraryUnavailable);
+    const reason = failure?.error || '';
     if (/not found|already (?:marked as )?removed/i.test(reason)) {
       return complete(record, MESSAGES.alreadyDeleted);
     }
@@ -263,7 +266,9 @@ function createExternalRequestExecutor({
     await resolveFinishedDownloads();
     const approved = await ExternalRequest.findAll({
       where: { request_type: { [Op.in]: REQUEST_TYPES }, status: 'approved' },
-      order: [['created_at', 'ASC'], ['id', 'ASC']],
+      // A held request goes to the back so paused downloads cannot starve
+      // newer work, especially deletions that can free up storage.
+      order: [['updated_at', 'ASC'], ['id', 'ASC']],
       limit: SWEEP_BATCH_SIZE,
     });
     approved.forEach(launch);
@@ -300,7 +305,8 @@ function createExternalRequestExecutor({
   /** jobModule.onJobEnded listener: close the request a finished job served. */
   async function handleJobEnded({ jobId } = {}) {
     // Every download job ends through here; only external ones need a query.
-    if (jobLookup(jobId)?.jobType !== EXTERNAL_REQUEST_JOB_LABEL) return;
+    const jobType = jobLookup(jobId)?.jobType;
+    if (jobType !== EXTERNAL_REQUEST_JOB_LABEL && !jobType?.startsWith(AUTO_RETRY_LABEL_PREFIX)) return;
     try {
       const records = await ExternalRequest.findAll({
         where: {
