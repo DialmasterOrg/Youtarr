@@ -806,7 +806,7 @@ describe('VideoDeletionModule', () => {
         const result = await VideoDeletionModule.deleteVideos([1, 2]);
 
         const error = 'The downloads folder is empty. Nothing was deleted; check that the drive is mounted.';
-        expect(result).toEqual({ success: false, deleted: [], failed: [{ videoId: 1, error }, { videoId: 2, error }] });
+        expect(result).toEqual({ success: false, deleted: [], failed: [{ videoId: 1, error, code: 'LIBRARY_UNAVAILABLE' }, { videoId: 2, error, code: 'LIBRARY_UNAVAILABLE' }] });
         expect(mockVideo1.update).not.toHaveBeenCalled();
         expect(mockFilesystem.removeDirectoryResilient).not.toHaveBeenCalled();
       });
@@ -820,7 +820,7 @@ describe('VideoDeletionModule', () => {
         const result = await VideoDeletionModule.deleteVideos([1, 2]);
 
         expect(result.deleted).toEqual([2]);
-        expect(result.failed).toEqual([{ videoId: 1, error: 'The subfolder __Music is empty. Nothing was deleted; check that the drive is mounted.' }]);
+        expect(result.failed).toEqual([{ videoId: 1, error: 'The subfolder __Music is empty. Nothing was deleted; check that the drive is mounted.', code: 'LIBRARY_UNAVAILABLE' }]);
         expect(inMusic.update).not.toHaveBeenCalled();
         expect(inRoot.update).toHaveBeenCalledWith(USER_DELETED_COLUMNS);
       });

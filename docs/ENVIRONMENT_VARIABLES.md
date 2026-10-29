@@ -99,6 +99,38 @@ To use an external database:
 - When using reverse proxy with authentication
 - Platform deployments with external auth (e.g., Cloudflare Access)
 
+### EXTERNAL_API_ENABLED
+**Required**: No
+**Default**: `false`
+**Options**: `true`, `false`
+**Description**: Enables the versioned `/external-api/v1` integration API when set to `true`
+**Security**: External API routes always require a non-legacy `x-api-key`, even when `AUTH_ENABLED=false`
+
+Set this to `true` only after the external trust boundary, key policy, and
+reverse-proxy rules have been reviewed. The namespace is disabled by default.
+The routes remain protected until an administrator has assigned an API key an
+external role and policy. Existing API keys migrate as `legacy_download` and
+cannot use the versioned API. For endpoint-only public access, keep the Youtarr
+origin port private and publish only the exact v1 path through a TLS reverse
+proxy. Exposing the complete port also exposes unrelated application routes; see
+[Youtarr External API](EXTERNAL_API.md).
+
+### EXTERNAL_API_WORK_CONCURRENCY
+**Required**: No
+**Default**: `2`
+**Options**: `1` or `2` (larger values are capped at `2`)
+**Description**: How many expensive External API tasks run at once: video-detail
+lookups, channel provisioning, and video deletion. Download jobs are queued
+separately through Youtarr's normal download queue.
+
+### EXTERNAL_API_WORK_QUEUE
+**Required**: No
+**Default**: `20`
+**Options**: `0`-`100` (larger values are capped at `100`)
+**Description**: How many External API tasks may wait for a free slot. When the
+queue is full, video-detail lookups return 503 and approved requests stay
+`approved` until the next background sweep.
+
 ### AUTH_PRESET_USERNAME
 **Required**: No
 **Default**: None
@@ -125,8 +157,10 @@ To use an external database:
 **Recommendations**:
 - Set `TRUST_PROXY=false` when Youtarr is exposed directly without a reverse proxy
 - Leave unset only if you want the historical Express proxy-header trust behavior; Youtarr's rate-limit, session, and setup audit IPs will still key on the direct peer IP until `TRUST_PROXY` is explicitly configured
-- Set `TRUST_PROXY=1` when Youtarr is behind one trusted reverse proxy and you want per-client rate limits
-- Prefer a specific hop count or trusted subnet over broad `true` when exposing Youtarr through a proxy you control
+- Set `TRUST_PROXY=1` only when Youtarr is behind exactly one trusted reverse
+  proxy and you want per-client rate limits
+- Prefer the exact proxy IP/subnet over broad `true`; the origin must not be
+  reachable in a way that lets a client bypass the trusted proxy
 
 ## YouTube Cookies
 

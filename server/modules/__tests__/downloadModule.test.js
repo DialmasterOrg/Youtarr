@@ -1359,17 +1359,18 @@ describe('DownloadModule', () => {
       ChannelVideoMock.findAll.mockResolvedValue([]);
       doSpecificDownloadsSpy = jest
         .spyOn(downloadModule, 'doSpecificDownloads')
-        .mockResolvedValue(undefined);
+        .mockResolvedValue({ jobId: 'retry-job-1', acceptedIds: [retryVideo.youtubeId] });
     });
 
     it('enqueues a URL-list job with the auto-retry label, attempt counter, and run id', async () => {
-      await downloadModule.enqueueAutoRetryJob({
+      const links = await downloadModule.enqueueAutoRetryJob({
         retryVideos: [retryVideo],
         autoRetryAttempt: 1,
         runId: 'run-1',
         sourceJobData: { overrideSettings: { resolution: '720' } },
       });
 
+      expect(links).toEqual({ abc123def45: 'retry-job-1' });
       expect(doSpecificDownloadsSpy).toHaveBeenCalledWith({
         body: expect.objectContaining({
           urls: ['https://www.youtube.com/watch?v=abc123def45'],
@@ -1378,7 +1379,7 @@ describe('DownloadModule', () => {
           autoRetryAttempt: 1,
           runId: 'run-1',
         }),
-      });
+      }, false, { includeJobId: true });
     });
 
     it('marks cookie-specific retries as anonymous', async () => {
@@ -1399,7 +1400,7 @@ describe('DownloadModule', () => {
           autoRetryAttempt: 1,
           runId: 'run-cookie',
         }),
-      });
+      }, false, { includeJobId: true });
     });
 
     it('splits mixed authenticated and anonymous retries into separate jobs', async () => {
@@ -1439,6 +1440,22 @@ describe('DownloadModule', () => {
           runId: 'run-mixed',
         }),
       ]));
+    });
+
+    it('retains the successful handoff when the other retry group fails', async () => {
+      doSpecificDownloadsSpy.mockRejectedValueOnce(new Error('queue unavailable'))
+        .mockResolvedValueOnce({ jobId: 'anonymous-job', acceptedIds: ['zzz999xxx11'] });
+      const links = await downloadModule.enqueueAutoRetryJob({
+        retryVideos: [retryVideo, { youtubeId: 'zzz999xxx11', url: 'https://youtu.be/zzz999xxx11', anonymousRetry: true }],
+        autoRetryAttempt: 1, sourceJobData: {},
+      });
+      expect(links).toEqual({ zzz999xxx11: 'anonymous-job' });
+    });
+
+    it('does not claim a handoff when video admission was refused', async () => {
+      doSpecificDownloadsSpy.mockResolvedValue({ queued: 0, acceptedIds: [], alreadyActiveIds: [retryVideo.youtubeId] });
+      await expect(downloadModule.enqueueAutoRetryJob({ retryVideos: [retryVideo], autoRetryAttempt: 1 }))
+        .resolves.toEqual({});
     });
 
     it('resolves owning channels for unmapped videos and passes channelId when unique', async () => {
@@ -1728,6 +1745,41 @@ describe('DownloadModule', () => {
           anonymousRetry: false
         })
       );
+    });
+
+    it('uses a job id passed in options and returns it', async () => {
+      const jobId = '9b89e5bc-8c90-4e72-b245-270fed2eacc2';
+      jobModuleMock.addOrUpdateJob.mockResolvedValue(jobId);
+      jobModuleMock.getJob.mockReturnValueOnce(undefined).mockReturnValue({ status: 'Pending' });
+
+      const result = await downloadModule.doSpecificDownloads(
+        { urls: ['https://youtube.com/watch?v=abc123'] }, false, { jobId }
+      );
+
+      expect(jobModuleMock.addOrUpdateJob).toHaveBeenCalledWith(expect.any(Object), false, jobId);
+      expect(result).toBe(jobId);
+    });
+
+    it('returns the admitted identity only to internal retry callers', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'Pending' });
+      const request = { body: { urls: ['https://youtu.be/abcdefghijk'], includeJobId: true } };
+      const legacy = await downloadModule.doSpecificDownloads(request);
+      expect(legacy).not.toHaveProperty('jobId');
+      const internal = await downloadModule.doSpecificDownloads(request, false, { includeJobId: true });
+      expect(internal).toMatchObject({ jobId: mockJobId, acceptedIds: ['abcdefghijk'] });
+    });
+
+    it('ignores a job id supplied in the request body', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'Pending' });
+
+      await downloadModule.doSpecificDownloads({
+        body: {
+          urls: ['https://youtube.com/watch?v=abc123'],
+          externalRequestId: '9b89e5bc-8c90-4e72-b245-270fed2eacc2',
+        },
+      });
+
+      expect(jobModuleMock.addOrUpdateJob).toHaveBeenCalledWith(expect.any(Object), false);
     });
 
     it('should handle job data directly', async () => {

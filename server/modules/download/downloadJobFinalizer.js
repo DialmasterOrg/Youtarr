@@ -253,19 +253,20 @@ async function finalizeDownloadJob({
       });
       if (retryPlan) {
         try {
-          await enqueueAutoRetry({
+          const retryJobs = await enqueueAutoRetry({
             retryVideos: retryPlan.retryVideos,
             autoRetryAttempt: retryPlan.nextAttempt,
             runId,
             sourceJobData,
           });
-          const retryIds = new Set(retryPlan.retryVideos.map((video) => video.youtubeId));
+          const retryIds = new Set(Object.keys(retryJobs || {}));
           for (const failedVideo of failedVideosList) {
             if (retryIds.has(failedVideo.youtubeId)) {
               failedVideo.autoRetryQueued = true;
+              failedVideo.autoRetryJobId = retryJobs[failedVideo.youtubeId];
             }
           }
-          autoRetryQueuedCount = retryPlan.retryVideos.length;
+          autoRetryQueuedCount = retryIds.size;
           logger.info(
             { jobId, count: autoRetryQueuedCount, attempt: retryPlan.nextAttempt },
             'Queued auto-retry job for retryable download failures'

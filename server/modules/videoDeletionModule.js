@@ -151,7 +151,8 @@ class VideoDeletionModule {
         return {
           success: false,
           videoId,
-          error: `${libraryCheck.message} Nothing was deleted; check that the drive is mounted.`
+          error: `${libraryCheck.message} Nothing was deleted; check that the drive is mounted.`,
+          code: 'LIBRARY_UNAVAILABLE'
         };
       }
 
@@ -288,7 +289,8 @@ class VideoDeletionModule {
       } else {
         failed.push({
           videoId,
-          error: result.error || 'Unknown error'
+          error: result.error || 'Unknown error',
+          ...(result.code ? { code: result.code } : {})
         });
       }
     }
@@ -340,7 +342,8 @@ class VideoDeletionModule {
         } else {
           failed.push({
             youtubeId,
-            error: result.error || 'Unknown error'
+            error: result.error || 'Unknown error',
+            ...(result.code ? { code: result.code } : {})
           });
         }
       } catch (error) {
