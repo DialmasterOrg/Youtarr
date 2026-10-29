@@ -437,6 +437,37 @@ describe('VideosModule', () => {
       }));
     });
 
+    test('should filter on a single youtubeId', async () => {
+      mockVideo.count.mockResolvedValue(1);
+      mockVideo.findAll.mockResolvedValue([]);
+      mockVideo.aggregate.mockResolvedValue([]);
+
+      await VideosModule.getVideosPaginated({ youtubeId: 'dQw4w9WgXcQ' });
+
+      expect(mockVideo.count).toHaveBeenCalledWith(expect.objectContaining({
+        where: {
+          youtubeId: 'dQw4w9WgXcQ',
+        },
+      }));
+    });
+
+    describe('getVideoByYoutubeId', () => {
+      test('returns the matching row and applies no removal-state filter', async () => {
+        const row = { id: 3, youtubeId: 'dQw4w9WgXcQ', removed: true };
+        const listing = jest.spyOn(VideosModule, 'getVideosPaginated').mockResolvedValue({ videos: [row] });
+
+        await expect(VideosModule.getVideoByYoutubeId('dQw4w9WgXcQ')).resolves.toBe(row);
+
+        expect(listing).toHaveBeenCalledWith({ youtubeId: 'dQw4w9WgXcQ', limit: 1 });
+      });
+
+      test('returns null when no row matches', async () => {
+        jest.spyOn(VideosModule, 'getVideosPaginated').mockResolvedValue({ videos: [] });
+
+        await expect(VideosModule.getVideoByYoutubeId('dQw4w9WgXcQ')).resolves.toBeNull();
+      });
+    });
+
     test('should apply protectedFilter=only to the WHERE clause', async () => {
       mockVideo.count.mockResolvedValue(0);
       mockVideo.findAll.mockResolvedValue([]);

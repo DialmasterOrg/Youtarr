@@ -132,8 +132,8 @@ function registerRoutes(app, deps) {
   // Subscription import routes
   app.use(createSubscriptionRoutes({ verifyToken, subscriptionImportModule }));
 
-  // Video detail routes (metadata and streaming)
-  app.use(createVideoDetailRoutes({ verifyToken, videoMetadataModule, mediaServers }));
+  // Video detail routes (single video, metadata and streaming)
+  app.use(createVideoDetailRoutes({ verifyToken, videosModule, videoMetadataModule, mediaServers }));
 
   // Playlist routes
   app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard }));

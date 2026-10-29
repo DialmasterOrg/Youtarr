@@ -36,9 +36,12 @@ jest.mock('../../hooks/useConfig', () => ({
 }));
 
 const mockNavigate = jest.fn();
+const mockSetSearchParams = jest.fn();
+let mockSearchParams = new URLSearchParams();
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
   useNavigate: () => mockNavigate,
+  useSearchParams: () => [mockSearchParams, mockSetSearchParams],
 }));
 
 const mockTriggerDownloads = jest.fn();
@@ -119,7 +122,10 @@ jest.mock('../shared/VideoModal', () => ({
     }, props.video?.title, React.createElement('button', {
       type: 'button',
       onClick: () => props.onMarkedDeleted?.(props.video?.youtubeId),
-    }, 'Modal mark as deleted'));
+    }, 'Modal mark as deleted'), React.createElement('button', {
+      type: 'button',
+      onClick: props.onClose,
+    }, 'Modal close'));
   }
 }));
 
@@ -424,6 +430,7 @@ describe('VideosPage Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     window.localStorage.clear();
+    mockSearchParams = new URLSearchParams();
     (useMediaQuery as jest.Mock).mockReturnValue(false);
 
     // Mock useVideoDeletion to return a mock function
@@ -639,6 +646,112 @@ describe('VideosPage Component', () => {
       await user.click(screen.getByRole('button', { name: 'How to Code' }));
 
       expect(screen.getByTestId('video-modal')).toHaveAttribute('data-video-title', 'How to Code');
+    });
+
+    describe('video named in the URL', () => {
+      let consoleErrorSpy: jest.SpyInstance | undefined;
+
+      afterEach(() => {
+        axios.isAxiosError.mockImplementation(() => false);
+        consoleErrorSpy?.mockRestore();
+        consoleErrorSpy = undefined;
+      });
+
+      // The list answers /getVideos. The lookup answers /api/videos/:youtubeId
+      // with the video, or with the given HTTP error.
+      const mockListAndLookup = (lookup: VideoData | { status: number }) => {
+        axios.get.mockImplementation((url: string) => {
+          if (url.startsWith('/api/videos/')) {
+            return 'status' in lookup
+              ? Promise.reject({ isAxiosError: true, response: { status: lookup.status } })
+              : Promise.resolve({ data: lookup });
+          }
+          return Promise.resolve({ data: mockPaginatedResponse(mockVideos) });
+        });
+      };
+
+      test('opens the modal for the video in the video parameter', async () => {
+        mockSearchParams = new URLSearchParams('video=def456');
+        mockListAndLookup(mockVideos[1]);
+
+        render(<VideosPage token={mockToken} />);
+
+        expect(await screen.findByTestId('video-modal')).toHaveAttribute('data-video-title', 'Game Review');
+        expect(axios.get).toHaveBeenCalledWith(
+          '/api/videos/def456',
+          expect.objectContaining({ headers: { 'x-access-token': mockToken } })
+        );
+      });
+
+      test('drops only the video parameter once the modal is open', async () => {
+        mockSearchParams = new URLSearchParams('video=def456&other=1');
+        mockListAndLookup(mockVideos[1]);
+
+        render(<VideosPage token={mockToken} />);
+        await screen.findByTestId('video-modal');
+
+        await waitFor(() => expect(mockSetSearchParams).toHaveBeenCalledTimes(1));
+        const [updater, options] = mockSetSearchParams.mock.calls[0];
+        const next = updater(new URLSearchParams('video=def456&other=1'));
+        expect(next.get('video')).toBeNull();
+        expect(next.get('other')).toBe('1');
+        expect(options).toEqual({ replace: true });
+      });
+
+      test('keeps the modal open over the list when the parameter is gone', async () => {
+        mockSearchParams = new URLSearchParams('video=def456');
+        mockListAndLookup(mockVideos[1]);
+
+        const { rerender } = render(<VideosPage token={mockToken} />);
+        await screen.findByTestId('video-modal');
+
+        mockSearchParams = new URLSearchParams();
+        rerender(<VideosPage token={mockToken} />);
+
+        expect(screen.getByTestId('video-modal')).toHaveAttribute('data-video-title', 'Game Review');
+        expect(await screen.findByText('How to Code')).toBeInTheDocument();
+      });
+
+      test.each([404, 400])('shows a message and drops the parameter on a %i response', async (status) => {
+        mockSearchParams = new URLSearchParams('video=missing000');
+        mockListAndLookup({ status });
+        axios.isAxiosError.mockImplementation(
+          (error: unknown) => Boolean((error as { isAxiosError?: boolean } | null)?.isAxiosError)
+        );
+
+        render(<VideosPage token={mockToken} />);
+
+        expect(await screen.findByText('Video not found')).toBeInTheDocument();
+        expect(screen.queryByTestId('video-modal')).not.toBeInTheDocument();
+        expect(mockSetSearchParams).toHaveBeenCalledTimes(1);
+      });
+
+      test('shows a load error and drops the parameter on a server error', async () => {
+        mockSearchParams = new URLSearchParams('video=def456');
+        mockListAndLookup({ status: 500 });
+        axios.isAxiosError.mockImplementation(
+          (error: unknown) => Boolean((error as { isAxiosError?: boolean } | null)?.isAxiosError)
+        );
+        consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        render(<VideosPage token={mockToken} />);
+
+        expect(await screen.findByText('Failed to load the video.')).toBeInTheDocument();
+        expect(screen.queryByTestId('video-modal')).not.toBeInTheDocument();
+        expect(mockSetSearchParams).toHaveBeenCalledTimes(1);
+      });
+
+      test('leaves the URL alone when a modal opened from the list closes', async () => {
+        const user = setupUser();
+        axios.get.mockResolvedValue({ data: mockPaginatedResponse([mockVideos[0]]) });
+
+        render(<VideosPage token={mockToken} />);
+        await user.click(await screen.findByRole('button', { name: 'How to Code' }));
+        await user.click(screen.getByRole('button', { name: 'Modal close' }));
+
+        expect(screen.queryByTestId('video-modal')).not.toBeInTheDocument();
+        expect(mockSetSearchParams).not.toHaveBeenCalled();
+      });
     });
 
     test('reloads the list after the modal marks a video as deleted', async () => {
