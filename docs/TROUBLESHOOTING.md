@@ -804,7 +804,13 @@ If you only enabled cookies to get past a "Sign in to confirm you're not a bot" 
 
 This is the subtitle request (YouTube's timedtext endpoint), not the video: video streams come from `googlevideo.com`. YouTube throttles or hangs subtitle requests that don't look like they come from a browser, so yt-dlp sends them with browser impersonation, which needs the `curl_cffi` library. Youtarr's Docker image includes it; if you see `WARNING: The extractor specified to use impersonation for this download, but no impersonate target is available` in the logs, you are on an older image and should pull the latest.
 
-Even with impersonation, YouTube's subtitle endpoint is flaky at times. When the subtitle fetch fails, yt-dlp still downloads the video; Youtarr keeps the video, does not count it as a failed download, and marks the job "Complete with Warnings". If the extra retry time bothers you, turn off **Subtitles** in **Settings -> Core -> Downloads** until it settles.
+Even with impersonation, YouTube's subtitle endpoint is flaky at times. When the subtitle fetch fails, yt-dlp still downloads the video; Youtarr keeps the video, does not count it as a failed download, and marks the job "Complete with Warnings". The same applies when YouTube sends back an empty subtitle file, which logs `ERROR: Did not get any data blocks` after `Writing video subtitles to: ...`. If the extra retry time bothers you, turn off **Subtitles** in **Settings -> Core -> Downloads** until it settles.
+
+### SponsorBlock Lookup Fails
+
+If a download logs `ERROR: Unable to communicate with SponsorBlock API`, the video can still download successfully without SponsorBlock segment processing. Youtarr keeps successfully downloaded videos in the archive and marks the job "Complete with Warnings", and the download's completion message says how many videos couldn't reach SponsorBlock. A failed SponsorBlock lookup alone does not cause the video to be downloaded again on the next run.
+
+An error starting with `Preprocessing: Unable to communicate with SponsorBlock API` still counts as a video failure because yt-dlp abandons that video. Other video download failures are also reported normally.
 
 ### Downloads Fail with "Conversion failed!" or "No space left on device" {#download-out-of-space}
 
