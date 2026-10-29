@@ -1,151 +1,113 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Box,
   Typography,
-  Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  IconButton,
-  TextField,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Alert,
-  Tooltip,
-  Chip,
   Skeleton,
   Snackbar,
   Divider,
 } from '../../ui';
-import { Trash2 as DeleteIcon, Plus as AddIcon, Copy as ContentCopyIcon, AlertTriangle as WarningIcon } from 'lucide-react';
+import { AlertTriangle as WarningIcon } from 'lucide-react';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
-import { InfoTooltip } from '../common/InfoTooltip';
 
 import { locationUtils } from '../../../utils/location';
+import BookmarkletKeysSection from './ApiKeysSection/BookmarkletKeysSection';
+import ConfirmKeyActionDialog from './ApiKeysSection/ConfirmKeyActionDialog';
+import CreateKeyDialog from './ApiKeysSection/CreateKeyDialog';
+import CreatedKeyDialog from './ApiKeysSection/CreatedKeyDialog';
+import EditKeyDialog from './ApiKeysSection/EditKeyDialog';
+import ExternalKeysSection from './ApiKeysSection/ExternalKeysSection';
+import { apiKeyError } from './ApiKeysSection/apiKeyError';
+import { ApiKey, ApiKeyRole, ApiKeyCreatedResponse, useApiKeys } from './ApiKeysSection/useApiKeys';
 
-interface ApiKey {
-  id: number;
-  name: string;
-  key_prefix: string;
-  created_at: string;
-  last_used_at: string | null;
-  is_active: boolean;
-  usage_count: number;
-}
-
-interface ApiKeyCreatedResponse {
-  success: boolean;
-  message: string;
-  id: number;
-  name: string;
-  key: string;
-  prefix: string;
-}
+const SECTION_TITLE = 'API Keys & Bookmarklet';
 
 interface ApiKeysSectionProps {
   token: string | null;
   apiKeyRateLimit: number;
   onRateLimitChange: (value: number) => void;
+  externalApiEnabled?: boolean;
+  showRequestsNavLink: boolean;
+  onShowRequestsNavLinkChange: (value: boolean) => void;
 }
 
-const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit, onRateLimitChange }) => {
+const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
+  token,
+  apiKeyRateLimit,
+  onRateLimitChange,
+  externalApiEnabled = false,
+  showRequestsNavLink,
+  onShowRequestsNavLinkChange,
+}) => {
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createKeyType, setCreateKeyType] = useState<'external' | 'legacy'>('external');
   const [createdKeyDialogOpen, setCreatedKeyDialogOpen] = useState(false);
-  const [newKeyName, setNewKeyName] = useState('');
   const [createdKey, setCreatedKey] = useState<ApiKeyCreatedResponse | null>(null);
+  const [createdKeyRole, setCreatedKeyRole] = useState<ApiKeyRole>('legacy_download');
+  const [createdKeyAction, setCreatedKeyAction] = useState<'created' | 'regenerated'>('created');
   const [error, setError] = useState<string | null>(null);
+  const [editKey, setEditKey] = useState<ApiKey | null>(null);
+  const apiKeyApi = useApiKeys(token);
   const [snackbar, setSnackbar] = useState({ open: false, message: '' });
   const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<{ open: boolean; keyId: number | null; keyName: string }>({
     open: false,
     keyId: null,
     keyName: '',
   });
+  const [regenerateConfirmDialog, setRegenerateConfirmDialog] = useState<{
+    open: boolean;
+    key: ApiKey | null;
+  }>({ open: false, key: null });
+  const [regenerating, setRegenerating] = useState(false);
   const [isHttpWarning] = useState(
     locationUtils.getProtocol() !== 'https:' && locationUtils.getHostname() !== 'localhost'
   );
 
+  const loadSequence = useRef(0);
+  const sessionSequence = useRef(0);
+  const mutationBusy = useRef(false);
+  const [revoking, setRevoking] = useState(false);
   const fetchApiKeys = useCallback(async () => {
-    if (!token) return;
-    
+    const sequence = ++loadSequence.current;
     try {
-      const response = await fetch('/api/keys', {
-        headers: { 'x-access-token': token },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setApiKeys(data.keys || []);
-      } else {
-        const errData = await response.json();
-        setError(errData.error || 'Failed to fetch API keys');
-      }
+      const keys = await apiKeyApi.fetchApiKeys();
+      if (sequence === loadSequence.current) { setApiKeys(keys); setError(null); }
     } catch (err) {
-      setError('Failed to fetch API keys');
+      if (sequence === loadSequence.current) setError(apiKeyError(err, 'Failed to fetch API keys'));
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
-  }, [token]);
+  }, [apiKeyApi]);
 
   useEffect(() => {
-    fetchApiKeys();
+    ++sessionSequence.current;
+    setLoading(true);
+    setCreateDialogOpen(false); setEditKey(null); setCreatedKeyDialogOpen(false); setCreatedKey(null);
+    void fetchApiKeys();
+    return () => { ++loadSequence.current; ++sessionSequence.current; };
   }, [fetchApiKeys]);
 
-  const handleCreateKey = async () => {
-    if (!token || !newKeyName.trim()) return;
-
-    try {
-      const response = await fetch('/api/keys', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-access-token': token,
-        },
-        body: JSON.stringify({ name: newKeyName.trim() }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        setCreatedKey(data);
-        setCreateDialogOpen(false);
-        setCreatedKeyDialogOpen(true);
-        setNewKeyName('');
-        fetchApiKeys();
-      } else {
-        setError(data.error || 'Failed to create API key');
-      }
-    } catch (err) {
-      setError('Failed to create API key');
-    }
+  const openCreateDialog = (type: 'external' | 'legacy' = 'external') => {
+    setCreateKeyType(type); setCreateDialogOpen(true);
+  };
+  const openEditDialog = (key: ApiKey) => {
+    if (token && key.role !== 'legacy_download' && !key.revoked_at) setEditKey(key);
   };
 
   const handleDeleteKey = async () => {
-    if (!token || !deleteConfirmDialog.keyId) return;
-
+    if (!token || !deleteConfirmDialog.keyId || mutationBusy.current) return;
+    mutationBusy.current = true; setRevoking(true); setError(null);
+    const session = sessionSequence.current;
     try {
-      const response = await fetch(`/api/keys/${deleteConfirmDialog.keyId}`, {
-        method: 'DELETE',
-        headers: { 'x-access-token': token },
-      });
-
-      if (response.ok) {
-        setSnackbar({ open: true, message: 'API key deleted' });
-        fetchApiKeys();
-      } else {
-        const data = await response.json();
-        setError(data.error || 'Failed to delete API key');
-      }
+      await apiKeyApi.revokeApiKey(deleteConfirmDialog.keyId);
+      if (session !== sessionSequence.current) return;
+      setSnackbar({ open: true, message: 'API key revoked' });
+      void fetchApiKeys();
     } catch (err) {
-      setError('Failed to delete API key');
+      if (session === sessionSequence.current) setError(apiKeyError(err, 'Failed to revoke API key'));
     } finally {
+      mutationBusy.current = false; setRevoking(false);
       setDeleteConfirmDialog({ open: false, keyId: null, keyName: '' });
     }
   };
@@ -154,71 +116,66 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
     setDeleteConfirmDialog({ open: true, keyId: id, keyName: name });
   };
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    setSnackbar({ open: true, message: `${label} copied to clipboard` });
+  const handleRegenerateKey = async () => {
+    if (!token || !regenerateConfirmDialog.key || mutationBusy.current) return;
+    mutationBusy.current = true; setError(null);
+    const session = sessionSequence.current;
+    const key = regenerateConfirmDialog.key;
+    setRegenerating(true);
+    try {
+      const body = await apiKeyApi.regenerateApiKey(key.id);
+      if (session !== sessionSequence.current) return;
+      setRegenerateConfirmDialog({ open: false, key: null });
+      setCreatedKey(body);
+      setCreatedKeyRole(key.role);
+      setCreatedKeyAction('regenerated');
+      setCreatedKeyDialogOpen(true);
+      await fetchApiKeys();
+    } catch (err) {
+      if (session === sessionSequence.current) setError(apiKeyError(err, 'Failed to regenerate API key'));
+    } finally {
+      mutationBusy.current = false;
+      setRegenerating(false);
+    }
   };
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return 'Never';
-    return new Date(dateStr).toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setSnackbar({ open: true, message: `${label} copied to clipboard` });
+    } catch {
+      setSnackbar({ open: true, message: 'Unable to copy. Select and copy it manually.' });
+    }
   };
 
-  const generateBookmarklet = (apiKey: string) => {
-    const serverUrl = locationUtils.getOrigin();
-    const code = `javascript:(function(){var k='${apiKey}';var s='${serverUrl}';var u=location.href;if(!/youtube\\.com|youtu\\.be/.test(u)){alert('Not YouTube');return;}fetch(s+'/api/videos/download',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':k},body:JSON.stringify({url:u})}).then(function(r){return r.json()}).then(function(d){alert(d.success?'✓ Added: '+(d.video&&d.video.title?d.video.title:'Queued'):'✗ '+d.error)}).catch(function(){alert('✗ Connection failed')})})();`;
-    return code;
+  const closeCreatedKeyDialog = () => {
+    setCreatedKeyDialogOpen(false);
+    setCreatedKey(null);
   };
 
   if (loading) {
     return (
-      <ConfigurationAccordion title="API Keys & Bookmarklet">
+      <ConfigurationAccordion title={SECTION_TITLE}>
         <Skeleton variant="rectangular" height={200} />
       </ConfigurationAccordion>
     );
   }
 
+  const externalKeys = apiKeys.filter((key) => key.role !== 'legacy_download');
+  const bookmarkletKeys = apiKeys.filter((key) => key.role === 'legacy_download');
+
   return (
-    <ConfigurationAccordion title="API Keys & Bookmarklet">
-      <Box className="mb-6">
-        <Typography variant="subtitle1" gutterBottom>
-          Get the "Send to Youtarr" button
-        </Typography>
-        <ol className="list-decimal space-y-1 pl-5 text-sm">
-          <li>
-            Click <strong>Create Key</strong>, give it a name like "Laptop browser", and click <strong>Create</strong>.
-          </li>
-          <li>In the window that opens, drag the <strong>Send to Youtarr</strong> button to your bookmarks bar.</li>
-          <li>On any YouTube video, click the button to queue it.</li>
-        </ol>
-        <Typography variant="body2" color="secondary" className="mt-2">
-          The button is only shown once. If you lose it, create another key.
-        </Typography>
-      </Box>
-
-      <Typography variant="body2" color="secondary" className="mb-4">
-        Keys also work with Apple Shortcuts, Tasker, and other tools.
-        <strong> Note:</strong> API keys currently support single video downloads only. Playlists and channels require the web UI.
-      </Typography>
-
-      <Box className="flex justify-between items-center mb-4">
-        <Typography variant="subtitle1">Manage API Keys</Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon size={16} />}
-          onClick={() => setCreateDialogOpen(true)}
-          size="small"
-        >
-          Create Key
-        </Button>
-      </Box>
-
+    <ConfigurationAccordion
+      title={SECTION_TITLE}
+      statusBanner={externalApiEnabled ? {
+        enabled: showRequestsNavLink,
+        label: 'Show Requests in navigation',
+        onToggle: onShowRequestsNavLinkChange,
+        onText: 'Requests navigation link shown',
+        offText: 'Requests navigation link hidden',
+        toggleTestId: 'requests-nav-link-switch',
+      } : undefined}
+    >
       {isHttpWarning && (
         <Alert severity="warning" className="mb-4" icon={<WarningIcon size={20} />}>
           Creating API keys over HTTP is insecure. Use HTTPS in production.
@@ -231,245 +188,102 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
         </Alert>
       )}
 
-      {apiKeys.length === 0 ? (
-        <Paper className="p-6 text-center">
-          <Typography color="secondary">
-            No API keys yet. Create one to get your Send to Youtarr button.
-          </Typography>
-        </Paper>
-      ) : (
-        <TableContainer component={Paper}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Key</TableCell>
-                <TableCell>Created</TableCell>
-                <TableCell>Last Used</TableCell>
-                <TableCell align="center">Uses</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {apiKeys.map((key) => (
-                <TableRow key={key.id}>
-                  <TableCell>{key.name}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={`${key.key_prefix}...`}
-                      size="small"
-                      variant="outlined"
-                    />
-                  </TableCell>
-                  <TableCell>{formatDate(key.created_at)}</TableCell>
-                  <TableCell>{formatDate(key.last_used_at)}</TableCell>
-                  <TableCell align="center">
-                    <Chip
-                      label={key.usage_count}
-                      size="small"
-                      color={key.usage_count > 0 ? 'primary' : 'default'}
-                      variant="outlined"
-                    />
-                  </TableCell>
-                  <TableCell align="right">
-                    <Tooltip title="Delete">
-                      <IconButton
-                        size="small"
-                        onClick={() => openDeleteConfirmDialog(key.id, key.name)}
-                        color="error"
-                        aria-label="Delete"
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+      <BookmarkletKeysSection
+        keys={bookmarkletKeys}
+        rateLimit={apiKeyRateLimit}
+        onRateLimitChange={onRateLimitChange}
+        onCreate={() => openCreateDialog('legacy')}
+        onRevoke={openDeleteConfirmDialog}
+      />
+
+      {externalApiEnabled && (
+        <>
+          <Divider className="my-6" />
+          <ExternalKeysSection
+            keys={externalKeys}
+            onCreate={() => openCreateDialog('external')}
+            onEdit={openEditDialog}
+            onRegenerate={(key) => setRegenerateConfirmDialog({ open: true, key })}
+            onRevoke={openDeleteConfirmDialog}
+          />
+        </>
       )}
 
-      <Divider className="my-6" />
-
-      {/* Rate Limit Setting */}
-      <Box className="flex items-center">
-        <TextField
-          type="number"
-          label="Rate Limit (requests/min)"
-          value={apiKeyRateLimit}
-          onChange={(e) => {
-            const val = parseInt(e.target.value, 10);
-            if (!isNaN(val) && val >= 1 && val <= 100) {
-              onRateLimitChange(val);
-            }
+      {createDialogOpen && (createKeyType === 'legacy' || externalApiEnabled) && (
+        <CreateKeyDialog
+          key={token}
+          api={apiKeyApi}
+          createKeyType={createKeyType}
+          onClose={() => setCreateDialogOpen(false)}
+          onCreated={(key, role) => {
+            setCreatedKey(key);
+            setCreatedKeyRole(role);
+            setCreatedKeyAction('created');
+            setCreateDialogOpen(false);
+            setCreatedKeyDialogOpen(true);
+            void fetchApiKeys();
           }}
-          inputProps={{ min: 1, max: 100 }}
-          size="small"
-          className="w-[200px]"
         />
-        <InfoTooltip text="Maximum download requests per minute per API key. Helps prevent abuse." />
-      </Box>
+      )}
+      {externalApiEnabled && editKey && (
+        <EditKeyDialog
+          key={`${token}:${editKey.id}`}
+          apiKey={editKey}
+          api={apiKeyApi}
+          onClose={() => setEditKey(null)}
+          onSaved={() => {
+            setEditKey(null);
+            setSnackbar({ open: true, message: 'External access updated' });
+            void fetchApiKeys();
+          }}
+        />
+      )}
 
-      {/* Create Key Dialog */}
-      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Create API Key</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Key Name"
-            placeholder="e.g., iPhone Shortcut, Bookmarklet"
-            fullWidth
-            value={newKeyName}
-            onChange={(e) => setNewKeyName(e.target.value)}
-            inputProps={{ maxLength: 100 }}
-            helperText="A descriptive name to identify this key"
-          />
-          <Typography variant="body2" color="secondary" className="mt-2">
-            Next you'll get your key, the Send to Youtarr button, and the details for phone shortcuts. They're
-            shown only once.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
-          <Button
-            onClick={handleCreateKey}
-            variant="contained"
-            disabled={!newKeyName.trim()}
-          >
-            Create
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Key Created Dialog with Bookmarklet */}
-      <Dialog
+      <CreatedKeyDialog
         open={createdKeyDialogOpen}
-        onClose={() => setCreatedKeyDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
+        createdKey={createdKey}
+        role={createdKeyRole}
+        action={createdKeyAction}
+        onClose={closeCreatedKeyDialog}
+        onCopy={(text, label) => void copyToClipboard(text, label)}
+      />
+
+      <ConfirmKeyActionDialog
+        open={regenerateConfirmDialog.open}
+        title="Regenerate API Key?"
+        confirmLabel="Regenerate Key"
+        busyLabel="Regenerating…"
+        busy={regenerating}
+        onCancel={() => setRegenerateConfirmDialog({ open: false, key: null })}
+        onConfirm={handleRegenerateKey}
       >
-        <DialogTitle>✓ API Key Created</DialogTitle>
-        <DialogContent>
-          <Alert severity="warning" className="mb-6">
-            Save this key now - it will not be shown again!
-          </Alert>
+        <Alert severity="warning" className="mb-3">
+          The current key will stop working immediately.
+        </Alert>
+        <Typography>
+          Regenerate <strong>&quot;{regenerateConfirmDialog.key?.name}&quot;</strong>?
+        </Typography>
+        <Typography variant="body2" color="secondary" className="mt-2">
+          Its permissions and approved channels will stay the same. The replacement key is
+          shown only once, so copy it before closing the next dialog.
+        </Typography>
+      </ConfirmKeyActionDialog>
 
-          <Typography variant="subtitle2" gutterBottom>
-            Your API Key
-          </Typography>
-          <Paper
-            className="p-4 mb-6 flex items-center justify-between bg-muted/50 font-mono break-all"
-          >
-            <code>{createdKey?.key}</code>
-            <IconButton
-              onClick={() => copyToClipboard(createdKey?.key || '', 'API key')}
-              size="small"
-            >
-              <ContentCopyIcon size={16} />
-            </IconButton>
-          </Paper>
-
-          <Typography variant="subtitle2" gutterBottom>
-            📚 Add to Bookmarks
-          </Typography>
-          <Typography variant="body2" color="secondary" className="mb-2">
-            Drag this button to your bookmarks bar:
-          </Typography>
-          <Box className="mb-4">
-            <a
-              href={createdKey ? generateBookmarklet(createdKey.key) : '#'}
-              onClick={(e) => e.preventDefault()}
-              draggable="true"
-              style={{
-                display: 'inline-block',
-                padding: '8px 16px',
-                backgroundColor: 'var(--primary)',
-                color: 'var(--primary-foreground)',
-                borderRadius: 'var(--radius-input)',
-                textDecoration: 'none',
-                fontWeight: 500,
-                cursor: 'grab',
-              }}
-            >
-              📥 Send to Youtarr
-            </a>
-          </Box>
-
-          <Typography variant="body2" color="secondary" className="mb-2">
-            Or copy the bookmarklet code:
-          </Typography>
-          <Paper
-            className="p-4 mb-6 flex items-center justify-between bg-muted/50 max-h-[100px] overflow-auto"
-          >
-            <code style={{ fontSize: '0.75rem', wordBreak: 'break-all' }}>
-              {createdKey ? generateBookmarklet(createdKey.key) : ''}
-            </code>
-            <IconButton
-              onClick={() =>
-                copyToClipboard(
-                  createdKey ? generateBookmarklet(createdKey.key) : '',
-                  'Bookmarklet'
-                )
-              }
-              size="small"
-            >
-              <ContentCopyIcon size={16} />
-            </IconButton>
-          </Paper>
-
-          <Typography variant="subtitle2" gutterBottom>
-            📱 Mobile / Shortcuts
-          </Typography>
-          <Typography variant="body2" color="secondary" className="mb-2">
-            Use this URL in Apple Shortcuts, Tasker, or other tools:
-          </Typography>
-          <Paper className="p-4 bg-muted/50">
-            <Typography variant="body2" style={{ fontFamily: 'monospace' }} className="mb-2">
-              <strong>URL:</strong> {locationUtils.getOrigin()}/api/videos/download
-            </Typography>
-            <Typography variant="body2" style={{ fontFamily: 'monospace' }} className="mb-2">
-              <strong>Method:</strong> POST
-            </Typography>
-            <Typography variant="body2" style={{ fontFamily: 'monospace' }} className="mb-2">
-              <strong>Header:</strong> x-api-key: {createdKey?.key?.substring(0, 8)}...
-            </Typography>
-            <Typography variant="body2" style={{ fontFamily: 'monospace' }}>
-              <strong>Body:</strong> {`{ "url": "<youtube-url>" }`}
-            </Typography>
-          </Paper>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCreatedKeyDialogOpen(false)} variant="contained">
-            Done
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog
+      <ConfirmKeyActionDialog
         open={deleteConfirmDialog.open}
-        onClose={() => setDeleteConfirmDialog({ open: false, keyId: null, keyName: '' })}
+        title="Revoke API Key?"
+        confirmLabel="Revoke"
+        busy={revoking}
+        onCancel={() => setDeleteConfirmDialog({ open: false, keyId: null, keyName: '' })}
+        onConfirm={handleDeleteKey}
       >
-        <DialogTitle>Delete API Key?</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to delete the API key <strong>"{deleteConfirmDialog.keyName}"</strong>?
-          </Typography>
-          <Typography variant="body2" color="secondary" className="mt-2">
-            This action cannot be undone. Any integrations using this key will stop working.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteConfirmDialog({ open: false, keyId: null, keyName: '' })}>
-            Cancel
-          </Button>
-          <Button onClick={handleDeleteKey} color="error" variant="contained">
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+        <Typography>
+          Are you sure you want to revoke the API key <strong>"{deleteConfirmDialog.keyName}"</strong>?
+        </Typography>
+        <Typography variant="body2" color="secondary" className="mt-2">
+          Any integration using this key will stop working immediately. Its audit history is retained.
+        </Typography>
+      </ConfirmKeyActionDialog>
 
       <Snackbar
         open={snackbar.open}
@@ -482,4 +296,3 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
 };
 
 export default ApiKeysSection;
-

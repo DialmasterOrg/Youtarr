@@ -1730,6 +1730,32 @@ describe('DownloadModule', () => {
       );
     });
 
+    it('uses a job id passed in options and returns it', async () => {
+      const jobId = '9b89e5bc-8c90-4e72-b245-270fed2eacc2';
+      jobModuleMock.addOrUpdateJob.mockResolvedValue(jobId);
+      jobModuleMock.getJob.mockReturnValueOnce(undefined).mockReturnValue({ status: 'Pending' });
+
+      const result = await downloadModule.doSpecificDownloads(
+        { urls: ['https://youtube.com/watch?v=abc123'] }, false, { jobId }
+      );
+
+      expect(jobModuleMock.addOrUpdateJob).toHaveBeenCalledWith(expect.any(Object), false, jobId);
+      expect(result).toBe(jobId);
+    });
+
+    it('ignores a job id supplied in the request body', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'Pending' });
+
+      await downloadModule.doSpecificDownloads({
+        body: {
+          urls: ['https://youtube.com/watch?v=abc123'],
+          externalRequestId: '9b89e5bc-8c90-4e72-b245-270fed2eacc2',
+        },
+      });
+
+      expect(jobModuleMock.addOrUpdateJob).toHaveBeenCalledWith(expect.any(Object), false);
+    });
+
     it('should handle job data directly', async () => {
       jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
       const jobData = {

@@ -684,6 +684,32 @@ Send videos to Youtarr from anywhere using API keys. This enables one-click down
    - The full key is shown only once
    - Copy it to a secure location before closing the dialog
 
+### Versioned external API keys and the Requests page
+
+When the server runs with `EXTERNAL_API_ENABLED=true` (see [External API](EXTERNAL_API.md)), the same settings page gains an **External access keys** section below the bookmarklet keys. These keys use `/external-api/v1` for approved catalog access and approval-backed video, channel, and deletion requests. Bookmarklet keys cannot use `/external-api/v1`, and external keys cannot use the bookmarklet endpoint. With the variable unset, neither the section nor the Requests page appears.
+
+1. Click **Create external key**, name it, choose its permissions and content policy, and select the channels it may see.
+2. To change grants later, use the edit action on the key's card. Youtarr asks for confirmation before saving a change that widens what the key can see or request.
+
+Open **Requests** in the main navigation to review what external clients submitted. The page filters by status, requester, and type, and every approval or rejection is confirmed first. The **Show Requests in navigation** switch on the API keys page hides the link without turning the API off; the page stays reachable at `/requests`.
+
+- **Approve** rechecks the requester's current role and policy, its current
+  channel grant, the enabled cached catalog entry, media type, rating, and
+  downloaded/duplicate state, then hands the work to a background runner. The
+  request shows **Approved** until the work starts, then **Processing**, then
+  **Completed** or **Failed**; the page refreshes itself while any request on
+  it is approved or processing. A request held while downloads are paused
+  stays Approved with a note saying what it is waiting for.
+- **Reject** requires a short reason. Rejection is final for that request, but
+  clears the active dedupe record so the client can submit a new request later.
+- Requests that are no longer safe or whose downloader job cannot be queued
+  are marked failed without exposing internal errors.
+- Channel approval provisions the canonical channel and grants it to the
+  requester by default. Video deletion approval removes only the downloaded
+  asset; it never removes the channel subscription.
+
+The Requests page uses your Youtarr login (or no login when `AUTH_ENABLED=false`). External API keys cannot reach the review queue or its actions.
+
 ### Install a Browser Bookmarklet
 
 After creating an API key, you can set up a bookmarklet to send videos with one click:

@@ -754,7 +754,14 @@ class DownloadModule {
     }
   }
 
-  async doSpecificDownloads(reqOrJobData, isNextJob = false) {
+  /**
+   * @param {Object} reqOrJobData - request (body) or job data
+   * @param {boolean} [isNextJob]
+   * @param {{jobId?: string}} [options] - jobId: a stable UUID for the job, from
+   *   trusted internal callers only (the external request executor). Kept out
+   *   of the job data so a request body cannot choose a job id.
+   */
+  async doSpecificDownloads(reqOrJobData, isNextJob = false, { jobId: preferredJobId = null } = {}) {
     const jobData = reqOrJobData.body ? reqOrJobData.body : reqOrJobData;
     if (!isNextJob && !jobData.id) {
       await storageGuard.assertDownloadsAllowed();
@@ -777,7 +784,16 @@ class DownloadModule {
     const requestedIds = requestedUrls.flatMap(url => {
       try { return [normalizeUrlToVideoId(url).id]; } catch { return []; }
     });
-    const jobId = await jobModule.addOrUpdateJob(
+    if (!isNextJob && preferredJobId) {
+      const existingJob = jobModule.getJob(preferredJobId);
+      if (existingJob) {
+        if (['Error', 'Killed', 'Terminated'].includes(existingJob.status)) {
+          throw new Error('Existing job with the requested id is terminal');
+        }
+        return preferredJobId;
+      }
+    }
+    const addJobArgs = [
       {
         jobType: jobType,
         status: '',
@@ -787,7 +803,9 @@ class DownloadModule {
         action: this.doSpecificDownloads.bind(this),
       },
       isNextJob
-    );
+    ];
+    if (preferredJobId) addJobArgs.push(preferredJobId);
+    const jobId = await jobModule.addOrUpdateJob(...addJobArgs);
 
     if (!jobId) return { queued: 0, acceptedIds: [], alreadyActiveIds: [...new Set(requestedIds)] };
     const job = jobModule.getJob(jobId);
@@ -960,6 +978,7 @@ class DownloadModule {
       await jobModule.startNextJob();
       throw err;
     }
+    if (preferredJobId) return jobId;
     return { queued: urls.length, acceptedIds: admission.acceptedIds, alreadyActiveIds: admission.alreadyActiveIds };
   }
 

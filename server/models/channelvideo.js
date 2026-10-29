@@ -21,11 +21,11 @@ ChannelVideo.init(
     },
     title: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     thumbnail: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     duration: {
       type: DataTypes.INTEGER,
