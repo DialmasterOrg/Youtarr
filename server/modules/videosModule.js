@@ -57,6 +57,7 @@ class VideosModule {
       deletedFilter = 'off',
       watchedFilter = 'off',
       maxRating = null,
+      youtubeId = null,
     } = options;
 
     try {
@@ -76,6 +77,10 @@ class VideosModule {
 
       if (channelFilter) {
         where.youTubeChannelName = channelFilter;
+      }
+
+      if (youtubeId) {
+        where.youtubeId = youtubeId;
       }
 
       if (dateFrom) {
@@ -302,6 +307,18 @@ class VideosModule {
       logger.error({ err }, 'Error in getVideosPaginated');
       throw err;
     }
+  }
+
+  /**
+   * Get one video by YouTube ID, in the shape of a getVideosPaginated row.
+   * It applies no filter on the removal state, so a deleted or missing video is
+   * returned until the trash is emptied.
+   * @param {string} youtubeId
+   * @returns {Promise<Object|null>} The video row, or null when there is none
+   */
+  async getVideoByYoutubeId(youtubeId) {
+    const { videos } = await this.getVideosPaginated({ youtubeId, limit: 1 });
+    return videos[0] ?? null;
   }
 
   /**
