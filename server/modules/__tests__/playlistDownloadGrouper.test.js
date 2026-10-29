@@ -3,8 +3,11 @@ jest.mock('../configModule', () => ({
   config: { preferredResolution: '1080' },
   getDefaultSubfolder: jest.fn().mockReturnValue(null),
 }));
+jest.mock('../tvShows/libraryLayouts', () => ({ getLayoutResolver: jest.fn() }));
+jest.mock('../../logger', () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }));
 
 const Channel = require('../../models/channel');
+const libraryLayouts = require('../tvShows/libraryLayouts');
 const grouper = require('../playlistDownloadGrouper');
 
 const playlist = {
@@ -19,6 +22,7 @@ const playlist = {
 beforeEach(() => {
   jest.clearAllMocks();
   Channel.findAll.mockResolvedValue([]);
+  libraryLayouts.getLayoutResolver.mockResolvedValue((folder) => (folder === 'TV' ? 'tv' : 'videos'));
 });
 
 test('groups contain only command settings (no subFolder/rating)', async () => {
@@ -130,4 +134,41 @@ test('routing values (subfolder/rating) never split groups', async () => {
     {}
   );
   expect(groups).toHaveLength(1);
+});
+
+describe('TV folders are video-only', () => {
+  const mp3Playlist = { ...playlist, audio_format: 'mp3_only' };
+
+  test('loads the channel subfolder with its command settings', async () => {
+    await grouper.buildGroups(mp3Playlist, [{ youtube_id: 'a', channel_id: 'UCc' }], {});
+    expect(Channel.findAll).toHaveBeenCalledWith(expect.objectContaining({
+      attributes: expect.arrayContaining(['sub_folder']),
+    }));
+  });
+
+  test('downgrades the playlist MP3 type for a video of a channel in a TV folder', async () => {
+    Channel.findAll.mockResolvedValue([
+      { channel_id: 'UCtv', video_quality: null, audio_format: null, skip_video_folder: null, sub_folder: 'TV' },
+    ]);
+    const groups = await grouper.buildGroups(mp3Playlist, [
+      { youtube_id: 'a', channel_id: 'UCtv' },
+      { youtube_id: 'b', channel_id: 'UCnone' },
+    ], {});
+    expect(groups).toContainEqual({ resolution: '720', audioFormat: null, skipVideoFolder: false, youtubeIds: ['a'] });
+    expect(groups).toContainEqual({ resolution: '720', audioFormat: 'mp3_only', skipVideoFolder: false, youtubeIds: ['b'] });
+  });
+
+  test('downgrades MP3 for untracked videos when the playlist folder is TV', async () => {
+    const groups = await grouper.buildGroups({ ...mp3Playlist, default_sub_folder: 'TV' }, [
+      { youtube_id: 'a', channel_id: 'UCnone' },
+    ], {});
+    expect(groups[0].audioFormat).toBeNull();
+  });
+
+  test('downgrades an MP3 download override into a TV folder', async () => {
+    const groups = await grouper.buildGroups(playlist, [{ youtube_id: 'a', channel_id: 'UCnone' }], {
+      audioFormat: 'video_mp3', subfolder: 'TV',
+    });
+    expect(groups[0].audioFormat).toBeNull();
+  });
 });

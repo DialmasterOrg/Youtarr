@@ -14,6 +14,14 @@ const VideoWatchStatus = require('./videowatchstatus');
 const MediaServerUser = require('./mediaserveruser');
 const WatchStatusSyncCursor = require('./watchstatussynccursor');
 const ScheduledTaskRun = require('./scheduledtaskrun');
+const TvShow = require('./tvshow');
+const VideoClassification = require('./videoclassification');
+const TvReorganizeOperation = require('./tvreorganizeoperation');
+const TvReorganizeItem = require('./tvreorganizeitem');
+const WatchStatusHold = require('./watchstatushold');
+const TvShowPattern = require('./tvshowpattern');
+const TvShowSeason = require('./tvshowseason');
+const EpisodeConflict = require('./episodeconflict');
 const ApiKeyChannelGrant = require('./apikeychannelgrant');
 const ExternalRequest = require('./externalrequest');
 const ExternalApiUsageBucket = require('./externalapiusagebucket');
@@ -36,6 +44,16 @@ PlaylistSyncState.belongsTo(Playlist, { foreignKey: 'playlist_id', targetKey: 'i
 
 Video.hasMany(VideoWatchStatus, { foreignKey: 'video_id', as: 'watchStatuses' });
 VideoWatchStatus.belongsTo(Video, { foreignKey: 'video_id', as: 'video' });
+
+TvShow.hasMany(VideoClassification, { foreignKey: 'show_id', as: 'classifications' });
+VideoClassification.belongsTo(TvShow, { foreignKey: 'show_id', as: 'show' });
+TvShow.hasMany(TvShowPattern, { foreignKey: 'show_id', as: 'patterns' });
+TvShowPattern.belongsTo(TvShow, { foreignKey: 'show_id', as: 'show' });
+TvShow.hasMany(TvShowSeason, { foreignKey: 'show_id', as: 'seasons' });
+TvShowSeason.belongsTo(TvShow, { foreignKey: 'show_id', as: 'show' });
+
+TvReorganizeOperation.hasMany(TvReorganizeItem, { foreignKey: 'operation_id', as: 'items' });
+TvReorganizeItem.belongsTo(TvReorganizeOperation, { foreignKey: 'operation_id', as: 'operation' });
 
 ApiKey.hasMany(ApiKeyChannelGrant, { foreignKey: 'api_key_id', as: 'channelGrants' });
 ApiKeyChannelGrant.belongsTo(ApiKey, { foreignKey: 'api_key_id', as: 'apiKey' });
@@ -66,6 +84,14 @@ module.exports = {
   MediaServerUser,
   WatchStatusSyncCursor,
   ScheduledTaskRun,
+  TvShow,
+  VideoClassification,
+  TvReorganizeOperation,
+  TvReorganizeItem,
+  WatchStatusHold,
+  TvShowPattern,
+  TvShowSeason,
+  EpisodeConflict,
   ApiKeyChannelGrant,
   ExternalRequest,
   ExternalApiUsageBucket,

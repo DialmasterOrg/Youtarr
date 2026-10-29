@@ -26,7 +26,12 @@ Youtarr provides full Plex integration with:
 
 ## Library Setup
 
-There are two ways to add Youtarr content to Plex. The "Other Videos" library is the standard, recommended method: it has been in place since Youtarr's inception, is extensively tested, and works out of the box. The "TV Shows" library is an alternative you can try if you want a more series-style presentation in Plex. It requires a specific file naming convention, so you need to set the file naming before you start downloading, or re-download existing videos after changing it.
+Each Youtarr library folder (the main downloads folder and each `__subfolder`) has a layout, set under Settings -> **Library folders**:
+
+- **Videos** (the default): give the folder an **Other Videos** library.
+- **TV shows**: give the folder a **TV Shows** library. Youtarr saves each channel there as a show, with year seasons and an episode NFO file for every video; see [TV Shows](#tv-shows).
+
+A Plex library must hold folders of one layout only.
 
 ### Other Videos
 
@@ -62,34 +67,56 @@ Choose the appropriate agent:
 
 #### Step 4: Add Folder
 
-Point the library to your Youtarr download directory:
-- Default: `/path/to/youtube`
+Point the library at `__Videos` inside your Youtarr download directory (new installs save there), or at the download directory itself on installs that save into it:
+- New installs: `/path/to/youtube/__Videos`
+- Installs that save into the download directory: `/path/to/youtube`
 - Or specific subfolder: `/path/to/youtube/__kids`
+
+Before you add a TV show folder, Youtarr moves those downloads into `__Videos` and you point the library there.
+
+Once one of your folders is a TV folder, point the Other Videos library at your Video folders only (one location per folder). A library at the whole download directory would show the TV folder's episodes a second time. See [Move an existing setup to TV shows](../USAGE_GUIDE.md#move-an-existing-setup-to-tv-shows).
 
 ### TV Shows
 
-#### Step 1: Set Naming Convention
-In Youtarr, go to `Settings -> Core -> Video Filename Template` and select the `Plex TV Series` preset.
+Use a TV Shows library for each Youtarr **TV folder**: a library folder whose layout is TV shows. To make one, set a folder's layout under Settings -> **Library folders**, or switch a channel to **TV show** under Channel Settings -> **TV Show**, which can create the folder for you. Files are saved as `__TV Shows/<Show>/Season 2026/S2026E09281530 - Title [id].mp4`, where the episode number is the upload's month, day, hour and minute (UTC); see [TV folders](../YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md#tv-folders).
 
-This will **not** rename previously downloaded videos. It is best to set this before you start downloading; otherwise, re-download videos so they pick up the new naming.
+#### Step 1: Create the library
 
-While you are there, turn off `Prefix channel name in embedded video title` under `Settings -> Core -> Download Settings`. Plex reads the embedded MP4 title as the episode title, and in a TV Shows library the channel is already the show name, so the prefix would only repeat it. This also only applies to new downloads.
+1. In Plex, go to Settings -> Manage -> Libraries and click **Add Library**
+2. **Select type**: TV Shows, and name the library
+3. **Add folders**: the TV folder itself, for example `/path/to/youtube/__TV Shows`. Show folders must sit directly inside the library's folder, so don't point it at your downloads folder.
 
-#### Step 2: Create a New Library
-1. In Plex, go to Settings → Manage → Libraries
-2. Click "Add Library"
-3. Configure as follows:
-   - **Type**: TV Shows
-   - **Name**: YouTube (or your preference)
-   - **Language**: Your preferred language
+#### Step 2: Advanced settings
 
-#### Step 3: Advanced Settings
+- **Scanner**: Plex TV Series
+- **Agent**: **Plex NFO Series** (Plex Media Server 1.43.1 or newer, recommended), or Plex Personal Media. With the NFO agent selected, a **Ratings Source** option set to "NFO Default" appears; leave it.
+- **Use local assets**: on, so Plex uses Youtarr's `poster.jpg`, `backdrop.jpg` and episode thumbnails
+- **Enable video preview thumbnails**: off for a large library (Plex generates them for every episode)
+- Turn off intro, credit and voice activity detection. They don't help with this content, and Plex spends time on them.
+- The remaining options (season titles, original titles, artwork language, collections, Seasons: Show, ad detection) can keep their defaults.
 
-Choose the appropriate agent:
-* **Agent**: Plex Personal Media
-* **Use local assets**: this **must** be enabled so Plex uses the local metadata
+| | Plex NFO Series | Plex Personal Media |
+|---|---|---|
+| Episode title, plot and air date | From Youtarr's episode NFO files | From the tags embedded in the MP4 file |
+| Show title and summary | From `tvshow.nfo` | Folder name, no summary |
+| Watch state when Youtarr moves an episode to another TV folder | Kept: Plex identifies each episode by the YouTube ID in its NFO file | Lost; Youtarr restores the server owner's state |
+| Videos Youtarr moved in from a Videos folder | NFO title | The title embedded at download, which can start with the channel name |
 
-It is also recommended to disable the settings that scan shows, like intro detection, credit detection, and voice activity detection. They do not work for this content, but Plex will still spend time scanning for them if left enabled.
+Don't use the **Plex Series** agent: it looks shows up online and can match a channel to an unrelated TV series. Plex is removing the legacy agents and scanners.
+
+#### Step 3: Refresh mapping
+
+After a download Youtarr refreshes the Plex library mapped to the folder the video landed in (the folder's page in Settings -> **Library folders**, **After downloads here, Plex refreshes**), or the default YouTube library when the folder has no mapping. Youtarr fills this in for TV folders: when you add a TV folder with **Add folder**, or whenever Channel Settings -> **TV Show** opens for a channel in a TV folder that has no mapping yet, it checks your Plex libraries and adds the mapping as soon as it finds the one TV Shows library that holds the folder. You can also add it from the library check in Settings -> **Library folders**, on each folder's page. Youtarr never changes a mapping that exists, so to have a TV folder refresh a different library, pick that library in the same list rather than removing the setting. Choosing the default library there is kept as your choice too: Youtarr won't replace it with the TV Shows library. **Remove setting** clears the folder's mapping, and works even while Youtarr can't reach Plex; a TV folder's removed mapping is filled in again the next time Channel Settings -> **TV Show** opens for one of its channels.
+
+#### Checking your setup
+
+In Settings -> **Library folders**, each folder's page lists the Plex libraries that hold it and anything to fix: no TV Shows library yet, a library of the wrong type, the Plex Series agent or a legacy agent, another library that shows the same episodes again, or a missing refresh mapping. Channel Settings -> **TV Show** shows the same for the channel's TV folder, and the review of a move shows it for the TV folders the videos move into.
+
+Avoid libraries that include a TV folder from a parent folder, such as a "YouTube - All" library pointed at your downloads folder: Plex shows every episode there a second time as a plain video, and Youtarr restores watch state to only one of the copies. Two TV Shows libraries pointed at the same folder have the same problem.
+
+#### Plex TV Series filename preset
+
+The **Plex TV Series** preset (Settings -> Core -> **Naming**, **Video filename template**) names files like episodes but keeps everything else movie-style: no season folders, no episode NFO files. If you used it and your Plex TV Shows library points at your downloads folder, you can keep that library and switch the main folder to **TV shows** on Settings -> **Library folders** (path B in [Move an existing setup to TV shows](../USAGE_GUIDE.md#path-b-make-the-whole-downloads-folder-tv-shows)): Youtarr writes a `.plexignore` with `__*/*` there so that library skips your subfolders, and when your channels' files move into season folders they keep the episode numbers the preset gave them. For a new setup, use a TV folder instead.
 
 ## Youtarr Settings
 
@@ -142,7 +169,7 @@ For how syncing, ordering, and playlist updates work across all servers, see [Me
 
 ## Watch Status Sync
 
-The same Plex connection you set up above also enables watch status sync: on a schedule (every 4 hours by default), Youtarr pulls per-video watch state from Plex and shows it as Watched chips and filters on its listing pages. The sync is one-way; Youtarr never marks anything watched on Plex.
+The same Plex connection you set up above also enables watch status sync: on a schedule (every 4 hours by default), Youtarr pulls per-video watch state from Plex and shows it as Watched chips and filters on its listing pages. Youtarr writes to Plex only to restore watch state after it moves your files (see below).
 
 A couple of Plex-specific details:
 
@@ -150,6 +177,7 @@ A couple of Plex-specific details:
 - Other Plex accounts come from the server's play history, which only records completed plays. Those users show as watched or not, with no in-progress positions.
 - On an unclaimed server (see the playlist visibility scope above), Youtarr reads the anonymous session's watch state instead.
 - Plex decides when a video counts as played, not Youtarr: the **Video Played Threshold** setting under Settings -> Library (90% by default).
+- When Youtarr moves files (switching a channel or folder between Videos and TV shows, or a TV channel to another TV folder), Plex sees the moved files as new, unwatched items. With Plex NFO Series, episodes moved between TV folders keep their watch state on their own. Otherwise Youtarr restores the server owner's played state and resume position once Plex has scanned the moved files. Other Plex accounts keep their history in Youtarr, but not on Plex.
 
 Settings live under **Settings -> Watch Status**, including a per-server toggle for syncing all users vs. just the owner. See [Track Watch Status from Media Servers](../USAGE_GUIDE.md#track-watch-status-from-media-servers) for the full workflow.
 
@@ -176,6 +204,8 @@ Separate content by purpose:
    Library: "YouTube - All" → /path/to/youtube
    ```
 
+   A "YouTube - All" library at your downloads folder also includes any TV folder, so its episodes show up there a second time. Once you use a TV folder, point your Other Videos libraries at the Videos folders only.
+
 3. **Configure each library** with appropriate settings:
    - Kids library: Enable parental controls
    - Music library: Use music-focused view
@@ -194,7 +224,7 @@ See: [docs/YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md](../YOUTARR_DOWNLOADS_FOLDER_ST
 <img width="1478" height="1248" alt="Plex Video Details" src="https://github.com/user-attachments/assets/f146ba72-abe0-4e4d-93bb-6f34cea8e5e5" />
 
 ### Metadata Display
-- **Title**: Video title with channel prefix, from the embedded MP4 title (turn off **Prefix channel name in embedded video title** in Settings -> Core for plain titles, for example in a TV Shows library)
+- **Title**: Video title with channel prefix, from the embedded MP4 title (turn off **Channel name in embedded title** in Settings -> Core -> **Naming** for plain titles). Episodes in a TV folder are always tagged with the plain title.
 - **Description**: Full YouTube description
 - **Studio**: Channel name for grouping
 - **Album**: Channel name (alternative grouping)

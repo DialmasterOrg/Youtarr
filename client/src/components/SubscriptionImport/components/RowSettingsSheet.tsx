@@ -89,7 +89,7 @@ const RowSettingsSheet: React.FC<RowSettingsSheetProps> = ({
           subfolders={subfolders}
           createSubfolder={createSubfolder}
           defaultSubfolderDisplay={defaultSubfolderDisplay}
-          label="Subfolder"
+          label="Library folder"
         />
 
         <FormControl fullWidth>

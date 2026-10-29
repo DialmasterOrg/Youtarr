@@ -47,4 +47,25 @@ describe('AudioFormatSelect', () => {
       screen.getByText('MP3 files are saved at 192kbps in the same folder as videos.')
     ).toBeInTheDocument();
   });
+
+  describe('videoOnly', () => {
+    test('hides the MP3 choices', async () => {
+      render(<AudioFormatSelect value={null} onChange={jest.fn()} videoOnly />);
+      fireEvent.mouseDown(screen.getByLabelText('Download Type'));
+      await screen.findByRole('option', { name: 'Video Only (default)' });
+      expect(screen.queryByRole('option', { name: 'MP3 Only' })).not.toBeInTheDocument();
+    });
+
+    test('keeps an MP3 choice already selected so it can be changed', async () => {
+      render(<AudioFormatSelect value="mp3_only" onChange={jest.fn()} videoOnly />);
+      fireEvent.mouseDown(screen.getByLabelText('Download Type'));
+      expect(await screen.findByRole('option', { name: 'MP3 Only' })).toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: 'Video + MP3' })).not.toBeInTheDocument();
+    });
+
+    test('explains why by default', () => {
+      render(<AudioFormatSelect value={null} onChange={jest.fn()} videoOnly />);
+      expect(screen.getByText('TV folders are video-only.')).toBeInTheDocument();
+    });
+  });
 });

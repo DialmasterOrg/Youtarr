@@ -6,6 +6,8 @@ export interface NavSubItem {
   key: string;
   label: string;
   to: string;
+  /** Also active on paths under `to` (a page with its own sub-routes) */
+  matchPrefix?: boolean;
 }
 
 export interface NavItem {
@@ -29,14 +31,14 @@ export const isNavItemSelected = (path: string, item: NavItem) => {
   return path === item.to || path.startsWith(`${item.to}/`);
 };
 
+export const isNavSubItemActive = (path: string, subItem: Pick<NavSubItem, 'to' | 'matchPrefix'>) => (
+  path === subItem.to || (subItem.matchPrefix === true && path.startsWith(`${subItem.to}/`))
+);
+
 export const isNavItemExpanded = (path: string, item: NavItem) => {
   if (isNavItemSelected(path, item)) {
     return true;
   }
 
-  return item.subItems?.some((subItem) => isNavPathActive(path, subItem.to)) || false;
-};
-
-export const isNavPathActive = (path: string, targetPath: string) => {
-  return path === targetPath;
+  return item.subItems?.some((subItem) => isNavSubItemActive(path, subItem)) || false;
 };

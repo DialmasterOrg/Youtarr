@@ -9,6 +9,10 @@ jest.mock('fs', () => ({
   promises: {
     access: jest.fn(),
     stat: jest.fn(),
+    mkdir: jest.fn(),
+    rename: jest.fn(),
+    unlink: jest.fn(),
+    open: jest.fn(),
     utimes: jest.fn(),
     readFile: jest.fn(),
     writeFile: jest.fn(),
@@ -34,6 +38,7 @@ jest.mock('../../../logger', () => ({
 const {
   sleep,
   moveWithRetries,
+  moveFileNoClobber,
   safeRemove,
   safeCopy,
   copySyncWithFallback,
@@ -395,5 +400,99 @@ describe('filesystem/fileOperations', () => {
 
       expect(result).toBe(false);
     });
+  });
+});
+
+describe('moveFileNoClobber with a busy file', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    fsPromises.rename.mockReset();
+    fsPromises.stat.mockImplementation(async (file) => {
+      if (file === '/src.mp4') return { ino: 1, dev: 1, size: 10, mtimeMs: 1 };
+      throw Object.assign(new Error('missing'), { code: 'ENOENT' });
+    });
+    fsPromises.mkdir.mockResolvedValue(undefined);
+  });
+
+  it('retries a rename while the file is busy', async () => {
+    fsPromises.rename.mockRejectedValueOnce(Object.assign(new Error('busy'), { code: 'EBUSY' })).mockResolvedValueOnce(undefined);
+    await expect(moveFileNoClobber('/src.mp4', '/dest.mp4', { busyDelayMs: 1 })).resolves.toBe('moved');
+    expect(fsPromises.rename).toHaveBeenCalledTimes(2);
+  });
+
+  it('gives up on a busy file after the retries', async () => {
+    fsPromises.rename.mockRejectedValue(Object.assign(new Error('busy'), { code: 'EBUSY' }));
+    await expect(moveFileNoClobber('/src.mp4', '/dest.mp4', { busyRetries: 2, busyDelayMs: 1 }))
+      .rejects.toMatchObject({ code: 'EBUSY' });
+    expect(fsPromises.rename).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not retry a permission error', async () => {
+    fsPromises.rename.mockRejectedValue(Object.assign(new Error('perm'), { code: 'EACCES' }));
+    await expect(moveFileNoClobber('/src.mp4', '/dest.mp4', { busyDelayMs: 1 })).rejects.toMatchObject({ code: 'EACCES' });
+    expect(fsPromises.rename).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('moveFileNoClobber with a file already at the destination', () => {
+  const statsWith = (destDev) => async (file) => (file === '/src.mp4'
+    ? { ino: 1, dev: 1, size: 10, mtimeMs: 1000 }
+    : { ino: 2, dev: destDev, size: 10, mtimeMs: 1000 });
+
+  // A file handle over the content, read in chunks as a real one is.
+  const handleOf = (content) => ({
+    read: jest.fn(async (buffer, offset, length, position) => {
+      const end = Math.min(content.length, position + length);
+      if (position >= end) return { bytesRead: 0 };
+      return { bytesRead: content.copy(buffer, offset, position, end) };
+    }),
+    close: jest.fn().mockResolvedValue(undefined),
+  });
+  const contents = (ofSrc, ofDest) => {
+    fsPromises.open.mockImplementation(async (file) => handleOf(file === '/src.mp4' ? ofSrc : ofDest));
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    fsPromises.unlink.mockResolvedValue(undefined);
+    fsPromises.open.mockReset();
+  });
+
+  it('keeps the source when a same-size, same-time file with other contents is there on the same device', async () => {
+    fsPromises.stat.mockImplementation(statsWith(1));
+    contents(Buffer.from('0123456789'), Buffer.from('abcdefghij'));
+    await expect(moveFileNoClobber('/src.mp4', '/dest.mp4')).rejects.toMatchObject({ code: 'EEXIST' });
+    expect(fsPromises.unlink).not.toHaveBeenCalledWith('/src.mp4');
+  });
+
+  it('finishes an interrupted copy on another mount of the same device', async () => {
+    fsPromises.stat.mockImplementation(statsWith(1));
+    contents(Buffer.from('0123456789'), Buffer.from('0123456789'));
+    await expect(moveFileNoClobber('/src.mp4', '/dest.mp4')).resolves.toBe('already-moved');
+    expect(fsPromises.unlink).toHaveBeenCalledWith('/src.mp4');
+  });
+
+  it('compares past the first chunk', async () => {
+    const chunk = 1024 * 1024;
+    const ofSrc = Buffer.alloc(chunk + 1, 'a');
+    const ofDest = Buffer.alloc(chunk + 1, 'a');
+    ofDest[chunk] = 'b'.charCodeAt(0);
+    fsPromises.stat.mockImplementation(async (file) => ({ ino: file === '/src.mp4' ? 1 : 2, dev: 1, size: chunk + 1, mtimeMs: 1000 }));
+    contents(ofSrc, ofDest);
+    await expect(moveFileNoClobber('/src.mp4', '/dest.mp4')).rejects.toMatchObject({ code: 'EEXIST' });
+  });
+
+  it('closes both files after comparing them', async () => {
+    fsPromises.stat.mockImplementation(statsWith(1));
+    const handles = [];
+    fsPromises.open.mockImplementation(async () => { const handle = handleOf(Buffer.from('0123456789')); handles.push(handle); return handle; });
+    await moveFileNoClobber('/src.mp4', '/dest.mp4');
+    expect(handles.map((handle) => handle.close.mock.calls.length)).toEqual([1, 1]);
+  });
+
+  it('finishes an interrupted copy across filesystems without reading the files', async () => {
+    fsPromises.stat.mockImplementation(statsWith(2));
+    await expect(moveFileNoClobber('/src.mp4', '/dest.mp4')).resolves.toBe('already-moved');
+    expect(fsPromises.open).not.toHaveBeenCalled();
   });
 });

@@ -18,7 +18,7 @@ export const SCHEDULE_FIELDS = [
     group: 'sync',
     label: 'Automatic downloads',
     description: 'Check enabled channels and playlists for new videos and download them.',
-    settingsPath: 'core',
+    settingsPath: 'core#downloads',
     settingsLabel: 'Core settings',
     enabledKey: 'channelAutoDownload',
     disabledText: 'Automatic downloads are off, so this schedule is idle until you turn them on.',

@@ -18,6 +18,7 @@ const pathBuilder = require('./pathBuilder');
 const fileOperations = require('./fileOperations');
 const directoryManager = require('./directoryManager');
 const sanitizer = require('./sanitizer');
+const showFolderCleanup = require('./showFolderCleanup');
 
 module.exports = {
   // Re-export all constants
@@ -35,10 +36,14 @@ module.exports = {
   // Re-export all sanitizer functions
   ...sanitizer,
 
+  // Re-export all TV-layout cleanup functions
+  ...showFolderCleanup,
+
   // Also export as namespaced modules for explicit imports
   constants,
   pathBuilder,
   fileOperations,
   directoryManager,
-  sanitizer
+  sanitizer,
+  showFolderCleanup
 };

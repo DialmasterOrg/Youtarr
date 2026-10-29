@@ -7,20 +7,32 @@ jest.mock('../../logger', () => ({ error: jest.fn(), info: jest.fn(), warn: jest
 describe('Subfolder routes', () => {
   let app;
   let mockSubfolderModule;
+  let libraryFolders;
+  let layoutGuards;
+  let jobModule;
 
   beforeEach(() => {
     jest.resetModules();
     mockSubfolderModule = {
-      register: jest.fn().mockResolvedValue(undefined),
       delete: jest.fn().mockResolvedValue(undefined),
       getUsage: jest.fn().mockResolvedValue([]),
     };
+    libraryFolders = {
+      createLibraryFolder: jest.fn().mockResolvedValue({ name: 'Sports', layout: 'videos', created: true, existingContent: false }),
+    };
+    layoutGuards = {
+      errorBody: (e) => ({ error: e.message, ...(e.reorganizeRequired ? { reorganizeRequired: true, change: e.change } : {}) }),
+    };
+    jobModule = { getInProgressJobId: jest.fn().mockReturnValue(null) };
     const createSubfolderRoutes = require('../subfolders');
     app = express();
     app.use(express.json());
     app.use(createSubfolderRoutes({
       verifyToken: (req, res, next) => next(),
       subfolderModule: mockSubfolderModule,
+      libraryFolders,
+      layoutGuards,
+      jobModule,
     }));
   });
 
@@ -46,18 +58,53 @@ describe('Subfolder routes', () => {
   });
 
   describe('POST /api/subfolders', () => {
-    test('registers a valid name and returns 200', async () => {
+    test('creates a folder with a layout and answers 201', async () => {
+      const res = await request(app).post('/api/subfolders').send({ name: ' Sports ', layout: 'tv' });
+      expect(res.status).toBe(201);
+      expect(libraryFolders.createLibraryFolder).toHaveBeenCalledWith('Sports', 'tv', { isDownloadRunning: expect.any(Function) });
+    });
+
+    test('answers 200 for a folder that existed', async () => {
+      libraryFolders.createLibraryFolder.mockResolvedValueOnce({ name: 'Sports', layout: 'videos', created: false });
       const res = await request(app).post('/api/subfolders').send({ name: 'Sports' });
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ name: 'Sports' });
-      expect(mockSubfolderModule.register).toHaveBeenCalledWith('Sports');
+      expect(libraryFolders.createLibraryFolder).toHaveBeenCalledWith('Sports', null, expect.any(Object));
+    });
+
+    test('rejects the reserved playlists name and an unknown layout', async () => {
+      expect((await request(app).post('/api/subfolders').send({ name: 'Playlists' })).status).toBe(400);
+      expect((await request(app).post('/api/subfolders').send({ name: 'X', layout: 'music' })).status).toBe(400);
+    });
+
+    test('passes a reorganize refusal through with its change', async () => {
+      libraryFolders.createLibraryFolder.mockRejectedValueOnce(Object.assign(new Error('Review the move'), {
+        status: 409, reorganizeRequired: true, change: { type: 'folderLayout', folder: 'Old', layout: 'tv' },
+      }));
+      const res = await request(app).post('/api/subfolders').send({ name: 'Old', layout: 'tv' });
+      expect(res.status).toBe(409);
+      expect(res.body.change).toEqual({ type: 'folderLayout', folder: 'Old', layout: 'tv' });
+    });
+
+    test('reports a directory that could not be created', async () => {
+      libraryFolders.createLibraryFolder.mockRejectedValueOnce(Object.assign(
+        new Error('Couldn\'t create the folder on disk: EACCES'), { status: 500 }
+      ));
+      const res = await request(app).post('/api/subfolders').send({ name: 'X' });
+      expect(res.body).toEqual({ error: 'Couldn\'t create the folder on disk: EACCES' });
+    });
+
+    test('answers 500 when saving fails unexpectedly', async () => {
+      libraryFolders.createLibraryFolder.mockRejectedValueOnce(new Error('db down'));
+      const res = await request(app).post('/api/subfolders').send({ name: 'X' });
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to create the folder' });
     });
 
     test('rejects an empty name with 400', async () => {
       const res = await request(app).post('/api/subfolders').send({ name: '   ' });
       expect(res.status).toBe(400);
       expect(res.body.error).toBeDefined();
-      expect(mockSubfolderModule.register).not.toHaveBeenCalled();
+      expect(libraryFolders.createLibraryFolder).not.toHaveBeenCalled();
     });
 
     test('rejects a sentinel name with 400', async () => {

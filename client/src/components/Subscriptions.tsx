@@ -39,6 +39,7 @@ import useMediaQuery from '../hooks/useMediaQuery';
 import { useNavigate, useLocation } from 'react-router-dom';
 import WebSocketContext, { Message } from '../contexts/WebSocketContext';
 import { useConfig } from '../hooks/useConfig';
+import { useLibraryFolders } from '../hooks/useLibraryFolders';
 import { Channel } from '../types/Channel';
 import { useChannelList } from './Subscriptions/hooks/useChannelList';
 import { ChannelLookupResult, useChannelMutations } from './Subscriptions/hooks/useChannelMutations';
@@ -76,6 +77,8 @@ type ViewMode = 'list' | 'grid';
 type SortOrder = 'asc' | 'desc';
 
 const AUTO_DOWNLOADS_COLUMN_LABEL = 'Auto downloads';
+const TV_FILTER_LABEL = 'TV shows only';
+const TV_FILTER_DESCRIPTION = 'Channels saved as TV shows';
 
 interface SubscriptionsProps {
   token: string | null;
@@ -99,6 +102,7 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
   const [newSubscriptionUrl, setNewSubscriptionUrl] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedSubFolder, setSelectedSubFolder] = useState<string | null>(null);
+  const [tvOnly, setTvOnly] = useState(false);
   const [typeFilter, setTypeFilter] = useState<SubscriptionsFilterValue>(() => {
     const navState = location.state as { tab?: unknown } | null;
     return navState?.tab === 'playlists' ? 'playlists' : 'channels';
@@ -141,8 +145,9 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
     searchTerm: filterValue,
     sortOrder,
     subFolder: selectedSubFolder || undefined,
+    layout: tvOnly ? ('tv' as const) : undefined,
     append: useInfiniteScroll,
-  }), [token, page, effectivePageSize, filterValue, sortOrder, selectedSubFolder, useInfiniteScroll]);
+  }), [token, page, effectivePageSize, filterValue, sortOrder, selectedSubFolder, tvOnly, useInfiniteScroll]);
 
   const {
     channels: serverChannels,
@@ -153,6 +158,10 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
     refetch,
     subFolders: apiSubFolders,
   } = useChannelList(channelListParams);
+
+  const { folders: libraryFolders } = useLibraryFolders(token);
+  // Offered once a TV folder exists; kept while active so it can be turned off.
+  const showTvFilter = tvOnly || libraryFolders.some((folder) => folder.layout === 'tv');
 
   const {
     playlists,
@@ -214,7 +223,7 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
 
   const showDesktopListColumns = !isMobile && viewMode === 'list';
   const listColumnLabels = ['Channel', 'Quality / Folder', AUTO_DOWNLOADS_COLUMN_LABEL, 'Filters'];
-  const folderControlActive = Boolean(selectedSubFolder);
+  const folderControlActive = Boolean(selectedSubFolder) || tvOnly;
   const availableFolderOptions = useMemo(() => {
     const folderSet = new Set<string>([DEFAULT_SUBFOLDER_KEY]);
     (apiSubFolders || []).forEach((folder) => folderSet.add(folder));
@@ -225,14 +234,16 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
       return a.localeCompare(b);
     });
   }, [apiSubFolders, pendingAdditions]);
-  const folderTooltip = selectedSubFolder
-    ? `Filtering by ${formatSubFolderLabel(selectedSubFolder)}` :
-    'Filter or group by folder';
+  const folderTooltip = tvOnly
+    ? 'Filtering by TV shows'
+    : selectedSubFolder
+      ? `Filtering by ${formatSubFolderLabel(selectedSubFolder)}`
+      : 'Filter or group by folder';
   let listRowIndex = 0;
 
   useEffect(() => {
     setPage(1);
-  }, [filterValue, sortOrder, viewMode, isMobile, selectedSubFolder]);
+  }, [filterValue, sortOrder, viewMode, isMobile, selectedSubFolder, tvOnly]);
 
   useEffect(() => {
     if (page > pageCount) {
@@ -449,8 +460,16 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
     setFolderMenuAnchor(null);
   };
 
+  // Folder and TV choices share one single-select menu.
   const handleSubFolderSelect = (value: string | null) => {
     setSelectedSubFolder(value);
+    setTvOnly(false);
+    setFolderMenuAnchor(null);
+  };
+
+  const handleTvOnlySelect = () => {
+    setSelectedSubFolder(null);
+    setTvOnly(true);
     setFolderMenuAnchor(null);
   };
 
@@ -585,11 +604,16 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
                     secondary={sortOrder === 'asc' ? 'Currently A → Z' : 'Currently Z → A'}
                   />
                 </MenuItem>
-                {availableFolderOptions.length > 1 && [
+                {(availableFolderOptions.length > 1 || showTvFilter) && [
                   <Divider key="folder-divider" style={{ margin: '4px 0' }} />,
-                  <MenuItem key="folder-all" selected={!selectedSubFolder} onClick={() => { handleSubFolderSelect(null); handleMobileActionsClose(); }}>
+                  <MenuItem key="folder-all" selected={!selectedSubFolder && !tvOnly} onClick={() => { handleSubFolderSelect(null); handleMobileActionsClose(); }}>
                     <ListItemText primary="All folders" secondary="Show every channel" />
                   </MenuItem>,
+                  ...(showTvFilter ? [
+                    <MenuItem key="folder-tv" selected={tvOnly} onClick={() => { handleTvOnlySelect(); handleMobileActionsClose(); }}>
+                      <ListItemText primary={TV_FILTER_LABEL} secondary={TV_FILTER_DESCRIPTION} />
+                    </MenuItem>,
+                  ] : []),
                   ...availableFolderOptions.map((folder) => (
                     <MenuItem
                       key={folder}
@@ -818,9 +842,14 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
       </div>
 
       <Menu anchorEl={folderMenuAnchor} open={Boolean(folderMenuAnchor)} onClose={handleFolderMenuClose}>
-        <MenuItem selected={!selectedSubFolder} onClick={() => handleSubFolderSelect(null)}>
+        <MenuItem selected={!selectedSubFolder && !tvOnly} onClick={() => handleSubFolderSelect(null)}>
           <ListItemText primary="All folders" secondary="Show every channel" />
         </MenuItem>
+        {showTvFilter && (
+          <MenuItem selected={tvOnly} onClick={handleTvOnlySelect}>
+            <ListItemText primary={TV_FILTER_LABEL} secondary={TV_FILTER_DESCRIPTION} />
+          </MenuItem>
+        )}
         <Divider style={{ margin: '4px 0' }} />
         {availableFolderOptions.length === 0 ? (
           <MenuItem disabled>

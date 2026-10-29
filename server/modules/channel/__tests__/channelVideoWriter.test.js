@@ -4,6 +4,8 @@ const mockFactories = require('./mockFactories');
 
 jest.mock('../../../logger');
 jest.mock('../../../models/channelvideo', () => mockFactories.mockChannelVideoModel());
+jest.mock('../../../models/channel', () => ({ findOne: jest.fn() }));
+jest.mock('../../tvShows/titleShowSaver', () => ({ classifyNew: jest.fn() }));
 
 describe('channelVideoWriter', () => {
   let channelVideoWriter;
@@ -344,6 +346,43 @@ describe('channelVideoWriter', () => {
 
       // Consistent fetched dates need no phase-2 rewrite.
       expect(ChannelVideo.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('title show classification of new videos', () => {
+    let Channel;
+    let titleShowSaver;
+
+    beforeEach(() => {
+      Channel = require('../../../models/channel');
+      titleShowSaver = require('../../tvShows/titleShowSaver');
+      let nextId = 1;
+      ChannelVideo.findOrCreate.mockImplementation(async ({ where, defaults }) => (
+        where.youtube_id === 'old'
+          ? [{ id: 0, publishedAt: '2020-01-01T00:00:00Z', published_at_source: 'approximate', update: jest.fn() }, false]
+          : [{ id: nextId++, publishedAt: defaults.publishedAt, published_at_source: defaults.published_at_source, update: jest.fn() }, true]
+      ));
+    });
+
+    test('classifies the videos the refresh added for a subscribed channel', async () => {
+      const channel = { channel_id: 'UC123', enabled: true };
+      Channel.findOne.mockResolvedValue(channel);
+      await channelVideoWriter.insertVideosIntoDb([
+        { ...mockVideoData, youtube_id: 'new' }, { ...mockVideoData, youtube_id: 'old' },
+      ], 'UC123');
+      expect(titleShowSaver.classifyNew).toHaveBeenCalledWith({ channel, youtubeIds: ['new'] });
+    });
+
+    test('skips a channel that is not subscribed', async () => {
+      Channel.findOne.mockResolvedValue({ channel_id: 'UC123', enabled: false });
+      await channelVideoWriter.insertVideosIntoDb([{ ...mockVideoData, youtube_id: 'new' }], 'UC123');
+      expect(titleShowSaver.classifyNew).not.toHaveBeenCalled();
+    });
+
+    test('never fails the refresh when classification fails', async () => {
+      Channel.findOne.mockResolvedValue({ channel_id: 'UC123', enabled: true });
+      titleShowSaver.classifyNew.mockRejectedValue(new Error('python crashed'));
+      await expect(channelVideoWriter.insertVideosIntoDb([{ ...mockVideoData, youtube_id: 'new' }], 'UC123')).resolves.toBeUndefined();
     });
   });
 });

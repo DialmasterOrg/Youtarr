@@ -1,8 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent, waitFor } from '@testing-library/react';
+import type { ReactElement } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import RowSettingsPopover from '../components/RowSettingsPopover';
 import { RowState, DEFAULT_ROW_SETTINGS } from '../../../types/subscriptionImport';
 import { ImportFlowAction } from '../hooks/useImportFlow';
+
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: MemoryRouter });
 
 function makeRowState(overrides: Partial<RowState> = {}): RowState {
   return {
@@ -72,7 +76,7 @@ describe('RowSettingsPopover', () => {
     });
     expect(screen.getByLabelText('Auto-download enabled')).toBeInTheDocument();
     expect(screen.getByLabelText('Video Quality')).toBeInTheDocument();
-    expect(screen.getByLabelText('Subfolder')).toBeInTheDocument();
+    expect(screen.getByLabelText('Library folder')).toBeInTheDocument();
     expect(screen.getByLabelText('Content Rating')).toBeInTheDocument();
   });
 

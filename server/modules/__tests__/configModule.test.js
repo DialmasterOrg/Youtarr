@@ -516,6 +516,57 @@ describe('ConfigModule', () => {
     });
   });
 
+  describe('a new install', () => {
+    const templateWithFolder = { ...defaultTemplate, defaultSubfolder: '' };
+
+    const loadWithMissingConfig = (downloadsEntries) => {
+      fs.readdirSync = jest.fn().mockReturnValue(downloadsEntries);
+      fs.existsSync.mockImplementation((p) => !(p.includes('config.json') && !p.includes('example')));
+      fs.readFileSync.mockReturnValue(JSON.stringify(templateWithFolder));
+      return require('../configModule');
+    };
+
+    test('saves into the Videos folder when the downloads folder is empty', () => {
+      expect(loadWithMissingConfig([]).getConfig().defaultSubfolder).toBe('Videos');
+    });
+
+    test('saves the Videos folder choice to config.json', () => {
+      loadWithMissingConfig([]);
+      const lastWrite = fs.writeFileSync.mock.calls[fs.writeFileSync.mock.calls.length - 1];
+      expect(JSON.parse(lastWrite[1]).defaultSubfolder).toBe('Videos');
+    });
+
+    test('creates the Videos folder', () => {
+      loadWithMissingConfig([]);
+      expect(fs.mkdirSync).toHaveBeenCalledWith(
+        require('path').join('/usr/src/app/data', '__Videos'),
+        { recursive: true }
+      );
+    });
+
+    test('treats a downloads folder with only __ folders and hidden entries as empty', () => {
+      expect(loadWithMissingConfig(['__Kids', '.plexignore']).getConfig().defaultSubfolder).toBe('Videos');
+    });
+
+    test('keeps the main folder when the downloads folder already holds channel folders', () => {
+      expect(loadWithMissingConfig(['Some Channel', '__Kids', '.plexignore']).getConfig().defaultSubfolder).toBe('');
+    });
+
+    test('does not create a Videos folder over an existing library', () => {
+      loadWithMissingConfig(['Some Channel']);
+      expect(fs.mkdirSync).not.toHaveBeenCalledWith(expect.stringContaining('__Videos'), expect.anything());
+    });
+
+    test('leaves an existing config without the key on the template value', () => {
+      fs.readdirSync = jest.fn().mockReturnValue([]);
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockImplementation((p) => JSON.stringify(
+        p.includes('config.json') && !p.includes('example') ? defaultTemplate : templateWithFolder
+      ));
+      expect(require('../configModule').getConfig().defaultSubfolder).toBe('');
+    });
+  });
+
   describe('Platform Detection', () => {
     test('should detect platform deployment when DATA_PATH is set', () => {
       // Arrange

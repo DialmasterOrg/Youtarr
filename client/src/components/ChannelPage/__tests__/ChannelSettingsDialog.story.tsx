@@ -1,3 +1,5 @@
+import React from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, userEvent, within } from 'storybook/test';
 import { http, HttpResponse } from 'msw';
@@ -6,6 +8,7 @@ import ChannelSettingsDialog from '../ChannelSettingsDialog';
 const meta: Meta<typeof ChannelSettingsDialog> = {
   title: 'Components/ChannelPage/ChannelSettingsDialog',
   component: ChannelSettingsDialog,
+  decorators: [(Story) => <MemoryRouter><Story /></MemoryRouter>],
   args: {
     open: true,
     channelId: 'chan-1',
@@ -29,6 +32,25 @@ const meta: Meta<typeof ChannelSettingsDialog> = {
         ),
         http.get('/api/channels/subfolders', () =>
           HttpResponse.json(['Movies', 'Shows'])
+        ),
+        http.get('/api/channels/chan-1/tv', () =>
+          HttpResponse.json({
+            layout: 'videos',
+            libraryFolder: '',
+            show: null,
+            tvFolders: ['Shows'],
+            defaultFolder: '',
+            defaultFolderLayout: 'videos',
+            hasDownloads: false,
+          })
+        ),
+        http.get('/api/library-folders', () =>
+          HttpResponse.json({
+            folders: [
+              { name: '', layout: 'videos', isDefault: true, hasFiles: true, channels: 1 },
+              { name: 'Shows', layout: 'tv', isDefault: false, hasFiles: false, channels: 0 },
+            ],
+          })
         ),
       ],
     },

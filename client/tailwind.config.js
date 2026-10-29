@@ -116,6 +116,11 @@ module.exports = {
           '0%': { transform: 'translateY(-8px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
         },
+        // The Library folders inspector header when a folder is selected: the tint flashes, then settles.
+        'select-flash': {
+          '0%': { backgroundColor: 'hsl(var(--primary-raw) / 0.2)' },
+          '100%': { backgroundColor: 'hsl(var(--primary-raw) / 0.07)' },
+        },
         'download-arrow-drop': {
           '0%': { transform: 'translateY(-4px)', opacity: '0' },
           '30%': { opacity: '1' },
@@ -130,6 +135,7 @@ module.exports = {
         'slide-up': 'slide-up 150ms ease',
         'slide-down': 'slide-down 150ms ease',
         'download-arrow-drop': 'download-arrow-drop 1.1s ease-in-out infinite',
+        'select-flash': 'select-flash 700ms ease-out',
         // Tailwind's ping, slowed down: a calm "running" signal rather than a blink.
         'ping-slow': 'ping 2s cubic-bezier(0, 0, 0.2, 1) infinite',
         spin: 'spin 1s linear infinite',

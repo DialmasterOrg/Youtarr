@@ -15,6 +15,11 @@ jest.mock('../../m3uGenerator', () => ({
 }));
 jest.mock('../tabDownloadStats', () => ({ getForChannels: jest.fn().mockResolvedValue(new Map()) }));
 
+jest.mock('../../tvShows/episodeInfo', () => ({ getEpisodeInfoMap: jest.fn().mockResolvedValue(new Map()) }));
+jest.mock('../../tvShows/libraryLayouts', () => ({ getLayoutResolver: jest.fn().mockResolvedValue(() => 'videos'), listTvFolders: jest.fn().mockResolvedValue([]) }));
+jest.mock('../../tvShows/showStore', () => ({ findChannelShow: jest.fn().mockResolvedValue(null) }));
+jest.mock('../../tvShows/titleShowQueries', () => ({ countActiveByChannel: jest.fn().mockResolvedValue(new Map()) }));
+
 describe('channelCatalog', () => {
   let channelCatalog;
   let Channel;
@@ -194,6 +199,7 @@ describe('channelCatalog', () => {
             terminated_at: null,
             auto_removal_protected: false,
             auto_removal_keep_recent_count: null,
+            layout: 'videos',
           }
         ],
         total: 25,
@@ -202,6 +208,57 @@ describe('channelCatalog', () => {
         totalPages: 3,
         subFolders: ['__default__', '_Kids']
       });
+    });
+
+    test('marks each channel with the layout of its folder', async () => {
+      const libraryLayouts = require('../../tvShows/libraryLayouts');
+      libraryLayouts.getLayoutResolver.mockResolvedValueOnce((folder) => (folder === 'TV' ? 'tv' : 'videos'));
+      Channel.findAndCountAll.mockResolvedValueOnce({
+        rows: [{ channel_id: 'UC1', sub_folder: 'TV' }, { channel_id: 'UC2', sub_folder: 'Kids' }],
+        count: 2,
+      });
+
+      const result = await channelCatalog.getChannelsPaginated();
+
+      expect(result.channels.map((c) => c.layout)).toEqual(['tv', 'videos']);
+    });
+
+    test('counts the title shows of channels that have some', async () => {
+      require('../../tvShows/titleShowQueries').countActiveByChannel.mockResolvedValueOnce(new Map([['UC1', 3]]));
+      Channel.findAndCountAll.mockResolvedValueOnce({
+        rows: [{ channel_id: 'UC1', sub_folder: 'TV' }, { channel_id: 'UC2', sub_folder: 'Kids' }],
+        count: 2,
+      });
+
+      const result = await channelCatalog.getChannelsPaginated();
+
+      expect(result.channels.map((c) => c.titleShows)).toEqual([3, undefined]);
+    });
+
+    test('still lists channels when the title shows can\'t be counted', async () => {
+      require('../../tvShows/titleShowQueries').countActiveByChannel.mockRejectedValueOnce(new Error('db'));
+      Channel.findAndCountAll.mockResolvedValueOnce({ rows: [{ channel_id: 'UC1', sub_folder: 'TV' }], count: 1 });
+
+      const result = await channelCatalog.getChannelsPaginated();
+
+      expect(result.channels).toHaveLength(1);
+    });
+
+    test('filters to channels in TV folders', async () => {
+      const libraryLayouts = require('../../tvShows/libraryLayouts');
+      libraryLayouts.listTvFolders.mockResolvedValueOnce(['TV']);
+
+      await channelCatalog.getChannelsPaginated({ layout: 'tv' });
+
+      const { where } = Channel.findAndCountAll.mock.calls[0][0];
+      expect(where[Op.and]).toEqual([{ [Op.or]: [{ sub_folder: { [Op.in]: ['TV'] } }] }]);
+    });
+
+    test('matches no channel for the TV filter when no folder is TV', async () => {
+      await channelCatalog.getChannelsPaginated({ layout: 'tv' });
+
+      const { where } = Channel.findAndCountAll.mock.calls[0][0];
+      expect(where[Op.and]).toEqual([{ id: null }]);
     });
 
     test('applies search filtering when a term is provided', async () => {
@@ -430,9 +487,23 @@ describe('channelCatalog', () => {
           channelSettingsModule,
         });
 
-        expect(channelSettingsModule.updateChannelSettings).toHaveBeenCalledWith('UCpending', settings);
+        expect(channelSettingsModule.updateChannelSettings).toHaveBeenCalledWith('UCpending', settings, expect.any(Object));
         expect(channelSettingsModule.updateChannelSettings.mock.invocationCallOrder[0])
           .toBeLessThan(mockChannel.update.mock.invocationCallOrder[0]);
+      });
+
+      test('passes the running-download check to the settings save', async () => {
+        const mockChannel = { channel_id: 'UCpending', update: jest.fn().mockResolvedValue(true) };
+        Channel.findOne = jest.fn().mockResolvedValue(mockChannel);
+        const isDownloadRunning = () => false;
+
+        await channelCatalog.updateChannelsByDelta({
+          enableUrls: [{ url: 'https://youtube.com/@pending', channel_id: 'UCpending', settings }],
+          channelSettingsModule,
+          isDownloadRunning,
+        });
+
+        expect(channelSettingsModule.updateChannelSettings).toHaveBeenCalledWith('UCpending', settings, { isDownloadRunning });
       });
 
       test('leaves settings untouched for an add item without settings', async () => {
@@ -458,7 +529,7 @@ describe('channelCatalog', () => {
           channelSettingsModule,
         });
 
-        expect(channelSettingsModule.updateChannelSettings).toHaveBeenCalledWith('UCfetched', settings);
+        expect(channelSettingsModule.updateChannelSettings).toHaveBeenCalledWith('UCfetched', settings, expect.any(Object));
       });
 
       test('leaves an unchanged subfolder out so active downloads do not block the save', async () => {
@@ -477,7 +548,7 @@ describe('channelCatalog', () => {
           channelSettingsModule,
         });
 
-        expect(channelSettingsModule.updateChannelSettings).toHaveBeenCalledWith('UCpending', { video_quality: '720' });
+        expect(channelSettingsModule.updateChannelSettings).toHaveBeenCalledWith('UCpending', { video_quality: '720' }, expect.any(Object));
       });
 
       test('passes a changed subfolder through', async () => {
@@ -489,7 +560,7 @@ describe('channelCatalog', () => {
           channelSettingsModule,
         });
 
-        expect(channelSettingsModule.updateChannelSettings).toHaveBeenCalledWith('UCpending', { sub_folder: 'Kids' });
+        expect(channelSettingsModule.updateChannelSettings).toHaveBeenCalledWith('UCpending', { sub_folder: 'Kids' }, expect.any(Object));
       });
 
       test('provisions a fetched channel disabled and enables it only after applying settings', async () => {
