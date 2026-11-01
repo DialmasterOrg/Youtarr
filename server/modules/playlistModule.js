@@ -1,6 +1,7 @@
-const { spawn } = require('child_process');
 const { Op } = require('sequelize');
 const logger = require('../logger');
+const configModule = require('./configModule');
+const { spawnYtDlp } = require('./ytdlpProcess');
 const { sequelize } = require('../db');
 const { Playlist, PlaylistVideo, Channel, Video, Job, JobVideo } = require('../models');
 const youtubeApi = require('./youtubeApi');
@@ -21,6 +22,20 @@ const REPORTED_COUNT_SLACK = 5;
 // downloaded_at round-trips through a DATETIME column (second precision), so an
 // exact millisecond comparison would flag every already-correct row as stale.
 const DOWNLOAD_TIME_TOLERANCE_MS = 1000;
+
+// A channel's members-only uploads live in its UUM* playlists, which only a
+// member's session can list. Every other playlist stays anonymous.
+const MEMBERS_PLAYLIST_RE = /[?&]list=UUM/;
+
+function membersPlaylistCookieArgs(url) {
+  if (!MEMBERS_PLAYLIST_RE.test(url)) return [];
+  const cookiesPath = configModule.getCookiesPath();
+  return cookiesPath ? ['--cookies', cookiesPath] : [];
+}
+
+function skipWebpageArg(cookieArgs) {
+  return cookieArgs.length > 0 ? 'youtubetab:skip=webpage,authcheck' : 'youtubetab:skip=webpage';
+}
 
 function reportedCount(value) {
   if (!['number', 'string'].includes(typeof value) || String(value).trim() === '') return null;
@@ -55,15 +70,17 @@ class PlaylistModule {
 
   async _getPlaylistMetadata(url, { skipWebpage = false } = {}) {
     return new Promise((resolve, reject) => {
+      const cookieArgs = membersPlaylistCookieArgs(url);
       const args = [
+        ...cookieArgs,
         '--skip-download',
         '--dump-single-json',
         '--flat-playlist',
         '--playlist-items', '0',
       ];
-      if (skipWebpage) args.push('--extractor-args', 'youtubetab:skip=webpage');
+      if (skipWebpage) args.push('--extractor-args', skipWebpageArg(cookieArgs));
       args.push(url);
-      const child = spawn('yt-dlp', args);
+      const child = spawnYtDlp(args);
       let stdout = '';
       let stderr = '';
 
@@ -477,15 +494,16 @@ class PlaylistModule {
   // is also passed.
   _spawnFlatPlaylist(url, { playlistEnd, skipWebpage = false } = {}) {
     return new Promise((resolve, reject) => {
-      const args = ['--flat-playlist', '--dump-json'];
+      const cookieArgs = membersPlaylistCookieArgs(url);
+      const args = [...cookieArgs, '--flat-playlist', '--dump-json'];
       if (playlistEnd != null) {
         args.push('--playlist-end', String(playlistEnd));
       }
       if (skipWebpage) {
-        args.push('--extractor-args', 'youtubetab:skip=webpage');
+        args.push('--extractor-args', skipWebpageArg(cookieArgs));
       }
       args.push(url);
-      const child = spawn('yt-dlp', args);
+      const child = spawnYtDlp(args);
       let stdout = '';
       let stderr = '';
       child.stdout.on('data', (d) => { stdout += d.toString(); });
