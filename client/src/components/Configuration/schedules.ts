@@ -17,7 +17,8 @@ export const SCHEDULE_FIELDS = [
     key: 'channelDownloadFrequency',
     group: 'sync',
     label: 'Automatic downloads',
-    description: 'Check enabled channels and playlists for new videos and download them.',
+    description: 'Check enabled channels and playlists for new videos and download them. '
+      + 'Automatic downloads can lead to a loss of videos if the task runs less than once a week.',
     settingsPath: 'core',
     settingsLabel: 'Core settings',
     enabledKey: 'channelAutoDownload',
