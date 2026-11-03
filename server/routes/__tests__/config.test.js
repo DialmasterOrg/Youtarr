@@ -2,7 +2,12 @@
 jest.mock('../../modules/filenamePreview', () => ({
   previewTemplate: jest.fn(),
   validateTemplate: jest.fn().mockResolvedValue({ ok: true }),
+  isTimeoutError: jest.fn(() => false),
 }));
+
+const TIMEOUT_MESSAGE =
+  'The filename template could not be checked: yt-dlp took longer than 20 seconds. ' +
+  'The server may be busy; try again in a moment.';
 
 const express = require('express');
 const supertest = require('supertest');
@@ -76,6 +81,8 @@ beforeEach(() => {
   filenamePreview.validateTemplate.mockReset();
   filenamePreview.validateTemplate.mockResolvedValue({ ok: true });
   filenamePreview.previewTemplate.mockReset();
+  filenamePreview.isTimeoutError.mockReset();
+  filenamePreview.isTimeoutError.mockReturnValue(false);
 });
 
 describe('externally managed cookie routes', () => {
@@ -608,10 +615,11 @@ describe('POST /updateconfig - videoFilenamePrefix validation', () => {
     expect(configModule.updateConfig).not.toHaveBeenCalled();
   });
 
-  test('blocks save with 400 on any filenamePreview failure (yt-dlp ships with the app)', async () => {
+  test('blocks save with 400 when yt-dlp times out checking the template', async () => {
     filenamePreview.validateTemplate.mockResolvedValueOnce({
       ok: false,
-      error: 'yt-dlp process timed out after 5000ms',
+      error: TIMEOUT_MESSAGE,
+      timedOut: true,
     });
     const { app, configModule } = makeApp();
     const res = await supertest(app)
@@ -619,8 +627,21 @@ describe('POST /updateconfig - videoFilenamePrefix validation', () => {
       .send({ videoFilenamePrefix: '%(title).76B' });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/timed out/);
     expect(configModule.updateConfig).not.toHaveBeenCalled();
+  });
+
+  test('reports a save timeout without calling the template rejected', async () => {
+    filenamePreview.validateTemplate.mockResolvedValueOnce({
+      ok: false,
+      error: TIMEOUT_MESSAGE,
+      timedOut: true,
+    });
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ videoFilenamePrefix: '%(title).76B' });
+
+    expect(res.body.error).toBe(TIMEOUT_MESSAGE);
   });
 
   test('forwards unexpected save errors to Express error handling', async () => {
@@ -723,16 +744,24 @@ describe('POST /api/config/filename-preview', () => {
     expect(res.body.error).toMatch(/incomplete format key/);
   });
 
-  test('returns 400 with yt-dlp message on timeout (yt-dlp ships with the app, so any failure blocks)', async () => {
-    filenamePreview.previewTemplate.mockRejectedValueOnce(new Error(
-      'yt-dlp process timed out after 5000ms'
-    ));
+  test('returns 400 when yt-dlp times out rendering the preview', async () => {
+    filenamePreview.previewTemplate.mockRejectedValueOnce(new Error(TIMEOUT_MESSAGE));
+    filenamePreview.isTimeoutError.mockReturnValueOnce(true);
     const { app } = makeApp();
     const res = await supertest(app)
       .post('/api/config/filename-preview')
       .send({ prefix: '%(title).76B' });
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/timed out/);
+  });
+
+  test('reports a preview timeout without calling the template rejected', async () => {
+    filenamePreview.previewTemplate.mockRejectedValueOnce(new Error(TIMEOUT_MESSAGE));
+    filenamePreview.isTimeoutError.mockReturnValueOnce(true);
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/api/config/filename-preview')
+      .send({ prefix: '%(title).76B' });
+    expect(res.body.error).toBe(TIMEOUT_MESSAGE);
   });
 });
 
