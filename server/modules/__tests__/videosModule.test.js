@@ -92,7 +92,8 @@ describe('VideosModule', () => {
     };
 
     mockNfoGenerator = {
-      writeVideoNfoFile: jest.fn()
+      writeVideoNfoFile: jest.fn().mockReturnValue(true),
+      readDateAdded: jest.fn().mockReturnValue(null)
     };
 
     mockMessageEmitter = {
@@ -2185,12 +2186,13 @@ describe('VideosModule', () => {
 
       const videoInstance = {
         id: existingId,
+        youtubeId: 'abc123',
         filePath: '/downloads/Channel/video [abc123].mp4',
+        removed: false,
         update: jest.fn().mockResolvedValue()
       };
 
       mockVideo.findByPk.mockImplementation(async (id) => (id === existingId ? videoInstance : null));
-      mockFs.access.mockResolvedValue();
       mockFs.readFile.mockResolvedValue(JSON.stringify({
         normalized_rating: 'PG',
         rating_source: 'Initial Source',
@@ -2208,8 +2210,10 @@ describe('VideosModule', () => {
       });
       expect(result.success).toEqual([existingId]);
       expect(result.failed).toEqual([{ id: missingId, error: 'Video not found' }]);
-      expect(mockFs.readFile).toHaveBeenCalledWith(expect.stringContaining('.info.json'), 'utf8');
+      // The post-processor moves every info.json into jobs/info; nothing is left beside the video.
+      expect(mockFs.readFile).toHaveBeenCalledWith('/test/jobs/info/abc123.info.json', 'utf8');
       expect(mockFs.writeFile).toHaveBeenCalledTimes(1);
+      expect(mockFs.writeFile.mock.calls[0][0]).toBe('/test/jobs/info/abc123.info.json');
 
       const [, writtenData] = mockFs.writeFile.mock.calls[0];
       const parsed = JSON.parse(writtenData);
@@ -2217,8 +2221,243 @@ describe('VideosModule', () => {
       expect(parsed.rating_source).toBe('Manual Override');
       expect(mockNfoGenerator.writeVideoNfoFile).toHaveBeenCalledWith(
         videoInstance.filePath,
-        expect.objectContaining({ normalized_rating: null })
+        expect.objectContaining({ normalized_rating: null }),
+        { dateAdded: undefined }
       );
+    });
+
+    function givenVideo(overrides = {}) {
+      const videoInstance = {
+        id: 101,
+        youtubeId: 'abc123',
+        filePath: '/downloads/Channel/video [abc123].mp4',
+        audioFilePath: null,
+        removed: false,
+        last_downloaded_at: null,
+        update: jest.fn().mockResolvedValue(),
+        ...overrides
+      };
+      mockVideo.findByPk.mockResolvedValue(videoInstance);
+      mockFs.readFile.mockResolvedValue(JSON.stringify({ fulltitle: 'Test Video' }));
+      mockFs.writeFile.mockResolvedValue();
+      return videoInstance;
+    }
+
+    const fsError = (code) => Object.assign(new Error(code), { code });
+
+    test('warns when no cached info.json exists, since the NFO cannot be regenerated', async () => {
+      givenVideo();
+      mockFs.readFile.mockRejectedValue(fsError('ENOENT'));
+
+      const result = await VideosModule.bulkUpdateVideoRatings([101], 'PG-13');
+
+      expect(result.success).toEqual([101]);
+      expect(result.warnings).toEqual([
+        { id: 101, warning: 'Database updated but NFO not regenerated (no cached .info.json)' }
+      ]);
+      expect(mockFs.writeFile).not.toHaveBeenCalled();
+      expect(mockNfoGenerator.writeVideoNfoFile).not.toHaveBeenCalled();
+    });
+
+    test('does not warn about a missing cache when no NFO was due', async () => {
+      givenVideo();
+      mockFs.readFile.mockRejectedValue(fsError('ENOENT'));
+      mockConfigModule.getConfig.mockReturnValue({ writeVideoNfoFiles: false });
+
+      const result = await VideosModule.bulkUpdateVideoRatings([101], 'PG-13');
+
+      expect(result.success).toEqual([101]);
+      expect(result.warnings).toEqual([]);
+    });
+
+    test('regenerates the NFO beside the audio file of an MP3-only video', async () => {
+      givenVideo({ filePath: null, audioFilePath: '/downloads/Channel/song [abc123].mp3' });
+
+      await VideosModule.bulkUpdateVideoRatings([101], 'PG-13');
+
+      expect(mockNfoGenerator.writeVideoNfoFile).toHaveBeenCalledWith(
+        '/downloads/Channel/song [abc123].mp3',
+        expect.objectContaining({ normalized_rating: 'PG-13' }),
+        expect.anything()
+      );
+    });
+
+    test('keeps the date the existing NFO says the video was added', async () => {
+      const video = givenVideo({ last_downloaded_at: new Date('2025-05-05T00:00:00Z') });
+      mockNfoGenerator.readDateAdded.mockReturnValue('2020-01-01 00:00:00');
+
+      await VideosModule.bulkUpdateVideoRatings([101], 'PG-13');
+
+      expect(mockNfoGenerator.readDateAdded).toHaveBeenCalledWith(video.filePath);
+      expect(mockNfoGenerator.writeVideoNfoFile).toHaveBeenCalledWith(
+        video.filePath,
+        expect.any(Object),
+        { dateAdded: '2020-01-01 00:00:00' }
+      );
+    });
+
+    test('falls back to the download date when there is no NFO to keep the date from', async () => {
+      const downloadedAt = new Date('2025-05-05T00:00:00Z');
+      const video = givenVideo({ last_downloaded_at: downloadedAt });
+
+      await VideosModule.bulkUpdateVideoRatings([101], 'PG-13');
+
+      expect(mockNfoGenerator.writeVideoNfoFile).toHaveBeenCalledWith(
+        video.filePath,
+        expect.any(Object),
+        { dateAdded: downloadedAt }
+      );
+    });
+
+    test('reports an unreadable info.json as a warning, since the database was updated', async () => {
+      givenVideo();
+      mockFs.readFile.mockRejectedValue(fsError('EACCES'));
+
+      const result = await VideosModule.bulkUpdateVideoRatings([101], 'PG-13');
+
+      expect(result.success).toEqual([101]);
+      expect(result.failed).toEqual([]);
+      expect(result.warnings).toEqual([
+        { id: 101, warning: 'Database updated but NFO not regenerated (unreadable .info.json)' }
+      ]);
+    });
+
+    test('counts a corrupt info.json as a success with a warning', async () => {
+      givenVideo();
+      mockFs.readFile.mockResolvedValue('not json');
+
+      const result = await VideosModule.bulkUpdateVideoRatings([101], 'PG-13');
+
+      expect(result.success).toEqual([101]);
+      expect(result.warnings).toEqual([
+        { id: 101, warning: 'Database updated but NFO not regenerated (corrupt .info.json)' }
+      ]);
+      expect(mockNfoGenerator.writeVideoNfoFile).not.toHaveBeenCalled();
+    });
+
+    test('names the cached metadata in the warning when no NFO was due', async () => {
+      givenVideo({ removed: true });
+      mockFs.readFile.mockResolvedValue('not json');
+
+      const result = await VideosModule.bulkUpdateVideoRatings([101], 'PG-13');
+
+      expect(result.warnings).toEqual([
+        { id: 101, warning: 'Database updated but cached metadata not updated (corrupt .info.json)' }
+      ]);
+    });
+
+    test.each(['null', '"text"', '[]'])('treats an info.json holding %s as corrupt and leaves it alone', async (content) => {
+      givenVideo();
+      mockFs.readFile.mockResolvedValue(content);
+
+      const result = await VideosModule.bulkUpdateVideoRatings([101], 'PG-13');
+
+      expect(result.success).toEqual([101]);
+      expect(result.warnings).toEqual([
+        { id: 101, warning: 'Database updated but NFO not regenerated (corrupt .info.json)' }
+      ]);
+      expect(mockFs.writeFile).not.toHaveBeenCalled();
+      expect(mockNfoGenerator.writeVideoNfoFile).not.toHaveBeenCalled();
+    });
+
+    test('carries on with the batch after an info.json that does not hold an object', async () => {
+      const video = givenVideo();
+      mockFs.readFile.mockResolvedValue('null');
+
+      const result = await VideosModule.bulkUpdateVideoRatings([101, 102], 'PG-13');
+
+      expect(video.update).toHaveBeenCalledTimes(2);
+      expect(result.success).toEqual([101, 102]);
+    });
+
+    test('carries on with the batch when updating the files throws unexpectedly', async () => {
+      const video = givenVideo();
+      mockNfoGenerator.writeVideoNfoFile.mockImplementationOnce(() => {
+        throw new Error('boom');
+      });
+
+      const result = await VideosModule.bulkUpdateVideoRatings([101, 102], 'PG-13');
+
+      expect(video.update).toHaveBeenCalledTimes(2);
+      expect(result.success).toEqual([101, 102]);
+      expect(result.failed).toEqual([]);
+      expect(result.warnings).toEqual([
+        { id: 101, warning: 'Database updated but cached metadata and NFO may not match (unexpected error)' }
+      ]);
+    });
+
+    test('warns when the info.json could not be written', async () => {
+      givenVideo();
+      mockFs.writeFile.mockRejectedValue(fsError('EACCES'));
+
+      const result = await VideosModule.bulkUpdateVideoRatings([101], 'PG-13');
+
+      expect(result.success).toEqual([101]);
+      expect(result.warnings).toEqual([
+        { id: 101, warning: 'Database updated but NFO not regenerated (could not write .info.json)' }
+      ]);
+      expect(mockNfoGenerator.writeVideoNfoFile).not.toHaveBeenCalled();
+    });
+
+    test('warns when the NFO could not be written', async () => {
+      givenVideo();
+      mockNfoGenerator.writeVideoNfoFile.mockReturnValue(false);
+
+      const result = await VideosModule.bulkUpdateVideoRatings([101], 'PG-13');
+
+      expect(result.success).toEqual([101]);
+      expect(result.warnings).toEqual([
+        { id: 101, warning: 'Database updated but NFO not regenerated (could not write the NFO file)' }
+      ]);
+    });
+
+    test('slims the cached info.json while rewriting it', async () => {
+      givenVideo();
+      mockFs.readFile.mockResolvedValue(JSON.stringify({
+        fulltitle: 'Test Video',
+        automatic_captions: { 'en-de': [{ ext: 'vtt' }] }
+      }));
+
+      await VideosModule.bulkUpdateVideoRatings([101], 'PG-13');
+
+      const [, written] = mockFs.writeFile.mock.calls[0];
+      expect(JSON.parse(written)).toEqual({
+        fulltitle: 'Test Video',
+        normalized_rating: 'PG-13',
+        rating_source: 'Manual Override'
+      });
+    });
+
+    test('still fails the row when the database update fails', async () => {
+      const video = givenVideo();
+      video.update.mockRejectedValue(new Error('db down'));
+
+      const result = await VideosModule.bulkUpdateVideoRatings([101], 'PG-13');
+
+      expect(result.success).toEqual([]);
+      expect(result.failed).toEqual([{ id: 101, error: 'db down' }]);
+      expect(mockFs.readFile).not.toHaveBeenCalled();
+    });
+
+    test('updates the cached info.json but writes no NFO when NFO files are turned off', async () => {
+      givenVideo();
+      mockConfigModule.getConfig.mockReturnValue({ writeVideoNfoFiles: false });
+
+      const result = await VideosModule.bulkUpdateVideoRatings([101], 'PG-13');
+
+      expect(result.success).toEqual([101]);
+      expect(mockFs.writeFile).toHaveBeenCalledTimes(1);
+      expect(mockNfoGenerator.writeVideoNfoFile).not.toHaveBeenCalled();
+    });
+
+    test('updates the cached info.json but writes no NFO for a removed video, whose file is gone', async () => {
+      givenVideo({ removed: true });
+
+      const result = await VideosModule.bulkUpdateVideoRatings([101], 'PG-13');
+
+      expect(result.success).toEqual([101]);
+      expect(mockFs.writeFile).toHaveBeenCalledTimes(1);
+      expect(mockNfoGenerator.writeVideoNfoFile).not.toHaveBeenCalled();
     });
   });
 

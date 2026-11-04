@@ -11,7 +11,7 @@ const createLimiter = require('./subscriptionImport/concurrencyLimiter');
 // dies with its Videos row (Empty trash unlinks both), but a video that was
 // only looked at has no row, so nothing else would ever remove its file.
 // Recent files are kept so reopening the same video stays fast; a file's age
-// is its modification time, which only a fetch sets.
+// is its modification time, set by a fetch, a download, or a rating change.
 const UNTRACKED_MAX_AGE_MS = 21 * 24 * 60 * 60 * 1000;
 const LOOKUP_CHUNK_SIZE = 500;
 const FS_CONCURRENCY = 8;

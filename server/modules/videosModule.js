@@ -11,6 +11,7 @@ const logger = require('../logger');
 const messageEmitter = require('./messageEmitter');
 const m3uGenerator = require('./m3uGenerator');
 const infoJsonCachePruner = require('./infoJsonCachePruner');
+const { slimInfoJson } = require('./infoJsonSlimmer');
 const scheduledTaskRuns = require('./scheduledTaskRuns');
 const rescanRunSummary = require('./rescanRunSummary');
 const { AUDIO_EXTENSIONS, MEDIA_EXTENSIONS } = require('./filesystem/constants');
@@ -323,7 +324,9 @@ class VideosModule {
   }
 
   /**
-   * Bulk update video ratings
+   * Bulk update video ratings. The database row is the source of truth: once
+   * it is updated the id counts as a success, and anything that keeps the
+   * cached info.json or the NFO from following is reported as a warning.
    * @param {number[]} videoIds - List of database IDs
    * @param {string|null} rating - The new rating value
    * @returns {Promise<{success:number[], warnings:Array<{id:number, warning:string}>, failed:Array<{id:number, error:string}>}>}
@@ -335,11 +338,13 @@ class VideosModule {
       failed: []
     };
 
-    const nfoGenerator = require('./nfoGenerator');
+    // Same switch the post-processor honors when it first writes the NFO.
+    const writeNfoFiles = configModule.getConfig().writeVideoNfoFiles !== false;
 
     for (const id of videoIds) {
+      let video;
       try {
-        const video = await Video.findByPk(id);
+        video = await Video.findByPk(id);
         if (!video) {
           results.failed.push({ id, error: 'Video not found' });
           continue;
@@ -349,43 +354,73 @@ class VideosModule {
           normalized_rating: rating,
           rating_source: 'Manual Override'
         });
-
-        if (video.filePath) {
-          const parsedPath = path.parse(video.filePath);
-          const jsonPath = path.format({
-            dir: parsedPath.dir,
-            name: parsedPath.name,
-            ext: '.info.json'
-          });
-
-          const jsonExists = await fs.access(jsonPath).then(() => true).catch(() => false);
-          if (jsonExists) {
-            const content = await fs.readFile(jsonPath, 'utf8');
-            let jsonData;
-            try {
-              jsonData = JSON.parse(content);
-            } catch (parseErr) {
-              logger.warn({ parseErr, jsonPath }, 'Failed to parse .info.json for rating update');
-              results.warnings.push({ id, warning: 'Database updated but NFO not regenerated (corrupt .info.json)' });
-              continue;
-            }
-
-            jsonData.normalized_rating = rating;
-            jsonData.rating_source = 'Manual Override';
-
-            await fs.writeFile(jsonPath, JSON.stringify(jsonData, null, 2), 'utf8');
-            nfoGenerator.writeVideoNfoFile(video.filePath, jsonData);
-          }
-        }
-
-        results.success.push(id);
       } catch (err) {
         logger.error({ err, videoId: id }, 'Failed to update video rating');
         results.failed.push({ id, error: err.message });
+        continue;
+      }
+      results.success.push(id);
+
+      try {
+        const warning = await this._applyRatingToFiles(video, rating, writeNfoFiles);
+        if (warning) {
+          results.warnings.push({ id, warning });
+        }
+      } catch (err) {
+        logger.error({ err, videoId: id }, 'Failed to apply video rating to its files');
+        results.warnings.push({ id, warning: 'Database updated but cached metadata and NFO may not match (unexpected error)' });
       }
     }
 
     return results;
+  }
+
+  /**
+   * Writes a video's new rating into its cached info.json and regenerates the
+   * NFO beside its media file, keeping the date the NFO says the video was
+   * added. Returns a warning when something that was due could not be done.
+   * @returns {Promise<string|null>}
+   */
+  async _applyRatingToFiles(video, rating, writeNfoFiles) {
+    const nfoGenerator = require('./nfoGenerator');
+    // MP3-only videos have no filePath; the post-processor writes their NFO beside the audio file.
+    const mediaPath = video.filePath || video.audioFilePath;
+    // A removed video's file is gone, so there is nowhere to put its NFO.
+    const nfoDue = writeNfoFiles && !video.removed && Boolean(mediaPath);
+    const notDone = nfoDue ? 'NFO not regenerated' : 'cached metadata not updated';
+    // The post-processor moves every info.json into jobs/info; nothing is left beside the video.
+    const jsonPath = path.join(configModule.getJobsPath(), 'info', `${video.youtubeId}.info.json`);
+
+    let jsonData;
+    try {
+      jsonData = slimInfoJson(JSON.parse(await fs.readFile(jsonPath, 'utf8')));
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        return nfoDue ? 'Database updated but NFO not regenerated (no cached .info.json)' : null;
+      }
+      logger.warn({ err, jsonPath }, 'Failed to read .info.json for rating update');
+      const reason = err instanceof SyntaxError ? 'corrupt .info.json' : 'unreadable .info.json';
+      return `Database updated but ${notDone} (${reason})`;
+    }
+    if (!jsonData || typeof jsonData !== 'object' || Array.isArray(jsonData)) {
+      logger.warn({ jsonPath }, 'Cached .info.json does not hold an object');
+      return `Database updated but ${notDone} (corrupt .info.json)`;
+    }
+
+    jsonData.normalized_rating = rating;
+    jsonData.rating_source = 'Manual Override';
+    try {
+      await fs.writeFile(jsonPath, JSON.stringify(jsonData, null, 2), 'utf8');
+    } catch (err) {
+      logger.warn({ err, jsonPath }, 'Failed to write .info.json for rating update');
+      return `Database updated but ${notDone} (could not write .info.json)`;
+    }
+
+    if (!nfoDue) return null;
+    // <dateadded> is the date the video entered the library; a fresh stamp would make it look newly added.
+    const dateAdded = nfoGenerator.readDateAdded(mediaPath) || video.last_downloaded_at || undefined;
+    const written = nfoGenerator.writeVideoNfoFile(mediaPath, jsonData, { dateAdded });
+    return written ? null : 'Database updated but NFO not regenerated (could not write the NFO file)';
   }
 
   async getAllUniqueChannels() {
