@@ -9,6 +9,7 @@ const ChannelVideo = require('../models/channelvideo');
 const channelVideoReanchor = require('./channelVideoReanchor');
 const { parseTierFromFormatNote, selectionTierForHeight } = require('./resolutionTier');
 const { isFileForVideo } = require('./filesystem/pathBuilder');
+const { slimInfoJson } = require('./infoJsonSlimmer');
 
 const NULL_METADATA = {
   description: null,
@@ -110,10 +111,10 @@ class VideoMetadataModule {
         // Not cached - fetch via yt-dlp
         logger.debug({ youtubeId }, 'No cached .info.json, fetching via yt-dlp');
         try {
-          rawData = await ytDlpRunner.fetchMetadata(
+          rawData = slimInfoJson(await ytDlpRunner.fetchMetadata(
             `https://www.youtube.com/watch?v=${youtubeId}`,
             YTDLP_FETCH_TIMEOUT_MS
-          );
+          ));
 
           // Cache the result for future requests
           try {

@@ -58,7 +58,7 @@ export const SCHEDULE_FIELDS = [
     key: 'videoRescanFrequency',
     group: 'maintenance',
     label: 'Rescan files on disk',
-    description: 'Check that downloaded videos are still on disk, update their file locations and sizes, and fill in missing video resolutions. This also runs at startup.',
+    description: 'Check that downloaded videos are still on disk, update their file locations and sizes, and fill in missing video resolutions. Afterwards, clear metadata cached for videos that were opened but never downloaded, once it is three weeks old. This also runs at startup.',
     settingsPath: 'maintenance',
     settingsLabel: 'Maintenance',
     enabledKey: null,

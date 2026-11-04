@@ -275,6 +275,28 @@ describe('VideoMetadataModule', () => {
       expect(mockFs.writeFile).toHaveBeenCalled();
     });
 
+    test('leaves automatic_captions out of the cached file', async () => {
+      mockFs.access.mockRejectedValue(new Error('ENOENT'));
+      mockYtDlpRunner.fetchMetadata.mockResolvedValue({
+        description: 'Fetched description',
+        upload_date: '20240101',
+        subtitles: { en: [{ ext: 'vtt' }] },
+        automatic_captions: { 'en-de': [{ ext: 'vtt' }] },
+      });
+      mockFs.mkdir.mockResolvedValue(undefined);
+      mockFs.writeFile.mockResolvedValue(undefined);
+      mockVideo.findOne.mockResolvedValue(null);
+
+      await videoMetadataModule.getVideoMetadata('xyz789');
+
+      const [, written] = mockFs.writeFile.mock.calls[0];
+      expect(JSON.parse(written)).toEqual({
+        description: 'Fetched description',
+        upload_date: '20240101',
+        subtitles: { en: [{ ext: 'vtt' }] },
+      });
+    });
+
     test('returns all-null metadata when yt-dlp also fails', async () => {
       mockFs.access.mockRejectedValue(new Error('ENOENT'));
       mockYtDlpRunner.fetchMetadata.mockRejectedValue(new Error('yt-dlp failed'));

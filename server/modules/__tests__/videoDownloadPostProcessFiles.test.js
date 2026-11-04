@@ -421,6 +421,27 @@ describe('videoDownloadPostProcessFiles', () => {
     expect(fs.moveSync).toHaveBeenCalledWith(jsonPath, '/mock/jobs/info/abc123.info.json', { overwrite: true });
   });
 
+  it('leaves automatic_captions out of the saved info.json', async () => {
+    fs.readFileSync.mockReturnValue(JSON.stringify({
+      id: 'abc123',
+      upload_date: '20240131',
+      title: 'Video Title',
+      uploader: 'Channel',
+      channel_id: 'channel123',
+      automatic_captions: { 'en-de': [{ ext: 'vtt' }] },
+    }));
+
+    await loadModule();
+    await settleAsync();
+
+    const infoWrites = fs.writeFileSync.mock.calls
+      .filter(([target]) => target === jsonPath || target === '/mock/jobs/info/abc123.info.json')
+      .map(([, content]) => content);
+    expect(infoWrites.length).toBeGreaterThan(0);
+    expect(infoWrites.every((content) => content.includes('"title": "Video Title"'))).toBe(true);
+    expect(infoWrites.some((content) => content.includes('automatic_captions'))).toBe(false);
+  });
+
   it('logs warning when AtomicParsley fails', async () => {
     childProcess.spawnSync.mockReturnValueOnce({ status: 1, stderr: Buffer.from('error') });
 

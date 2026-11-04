@@ -21,6 +21,7 @@ describe('VideosModule', () => {
   let mockNfoGenerator;
   let mockMessageEmitter;
   let mockM3uGenerator;
+  let mockInfoJsonCachePruner;
   let mockScheduledTaskRuns;
   let mockExecFile;
 
@@ -102,6 +103,10 @@ describe('VideosModule', () => {
       regenerateAllChannelM3Us: jest.fn().mockResolvedValue({ attempted: 0, succeeded: 0 })
     };
 
+    mockInfoJsonCachePruner = {
+      pruneUntracked: jest.fn().mockResolvedValue({ scanned: 0, removed: 0, failed: 0 })
+    };
+
     // Mock the database module
     jest.doMock('../../db.js', () => ({
       Sequelize,
@@ -150,6 +155,8 @@ describe('VideosModule', () => {
     jest.doMock('../messageEmitter', () => mockMessageEmitter);
 
     jest.doMock('../m3uGenerator', () => mockM3uGenerator);
+
+    jest.doMock('../infoJsonCachePruner', () => mockInfoJsonCachePruner);
 
     mockScheduledTaskRuns = { record: jest.fn().mockResolvedValue(undefined) };
     jest.doMock('../scheduledTaskRuns', () => mockScheduledTaskRuns);
@@ -1952,6 +1959,15 @@ describe('VideosModule', () => {
       await VideosModule.backfillVideoMetadata({ trigger: 'manual' });
 
       expect(mockM3uGenerator.regenerateAllChannelM3Us).toHaveBeenCalledTimes(1);
+    });
+
+    test('prunes the cached metadata of never-downloaded videos after the rescan completes', async () => {
+      mockFs.readdir.mockResolvedValueOnce([]);
+      mockVideo.count.mockResolvedValueOnce(0);
+
+      await VideosModule.backfillVideoMetadata({ trigger: 'manual' });
+
+      expect(mockInfoJsonCachePruner.pruneUntracked).toHaveBeenCalledTimes(1);
     });
 
     test('should release lock on error', async () => {

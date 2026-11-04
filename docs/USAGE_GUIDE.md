@@ -559,6 +559,7 @@ Click any thumbnail on the Videos page or a channel page to open a video detail 
    - For downloaded videos, the modal shows the downloaded format's dimensions from the video metadata, with the quality tier alongside when it isn't obvious from the numbers (e.g. `608x1080 (1080p)` for a vertical video); video listings show a small tier chip based on the file's measured on-disk resolution
    - For downloaded videos, data is served from the cached `.info.json`
    - For videos not yet downloaded, Youtarr fetches metadata on demand via yt-dlp (this can take a few seconds on the first open)
+   - Metadata fetched this way is cached in `jobs/info` for three weeks after it was fetched, then removed by the nightly file rescan; a downloaded video's metadata stays until you empty the trash
 
 3. **In-browser playback**
    - Downloaded videos stream directly from Youtarr through the built-in player; no media server required

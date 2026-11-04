@@ -10,6 +10,7 @@ const ratingMapper = require('./ratingMapper');
 const logger = require('../logger');
 const messageEmitter = require('./messageEmitter');
 const m3uGenerator = require('./m3uGenerator');
+const infoJsonCachePruner = require('./infoJsonCachePruner');
 const scheduledTaskRuns = require('./scheduledTaskRuns');
 const rescanRunSummary = require('./rescanRunSummary');
 const { AUDIO_EXTENSIONS, MEDIA_EXTENSIONS } = require('./filesystem/constants');
@@ -902,6 +903,10 @@ class VideosModule {
         // Reconcile channel .m3u files with what the rescan found on disk.
         m3uGenerator.regenerateAllChannelM3Us().catch((err) => {
           logger.error({ err }, 'Failed to refresh channel M3Us after rescan');
+        });
+        // Metadata cached for videos that were only looked at has no other sweep.
+        infoJsonCachePruner.pruneUntracked().catch((err) => {
+          logger.error({ err }, 'Failed to prune cached metadata after rescan');
         });
       }
     }
