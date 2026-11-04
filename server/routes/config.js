@@ -5,6 +5,7 @@ const customArgsParser = require('../modules/download/customArgsParser');
 const filenamePreview = require('../modules/filenamePreview');
 const { getExternalCookiesPath } = require('../modules/externalCookies');
 const { isValidLevelSetting } = require('../logging/logLevel');
+const { getLinkTemplateError } = require('../modules/notifications/utils');
 
 // Summarize the allowlist check of a saved custom-args string for the client,
 // without the resolved args (which may carry secret values). Returns null when
@@ -234,7 +235,7 @@ module.exports = function createConfigRoutes({
    *                 enum: ['', warn, info, debug]
    *     responses:
    *       400:
-   *         description: Invalid configuration; schedule errors include a fieldErrors object keyed by config field, and a changed ytdlpCustomArgs that fails the allowlist check includes its customArgsCheck
+   *         description: Invalid configuration; schedule errors include a fieldErrors object keyed by config field, and a changed ytdlpCustomArgs that fails the allowlist check includes its customArgsCheck, and a changed notificationLinkTemplate that is not an http(s) URL with only the {youtubeId} variable returns its error message
    *       200:
    *         description: Configuration updated successfully
    *         content:
@@ -341,6 +342,22 @@ module.exports = function createConfigRoutes({
       !isValidLevelSetting(updateData.logLevel)
     ) {
       return res.status(400).json({ error: 'Log level must be Default, Warn, Info or Debug' });
+    }
+
+    // Link template gate. Like the custom args gate, it only checks a value
+    // that changed, so a hand-edited bad value cannot block every save.
+    // buildVideoLink re-checks at send time.
+    if (
+      Object.prototype.hasOwnProperty.call(updateData, 'notificationLinkTemplate') &&
+      updateData.notificationLinkTemplate !== currentConfig.notificationLinkTemplate
+    ) {
+      const linkTemplateError = getLinkTemplateError(updateData.notificationLinkTemplate);
+      if (linkTemplateError) {
+        return res.status(400).json({ error: linkTemplateError });
+      }
+      if (typeof updateData.notificationLinkTemplate === 'string') {
+        updateData.notificationLinkTemplate = updateData.notificationLinkTemplate.trim();
+      }
     }
 
     // Video filename template prefix validation

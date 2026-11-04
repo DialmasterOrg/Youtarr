@@ -36,6 +36,7 @@ import {
   getDefaultNameForUrl,
   supportsRichFormatting
 } from '../../../config/notificationServices';
+import { getLinkTemplateError } from '../../../config/notificationLinkTemplate';
 
 // Status for individual webhook tests
 interface WebhookTestStatus {
@@ -300,6 +301,8 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
     }
     return url;
   };
+
+  const linkTemplateError = getLinkTemplateError(config.notificationLinkTemplate);
 
   return (
     <ConfigurationAccordion
@@ -566,6 +569,26 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                   </Button>
                 </Box>
               </Paper>
+            </Grid>
+
+            {/* Link to each video in download notifications */}
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Link template (optional)"
+                value={config.notificationLinkTemplate ?? ''}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  onConfigChange({ notificationLinkTemplate: e.target.value })
+                }
+                placeholder="e.g., https://youtarr.example.com/videos?video={youtubeId}"
+                size="small"
+                error={linkTemplateError !== null}
+                helperText={
+                  linkTemplateError ??
+                  'Adds a link to each video in Discord, Slack, Telegram and email notifications. Use {youtubeId} for the video ID. Leave empty for no link.'
+                }
+                inputProps={{ 'data-testid': 'notification-link-template-input' }}
+              />
             </Grid>
 
             {/* URL formats reference */}

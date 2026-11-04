@@ -3,6 +3,7 @@
  */
 
 const {
+  buildVideoLink,
   formatDuration,
   buildTitle,
   getFailedCount,
@@ -36,13 +37,23 @@ function truncateFieldValueAtLineBoundary(value, limit = DISCORD_FIELD_VALUE_LIM
   return lastNewline > 0 ? truncated.substring(0, lastNewline) : truncated;
 }
 
+// Markdown link: [text](url). Brackets in the text and parentheses in the URL
+// would end the link early.
+function buildMarkdownLink(text, url) {
+  const safeText = text.replace(/[\\[\]]/g, '\\$&');
+  const safeUrl = url.replace(/\(/g, '%28').replace(/\)/g, '%29');
+  return `[${safeText}](${safeUrl})`;
+}
+
 /**
  * Format download notification as Discord embed
  * @param {Object} finalSummary - Summary object from downloadExecutor
  * @param {Array} videoData - Array of video metadata objects
+ * @param {Object} [options]
+ * @param {string} [options.linkTemplate] - Link template that adds a link to each video
  * @returns {Object} Discord webhook message payload with embeds
  */
-function formatDownloadMessage(finalSummary, videoData) {
+function formatDownloadMessage(finalSummary, videoData, options = {}) {
   const { totalDownloaded, jobType } = finalSummary;
   const failedCount = getFailedCount(finalSummary);
   const terminatedCount = getTerminatedCount(finalSummary);
@@ -93,9 +104,12 @@ function formatDownloadMessage(finalSummary, videoData) {
       // Truncate title if too long
       const truncatedTitle = videoTitle.length > 100 ? `${videoTitle.substring(0, 97)}...` : videoTitle;
 
+      const link = buildVideoLink(options.linkTemplate, video);
+      const titleText = link ? buildMarkdownLink(truncatedTitle, link) : truncatedTitle;
+
       fields.push({
         name: `📺 ${channelName}`,
-        value: `${truncatedTitle}\n⏱️ ${duration}`,
+        value: `${titleText}\n⏱️ ${duration}`,
         inline: true
       });
     });

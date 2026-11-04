@@ -572,6 +572,75 @@ describe('NotificationsSection Component', () => {
     });
   });
 
+  describe('Link template', () => {
+    const TEMPLATE = 'https://youtarr.example.com/videos?video={youtubeId}';
+
+    test('is hidden when notifications are disabled', () => {
+      const props = createSectionProps({
+        config: createConfig({ notificationsEnabled: false })
+      });
+      renderWithProviders(<NotificationsSection {...props} />);
+
+      expect(screen.queryByTestId('notification-link-template-input')).not.toBeInTheDocument();
+    });
+
+    test('shows the saved template and the help text', () => {
+      const props = createSectionProps({
+        config: createConfig({ notificationsEnabled: true, notificationLinkTemplate: TEMPLATE })
+      });
+      renderWithProviders(<NotificationsSection {...props} />);
+
+      expect(screen.getByTestId('notification-link-template-input')).toHaveValue(TEMPLATE);
+      expect(screen.getByText(/Use \{youtubeId\} for the video ID/)).toBeInTheDocument();
+    });
+
+    test('is empty by default', () => {
+      const props = createSectionProps({
+        config: createConfig({ notificationsEnabled: true })
+      });
+      renderWithProviders(<NotificationsSection {...props} />);
+
+      expect(screen.getByTestId('notification-link-template-input')).toHaveValue('');
+    });
+
+    test('reports the typed template through onConfigChange', async () => {
+      const user = setupUser();
+      const onConfigChange = jest.fn();
+      const props = createSectionProps({
+        config: createConfig({ notificationsEnabled: true }),
+        onConfigChange
+      });
+      renderWithProviders(<NotificationsSection {...props} />);
+
+      await user.type(screen.getByTestId('notification-link-template-input'), 'h');
+
+      expect(onConfigChange).toHaveBeenCalledWith({ notificationLinkTemplate: 'h' });
+    });
+
+    test('shows an error instead of the help text for an invalid template', () => {
+      const props = createSectionProps({
+        config: createConfig({ notificationsEnabled: true, notificationLinkTemplate: 'javascript:alert(1)' })
+      });
+      renderWithProviders(<NotificationsSection {...props} />);
+
+      expect(
+        screen.getByText('Link template must be a full URL that starts with http:// or https://.')
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/Use \{youtubeId\} for the video ID/)).not.toBeInTheDocument();
+    });
+
+    test('shows an error for an unknown variable', () => {
+      const props = createSectionProps({
+        config: createConfig({ notificationsEnabled: true, notificationLinkTemplate: 'https://example.com/{id}' })
+      });
+      renderWithProviders(<NotificationsSection {...props} />);
+
+      expect(
+        screen.getByText('Link template can only use the variable {youtubeId}.')
+      ).toBeInTheDocument();
+    });
+  });
+
   describe('InfoTooltip Integration', () => {
     test('renders section with InfoTooltip support', async () => {
       const user = setupUser();

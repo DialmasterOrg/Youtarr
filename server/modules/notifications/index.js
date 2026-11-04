@@ -136,7 +136,9 @@ class NotificationModule {
           const formatter = useRichFormatting ? getFormatter(service) : plainFormatter;
           const sendMethod = useRichFormatting ? service.sendMethod : 'apprise-plain';
 
-          const message = formatter.formatDownloadMessage(finalSummary, videoData);
+          const message = formatter.formatDownloadMessage(finalSummary, videoData, {
+            linkTemplate: config.notificationLinkTemplate
+          });
           await sendNotification(entry.url, message, sendMethod);
           return true;
         } catch (err) {
