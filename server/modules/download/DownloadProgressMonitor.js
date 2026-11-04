@@ -15,6 +15,9 @@ class DownloadProgressMonitor {
     this.stallRaised = false;
     this.currentState = 'initiating';
     this.lastVideoInfo = null;
+    // Format IDs yt-dlp announced for the current video ("315+140-1" ->
+    // ['315', '140-1']), used to tell its video stream from its audio stream.
+    this.requestedFormatIds = [];
     this.lastEmittedState = null;
     this.hasError = false;
     this.videoCount = {
@@ -286,6 +289,22 @@ class DownloadProgressMonitor {
     return this.lastVideoInfo;
   }
 
+  // A merged download names its video format first and its audio format last.
+  // Without that announcement, fall back to the extension: VP9 and AV1 video
+  // above 1080p arrives as .webm, so .webm counts as video unless announced
+  // as the audio format.
+  streamStateFor(formatId, ext) {
+    const ids = this.requestedFormatIds;
+    if (ids.length > 1) {
+      if (formatId === ids[0]) return 'downloading_video';
+      if (formatId === ids[ids.length - 1]) return 'downloading_audio';
+    }
+    const lowerExt = ext.toLowerCase();
+    if (['mp4', 'webm', 'mkv', 'mov'].includes(lowerExt)) return 'downloading_video';
+    if (['m4a', 'opus', 'mp3', 'ogg', 'aac'].includes(lowerExt)) return 'downloading_audio';
+    return null;
+  }
+
   determineState(line) {
     // Detect metadata fetching phase (before actual downloads start)
     if (line.includes('[youtube] Extracting URL:') && !line.includes('[youtube:tab]')) {
@@ -309,13 +328,24 @@ class DownloadProgressMonitor {
       return 'preparing_subtitles';
     }
 
-    // Detect download type from file extension
+    // Remember which formats this video downloads, e.g. "315+140-1" is video
+    // format 315 merged with audio format 140-1.
+    const formatsMatch = line.match(/\[info\] [^:]+: Downloading \d+ format\(s\): (\S+)/);
+    if (formatsMatch) {
+      this.requestedFormatIds = formatsMatch[1].split('+');
+      return null;
+    }
+
+    // Detect download type from the format ID and file extension
     if (line.includes('[download] Destination:')) {
       const path = line.split('Destination:')[1].trim();
       // Detect subtitle file downloads
       if (path.match(/\.(vtt|srt)$/i)) return 'downloading_subtitles';
-      if (path.match(/\.f[\d-]+\.mp4$/)) return 'downloading_video';
-      if (path.match(/\.f[\d-]+\.m4a$/)) return 'downloading_audio';
+      const streamMatch = path.match(/\.f([\w-]+)\.(\w+)$/);
+      if (streamMatch) {
+        const streamState = this.streamStateFor(streamMatch[1], streamMatch[2]);
+        if (streamState) return streamState;
+      }
       if (path.includes('poster') || path.includes('thumbnail')) return 'downloading_thumbnail';
     }
 
