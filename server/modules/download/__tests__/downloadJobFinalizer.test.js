@@ -437,7 +437,7 @@ describe('downloadJobFinalizer', () => {
         it('reports no issue when every failed video went to the retry', async () => {
           endWith([failure('vid403aaaa1')]);
 
-          await finalizeDownloadJob(makeContext({ runId: 'run-1', code: 1, enqueueAutoRetry: jest.fn().mockResolvedValue() }));
+          await finalizeDownloadJob(makeContext({ runId: 'run-1', code: 1, enqueueAutoRetry: jest.fn().mockResolvedValue({ vid403aaaa1: 'retry-job-1' }) }));
 
           const [, , summary] = downloadRunTracker.recordJobResult.mock.calls[0];
           expect(summary).toMatchObject({ totalFailed: 0 });
@@ -447,7 +447,7 @@ describe('downloadJobFinalizer', () => {
         it('still reports the error when a failed video was not retried', async () => {
           endWith([failure('vid403aaaa1'), failure('vidprivate1', 'Private video. Sign in if you have been granted access')]);
 
-          await finalizeDownloadJob(makeContext({ runId: 'run-1', code: 1, enqueueAutoRetry: jest.fn().mockResolvedValue() }));
+          await finalizeDownloadJob(makeContext({ runId: 'run-1', code: 1, enqueueAutoRetry: jest.fn().mockResolvedValue({ vid403aaaa1: 'retry-job-1' }) }));
 
           expect(downloadRunTracker.recordJobResult).toHaveBeenCalledWith('run-1', mockJobId, expect.objectContaining({
             totalFailed: 1,
@@ -560,7 +560,7 @@ describe('downloadJobFinalizer', () => {
         const failure = make403Failure();
         primeFailure(failure);
         jobModule.getJob.mockReturnValue({ data: { overrideSettings: { resolution: '720' } } });
-        const enqueueAutoRetry = jest.fn().mockResolvedValue();
+        const enqueueAutoRetry = jest.fn().mockResolvedValue({ vid403aaaa1: 'retry-job-1' });
 
         await finalizeDownloadJob(makeContext({ code: 1, enqueueAutoRetry, runId: 'run-9' }));
 
@@ -584,13 +584,15 @@ describe('downloadJobFinalizer', () => {
         const failure = make403Failure();
         primeFailure(failure);
         jobModule.getJob.mockReturnValue({ data: {} });
-        const enqueueAutoRetry = jest.fn().mockResolvedValue();
+        const enqueueAutoRetry = jest.fn().mockResolvedValue({ vid403aaaa1: 'retry-job-1' });
 
         await finalizeDownloadJob(makeContext({ enqueueAutoRetry }));
 
         expect(failure.autoRetryQueued).toBe(true);
         const [, fields] = jobModule.updateJob.mock.calls[0];
-        expect(fields.data.failedVideos[0].autoRetryQueued).toBe(true);
+        expect(fields.data.failedVideos[0]).toMatchObject({
+          autoRetryQueued: true, autoRetryJobId: 'retry-job-1',
+        });
 
         const finalCall = MessageEmitter.emitMessage.mock.calls.find(
           (call) => call[4] && call[4].finalSummary
@@ -607,7 +609,7 @@ describe('downloadJobFinalizer', () => {
         primeFailure(failure);
         jobModule.getJob.mockReturnValue({ data: {} });
         downloadRunTracker.isActive.mockReturnValue(true);
-        const enqueueAutoRetry = jest.fn().mockResolvedValue();
+        const enqueueAutoRetry = jest.fn().mockResolvedValue({ vid403aaaa1: 'retry-job-1' });
 
         await finalizeDownloadJob(makeContext({ enqueueAutoRetry, runId: 'run-1' }));
 
@@ -623,7 +625,7 @@ describe('downloadJobFinalizer', () => {
         });
         primeFailure(failure);
         configModule.getCookiesPath.mockReturnValue('/app/config/cookies.user.txt');
-        const enqueueAutoRetry = jest.fn().mockResolvedValue();
+        const enqueueAutoRetry = jest.fn().mockResolvedValue({ vid403aaaa1: 'retry-job-1' });
 
         await finalizeDownloadJob(makeContext({
           code: 1,
@@ -655,6 +657,17 @@ describe('downloadJobFinalizer', () => {
 
         expect(enqueueAutoRetry).not.toHaveBeenCalled();
         expect(failure.autoRetryQueued).toBeUndefined();
+      });
+
+      it('does not mark failed videos as handed off when no retry was admitted', async () => {
+        const failure = make403Failure();
+        primeFailure(failure);
+        await finalizeDownloadJob(makeContext({ enqueueAutoRetry: jest.fn().mockResolvedValue({}) }));
+        expect(failure.autoRetryQueued).toBeUndefined();
+        expect(failure.autoRetryJobId).toBeUndefined();
+        expect(jobModule.updateJob.mock.calls[0][1].data.failedVideos).toContainEqual(
+          expect.objectContaining({ youtubeId: failure.youtubeId })
+        );
       });
 
       it('does not enqueue when bot detection fired', async () => {
@@ -803,7 +816,7 @@ describe('downloadJobFinalizer', () => {
         const failure = make403Failure();
         primeFailure(failure);
         jobModule.getJob.mockReturnValue({ data: {} });
-        const enqueueAutoRetry = jest.fn().mockResolvedValue();
+        const enqueueAutoRetry = jest.fn().mockResolvedValue({ vid403aaaa1: 'retry-job-1' });
 
         await finalizeDownloadJob(makeContext({ enqueueAutoRetry }));
 

@@ -212,42 +212,72 @@ class VideoMetadataModule {
         }
       }
 
-      // Use the numeric aspect_ratio from yt-dlp (e.g. 1.78 for 16:9)
-      const aspectRatio = rawData.aspect_ratio ?? null;
-
-      // Collect related files on disk (thumbnail, subtitles, nfo, etc.)
-      const relatedFiles = await this._getVideoRelatedFiles(youtubeId);
-
-      // Extract available resolutions from the formats array
-      const availableResolutions = this._extractAvailableResolutions(rawData.formats);
-
-      return {
-        description: rawData.description ?? null,
-        viewCount: rawData.view_count ?? null,
-        likeCount: rawData.like_count ?? null,
-        commentCount: rawData.comment_count ?? null,
-        tags: rawData.tags ?? null,
-        categories: rawData.categories ?? null,
-        uploadDate: rawData.upload_date ?? null,
-        resolution: rawData.resolution ?? null,
-        width: rawData.width ?? null,
-        height: rawData.height ?? null,
-        fps: rawData.fps ?? null,
-        aspectRatio,
-        language: rawData.language ?? null,
-        isLive: rawData.is_live ?? null,
-        wasLive: rawData.was_live ?? null,
-        availability: rawData.availability ?? null,
-        channelFollowerCount: rawData.channel_follower_count ?? null,
-        ageLimit: rawData.age_limit ?? null,
-        webpageUrl: rawData.webpage_url ?? null,
-        relatedFiles,
-        availableResolutions,
-      };
+      return this._curateMetadata(youtubeId, rawData);
     } catch (err) {
       logger.error({ err, youtubeId }, 'Unexpected error in getVideoMetadata');
       return NULL_METADATA;
     }
+  }
+
+  /**
+   * Curated metadata from an already-cached .info.json only. Unlike
+   * getVideoMetadata it never runs yt-dlp and never writes to the database,
+   * so callers outside the app (the external API) cannot trigger YouTube
+   * fetches. Returns null when no .info.json is cached.
+   *
+   * @param {string} youtubeId - YouTube video ID
+   * @returns {Promise<Object|null>} Curated metadata object, or null
+   */
+  async getCachedVideoMetadata(youtubeId) {
+    let rawData;
+    try {
+      const infoPath = path.join(configModule.getJobsPath(), 'info', `${youtubeId}.info.json`);
+      rawData = JSON.parse(await fs.readFile(infoPath, 'utf8'));
+    } catch {
+      return null;
+    }
+    if (!rawData || typeof rawData !== 'object') return null;
+    try {
+      return await this._curateMetadata(youtubeId, rawData);
+    } catch (err) {
+      logger.error({ err, youtubeId }, 'Unexpected error in getCachedVideoMetadata');
+      return null;
+    }
+  }
+
+  async _curateMetadata(youtubeId, rawData) {
+    // Use the numeric aspect_ratio from yt-dlp (e.g. 1.78 for 16:9)
+    const aspectRatio = rawData.aspect_ratio ?? null;
+
+    // Collect related files on disk (thumbnail, subtitles, nfo, etc.)
+    const relatedFiles = await this._getVideoRelatedFiles(youtubeId);
+
+    // Extract available resolutions from the formats array
+    const availableResolutions = this._extractAvailableResolutions(rawData.formats);
+
+    return {
+      description: rawData.description ?? null,
+      viewCount: rawData.view_count ?? null,
+      likeCount: rawData.like_count ?? null,
+      commentCount: rawData.comment_count ?? null,
+      tags: rawData.tags ?? null,
+      categories: rawData.categories ?? null,
+      uploadDate: rawData.upload_date ?? null,
+      resolution: rawData.resolution ?? null,
+      width: rawData.width ?? null,
+      height: rawData.height ?? null,
+      fps: rawData.fps ?? null,
+      aspectRatio,
+      language: rawData.language ?? null,
+      isLive: rawData.is_live ?? null,
+      wasLive: rawData.was_live ?? null,
+      availability: rawData.availability ?? null,
+      channelFollowerCount: rawData.channel_follower_count ?? null,
+      ageLimit: rawData.age_limit ?? null,
+      webpageUrl: rawData.webpage_url ?? null,
+      relatedFiles,
+      availableResolutions,
+    };
   }
 
   /**
