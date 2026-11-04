@@ -352,15 +352,19 @@ module.exports = function createConfigRoutes({
       // If the saved prefix differs from what's currently in config, run
       // yt-dlp against the canned fixture to confirm it accepts the template.
       // Any failure here (grammar error, timeout, fixture corruption) is
-      // surfaced as 400 with yt-dlp's own message and blocks the save.
-      // yt-dlp ships inside the Youtarr Docker image, so it can't be
-      // "unavailable"; if it ever truly is, the rest of the app is broken
-      // too and a save error is the correct signal.
+      // surfaced as 400 and blocks the save, since a template yt-dlp could
+      // not check might break every download. A timeout gets its own message
+      // because it says nothing about the template. yt-dlp ships inside the
+      // Youtarr Docker image, so it can't be "unavailable"; if it ever truly
+      // is, the rest of the app is broken too and a save error is the
+      // correct signal.
       if (basic.trimmed !== currentConfig.videoFilenamePrefix) {
         const grammar = await filenamePreview.validateTemplate(basic.trimmed);
         if (!grammar.ok) {
           return res.status(400).json({
-            error: `videoFilenamePrefix rejected by yt-dlp: ${grammar.error}`,
+            error: grammar.timedOut
+              ? grammar.error
+              : `videoFilenamePrefix rejected by yt-dlp: ${grammar.error}`,
           });
         }
       }
@@ -418,7 +422,7 @@ module.exports = function createConfigRoutes({
    *       200:
    *         description: Rendered preview
    *       400:
-   *         description: Prefix failed safety checks or yt-dlp rejected the template
+   *         description: Prefix failed safety checks, yt-dlp rejected the template, or yt-dlp timed out before checking it
    *       401:
    *         description: Missing or invalid auth token
    *       429:
@@ -440,14 +444,19 @@ module.exports = function createConfigRoutes({
         return res.json(preview);
       } catch (err) {
         // yt-dlp ships inside the Youtarr Docker image, so any failure here
-        // is either a template grammar issue (the common case, e.g.
-        // "unsupported format character") or a genuine bug (timeout,
-        // corrupted fixture). Both surface to the user as 400 with the
-        // yt-dlp message; the FE shows it inline next to the Preview button.
+        // is a template grammar issue (the common case, e.g. "unsupported
+        // format character"), a slow or busy host (timeout), or a genuine bug
+        // (corrupted fixture). All surface to the user as 400; the FE shows
+        // the message inline next to the Preview button. A timeout carries
+        // its own message, since it is not a rejection.
         const message = err && err.message ? err.message : 'yt-dlp failed';
-        req.log.warn({ err }, 'filenamePreview rejected template');
+        const timedOut = filenamePreview.isTimeoutError(err);
+        req.log.warn(
+          { err },
+          timedOut ? 'filenamePreview timed out' : 'filenamePreview rejected template'
+        );
         return res.status(400).json({
-          error: `Template rejected by yt-dlp: ${message}`,
+          error: timedOut ? message : `Template rejected by yt-dlp: ${message}`,
         });
       }
     }
