@@ -436,6 +436,54 @@ describe('POST /updateconfig', () => {
     });
   });
 
+  describe('notificationLinkTemplate validation', () => {
+    test.each([
+      '',
+      '   ',
+      'https://youtarr.example.com/videos?video={youtubeId}',
+      'http://192.168.1.10:3087/videos?video={youtubeId}',
+    ])('accepts %p', async (value) => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({ notificationLinkTemplate: value });
+      expect(res.status).toBe(200);
+      expect(configModule.updateConfig).toHaveBeenCalled();
+    });
+
+    test('trims the saved template', async () => {
+      const { app, configModule } = makeApp();
+      await supertest(app)
+        .post('/updateconfig')
+        .send({ notificationLinkTemplate: '  https://youtarr.example.com/?video={youtubeId}  ' });
+      expect(configModule.updateConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ notificationLinkTemplate: 'https://youtarr.example.com/?video={youtubeId}' })
+      );
+    });
+
+    test.each([
+      ['not a URL', 'youtarr.example.com/{youtubeId}'],
+      ['not http or https', 'javascript:alert(1)//{youtubeId}'],
+      ['an unknown variable', 'https://youtarr.example.com/{id}'],
+      ['too long', `https://youtarr.example.com/${'a'.repeat(500)}`],
+      ['not text', 42],
+    ])('rejects a template that is %s without saving', async (_label, value) => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({ notificationLinkTemplate: value });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/^Link template/);
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+
+    test('does not re-check a template that is unchanged from the saved value', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.notificationLinkTemplate = 'edited by hand';
+      const res = await supertest(app)
+        .post('/updateconfig')
+        .send({ notificationLinkTemplate: 'edited by hand' });
+      expect(res.status).toBe(200);
+      expect(configModule.updateConfig).toHaveBeenCalled();
+    });
+  });
+
   test('does not save the read-only logging status', async () => {
     const { app, configModule } = makeApp();
     await supertest(app).post('/updateconfig').send({ logLevel: 'debug', logging: LOGGING_STATUS });

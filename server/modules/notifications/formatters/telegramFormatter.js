@@ -4,6 +4,7 @@
 
 const {
   escapeHtml,
+  buildVideoLink,
   formatDuration,
   buildTitle,
   getFailedCount,
@@ -29,9 +30,11 @@ const {
  * Format download notification as Telegram HTML message
  * @param {Object} finalSummary - Summary object from downloadExecutor
  * @param {Array} videoData - Array of video metadata objects
+ * @param {Object} [options]
+ * @param {string} [options.linkTemplate] - Link template that adds a link to each video
  * @returns {Object} Object with title and HTML body strings
  */
-function formatDownloadMessage(finalSummary, videoData) {
+function formatDownloadMessage(finalSummary, videoData, options = {}) {
   const { totalDownloaded, jobType } = finalSummary;
   const failedCount = getFailedCount(finalSummary);
   const terminatedCount = getTerminatedCount(finalSummary);
@@ -94,9 +97,10 @@ function formatDownloadMessage(finalSummary, videoData) {
       const channelName = escapeHtml(video.youTubeChannelName || 'Unknown Channel');
       const videoTitle = escapeHtml(video.youTubeVideoName || 'Unknown Title');
       const duration = formatDuration(video.duration);
+      const link = buildVideoLink(options.linkTemplate, video);
 
       body += `📺 <b>${channelName}</b>\n`;
-      body += `${videoTitle}\n`;
+      body += `${link ? `<a href="${escapeHtml(link)}">${videoTitle}</a>` : videoTitle}\n`;
       body += `<i>⏱️ ${duration}</i>\n\n`;
     });
 

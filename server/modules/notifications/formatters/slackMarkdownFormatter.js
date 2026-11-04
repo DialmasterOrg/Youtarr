@@ -5,6 +5,7 @@
  */
 
 const {
+  buildVideoLink,
   formatDuration,
   buildTitle,
   getFailedCount,
@@ -26,13 +27,26 @@ const {
   getStoppedLines
 } = require('../utils');
 
+// Slack link: [text](<url>). Apprise reads the body as Markdown and turns this
+// form into Slack's <url|text>. Apprise 2.x also reads <url|text> as a bare
+// link when the text has no space, so that form breaks one-word titles.
+// A backslash keeps these characters literal in the text: \ < > [ ]
+// A backtick cannot be escaped that way: CommonMark reads it as the start of a
+// code span, which wins over a link and can pair with a backtick in a later
+// title. A backslash would also show in Slack. So the label uses an apostrophe.
+function buildSlackLink(text, url) {
+  return `[${text.replace(/`/g, '\'').replace(/[\\<>[\]]/g, '\\$&')}](<${url}>)`;
+}
+
 /**
  * Format download notification as Slack markdown
  * @param {Object} finalSummary - Summary object from downloadExecutor
  * @param {Array} videoData - Array of video metadata objects
+ * @param {Object} [options]
+ * @param {string} [options.linkTemplate] - Link template that adds a link to each video
  * @returns {Object} { title, body } for Apprise
  */
-function formatDownloadMessage(finalSummary, videoData) {
+function formatDownloadMessage(finalSummary, videoData, options = {}) {
   const { totalDownloaded, jobType } = finalSummary;
   const failedCount = getFailedCount(finalSummary);
   const terminatedCount = getTerminatedCount(finalSummary);
@@ -100,8 +114,10 @@ function formatDownloadMessage(finalSummary, videoData) {
       // Truncate title if too long
       const truncatedTitle = videoTitle.length > 80 ? `${videoTitle.substring(0, 77)}...` : videoTitle;
 
+      const link = buildVideoLink(options.linkTemplate, video);
+
       body += `📺 *${channelName}*\n`;
-      body += `${truncatedTitle}\n`;
+      body += `${link ? buildSlackLink(truncatedTitle, link) : truncatedTitle}\n`;
       body += `⏱️ ${duration}\n`;
 
       if (index < videosToShow.length - 1) {

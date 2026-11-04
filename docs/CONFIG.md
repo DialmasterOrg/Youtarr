@@ -593,6 +593,25 @@ Each entry in the array is an object with the following properties:
 }
 ```
 
+### Notification Link Template
+- **Config Key**: `notificationLinkTemplate`
+- **Type**: `string`
+- **Default**: `""` (no links)
+- **Description**: A URL that Youtarr adds to each video in download notifications. The title of each video becomes a link.
+
+`{youtubeId}` is the only variable. Youtarr replaces it with the YouTube ID of the video. The template must be a full `http://` or `https://` URL of at most 500 characters. When the setting is empty, notifications do not change.
+
+The link appears in the services with rich formatting: Discord, Slack, Telegram and Email. Services that receive plain text have no link. Auto removal and download pause notifications have no link, because they do not list videos you can open.
+
+**Examples:**
+
+| Template | Where the link goes |
+|----------|---------------------|
+| `https://youtarr.example.com/videos?video={youtubeId}` | Opens the video in the Videos page of your Youtarr |
+| `https://www.youtube.com/watch?v={youtubeId}` | Opens the video on YouTube |
+
+The Videos page opens the video named in `?video=` and then removes the parameter from the URL. If no video has that ID, the page shows "Video not found".
+
 ### Rich Formatting
 
 For supported services, Youtarr sends beautifully formatted notifications with embeds, styled text, video cards, and timestamps. Services without rich formatting support receive plain text notifications.
