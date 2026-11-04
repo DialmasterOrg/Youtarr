@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVideoActivity } from '../../providers/VideoActivityProvider';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSwipeable } from 'react-swipeable';
 import { Alert, Box, Button, Grid, Snackbar, Typography } from '../ui';
 import { Trash2 as DeleteIcon, Star as RatingIcon, Download as DownloadIcon } from '../../lib/icons';
@@ -29,6 +29,7 @@ import VideoCard from './components/VideoCard';
 import VideosTable from './components/VideosTable';
 import VideosListMobile from './components/VideosListMobile';
 import { useVideosData } from './hooks/useVideosData';
+import { useVideoByYoutubeId } from './hooks/useVideoByYoutubeId';
 import {
   INFINITE_SCROLL_FETCH_SIZE,
   VideoListContainer,
@@ -130,6 +131,41 @@ function VideosPage({ token }: VideosPageProps) {
   );
 
   const navigate = useNavigate();
+
+  // A link such as /videos?video=<youtubeId> opens that video in the modal over
+  // the list. The parameter is dropped once handled, so a refresh does not
+  // open the modal again.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlYoutubeId = searchParams.get('video');
+  const {
+    video: urlVideo,
+    notFound: urlVideoNotFound,
+    loadError: urlVideoLoadError,
+  } = useVideoByYoutubeId(token, urlYoutubeId);
+
+  const clearVideoParam = useCallback(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('video');
+        return next;
+      },
+      { replace: true }
+    );
+  }, [setSearchParams]);
+
+  useEffect(() => {
+    if (!urlYoutubeId || !urlVideo) return;
+    setModalVideo(urlVideo);
+    clearVideoParam();
+  }, [urlYoutubeId, urlVideo, clearVideoParam]);
+
+  useEffect(() => {
+    if (!urlYoutubeId || (!urlVideoNotFound && !urlVideoLoadError)) return;
+    setErrorMessage(urlVideoNotFound ? 'Video not found' : urlVideoLoadError);
+    clearVideoParam();
+  }, [urlYoutubeId, urlVideoNotFound, urlVideoLoadError, clearVideoParam]);
+
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
   const { triggerDownloads } = useTriggerDownloads(token);
   const { snapshot } = useVideoActivity();
