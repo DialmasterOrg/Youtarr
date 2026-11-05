@@ -9,10 +9,11 @@
   },
   "scripts": {
     "start": "node server/server.js",
-    "lint": "eslint ./client/src/. --ext .ts,.tsx && eslint ./server/. --ext .js",
+    "lint": "eslint ./client/src/. --ext .ts,.tsx && eslint ./server/. --ext .js && npm run lint:rules",
     "lint:frontend": "eslint ./client/src/. --ext .ts,.tsx",
     "lint:backend": "eslint ./server/. --ext .js",
     "lint:ts": "cd client && npx tsc --noEmit",
+    "lint:rules": "node scripts/check-claude-rules.js",
     "lint:fix": "eslint ./client/src/. --ext .ts,.tsx --fix && eslint ./server/. --ext .js --fix",
     "lint-staged": "lint-staged",
     "prepare": "husky install",
