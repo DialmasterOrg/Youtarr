@@ -234,6 +234,51 @@ describe('ConfigModule', () => {
       });
     });
 
+    describe('download feed settings on load', () => {
+      const loadWith = (overrides) => {
+        const existingConfig = { ...defaultTemplate, ...overrides };
+        fs.existsSync.mockReturnValue(true);
+        fs.readFileSync.mockImplementation((path) => JSON.stringify(
+          path.includes('config.json') && !path.includes('example') ? existingConfig : defaultTemplate
+        ));
+        ConfigModule = require('../configModule');
+        return ConfigModule.getConfig();
+      };
+
+      test('brings a hand-edited item limit inside the limits', () => {
+        expect(loadWith({ downloadsFeedItemLimit: 5000 }).downloadsFeedItemLimit).toBe(200);
+      });
+
+      test('replaces an unusable item limit with the default', () => {
+        expect(loadWith({ downloadsFeedItemLimit: 'lots' }).downloadsFeedItemLimit).toBe(50);
+      });
+
+      test('removes unknown media types', () => {
+        expect(loadWith({ downloadsFeedMediaTypes: ['short', 'podcast'] }).downloadsFeedMediaTypes).toEqual(['short']);
+      });
+
+      test('restores every media type when none is usable', () => {
+        expect(loadWith({ downloadsFeedMediaTypes: [] }).downloadsFeedMediaTypes).toEqual(['video', 'short', 'livestream']);
+      });
+
+      test('warns and saves when a value is corrected', () => {
+        loadWith({ downloadsFeedItemLimit: 5000 });
+
+        expect(logger.warn).toHaveBeenCalledWith(
+          { key: 'downloadsFeedItemLimit', previous: 5000, replacement: 200 },
+          'Corrected an invalid download feed setting'
+        );
+        expect(fs.writeFileSync).toHaveBeenCalled();
+      });
+
+      test('does not save when the values are already valid', () => {
+        loadWith({ downloadsFeedItemLimit: 75, downloadsFeedMediaTypes: ['video'] });
+
+        expect(logger.warn).not.toHaveBeenCalled();
+        expect(fs.writeFileSync).not.toHaveBeenCalled();
+      });
+    });
+
     describe('log level setting on load', () => {
       const loadWith = (overrides) => {
         const existingConfig = { ...defaultTemplate, ...overrides };

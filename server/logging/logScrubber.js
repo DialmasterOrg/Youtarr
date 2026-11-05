@@ -3,7 +3,7 @@
 // log inside logged request errors (Plex URLs and params, Emby headers) and
 // the logged yt-dlp arguments (proxy credentials).
 const REDACTED = '[REDACTED]';
-const SECRET_CONFIG_KEYS = ['plexApiKey', 'plexPlaylistToken', 'jellyfinApiKey', 'embyApiKey', 'youtubeApiKey'];
+const SECRET_CONFIG_KEYS = ['plexApiKey', 'plexPlaylistToken', 'jellyfinApiKey', 'embyApiKey', 'youtubeApiKey', 'downloadsFeedToken'];
 // Shorter values would match ordinary text; real keys and tokens are longer.
 const MIN_SECRET_LENGTH = 8;
 

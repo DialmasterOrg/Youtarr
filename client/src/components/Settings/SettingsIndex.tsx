@@ -16,6 +16,7 @@ export const SETTINGS_PAGES = [
   { key: 'maintenance', title: 'Maintenance & Rescan', description: 'Rescan files on disk and other maintenance actions.' },
   { key: 'logging', title: 'Logging', description: 'Log level and log files for troubleshooting.' },
   { key: 'notifications', title: 'Notifications', description: 'Toast notifications and alert behavior.' },
+  { key: 'rss-feeds', title: 'RSS Feeds', description: 'A private RSS feed of your downloaded videos.' },
   { key: 'plex', title: 'Plex', description: 'Plex integration and library configuration.' },
   { key: 'jellyfin', title: 'Jellyfin', description: 'Jellyfin connection for native playlist sync.' },
   { key: 'emby', title: 'Emby', description: 'Emby connection for native playlist sync.' },

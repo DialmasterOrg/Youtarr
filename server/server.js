@@ -626,6 +626,23 @@ const initialize = async () => {
       keyGenerator: (req) => getRateLimitAddress(req),
     });
 
+    // Rate limiter for RSS feeds, which take a token instead of a session. Readers
+    // poll every few minutes at most, so this leaves room for several of them.
+    const feedLimiter = rateLimit({
+      windowMs: 1 * 60 * 1000,
+      max: 60,
+      standardHeaders: true,
+      legacyHeaders: false,
+      validate: {
+        trustProxy: false,
+        ip: false,
+      },
+      keyGenerator: (req) => getRateLimitAddress(req),
+      handler: (_req, res) => {
+        res.status(429).json({ error: 'Too many feed requests. Please wait a minute before trying again.' });
+      },
+    });
+
     // Rate limiter for YouTube API key validation. Each test round-trips to
     // Google; users mistyping a key shouldn't burn quota or our outbound rate.
     const youtubeApiKeyTestLimiter = rateLimit({
@@ -836,6 +853,7 @@ const initialize = async () => {
       ytdlpValidationRateLimiter,
       filenamePreviewRateLimiter,
       cookieTestRateLimiter,
+      feedLimiter,
       configModule,
       channelModule,
       plexModule,

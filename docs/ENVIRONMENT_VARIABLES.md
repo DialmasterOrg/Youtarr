@@ -100,6 +100,8 @@ To use an external database:
 - When using reverse proxy with authentication
 - Platform deployments with external auth (e.g., Cloudflare Access)
 
+**Note:** The [RSS feed](USAGE_GUIDE.md#rss-feeds) still requires the secret in its URL when this is `false`.
+
 ### EXTERNAL_API_ENABLED
 **Required**: No
 **Default**: `false`

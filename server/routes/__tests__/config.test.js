@@ -228,6 +228,16 @@ describe('POST /api/cookies/test', () => {
   });
 });
 
+describe('GET /getconfig', () => {
+  test('leaves out the download feed token, which only its own session route returns', async () => {
+    const { app, configModule } = makeApp();
+    configModule._config.downloadsFeedToken = 'saved-token';
+    const res = await supertest(app).get('/getconfig');
+    expect(res.status).toBe(200);
+    expect(res.body).not.toHaveProperty('downloadsFeedToken');
+  });
+});
+
 describe('POST /updateconfig', () => {
   test('returns 200 when ytdlpCustomArgs is empty', async () => {
     const { app } = makeApp();
@@ -479,6 +489,83 @@ describe('POST /updateconfig', () => {
       const res = await supertest(app)
         .post('/updateconfig')
         .send({ notificationLinkTemplate: 'edited by hand' });
+      expect(res.status).toBe(200);
+      expect(configModule.updateConfig).toHaveBeenCalled();
+    });
+  });
+
+  describe('download feed settings', () => {
+    test('keeps the saved token when the client sends a different one', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.downloadsFeedToken = 'saved-token';
+      await supertest(app).post('/updateconfig').send({ downloadsFeedToken: 'stale-token' });
+      expect(configModule.updateConfig.mock.calls[0][0].downloadsFeedToken).toBe('saved-token');
+    });
+
+    test('keeps the saved token when the client sends none, as the Settings page does', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.downloadsFeedToken = 'saved-token';
+      await supertest(app).post('/updateconfig').send({ downloadsFeedEnabled: true });
+      expect(configModule.updateConfig.mock.calls[0][0].downloadsFeedToken).toBe('saved-token');
+    });
+
+    test('accepts valid settings', async () => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({
+        downloadsFeedItemLimit: 100,
+        downloadsFeedMediaTypes: ['video', 'short'],
+      });
+      expect(res.status).toBe(200);
+      expect(configModule.updateConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ downloadsFeedItemLimit: 100, downloadsFeedMediaTypes: ['video', 'short'] })
+      );
+    });
+
+    test.each([9, 201, 1.5, '50'])('rejects the item limit %p without saving', async (value) => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({ downloadsFeedItemLimit: value });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/whole number from 10 to 200/);
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+
+    test.each([
+      ['an empty list', []],
+      ['an unknown type', ['podcast']],
+      ['text', 'video'],
+    ])('rejects media types that are %s without saving', async (_label, value) => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({ downloadsFeedMediaTypes: value });
+      expect(res.status).toBe(400);
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+
+    test('rejects an invalid link template without saving', async () => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app)
+        .post('/updateconfig')
+        .send({ downloadsFeedLinkTemplate: 'javascript:alert(1)//{youtubeId}' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/^Link template/);
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+
+    test('trims the saved link template', async () => {
+      const { app, configModule } = makeApp();
+      await supertest(app)
+        .post('/updateconfig')
+        .send({ downloadsFeedLinkTemplate: '  https://plex.example.com/{youtubeId}  ' });
+      expect(configModule.updateConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ downloadsFeedLinkTemplate: 'https://plex.example.com/{youtubeId}' })
+      );
+    });
+
+    test('does not re-check a link template that is unchanged from the saved value', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.downloadsFeedLinkTemplate = 'edited by hand';
+      const res = await supertest(app)
+        .post('/updateconfig')
+        .send({ downloadsFeedLinkTemplate: 'edited by hand' });
       expect(res.status).toBe(200);
       expect(configModule.updateConfig).toHaveBeenCalled();
     });
