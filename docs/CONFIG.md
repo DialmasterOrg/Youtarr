@@ -825,6 +825,8 @@ For an SMB/CIFS share (Synology, QNAP, Windows file shares), see [Letting Docker
 
 **Simplest workaround:** Set `useTmpForDownloads: false` (the default). Downloads are staged inside the output directory itself, so the move is a same-filesystem rename — atomic and immune to this class of error. Note: if the NFS mount is stale, downloads will still fail, but they will fail *before* yt-dlp marks them as archived — so they'll be automatically retried on the next scheduled run rather than getting permanently stuck.
 
+**Health check timeout:** Before each download, Youtarr writes and deletes a probe file in the output directory and fails the job if that takes longer than 10 seconds ("Output directory health check timed out"). On a share that is slow but healthy, set the [`OUTPUT_DIR_HEALTHCHECK_TIMEOUT`](ENVIRONMENT_VARIABLES.md#output_dir_healthcheck_timeout) environment variable to a larger number of seconds. The same value also sets how long a truly stale mount takes to fail each job.
+
 ## Auto-Removal Settings
 
 ### Enable Auto-Removal

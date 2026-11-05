@@ -19,6 +19,10 @@ const { YtdlpErrorTracker } = require('./YtdlpErrorTracker');
 const downloadRunTracker = require('./downloadRunTracker');
 const archiveAccess = require('./archiveAccess');
 const { HEALTHCHECK_FILE_PREFIX } = require('../filesystem/constants');
+const {
+  OUTPUT_DIR_HEALTHCHECK_TIMEOUT_VARIABLE,
+  resolveOutputDirHealthCheckTimeout,
+} = require('./outputDirHealthCheckConfig');
 
 // Tells the job's download run about a job that failed before yt-dlp ran, so
 // the run counts it instead of treating the job as quietly finished.
@@ -33,6 +37,8 @@ function reportJobFailureToRun(runId, jobId, jobType, reason, skipJobTransition)
 // case an orphaned ffmpeg or post-process child keeps the pipes open.
 const STDIO_DRAIN_TIMEOUT_MS = 5 * 1000;
 
+const OUTPUT_DIR_UNAVAILABLE_NOTES = 'The output directory could not be written to. If using NFS, check that the mount is healthy (not stale). See Youtarr docs for NFS mount recommendations.';
+
 class DownloadExecutor {
   // enqueueAutoRetry is injected by downloadModule so the finalizer can queue
   // auto-retry jobs without a require cycle back into downloadModule.
@@ -45,6 +51,14 @@ class DownloadExecutor {
     this.maxAbsoluteTimeoutMs = 6 * 60 * 60 * 1000; // 6 hours maximum runtime
     this.progressHeartbeatMs = 25 * 1000; // snapshot rebroadcast cadence while yt-dlp is quiet
     this.stdioDrainTimeoutMs = STDIO_DRAIN_TIMEOUT_MS;
+    const healthCheckTimeout = resolveOutputDirHealthCheckTimeout(process.env);
+    if (healthCheckTimeout.warning) {
+      logger.warn(
+        healthCheckTimeout.warning,
+        `Ignoring invalid ${OUTPUT_DIR_HEALTHCHECK_TIMEOUT_VARIABLE}; the output directory health check keeps its default of ${healthCheckTimeout.warning.fallback} seconds`
+      );
+    }
+    this.outputDirHealthCheckTimeoutMs = healthCheckTimeout.timeoutMs;
     // Current process tracking for manual termination
     this.currentProcess = null;
     this.currentJobId = null;
@@ -113,11 +127,11 @@ class DownloadExecutor {
    * downloads to temp and contaminates the archive with un-movable entries.
    *
    * @param {string} outputDir - The output directory path to check
-   * @param {number} timeoutMs - Maximum time to wait (default: 10s, for hung NFS)
+   * @param {number} timeoutMs - Maximum time to wait (default: OUTPUT_DIR_HEALTHCHECK_TIMEOUT, 10s, for hung NFS)
    * @returns {Promise<void>}
    * @throws {Error} If the directory is not writable or the check times out
    */
-  async checkOutputDirectoryHealth(outputDir, timeoutMs = 10000) {
+  async checkOutputDirectoryHealth(outputDir, timeoutMs = this.outputDirHealthCheckTimeoutMs) {
     if (!outputDir) {
       throw new Error('Output directory path is not configured (directoryPath is undefined)');
     }
@@ -128,9 +142,14 @@ class DownloadExecutor {
 
     let timer;
     const timeoutPromise = new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error(
-        `Output directory health check timed out after ${timeoutMs / 1000}s — the filesystem may be unresponsive (stale NFS mount?)`
-      )), timeoutMs);
+      timer = setTimeout(() => {
+        const timeoutError = new Error(
+          `Output directory health check timed out after ${timeoutMs / 1000}s: the filesystem may be unresponsive (stale NFS mount?)`
+        );
+        timeoutError.timedOut = true;
+        timeoutError.timeoutMs = timeoutMs;
+        reject(timeoutError);
+      }, timeoutMs);
     });
 
     let fileWritten = false;
@@ -201,11 +220,14 @@ class DownloadExecutor {
       const errorMsg = `Output directory is not accessible: ${error.message}`;
       logger.error({ err: error, outputDir: configModule.directoryPath }, errorMsg);
 
+      const notes = error.timedOut
+        ? `${OUTPUT_DIR_UNAVAILABLE_NOTES} If the share is slow but healthy, set the ${OUTPUT_DIR_HEALTHCHECK_TIMEOUT_VARIABLE} environment variable (whole seconds, currently ${error.timeoutMs / 1000}) to allow more time.`
+        : OUTPUT_DIR_UNAVAILABLE_NOTES;
       await jobModule.updateJob(jobId, {
         status: 'Error',
         endDate: Date.now(),
         output: errorMsg,
-        notes: 'The output directory could not be written to. If using NFS, check that the mount is healthy (not stale). See Youtarr docs for NFS mount recommendations.',
+        notes,
       });
       reportJobFailureToRun(runId, jobId, jobType, errorMsg, skipJobTransition);
 
