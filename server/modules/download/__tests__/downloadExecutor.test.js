@@ -2176,10 +2176,11 @@ describe('DownloadExecutor', () => {
         call => call[3] === 'downloadProgress' && call[4]?.finalSummary
       );
       expect(finalProgressCall[4]).toEqual(expect.objectContaining({
-        text: 'Download completed: No new videos to download',
+        text: 'Download completed: 1 not available',
         finalSummary: expect.objectContaining({
           totalDownloaded: 0,
           totalFailed: 0,
+          totalNotAvailable: 1,
           failedVideos: []
         })
       }));

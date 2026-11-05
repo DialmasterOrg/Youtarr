@@ -61,6 +61,8 @@ class YtdlpErrorTracker {
     // stdout+stderr emitting the same error for one video (the persist
     // call itself is not deduped; it's idempotent).
     this.membersOnlyVideoIds = new Set();
+    // The other expected skips: upcoming lives, premieres and pre-releases.
+    this.upcomingVideoIds = new Set();
     // Count of yt-dlp errors that are NOT expected skips. Incremented in
     // both stdout and stderr handlers regardless of whether currentVideoId
     // is known, so unassociated errors still block the
@@ -149,12 +151,14 @@ class YtdlpErrorTracker {
 
     if (isExpectedYtdlpSkipMessage(this.lastErrorMessage)) {
       this.recordExpectedSkip(this.lastErrorMessage, source);
+      const skippedVideoId = extractYoutubeIdFromYtdlpError(this.lastErrorMessage) || this.currentVideoId;
       if (isMembersOnlyMessage(this.lastErrorMessage)) {
-        const membersOnlyVideoId = extractYoutubeIdFromYtdlpError(this.lastErrorMessage) || this.currentVideoId;
-        if (membersOnlyVideoId) {
-          this.membersOnlyVideoIds.add(membersOnlyVideoId);
-          this.persistMembersOnlyAvailability(membersOnlyVideoId);
+        if (skippedVideoId) {
+          this.membersOnlyVideoIds.add(skippedVideoId);
+          this.persistMembersOnlyAvailability(skippedVideoId);
         }
+      } else if (skippedVideoId) {
+        this.upcomingVideoIds.add(skippedVideoId);
       }
       return true;
     }

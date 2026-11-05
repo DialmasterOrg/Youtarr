@@ -97,6 +97,7 @@ const makeErrorTracker = (overrides = {}) => ({
   terminatedChannels: [],
   terminationFailures: [],
   membersOnlyVideoIds: new Set(),
+  upcomingVideoIds: new Set(),
   settlePersistence: jest.fn().mockResolvedValue(),
   ...overrides
 });
@@ -106,6 +107,8 @@ const makeRouter = (overrides = {}) => ({
   botDetected: false,
   httpForbiddenDetected: false,
   partialDestinations: new Set(),
+  archiveSkippedIds: new Set(),
+  filterSkippedCount: 0,
   emitCookiesSuggestion: jest.fn(),
   ...overrides
 });
@@ -395,6 +398,81 @@ describe('downloadJobFinalizer', () => {
         jobType: 'Manually Added Urls'
       }));
       expect(notificationModule.sendDownloadNotification).toHaveBeenCalled();
+    });
+
+    describe('per-video counts in the summary', () => {
+      const emittedFinalSummary = () => MessageEmitter.emitMessage.mock.calls.find(
+        (call) => call[4] && call[4].finalSummary
+      )[4].finalSummary;
+      const contextWithSkips = (overrides = {}) => makeContext({
+        router: makeRouter({ archiveSkippedIds: new Set(['aaaaaaaaaaa', 'bbbbbbbbbbb']), filterSkippedCount: 1 }),
+        errorTracker: makeErrorTracker({
+          upcomingVideoIds: new Set(['ccccccccccc']),
+          membersOnlyVideoIds: new Set(['ddddddddddd']),
+        }),
+        ...overrides,
+      });
+
+      it('accounts for each video in a job given specific videos', async () => {
+        await finalizeDownloadJob(contextWithSkips());
+
+        expect(emittedFinalSummary()).toMatchObject({
+          totalAlreadyDownloaded: 2,
+          totalNotAvailable: 2,
+          totalMembersOnly: 1,
+        });
+      });
+
+      it('names what it did not download in the text of a job given specific videos', async () => {
+        await finalizeDownloadJob(contextWithSkips());
+
+        const finalCall = MessageEmitter.emitMessage.mock.calls.find((call) => call[4] && call[4].finalSummary);
+        expect(finalCall[4].text).toBe('Download completed: 2 already downloaded, 2 not available');
+      });
+
+      it('leaves the videos a channel job looked at out of its text', async () => {
+        await finalizeDownloadJob(contextWithSkips({
+          jobType: 'Channel Downloads',
+          monitor: makeMonitor({ videoCount: { current: 1, total: 9, completed: 0, skipped: 9 } }),
+        }));
+
+        const finalCall = MessageEmitter.emitMessage.mock.calls.find((call) => call[4] && call[4].finalSummary);
+        expect(finalCall[4].text).toBe('Download completed: No new videos to download');
+      });
+
+      it('reports none of them for a channel job, which only restates its settings', async () => {
+        await finalizeDownloadJob(contextWithSkips({ jobType: 'Channel Downloads' }));
+
+        expect(emittedFinalSummary()).toMatchObject({
+          totalAlreadyDownloaded: 0,
+          totalNotAvailable: 0,
+          totalMembersOnly: 0,
+        });
+      });
+
+      it('hands a job\'s counts to its run', async () => {
+        downloadRunTracker.isActive.mockReturnValue(true);
+
+        await finalizeDownloadJob(contextWithSkips({ runId: 'run-1' }));
+
+        expect(downloadRunTracker.recordJobResult).toHaveBeenCalledWith('run-1', mockJobId, expect.objectContaining({
+          totalAlreadyDownloaded: 2,
+          totalNotAvailable: 2,
+          totalMembersOnly: 1,
+        }));
+      });
+
+      it('hands a channel job\'s raw members-only count to its run for the run record', async () => {
+        downloadRunTracker.isActive.mockReturnValue(true);
+
+        await finalizeDownloadJob(contextWithSkips({ jobType: 'Channel Downloads', runId: 'run-1' }));
+
+        expect(downloadRunTracker.recordJobResult).toHaveBeenCalledWith('run-1', mockJobId, expect.objectContaining({
+          totalAlreadyDownloaded: 0,
+          totalNotAvailable: 0,
+          totalMembersOnly: 1,
+        }));
+      });
     });
 
     describe('job issues reported to the run', () => {

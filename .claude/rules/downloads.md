@@ -14,6 +14,7 @@ paths:
   - "server/modules/archiveOnlyIds.js"
   - "server/modules/manualDownloadGrouper.js"
   - "server/modules/channelDownloadGrouper.js"
+  - "server/modules/messageEmitter.js"
   - "server/modules/videoPersistence.js"
   - "server/modules/videoDownloadPostProcessFiles.js"
   - "server/modules/videoValidationModule.js"
@@ -88,6 +89,7 @@ yt-dlp runs, the job queue, the download archive, storage limits, and the activi
 - An Error whose failed videos all went to an automatic retry, without a bot check, is left to the retry job's own result rather than reported as an issue.
 - `autoDownloadScheduler` polls `getUnfinishedJobs(runId)` so the Automatic downloads task reports as running until every job of the sweep finishes; `channelAutoDownload` returns once the sweep is queued, with a `finalRecord` from `channel/sweepCompletion.waitForSweepEnd` (never rejects; 48 h cap) mapped by `channel/sweepRunSummary.toRunRecord`.
 - `waitForSweepEnd` also ends at a storage pause once none of the run's jobs is in progress or still reporting; `toRunRecord` records a pause as `success`/`paused` and carries the sweep's real `finishedAt` into the run record.
+- A `startRun({ sweep: true })` summary zeroes members-only, already-downloaded and not-available counts, because the same videos recur every sweep, even from its URL-list playlist jobs. `getTotals` and the Scheduling record's details keep the raw numbers.
 
 ## Custom yt-dlp options
 
@@ -120,6 +122,9 @@ yt-dlp runs, the job queue, the download archive, storage limits, and the activi
 - `download/videoActivity` is the transient per-video queued/downloading registry with duplicate admission claims and revisioned snapshots; `videoActivityUpdated` invalidates `GET /api/jobs/video-activity` snapshots. `VideoActivityProvider` shares them; `useLocalVideoStatus` refreshes persisted metadata independently of activity revisions.
 - The WebSocket replays only the last final-state message on connect, never in-flight progress, so the activity page seeds from `GET /api/jobs/current-activity` (`downloadModule.getCurrentActivitySnapshot()`, the retained monitor's side-effect-free `toPayload()`).
 - `DownloadManager/hooks/useCurrentActivitySeed` applies that seed only until the first live broadcast arrives and re-probes on tab visibility and on the provider's `connectionRestored` message.
+- `messageEmitter` keeps the last final summary with a real result; a clean job with none re-broadcasts it plus `lastCheckedAt`, so the hourly sweep can't hide a failure. It copies the payload because the finalizer's notification reads its summary afterward.
+- A stop with no counts is kept only if `notifications/utils.hasFailureStop` says it was a failure. A user stop shows once as a warning, then the next check restores the earlier result; a group timeout also reads as `terminated`, so it behaves the same.
+- The summary's `totalAlreadyDownloaded` comes from `router.archiveSkippedIds`, not the monitor's `skipped`, which misses archive hits after a finished video in URL-list jobs. Upcoming videos arrive as yt-dlp errors, so `totalNotAvailable` adds `upcomingVideoIds` to the filter count.
 - `client/src/utils/jobTypeLabel.ts` mirrors `server/modules/download/jobTypes.js` labels for the activity header, queued chips and job summaries.
 - `resolutionTier` probes the file's real dimensions with ffprobe (ground truth over info.json) into `Videos.video_resolution` as `"WIDTHxHEIGHT"`; `"0x0"` means the probe failed and is stamped once so the row is not re-probed nightly.
 - Interpreting dimensions into a tier is display logic in `client/src/utils/videoResolution.ts`: landscape by the YouTube ladder, vertical by selection class (608x1080 reads 1080p, 1080x1920 reads 2160p), shared by the listing chips and the modal so they agree.

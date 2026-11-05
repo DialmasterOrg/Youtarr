@@ -146,6 +146,8 @@ function resolveFinalPresentation({
   videoDataCount,
   failedCount,
   skippedCount,
+  alreadyDownloadedCount = 0,
+  notAvailableCount = 0,
   terminatedChannelCount,
   terminationFailureCount,
   videoCount,
@@ -244,8 +246,11 @@ function resolveFinalPresentation({
     if (autoRetryQueuedCount > 0) {
       parts.push(`${autoRetryQueuedCount} queued for auto-retry`);
     }
-    if (skippedCount > 0) {
-      parts.push(`${skippedCount} already existed`);
+    if (alreadyDownloadedCount > 0) {
+      parts.push(`${alreadyDownloadedCount} already downloaded`);
+    }
+    if (notAvailableCount > 0) {
+      parts.push(`${notAvailableCount} not available`);
     }
     if (terminatedChannelCount > 0) {
       parts.push(`${terminatedChannelCount} channel${terminatedChannelCount !== 1 ? 's' : ''} marked terminated`);

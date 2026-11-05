@@ -317,7 +317,7 @@ class DownloadModule {
   async doChannelAndPlaylistDownloads(jobData = {}) {
     await storageGuard.assertDownloadsAllowed();
     const downloadRunTracker = require('./download/downloadRunTracker');
-    const runId = downloadRunTracker.startRun();
+    const runId = downloadRunTracker.startRun({ sweep: true });
     this.setJobDataValue(jobData, 'runId', runId);
 
     // Playlist failures must not undo the channel jobs already queued, so they
@@ -571,7 +571,6 @@ class DownloadModule {
 
       // Build completion message with counts
       const messageParts = [`${totalVideos} downloaded`];
-      if (totalSkipped > 0) messageParts.push(`${totalSkipped} skipped`);
       if (failedVideos.length > 0) messageParts.push(`${failedVideos.length} failed`);
       if (autoRetriedCount > 0) messageParts.push(`${autoRetriedCount} queued for auto-retry`);
       if (terminatedChannels.length > 0) {

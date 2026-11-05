@@ -118,6 +118,21 @@ describe('YtdlpOutputRouter', () => {
     });
   });
 
+  describe('filter skip counting', () => {
+    it('counts each video the match filter rejects', () => {
+      router.handleStdoutChunk('[download] First does not pass filter (availability!=subscriber_only), skipping ..\n');
+      router.handleStdoutChunk('[download] Second does not pass filter (availability!=subscriber_only), skipping ..\n');
+
+      expect(router.filterSkippedCount).toBe(2);
+    });
+
+    it('does not count archive skips', () => {
+      router.handleStdoutChunk('[download] aaaaaaaaaaa: has already been recorded in the archive\n');
+
+      expect(router.filterSkippedCount).toBe(0);
+    });
+  });
+
   it('uses the current video for filter skips, not an ID-shaped title word', () => {
     videoActivity.claim('job-123', ['https://youtu.be/Introducing']);
     router.handleStdoutChunk(Buffer.from('[youtube] Extracting URL: https://youtu.be/aaaaaaaaaaa\n'));

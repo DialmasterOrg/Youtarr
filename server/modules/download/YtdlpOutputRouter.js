@@ -50,6 +50,7 @@ class YtdlpOutputRouter {
     // jobs read metadata for every URL, so the finalizer must not count these
     // as downloaded.
     this.archiveSkippedIds = new Set();
+    this.filterSkippedCount = 0;
     this.downloadedIds = new Set();
     this.stderrBuffer = '';
     // Partial stderr line waiting on its newline, so a split line never
@@ -151,6 +152,7 @@ class YtdlpOutputRouter {
           if (isArchiveSkip && id && !this.downloadedIds.has(id)) {
             this.archiveSkippedIds.add(id);
           }
+          if (!isArchiveSkip) this.filterSkippedCount += 1;
         }
 
         // Track destination files for cleanup

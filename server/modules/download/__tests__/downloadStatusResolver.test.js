@@ -375,15 +375,28 @@ describe('downloadStatusResolver', () => {
       expect(result.finalState).toBe('complete');
     });
 
-    it('mentions skipped existing videos in the final text', () => {
+    it('names requested videos that were already downloaded in the final text', () => {
       const result = resolveFinalPresentation({
         ...baseInput,
         videoDataCount: 1,
         skippedCount: 3,
+        alreadyDownloadedCount: 3,
         videoCount: 1,
         monitorCompletedCount: 1
       });
-      expect(result.finalText).toBe('Download completed: 1 video downloaded, 3 already existed');
+      expect(result.finalText).toBe('Download completed: 1 video downloaded, 3 already downloaded');
+    });
+
+    it('names requested videos that were not available in the final text', () => {
+      const result = resolveFinalPresentation({ ...baseInput, skippedCount: 1, notAvailableCount: 1 });
+
+      expect(result.finalText).toBe('Download completed: 1 not available');
+    });
+
+    it('leaves videos a job only looked at out of the final text', () => {
+      const result = resolveFinalPresentation({ ...baseInput, skippedCount: 9, monitorCompletedCount: 0 });
+
+      expect(result.finalText).toBe('Download completed: No new videos to download');
     });
 
     it('reports warning for a single handled termination on exit 1', () => {
