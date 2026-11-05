@@ -56,8 +56,15 @@ jobs:
         run: npm run lint:ts
         continue-on-error: true
 
+      - name: Check Claude Rule Paths
+        id: lint-rules
+        run: |
+          npm run lint:rules
+          node --test scripts/tests/check-claude-rules.test.js
+        continue-on-error: true
+
       - name: Check Linting Results
-        if: steps.lint-backend.outcome == 'failure' || steps.lint-frontend.outcome == 'failure' || steps.typescript-check.outcome == 'failure'
+        if: steps.lint-backend.outcome == 'failure' || steps.lint-frontend.outcome == 'failure' || steps.typescript-check.outcome == 'failure' || steps.lint-rules.outcome == 'failure'
         run: |
           echo "❌ Linting/Type checking failed!"
           if [ "${{ steps.lint-backend.outcome }}" == "failure" ]; then
@@ -68,6 +75,9 @@ jobs:
           fi
           if [ "${{ steps.typescript-check.outcome }}" == "failure" ]; then
             echo "TypeScript type checking failed"
+          fi
+          if [ "${{ steps.lint-rules.outcome }}" == "failure" ]; then
+            echo "Claude rule path check failed"
           fi
           exit 1
 
