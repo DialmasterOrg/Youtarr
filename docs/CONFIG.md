@@ -15,6 +15,7 @@ These settings can be changed from the Settings pages in the web UI.
 - [Kodi, Emby and Jellyfin Compatibility](#kodi-emby-and-jellyfin-compatibility)
 - [Cookie Config](#cookie-config)
 - [Notifications](#notifications)
+- [RSS Feeds](#rss-feeds)
 - [Download Performance](#download-performance)
 - [Advanced Settings](#advanced-settings)
 - [Auto-Removal Settings](#auto-removal-settings)
@@ -668,6 +669,41 @@ If you previously used the `discordWebhookUrl` configuration option, Youtarr aut
 ```
 
 The old `discordWebhookUrl` and `notificationService` fields are automatically removed after migration. No manual action is required.
+
+## RSS Feeds
+
+Settings for the private RSS feed of downloaded videos, served at `/feeds/downloads.xml`. See [RSS Feeds](USAGE_GUIDE.md#rss-feeds) in the usage guide for setup.
+
+### Download Feed Enabled
+- **Config Key**: `downloadsFeedEnabled`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Description**: Turns the feed on. While it's off, the feed URL answers 404.
+
+### Download Feed Item Limit
+- **Config Key**: `downloadsFeedItemLimit`
+- **Type**: `number`
+- **Default**: `50`
+- **Range**: 10 to 200
+- **Description**: How many of the newest downloads the feed lists. A value outside the range is corrected at startup.
+
+### Download Feed Media Types
+- **Config Key**: `downloadsFeedMediaTypes`
+- **Type**: `array`
+- **Default**: `["video", "short", "livestream"]`
+- **Description**: Which video types the feed lists. At least one is required.
+
+### Download Feed Link Template
+- **Config Key**: `downloadsFeedLinkTemplate`
+- **Type**: `string`
+- **Default**: `""` (opens YouTube)
+- **Description**: Where clicking a feed item goes. It follows the same rules as the [Notification Link Template](#notification-link-template): a full `http://` or `https://` URL of at most 500 characters, with `{youtubeId}` as the only variable.
+
+### Download Feed Token
+- **Config Key**: `downloadsFeedToken`
+- **Type**: `string`
+- **Default**: Not set; Youtarr creates it the first time the feed is turned on
+- **Description**: The secret in the feed URL. Youtarr manages it: use **Create new URL** in Settings -> RSS Feeds to replace it. Settings saves never change it.
 
 ## Download Performance
 

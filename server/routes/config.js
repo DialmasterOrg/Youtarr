@@ -7,6 +7,7 @@ const { getExternalCookiesPath } = require('../modules/externalCookies');
 const { isExternalApiEnabled } = require('../modules/externalApi/externalApiConfig');
 const { isValidLevelSetting } = require('../logging/logLevel');
 const { getLinkTemplateError } = require('../modules/notifications/utils');
+const { getItemLimitError, getMediaTypesError } = require('../modules/feeds/feedSettings');
 
 // Summarize the allowlist check of a saved custom-args string for the client,
 // without the resolved args (which may carry secret values). Returns null when
@@ -171,6 +172,7 @@ module.exports = function createConfigRoutes({
 
     delete safeConfig.passwordHash;
     delete safeConfig.username;
+    delete safeConfig.downloadsFeedToken;
 
     safeConfig.isPlatformManaged = {
       youtubeOutputDirectory: !!process.env.DATA_PATH,
@@ -354,16 +356,33 @@ module.exports = function createConfigRoutes({
     // Link template gate. Like the custom args gate, it only checks a value
     // that changed, so a hand-edited bad value cannot block every save.
     // buildVideoLink re-checks at send time.
-    if (
-      Object.prototype.hasOwnProperty.call(updateData, 'notificationLinkTemplate') &&
-      updateData.notificationLinkTemplate !== currentConfig.notificationLinkTemplate
-    ) {
-      const linkTemplateError = getLinkTemplateError(updateData.notificationLinkTemplate);
-      if (linkTemplateError) {
-        return res.status(400).json({ error: linkTemplateError });
+    for (const key of ['notificationLinkTemplate', 'downloadsFeedLinkTemplate']) {
+      if (
+        Object.prototype.hasOwnProperty.call(updateData, key) &&
+        updateData[key] !== currentConfig[key]
+      ) {
+        const linkTemplateError = getLinkTemplateError(updateData[key]);
+        if (linkTemplateError) {
+          return res.status(400).json({ error: linkTemplateError });
+        }
+        if (typeof updateData[key] === 'string') {
+          updateData[key] = updateData[key].trim();
+        }
       }
-      if (typeof updateData.notificationLinkTemplate === 'string') {
-        updateData.notificationLinkTemplate = updateData.notificationLinkTemplate.trim();
+    }
+
+    // configModule corrects hand-edited values on load, so these can be checked
+    // on every save without an old value blocking Settings.
+    const feedSettingChecks = [
+      ['downloadsFeedItemLimit', getItemLimitError],
+      ['downloadsFeedMediaTypes', getMediaTypesError],
+    ];
+    for (const [key, getError] of feedSettingChecks) {
+      if (Object.prototype.hasOwnProperty.call(updateData, key)) {
+        const feedSettingError = getError(updateData[key]);
+        if (feedSettingError) {
+          return res.status(400).json({ error: feedSettingError });
+        }
       }
     }
 
@@ -403,6 +422,8 @@ module.exports = function createConfigRoutes({
 
     updateData.passwordHash = currentConfig.passwordHash;
     updateData.username = currentConfig.username;
+    // Server-owned: /getconfig never sends it, and a save must not undo a new URL.
+    updateData.downloadsFeedToken = currentConfig.downloadsFeedToken;
     updateData.ytdlpLastChecked = currentConfig.ytdlpLastChecked;
     updateData.ytdlpLastUpdated = currentConfig.ytdlpLastUpdated;
     updateData.ytdlpLastResult = currentConfig.ytdlpLastResult;

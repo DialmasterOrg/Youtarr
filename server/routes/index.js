@@ -20,11 +20,13 @@ const createSubfolderRoutes = require('./subfolders');
 const createSchedulesRoutes = require('./schedules');
 const createLogRoutes = require('./logs');
 const createVideoTrashRoutes = require('./videoTrash');
+const createFeedRoutes = require('./feeds');
 const createExternalRequestReviewRoutes = require('./externalRequests');
 const { createExternalApiRoutes } = require('./externalApi');
 const { sendExternalError } = require('../modules/externalApi/externalApiResponse');
 const videoMetadataModule = require('../modules/videoMetadataModule');
 const videoTrashModule = require('../modules/videoTrashModule');
+const downloadsFeed = require('../modules/feeds/downloadsFeed');
 const videoOembedEnricher = require('../modules/videoOembedEnricher');
 const playlistModule = require('../modules/playlistModule');
 const m3uGenerator = require('../modules/m3uGenerator');
@@ -74,6 +76,7 @@ function registerRoutes(app, deps) {
     ytdlpValidationRateLimiter,
     filenamePreviewRateLimiter,
     cookieTestRateLimiter,
+    feedLimiter,
     configModule,
     channelModule,
     plexModule,
@@ -181,6 +184,9 @@ function registerRoutes(app, deps) {
 
   // Log file download
   app.use(createLogRoutes({ verifyToken, logFilesModule, configModule }));
+
+  // RSS feeds. The feed itself takes a token in its URL, not a session.
+  app.use(createFeedRoutes({ verifyToken, feedLimiter, downloadsFeed }));
 
   // The versioned external API stays unreachable until a deployment opts in
   // explicitly. This fail-closed default is independent of AUTH_ENABLED.

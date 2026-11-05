@@ -225,6 +225,10 @@ const options = {
         name: 'Playlists',
         description: 'YouTube playlist subscriptions and downloads',
       },
+      {
+        name: 'Feeds',
+        description: 'RSS feeds for feed readers, protected by a token in the URL',
+      },
     ],
   },
   // Use absolute paths based on __dirname to work in both local dev and Docker.
