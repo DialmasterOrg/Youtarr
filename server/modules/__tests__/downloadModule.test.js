@@ -551,6 +551,20 @@ describe('DownloadModule', () => {
       expect(order).toEqual(['channels', 'playlists']);
     });
 
+    it('keeps counts that come back every run out of the sweep summary', async () => {
+      const downloadRunTracker = require('../download/downloadRunTracker');
+      const MessageEmitter = require('../messageEmitter');
+      jest.doMock('../playlistModule', () => ({ playlistAutoDownload: jest.fn().mockResolvedValue() }));
+      jest.spyOn(downloadModule, 'doChannelDownloads').mockImplementation(async (jobData) => {
+        downloadRunTracker.recordJobResult(jobData.runId, 'job-1', { totalMembersOnly: 2, jobType: 'Channel Downloads' });
+      });
+
+      await downloadModule.doChannelAndPlaylistDownloads({});
+
+      const summaryCall = MessageEmitter.emitMessage.mock.calls.find((call) => call[4] && call[4].finalSummary);
+      expect(summaryCall[4].finalSummary.totalMembersOnly).toBe(0);
+    });
+
     it('threads manual override settings through to playlist auto-download', async () => {
       jest.spyOn(downloadModule, 'doChannelDownloads').mockResolvedValue();
       jest.doMock('../playlistModule', () => ({
@@ -1038,6 +1052,23 @@ describe('DownloadModule', () => {
           }),
         }));
       });
+    });
+
+    it('leaves the videos a failed group looked at out of the message the alert shows', async () => {
+      const MessageEmitter = require('../messageEmitter');
+      const job = { status: 'In Progress', data: { videos: [], cumulativeSkipped: 9 } };
+      jobModuleMock.getJob.mockReturnValue(job);
+      jest.spyOn(downloadModule, 'executeGroupDownload').mockImplementation(async () => {
+        job.status = 'Error';
+        job.output = 'Bot detection encountered';
+      });
+
+      await downloadModule.doGroupedChannelDownloads({}, [
+        { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1' }] },
+      ]);
+
+      const finalCall = MessageEmitter.emitMessage.mock.calls.find((call) => call[4] && call[4].finalSummary);
+      expect(finalCall[4].text).toBe('Download failed in Group 1/1 (1080p): Bot detection encountered. 0 downloaded');
     });
 
     describe('when the user terminates the last group', () => {

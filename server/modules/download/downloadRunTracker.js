@@ -76,10 +76,11 @@ function buildSummaryText(summary) {
     parts.push(`${summary.totalDownloaded} video${summary.totalDownloaded !== 1 ? 's' : ''} downloaded`);
   }
   if (summary.totalFailed > 0) parts.push(`${summary.totalFailed} failed`);
-  if (summary.totalSkipped > 0) parts.push(`${summary.totalSkipped} skipped`);
   if (summary.totalMembersOnly > 0) {
     parts.push(`${summary.totalMembersOnly} members-only skipped`);
   }
+  if (summary.totalAlreadyDownloaded > 0) parts.push(`${summary.totalAlreadyDownloaded} already downloaded`);
+  if (summary.totalNotAvailable > 0) parts.push(`${summary.totalNotAvailable} not available`);
   if (summary.totalTerminatedChannels > 0) {
     parts.push(`${summary.totalTerminatedChannels} channel${summary.totalTerminatedChannels !== 1 ? 's' : ''} marked terminated`);
   }
@@ -122,11 +123,16 @@ class DownloadRunTracker {
 
   /**
    * Begin tracking a new download run.
+   * @param {Object} [options]
+   * @param {boolean} [options.sweep] - an automatic channel and playlist check,
+   *   whose summary leaves out the per-video counts: it meets the same
+   *   members-only and filtered videos every run, so they aren't news.
    * @returns {string} the run id to thread through the run's jobs
    */
-  startRun() {
+  startRun({ sweep = false } = {}) {
     const runId = `run-${uuidv4()}`;
     this.runs.set(runId, {
+      sweep,
       sealed: false,
       finalized: false,
       jobIds: new Set(),
@@ -143,6 +149,8 @@ class DownloadRunTracker {
         totalSkipped: 0,
         totalFailed: 0,
         totalMembersOnly: 0,
+        totalAlreadyDownloaded: 0,
+        totalNotAvailable: 0,
         failedVideos: [],
         diagnoses: [],
         terminatedChannels: [],
@@ -214,6 +222,8 @@ class DownloadRunTracker {
     acc.totalSkipped += summary.totalSkipped || 0;
     acc.totalFailed += summary.totalFailed || 0;
     acc.totalMembersOnly += summary.totalMembersOnly || 0;
+    acc.totalAlreadyDownloaded += summary.totalAlreadyDownloaded || 0;
+    acc.totalNotAvailable += summary.totalNotAvailable || 0;
     if (Array.isArray(summary.failedVideos)) acc.failedVideos.push(...summary.failedVideos);
     if (Array.isArray(summary.diagnoses)) acc.diagnoses = mergeDiagnoses(acc.diagnoses, summary.diagnoses);
     if (Array.isArray(summary.videoData)) acc.videoData.push(...summary.videoData);
@@ -432,9 +442,10 @@ class DownloadRunTracker {
     const acc = run.acc;
     const terminatedChannels = dedupeTerminatedChannels(acc.terminatedChannels);
     const terminationFailures = [...new Set(acc.terminationFailures)];
+    const totalMembersOnly = run.sweep ? 0 : acc.totalMembersOnly;
     const hasIssue =
       acc.totalFailed > 0 ||
-      acc.totalMembersOnly > 0 ||
+      totalMembersOnly > 0 ||
       terminatedChannels.length > 0 ||
       terminationFailures.length > 0 ||
       acc.stoppedGroups.length > 0 ||
@@ -444,7 +455,9 @@ class DownloadRunTracker {
       totalDownloaded: acc.totalDownloaded,
       totalSkipped: acc.totalSkipped,
       totalFailed: acc.totalFailed,
-      totalMembersOnly: acc.totalMembersOnly,
+      totalMembersOnly,
+      totalAlreadyDownloaded: run.sweep ? 0 : acc.totalAlreadyDownloaded,
+      totalNotAvailable: run.sweep ? 0 : acc.totalNotAvailable,
       totalTerminatedChannels: terminatedChannels.length,
       totalTerminationFailures: terminationFailures.length,
       failedVideos: acc.failedVideos,
