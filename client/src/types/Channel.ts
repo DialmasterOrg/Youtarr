@@ -15,6 +15,7 @@ export interface TabDownloadStats {
 export type TabDownloadStatsByTab = Partial<Record<ChannelTabType, TabDownloadStats>>;
 
 export interface Channel {
+  database_id?: number;
   url: string;
   uploader: string;
   channel_id?: string;

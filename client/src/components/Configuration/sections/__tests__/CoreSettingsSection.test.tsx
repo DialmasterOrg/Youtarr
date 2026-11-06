@@ -77,6 +77,7 @@ const createPlatformManagedState = (
   authEnabled: false,
   useTmpForDownloads: false,
   ytdlpUpdates: false,
+  externalApiEnabled: false,
   ...overrides,
 });
 

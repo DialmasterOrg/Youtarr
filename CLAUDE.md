@@ -52,7 +52,7 @@ For multi-part requests (e.g., "review this PR AND explain WebSocket handling"),
 ### Frontend (`client/src/`)
 
 - `App.tsx`: routing plus the global `fetch()` override and axios response interceptor that turn a 503 `requiresDbFix` response into the database error overlay.
-- `components/`: one directory per feature (`Subscriptions/`, `ChannelPage/`, `PlaylistPage/`, `VideosPage/`, `FindVideos/`, `FindChannels/`, `DownloadManager/`, `SubscriptionImport/`, `Settings/` + `Configuration/`); `components/shared/` for cross-feature pieces (`VideoModal/`, `DeleteVideosDialog`, `AddChannelDialog`); `components/ui/` for theme-neutral primitives; `components/layout/` for the app shell and nav.
+- `components/`: one directory per feature (`Subscriptions/`, `ChannelPage/`, `PlaylistPage/`, `VideosPage/`, `FindVideos/`, `FindChannels/`, `DownloadManager/`, `SubscriptionImport/`, `Settings/` + `Configuration/`, `ExternalRequests/`); `components/shared/` for cross-feature pieces (`VideoModal/`, `DeleteVideosDialog`, `AddChannelDialog`); `components/ui/` for theme-neutral primitives; `components/layout/` for the app shell and nav.
 - `hooks/`, `contexts/`, `providers/` (auth token, WebSocket, theme, video activity), `themes/` (the `ALL_THEMES` registry), `config/` (the `CONFIG_FIELDS` registry), `types/`, `utils/`.
 
 ### Database
