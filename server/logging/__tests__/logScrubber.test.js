@@ -11,6 +11,14 @@ describe('createLogScrubber', () => {
       .toBe('url: "http://plex/sections?foo=[REDACTED]" key [REDACTED]');
   });
 
+  test('hides the download feed token', () => {
+    const feedToken = 'f'.repeat(64);
+    const scrub = createLogScrubber({ downloadsFeedToken: feedToken });
+
+    expect(scrub(`GET /feeds/downloads.xml?token=${feedToken}`))
+      .toBe('GET /feeds/downloads.xml?token=[REDACTED]');
+  });
+
   test('hides configured notification URLs, which carry webhook and bot tokens', () => {
     const scrub = createLogScrubber({
       appriseUrls: [{ url: 'discord://123456/webhookToken', name: 'Discord' }, 'tgram://botToken123/chatId'],

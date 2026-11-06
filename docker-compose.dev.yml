@@ -41,6 +41,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-debug}
       - LOG_FILE_MAX_SIZE=${LOG_FILE_MAX_SIZE:-}
       - LOG_FILE_MAX_COUNT=${LOG_FILE_MAX_COUNT:-}
+      - OUTPUT_DIR_HEALTHCHECK_TIMEOUT=${OUTPUT_DIR_HEALTHCHECK_TIMEOUT:-}
       - TZ=${TZ:-UTC}
       - DB_HOST=youtarr-db
       - DB_PORT=3306
@@ -49,6 +50,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-youtarrpassword}
       - YOUTUBE_OUTPUT_DIR=/usr/src/app/data
       - AUTH_ENABLED=${AUTH_ENABLED:-true}
+      - EXTERNAL_API_ENABLED=${EXTERNAL_API_ENABLED:-false}
       - AUTH_PRESET_USERNAME=${AUTH_PRESET_USERNAME:-}
       - AUTH_PRESET_PASSWORD=${AUTH_PRESET_PASSWORD:-}
       - TRUST_PROXY=${TRUST_PROXY:-}

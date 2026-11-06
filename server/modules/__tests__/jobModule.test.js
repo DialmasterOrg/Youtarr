@@ -2,7 +2,8 @@
 
 // Mock dependencies
 jest.mock('uuid', () => ({
-  v4: jest.fn(() => 'generated-uuid')
+  v4: jest.fn(() => 'generated-uuid'),
+  validate: jest.requireActual('uuid').validate
 }));
 jest.mock('node-cron');
 jest.mock('../messageEmitter.js');
@@ -1251,6 +1252,20 @@ describe('JobModule', () => {
       expect(Job.create).toHaveBeenCalledTimes(1);
       finishCreate({});
       await first;
+    });
+
+    test('uses a supplied UUID as the job id', async () => {
+      const jobId = '9b89e5bc-8c90-4e72-b245-270fed2eacc2';
+      await expect(JobModule.addJob({
+        jobType: 'Manually Added Urls', data: { urls: ['https://youtu.be/aaaaaaaaaaa'] },
+      }, jobId)).resolves.toBe(jobId);
+    });
+
+    test('rejects a supplied job id that is not a UUID', async () => {
+      await expect(JobModule.addJob({
+        jobType: 'Manually Added Urls', data: { urls: ['https://youtu.be/aaaaaaaaaaa'] },
+      }, '../jobs')).rejects.toThrow('Preferred job id must be a UUID');
+      expect(Job.create).not.toHaveBeenCalled();
     });
 
     test('rolls back queue ownership if creating the job fails', async () => {

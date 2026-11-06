@@ -4,7 +4,10 @@ const { SCHEDULES, getScheduleError, getSchedule } = require('../modules/schedul
 const customArgsParser = require('../modules/download/customArgsParser');
 const filenamePreview = require('../modules/filenamePreview');
 const { getExternalCookiesPath } = require('../modules/externalCookies');
+const { isExternalApiEnabled } = require('../modules/externalApi/externalApiConfig');
 const { isValidLevelSetting } = require('../logging/logLevel');
+const { getLinkTemplateError } = require('../modules/notifications/utils');
+const { getItemLimitError, getMediaTypesError } = require('../modules/feeds/feedSettings');
 
 // Summarize the allowlist check of a saved custom-args string for the client,
 // without the resolved args (which may carry secret values). Returns null when
@@ -145,6 +148,11 @@ module.exports = function createConfigRoutes({
    *                   type: string
    *                 ytdlpUpdateFrequency:
    *                   type: string
+   *                 isPlatformManaged:
+   *                   type: object
+   *                   properties:
+   *                     externalApiEnabled:
+   *                       type: boolean
    *                 channelVideoCountsFrequency:
    *                   type: string
    *                 logLevel:
@@ -164,13 +172,15 @@ module.exports = function createConfigRoutes({
 
     delete safeConfig.passwordHash;
     delete safeConfig.username;
+    delete safeConfig.downloadsFeedToken;
 
     safeConfig.isPlatformManaged = {
       youtubeOutputDirectory: !!process.env.DATA_PATH,
       plexUrl: !!process.env.PLEX_URL,
       authEnabled: process.env.AUTH_ENABLED === 'false' ? false : true,
       useTmpForDownloads: configModule.isElfhostedPlatform(),
-      ytdlpUpdates: configModule.isElfhostedPlatform()
+      ytdlpUpdates: configModule.isElfhostedPlatform(),
+      externalApiEnabled: isExternalApiEnabled()
     };
 
     safeConfig.deploymentEnvironment = {
@@ -234,7 +244,7 @@ module.exports = function createConfigRoutes({
    *                 enum: ['', warn, info, debug]
    *     responses:
    *       400:
-   *         description: Invalid configuration; schedule errors include a fieldErrors object keyed by config field, and a changed ytdlpCustomArgs that fails the allowlist check includes its customArgsCheck
+   *         description: Invalid configuration; schedule errors include a fieldErrors object keyed by config field, and a changed ytdlpCustomArgs that fails the allowlist check includes its customArgsCheck, and a changed notificationLinkTemplate that is not an http(s) URL with only the {youtubeId} variable returns its error message
    *       200:
    *         description: Configuration updated successfully
    *         content:
@@ -343,6 +353,39 @@ module.exports = function createConfigRoutes({
       return res.status(400).json({ error: 'Log level must be Default, Warn, Info or Debug' });
     }
 
+    // Link template gate. Like the custom args gate, it only checks a value
+    // that changed, so a hand-edited bad value cannot block every save.
+    // buildVideoLink re-checks at send time.
+    for (const key of ['notificationLinkTemplate', 'downloadsFeedLinkTemplate']) {
+      if (
+        Object.prototype.hasOwnProperty.call(updateData, key) &&
+        updateData[key] !== currentConfig[key]
+      ) {
+        const linkTemplateError = getLinkTemplateError(updateData[key]);
+        if (linkTemplateError) {
+          return res.status(400).json({ error: linkTemplateError });
+        }
+        if (typeof updateData[key] === 'string') {
+          updateData[key] = updateData[key].trim();
+        }
+      }
+    }
+
+    // configModule corrects hand-edited values on load, so these can be checked
+    // on every save without an old value blocking Settings.
+    const feedSettingChecks = [
+      ['downloadsFeedItemLimit', getItemLimitError],
+      ['downloadsFeedMediaTypes', getMediaTypesError],
+    ];
+    for (const [key, getError] of feedSettingChecks) {
+      if (Object.prototype.hasOwnProperty.call(updateData, key)) {
+        const feedSettingError = getError(updateData[key]);
+        if (feedSettingError) {
+          return res.status(400).json({ error: feedSettingError });
+        }
+      }
+    }
+
     // Video filename template prefix validation
     if (Object.prototype.hasOwnProperty.call(updateData, 'videoFilenamePrefix')) {
       const basic = basicValidatePrefix(updateData.videoFilenamePrefix);
@@ -352,15 +395,19 @@ module.exports = function createConfigRoutes({
       // If the saved prefix differs from what's currently in config, run
       // yt-dlp against the canned fixture to confirm it accepts the template.
       // Any failure here (grammar error, timeout, fixture corruption) is
-      // surfaced as 400 with yt-dlp's own message and blocks the save.
-      // yt-dlp ships inside the Youtarr Docker image, so it can't be
-      // "unavailable"; if it ever truly is, the rest of the app is broken
-      // too and a save error is the correct signal.
+      // surfaced as 400 and blocks the save, since a template yt-dlp could
+      // not check might break every download. A timeout gets its own message
+      // because it says nothing about the template. yt-dlp ships inside the
+      // Youtarr Docker image, so it can't be "unavailable"; if it ever truly
+      // is, the rest of the app is broken too and a save error is the
+      // correct signal.
       if (basic.trimmed !== currentConfig.videoFilenamePrefix) {
         const grammar = await filenamePreview.validateTemplate(basic.trimmed);
         if (!grammar.ok) {
           return res.status(400).json({
-            error: `videoFilenamePrefix rejected by yt-dlp: ${grammar.error}`,
+            error: grammar.timedOut
+              ? grammar.error
+              : `videoFilenamePrefix rejected by yt-dlp: ${grammar.error}`,
           });
         }
       }
@@ -375,6 +422,8 @@ module.exports = function createConfigRoutes({
 
     updateData.passwordHash = currentConfig.passwordHash;
     updateData.username = currentConfig.username;
+    // Server-owned: /getconfig never sends it, and a save must not undo a new URL.
+    updateData.downloadsFeedToken = currentConfig.downloadsFeedToken;
     updateData.ytdlpLastChecked = currentConfig.ytdlpLastChecked;
     updateData.ytdlpLastUpdated = currentConfig.ytdlpLastUpdated;
     updateData.ytdlpLastResult = currentConfig.ytdlpLastResult;
@@ -418,7 +467,7 @@ module.exports = function createConfigRoutes({
    *       200:
    *         description: Rendered preview
    *       400:
-   *         description: Prefix failed safety checks or yt-dlp rejected the template
+   *         description: Prefix failed safety checks, yt-dlp rejected the template, or yt-dlp timed out before checking it
    *       401:
    *         description: Missing or invalid auth token
    *       429:
@@ -440,14 +489,19 @@ module.exports = function createConfigRoutes({
         return res.json(preview);
       } catch (err) {
         // yt-dlp ships inside the Youtarr Docker image, so any failure here
-        // is either a template grammar issue (the common case, e.g.
-        // "unsupported format character") or a genuine bug (timeout,
-        // corrupted fixture). Both surface to the user as 400 with the
-        // yt-dlp message; the FE shows it inline next to the Preview button.
+        // is a template grammar issue (the common case, e.g. "unsupported
+        // format character"), a slow or busy host (timeout), or a genuine bug
+        // (corrupted fixture). All surface to the user as 400; the FE shows
+        // the message inline next to the Preview button. A timeout carries
+        // its own message, since it is not a rejection.
         const message = err && err.message ? err.message : 'yt-dlp failed';
-        req.log.warn({ err }, 'filenamePreview rejected template');
+        const timedOut = filenamePreview.isTimeoutError(err);
+        req.log.warn(
+          { err },
+          timedOut ? 'filenamePreview timed out' : 'filenamePreview rejected template'
+        );
         return res.status(400).json({
-          error: `Template rejected by yt-dlp: ${message}`,
+          error: timedOut ? message : `Template rejected by yt-dlp: ${message}`,
         });
       }
     }

@@ -11,6 +11,7 @@ This guide provides step-by-step instructions for common tasks in Youtarr. After
 - [Configure Automation](#configure-automation)
 - [Configure SponsorBlock](#configure-sponsorblock)
 - [Enable Download Notifications](#enable-download-notifications)
+- [RSS Feeds](#rss-feeds)
 - [Re-download Missing Videos](#re-download-missing-videos)
 - [Rescan Files on Disk](#rescan-files-on-disk)
 - [Organize Channels with Multi-Library Support](#organize-channels-with-multi-library-support)
@@ -368,6 +369,34 @@ Get notified when new videos finish downloading. Notifications are delivered thr
 
 **Note**: Download notifications are sent when a run downloads at least one new video, or when a run fails with a diagnosed cause or stops early. They are batched: a scheduled download run sends one summary covering all of its channels and playlists, not one message per video. Youtarr also sends notifications when automatic cleanup deletes videos and when downloads pause or resume because of a storage limit.
 
+## RSS Feeds
+
+Youtarr can publish a private RSS feed of the videos it has downloaded, so you can see what's new in your RSS reader instead of getting a notification for each download run. The feed is off by default, and it doesn't change your notifications.
+
+1. **Open Youtarr Settings -> RSS Feeds** and turn on **Enable the download feed**
+
+2. **Save configuration**
+
+3. **Copy the feed URL** and add it to your RSS reader
+
+Each downloaded video is one item in the feed, newest first, with its thumbnail, title, channel, length, upload date and the start of its description. New videos appear shortly after they finish downloading. Failed downloads aren't listed, and deleted videos drop off the feed.
+
+You can also choose:
+
+- **Videos in the feed**: how many of the newest downloads the feed lists (50 by default)
+- **Clicking an item opens**: YouTube, this Youtarr, or a custom link such as your media server. A custom link uses `{youtubeId}` for the video ID.
+- **Include**: videos, Shorts and livestreams
+
+**Keep the URL private.** RSS readers can't log in, so the URL contains a long random secret, and anyone with the URL can see your video titles, descriptions and thumbnails (but not the video files). An online reader also stores what it fetches, and a reverse proxy can record the URL in its logs. If the URL gets out, click **Create new URL**: the old URL stops working right away, and you'll need to add the new one to your reader.
+
+**Things to know:**
+
+- Online readers like Feedly need to reach your Youtarr over the internet. A reader on your home network doesn't.
+- If you use a login proxy like Authelia or Cloudflare Access, add an exception for the `/feeds/` path, because a reader can't get past the login page. See [the API key instructions](API_INTEGRATION.md#cors-error--blocked-by-external-auth-cloudflare-zero-trust-authelia-etc) for how to add one, using `/feeds/` as the path. Youtarr checks the secret in the URL even with `AUTH_ENABLED=false`, so this exception is safe in both setups.
+- Re-downloading a video won't show it as new in most readers, because it's still the same feed item.
+- Big "Download all" jobs show up in the feed too. The feed still only lists the newest videos, up to your limit.
+- The feed doesn't contain the video files, so readers won't download them.
+
 ## Re-download Missing Videos
 
 Videos can become "missing" if they're manually deleted from disk. This feature helps you recover them by fetching the file from YouTube again. The same flow also works for videos still on disk (the new download replaces the existing file, which is handy for upgrading quality); videos that have been removed from YouTube are skipped automatically.
@@ -559,6 +588,7 @@ Click any thumbnail on the Videos page or a channel page to open a video detail 
    - For downloaded videos, the modal shows the downloaded format's dimensions from the video metadata, with the quality tier alongside when it isn't obvious from the numbers (e.g. `608x1080 (1080p)` for a vertical video); video listings show a small tier chip based on the file's measured on-disk resolution
    - For downloaded videos, data is served from the cached `.info.json`
    - For videos not yet downloaded, Youtarr fetches metadata on demand via yt-dlp (this can take a few seconds on the first open)
+   - Metadata fetched this way is cached in `jobs/info` for three weeks after it was fetched, then removed by the nightly file rescan; a downloaded video's metadata stays until you empty the trash
 
 3. **In-browser playback**
    - Downloaded videos stream directly from Youtarr through the built-in player; no media server required

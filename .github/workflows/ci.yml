@@ -56,8 +56,15 @@ jobs:
         run: npm run lint:ts
         continue-on-error: true
 
+      - name: Check Claude Rule Paths
+        id: lint-rules
+        run: |
+          npm run lint:rules
+          node --test scripts/tests/check-claude-rules.test.js
+        continue-on-error: true
+
       - name: Check Linting Results
-        if: steps.lint-backend.outcome == 'failure' || steps.lint-frontend.outcome == 'failure' || steps.typescript-check.outcome == 'failure'
+        if: steps.lint-backend.outcome == 'failure' || steps.lint-frontend.outcome == 'failure' || steps.typescript-check.outcome == 'failure' || steps.lint-rules.outcome == 'failure'
         run: |
           echo "❌ Linting/Type checking failed!"
           if [ "${{ steps.lint-backend.outcome }}" == "failure" ]; then
@@ -68,6 +75,9 @@ jobs:
           fi
           if [ "${{ steps.typescript-check.outcome }}" == "failure" ]; then
             echo "TypeScript type checking failed"
+          fi
+          if [ "${{ steps.lint-rules.outcome }}" == "failure" ]; then
+            echo "Claude rule path check failed"
           fi
           exit 1
 
@@ -121,6 +131,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
+      - name: Validate external API fixture and checksum
+        run: npm run test:external-fixture
+
       - name: Run backend tests with coverage
         run: npm run test:backend -- --coverage --coverageReporters=json-summary --coverageReporters=lcov --coverageReporters=text
         env:
@@ -161,7 +174,7 @@ jobs:
             coverage/lcov.info
 
   test-external-api-database:
-    name: External API DB migrations (${{ matrix.engine }})
+    name: External API DB runtime and migrations (${{ matrix.engine }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
@@ -197,7 +210,7 @@ jobs:
         run: npm install -g npm@11.15.0 --ignore-scripts
       - name: Install dependencies
         run: npm ci --ignore-scripts
-      - name: Run external API migration lifecycle
+      - name: Run external API runtime and migration lifecycle
         run: |
           npm run test:external-api-database -- --json --outputFile=external-api-database-results.json
           node -e "const result = require('./external-api-database-results.json'); if (result.numPassedTests < 1 || result.numPendingTestSuites !== 0 || result.numPendingTests !== 0 || result.numTodoTests !== 0) process.exit(1);"
@@ -208,6 +221,19 @@ jobs:
           DB_PASSWORD: rootpass
           DB_ADMIN_USER: root
           DB_ADMIN_PASSWORD: rootpass
+      - name: Verify runtime query plans on synthetic data
+        run: npm run test:external-index-plans
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3321
+          DB_USER: root
+          DB_PASSWORD: rootpass
+          EXTERNAL_API_INDEX_REPORT: external-api-index-plans.json
+      - name: Upload runtime query plans
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: external-api-index-plans-${{ matrix.engine }}
+          path: external-api-index-plans.json
 
   test-frontend:
     name: Frontend Tests

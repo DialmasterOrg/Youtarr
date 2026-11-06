@@ -10,6 +10,7 @@ const tempPathManager = require('./download/tempPathManager');
 const downloadSettingsResolver = require('./download/downloadSettingsResolver');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const { selectSubtitleFilesToPrune } = require('./download/subtitleSidecarPruner');
+const { slimInfoJson } = require('./infoJsonSlimmer');
 const { JobVideoDownload } = require('../models');
 const videoPersistence = require('./videoPersistence');
 const { VIDEO_PERSISTED_MARKER } = require('./constants/outputMarkers');
@@ -390,8 +391,9 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
 // Main execution wrapped in async IIFE to handle async operations
 (async () => {
   if (fs.existsSync(jsonPath)) {
-    // Read the JSON file to get the upload_date
-    const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+    // Read the JSON file to get the upload_date. Every later write of
+    // jsonData (temp path, then jobs/info) saves the slimmed copy.
+    const jsonData = slimInfoJson(JSON.parse(fs.readFileSync(jsonPath, 'utf-8')));
 
     // Parse the upload_date (format: YYYYMMDD) into a Date object
     let uploadDate = null;

@@ -19,6 +19,7 @@ const failureAdvisor = require('./failureAdvisor');
 const failedVideoEnricher = require('./failedVideoEnricher');
 const tempSpaceProbe = require('./tempSpaceProbe');
 const { containsHttp403 } = require('./ytdlpStderrSignals');
+const { isSpecificUrlDownloadJob } = require('./jobTypes');
 const { runCompletionSideEffects } = require('./downloadCompletionEffects');
 const {
   describeSponsorBlockFailures,
@@ -253,19 +254,20 @@ async function finalizeDownloadJob({
       });
       if (retryPlan) {
         try {
-          await enqueueAutoRetry({
+          const retryJobs = await enqueueAutoRetry({
             retryVideos: retryPlan.retryVideos,
             autoRetryAttempt: retryPlan.nextAttempt,
             runId,
             sourceJobData,
           });
-          const retryIds = new Set(retryPlan.retryVideos.map((video) => video.youtubeId));
+          const retryIds = new Set(Object.keys(retryJobs || {}));
           for (const failedVideo of failedVideosList) {
             if (retryIds.has(failedVideo.youtubeId)) {
               failedVideo.autoRetryQueued = true;
+              failedVideo.autoRetryJobId = retryJobs[failedVideo.youtubeId];
             }
           }
-          autoRetryQueuedCount = retryPlan.retryVideos.length;
+          autoRetryQueuedCount = retryIds.size;
           logger.info(
             { jobId, count: autoRetryQueuedCount, attempt: retryPlan.nextAttempt },
             'Queued auto-retry job for retryable download failures'
@@ -520,6 +522,16 @@ async function finalizeDownloadJob({
     // (updateJob or saveIntermediateGroupResults).
     terminalUpdateDone = true;
 
+    // A job given specific videos accounts for each one. A channel job only
+    // walks the newest videos of each tab, so these counts would just restate
+    // its settings. archiveSkippedIds, not the monitor's skipped count, because
+    // the monitor misses archive hits that follow a finished video.
+    const listsSpecificVideos = isSpecificUrlDownloadJob(jobType);
+    const perVideoCounts = {
+      totalAlreadyDownloaded: listsSpecificVideos ? router.archiveSkippedIds.size : 0,
+      totalNotAvailable: listsSpecificVideos ? router.filterSkippedCount + errorTracker.upcomingVideoIds.size : 0,
+    };
+
     const presentation = resolveFinalPresentation({
       code,
       jobErrorCode,
@@ -531,6 +543,8 @@ async function finalizeDownloadJob({
       videoDataCount: videoData.length,
       failedCount: failedVideosList.length,
       skippedCount: monitor.videoCount.skipped || 0,
+      alreadyDownloadedCount: perVideoCounts.totalAlreadyDownloaded,
+      notAvailableCount: perVideoCounts.totalNotAvailable,
       terminatedChannelCount: errorTracker.terminatedChannelIds.size,
       terminationFailureCount: errorTracker.terminationFailures.length,
       videoCount,
@@ -591,7 +605,8 @@ async function finalizeDownloadJob({
         totalSkipped: monitor.videoCount.skipped || 0,
         totalFailed: reportableFailedVideos.length,
         totalAutoRetried: autoRetryQueuedCount,
-        totalMembersOnly: errorTracker.membersOnlyVideoIds.size,
+        totalMembersOnly: listsSpecificVideos ? errorTracker.membersOnlyVideoIds.size : 0,
+        ...perVideoCounts,
         totalTerminatedChannels: errorTracker.terminatedChannelIds.size,
         totalTerminationFailures: errorTracker.terminationFailures.length,
         failedVideos: reportableFailedVideos,
@@ -641,6 +656,7 @@ async function finalizeDownloadJob({
         totalSkipped: monitor.videoCount.skipped || 0,
         totalFailed: reportableFailedVideos.length,
         totalMembersOnly: errorTracker.membersOnlyVideoIds.size,
+        ...perVideoCounts,
         failedVideos: reportableFailedVideos,
         diagnoses,
         terminatedChannels: [...errorTracker.terminatedChannels],

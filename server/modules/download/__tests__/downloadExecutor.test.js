@@ -301,6 +301,85 @@ describe('DownloadExecutor', () => {
     });
   });
 
+  describe('output directory health check timeout setting', () => {
+    const mockArgs = ['--format', 'best', 'https://youtube.com/watch?v=test'];
+    const originalValue = process.env.OUTPUT_DIR_HEALTHCHECK_TIMEOUT;
+
+    afterEach(() => {
+      if (originalValue === undefined) {
+        delete process.env.OUTPUT_DIR_HEALTHCHECK_TIMEOUT;
+      } else {
+        process.env.OUTPUT_DIR_HEALTHCHECK_TIMEOUT = originalValue;
+      }
+    });
+
+    it('defaults to 10 seconds when OUTPUT_DIR_HEALTHCHECK_TIMEOUT is unset', () => {
+      delete process.env.OUTPUT_DIR_HEALTHCHECK_TIMEOUT;
+
+      expect(new DownloadExecutor().outputDirHealthCheckTimeoutMs).toBe(10000);
+    });
+
+    it('reads OUTPUT_DIR_HEALTHCHECK_TIMEOUT as whole seconds', () => {
+      process.env.OUTPUT_DIR_HEALTHCHECK_TIMEOUT = '45';
+
+      expect(new DownloadExecutor().outputDirHealthCheckTimeoutMs).toBe(45000);
+    });
+
+    it('warns and keeps the default for an invalid OUTPUT_DIR_HEALTHCHECK_TIMEOUT', () => {
+      process.env.OUTPUT_DIR_HEALTHCHECK_TIMEOUT = '45s';
+
+      const configured = new DownloadExecutor();
+
+      expect(configured.outputDirHealthCheckTimeoutMs).toBe(10000);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ variable: 'OUTPUT_DIR_HEALTHCHECK_TIMEOUT', value: '45s', fallback: 10 }),
+        expect.stringContaining('OUTPUT_DIR_HEALTHCHECK_TIMEOUT')
+      );
+    });
+
+    it('gives the check the configured time before giving up', async () => {
+      process.env.OUTPUT_DIR_HEALTHCHECK_TIMEOUT = '2';
+      const configured = new DownloadExecutor();
+      jest.useFakeTimers();
+      mockFsPromises.writeFile.mockReturnValue(new Promise(() => {}));
+
+      const healthPromise = configured.checkOutputDirectoryHealth('/mock/output');
+      jest.advanceTimersByTime(2000);
+
+      await expect(healthPromise).rejects.toThrow('timed out after 2s');
+    });
+
+    it('tells a job that timed out how to allow more time', async () => {
+      process.env.OUTPUT_DIR_HEALTHCHECK_TIMEOUT = '2';
+      const configured = new DownloadExecutor();
+      jest.useFakeTimers();
+      mockFsPromises.writeFile.mockReturnValue(new Promise(() => {}));
+
+      const downloadPromise = configured.doDownload(mockArgs, 'job-123', 'Channel Downloads');
+      await jest.advanceTimersByTimeAsync(2000);
+      await downloadPromise;
+
+      expect(mockSpawn).not.toHaveBeenCalled();
+      expect(jobModule.updateJob).toHaveBeenCalledWith('job-123', expect.objectContaining({
+        status: 'Error',
+        notes: expect.stringContaining('OUTPUT_DIR_HEALTHCHECK_TIMEOUT'),
+      }));
+    });
+
+    it('does not mention the time limit when the directory is not writable', async () => {
+      const error = new Error('EACCES: permission denied');
+      error.code = 'EACCES';
+      mockFsPromises.writeFile.mockRejectedValue(error);
+
+      await executor.doDownload(mockArgs, 'job-123', 'Channel Downloads');
+
+      expect(jobModule.updateJob).toHaveBeenCalledWith('job-123', expect.objectContaining({
+        status: 'Error',
+        notes: expect.not.stringContaining('OUTPUT_DIR_HEALTHCHECK_TIMEOUT'),
+      }));
+    });
+  });
+
   describe('archive access during downloads', () => {
     it('defers startup until the purge releases the archive', async () => {
       const release = archiveAccess.acquirePurge();
@@ -2097,10 +2176,11 @@ describe('DownloadExecutor', () => {
         call => call[3] === 'downloadProgress' && call[4]?.finalSummary
       );
       expect(finalProgressCall[4]).toEqual(expect.objectContaining({
-        text: 'Download completed: No new videos to download',
+        text: 'Download completed: 1 not available',
         finalSummary: expect.objectContaining({
           totalDownloaded: 0,
           totalFailed: 0,
+          totalNotAvailable: 1,
           failedVideos: []
         })
       }));

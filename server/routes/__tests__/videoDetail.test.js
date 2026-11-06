@@ -17,6 +17,84 @@ jest.mock('fs', () => {
 
 const fs = require('fs');
 
+describe('GET /api/videos/:youtubeId', () => {
+  const loggerMock = {
+    info: jest.fn(),
+    error: jest.fn(),
+  };
+
+  const createResponse = () => {
+    const res = {};
+    res.status = jest.fn(() => res);
+    res.json = jest.fn(() => res);
+    return res;
+  };
+
+  const getHandler = (videosModuleMock) => {
+    const router = createVideoDetailRoutes({
+      verifyToken: (req, res, next) => next(),
+      videosModule: videosModuleMock,
+    });
+
+    const app = express();
+    app.use(router);
+
+    return findRouteHandler(app, 'get', '/api/videos/:youtubeId');
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('returns the video row from videosModule', async () => {
+    const video = { id: 7, youtubeId: 'dQw4w9WgXcQ', youTubeVideoName: 'A video', removed: true };
+    const videosModuleMock = { getVideoByYoutubeId: jest.fn().mockResolvedValue(video) };
+    const res = createResponse();
+
+    await getHandler(videosModuleMock)({ params: { youtubeId: 'dQw4w9WgXcQ' }, log: loggerMock }, res);
+
+    expect(videosModuleMock.getVideoByYoutubeId).toHaveBeenCalledWith('dQw4w9WgXcQ');
+    expect(res.json).toHaveBeenCalledWith(video);
+  });
+
+  test('returns 404 when no video has this youtubeId', async () => {
+    const videosModuleMock = { getVideoByYoutubeId: jest.fn().mockResolvedValue(null) };
+    const res = createResponse();
+
+    await getHandler(videosModuleMock)({ params: { youtubeId: 'dQw4w9WgXcQ' }, log: loggerMock }, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Video not found' });
+  });
+
+  test.each([
+    ['empty', ''],
+    ['too short', 'abc'],
+    ['too long', 'a'.repeat(21)],
+    ['made of bad characters', 'abc def%'],
+  ])('returns 400 for a youtubeId that is %s', async (_label, youtubeId) => {
+    const videosModuleMock = { getVideoByYoutubeId: jest.fn() };
+    const res = createResponse();
+
+    await getHandler(videosModuleMock)({ params: { youtubeId }, log: loggerMock }, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid YouTube ID' });
+    expect(videosModuleMock.getVideoByYoutubeId).not.toHaveBeenCalled();
+  });
+
+  test('returns 500 when the lookup fails', async () => {
+    const videosModuleMock = { getVideoByYoutubeId: jest.fn().mockRejectedValue(new Error('db down')) };
+    const res = createResponse();
+
+    await getHandler(videosModuleMock)({ params: { youtubeId: 'dQw4w9WgXcQ' }, log: loggerMock }, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Failed to retrieve video' });
+    expect(loggerMock.error).toHaveBeenCalled();
+  });
+});
+
 describe('GET /api/videos/:youtubeId/metadata', () => {
   const loggerMock = {
     info: jest.fn(),

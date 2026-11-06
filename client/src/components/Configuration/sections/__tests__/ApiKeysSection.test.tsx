@@ -510,7 +510,7 @@ describe('ApiKeysSection Component', () => {
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: jest.fn().mockResolvedValue({ keys: [mockApiKeys[1]] }),
+          json: jest.fn().mockResolvedValue({ keys: [{ ...mockApiKeys[0], is_active: false, revoked_at: '2026-10-29T12:00:00Z' }, mockApiKeys[1]] }),
         });
       
       const props = createSectionProps();
@@ -533,6 +533,9 @@ describe('ApiKeysSection Component', () => {
           method: 'DELETE',
         }));
       });
+      await waitFor(() => expect(screen.queryByText('My Bookmarklet')).not.toBeInTheDocument());
+      expect(screen.getByText('iPhone Shortcut')).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: /Delete/i })).toHaveLength(1);
     });
   });
 
