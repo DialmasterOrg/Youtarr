@@ -16,6 +16,7 @@ const PROGRESS_THROTTLE_MS = 250;
 // a URL before extraction, and "<id>: <title> has already been ..." when it
 // skips an extracted entry.
 const ARCHIVE_SKIP_PATTERN = /^\[download\]\s+([a-zA-Z0-9_-]{11}):.*has already been recorded in the archive/;
+const SUBTITLE_WRITE_PREFIX = '[info] Writing video subtitles to:';
 // Must stay well under the client's 60s STALE_ACTIVITY_MS (useCurrentActivitySeed)
 // so the /api/jobs/current-activity snapshot is never considered stale mid-run.
 const PROGRESS_HEARTBEAT_MS = 25 * 1000;
@@ -49,6 +50,7 @@ class YtdlpOutputRouter {
     // jobs read metadata for every URL, so the finalizer must not count these
     // as downloaded.
     this.archiveSkippedIds = new Set();
+    this.filterSkippedCount = 0;
     this.downloadedIds = new Set();
     this.stderrBuffer = '';
     // Partial stderr line waiting on its newline, so a split line never
@@ -137,6 +139,10 @@ class YtdlpOutputRouter {
           }
         }
 
+        if (line.startsWith(SUBTITLE_WRITE_PREFIX)) {
+          this.errorTracker.trackSubtitleWrite(line.slice(SUBTITLE_WRITE_PREFIX.length).trim());
+        }
+
         if (line.includes('already been recorded in the archive') || line.includes('does not pass filter')) {
           const isArchiveSkip = !line.includes('does not pass filter');
           const id = isArchiveSkip
@@ -146,6 +152,7 @@ class YtdlpOutputRouter {
           if (isArchiveSkip && id && !this.downloadedIds.has(id)) {
             this.archiveSkippedIds.add(id);
           }
+          if (!isArchiveSkip) this.filterSkippedCount += 1;
         }
 
         // Track destination files for cleanup
@@ -153,6 +160,7 @@ class YtdlpOutputRouter {
           const destPath = line.replace('[download] Destination:', '').trim();
           if (destPath) {
             this.partialDestinations.add(destPath);
+            this.errorTracker.trackDownloadDestination(destPath);
 
             // Create tracking entry for any video download
             const youtubeId = filesystem.extractYoutubeIdFromPath(destPath);

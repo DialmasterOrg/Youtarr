@@ -551,6 +551,20 @@ describe('DownloadModule', () => {
       expect(order).toEqual(['channels', 'playlists']);
     });
 
+    it('keeps counts that come back every run out of the sweep summary', async () => {
+      const downloadRunTracker = require('../download/downloadRunTracker');
+      const MessageEmitter = require('../messageEmitter');
+      jest.doMock('../playlistModule', () => ({ playlistAutoDownload: jest.fn().mockResolvedValue() }));
+      jest.spyOn(downloadModule, 'doChannelDownloads').mockImplementation(async (jobData) => {
+        downloadRunTracker.recordJobResult(jobData.runId, 'job-1', { totalMembersOnly: 2, jobType: 'Channel Downloads' });
+      });
+
+      await downloadModule.doChannelAndPlaylistDownloads({});
+
+      const summaryCall = MessageEmitter.emitMessage.mock.calls.find((call) => call[4] && call[4].finalSummary);
+      expect(summaryCall[4].finalSummary.totalMembersOnly).toBe(0);
+    });
+
     it('threads manual override settings through to playlist auto-download', async () => {
       jest.spyOn(downloadModule, 'doChannelDownloads').mockResolvedValue();
       jest.doMock('../playlistModule', () => ({
@@ -1040,6 +1054,23 @@ describe('DownloadModule', () => {
       });
     });
 
+    it('leaves the videos a failed group looked at out of the message the alert shows', async () => {
+      const MessageEmitter = require('../messageEmitter');
+      const job = { status: 'In Progress', data: { videos: [], cumulativeSkipped: 9 } };
+      jobModuleMock.getJob.mockReturnValue(job);
+      jest.spyOn(downloadModule, 'executeGroupDownload').mockImplementation(async () => {
+        job.status = 'Error';
+        job.output = 'Bot detection encountered';
+      });
+
+      await downloadModule.doGroupedChannelDownloads({}, [
+        { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1' }] },
+      ]);
+
+      const finalCall = MessageEmitter.emitMessage.mock.calls.find((call) => call[4] && call[4].finalSummary);
+      expect(finalCall[4].text).toBe('Download failed in Group 1/1 (1080p): Bot detection encountered. 0 downloaded');
+    });
+
     describe('when the user terminates the last group', () => {
       const groups = [
         { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1' }] }
@@ -1359,17 +1390,18 @@ describe('DownloadModule', () => {
       ChannelVideoMock.findAll.mockResolvedValue([]);
       doSpecificDownloadsSpy = jest
         .spyOn(downloadModule, 'doSpecificDownloads')
-        .mockResolvedValue(undefined);
+        .mockResolvedValue({ jobId: 'retry-job-1', acceptedIds: [retryVideo.youtubeId] });
     });
 
     it('enqueues a URL-list job with the auto-retry label, attempt counter, and run id', async () => {
-      await downloadModule.enqueueAutoRetryJob({
+      const links = await downloadModule.enqueueAutoRetryJob({
         retryVideos: [retryVideo],
         autoRetryAttempt: 1,
         runId: 'run-1',
         sourceJobData: { overrideSettings: { resolution: '720' } },
       });
 
+      expect(links).toEqual({ abc123def45: 'retry-job-1' });
       expect(doSpecificDownloadsSpy).toHaveBeenCalledWith({
         body: expect.objectContaining({
           urls: ['https://www.youtube.com/watch?v=abc123def45'],
@@ -1378,7 +1410,7 @@ describe('DownloadModule', () => {
           autoRetryAttempt: 1,
           runId: 'run-1',
         }),
-      });
+      }, false, { includeJobId: true });
     });
 
     it('marks cookie-specific retries as anonymous', async () => {
@@ -1399,7 +1431,7 @@ describe('DownloadModule', () => {
           autoRetryAttempt: 1,
           runId: 'run-cookie',
         }),
-      });
+      }, false, { includeJobId: true });
     });
 
     it('splits mixed authenticated and anonymous retries into separate jobs', async () => {
@@ -1439,6 +1471,22 @@ describe('DownloadModule', () => {
           runId: 'run-mixed',
         }),
       ]));
+    });
+
+    it('retains the successful handoff when the other retry group fails', async () => {
+      doSpecificDownloadsSpy.mockRejectedValueOnce(new Error('queue unavailable'))
+        .mockResolvedValueOnce({ jobId: 'anonymous-job', acceptedIds: ['zzz999xxx11'] });
+      const links = await downloadModule.enqueueAutoRetryJob({
+        retryVideos: [retryVideo, { youtubeId: 'zzz999xxx11', url: 'https://youtu.be/zzz999xxx11', anonymousRetry: true }],
+        autoRetryAttempt: 1, sourceJobData: {},
+      });
+      expect(links).toEqual({ zzz999xxx11: 'anonymous-job' });
+    });
+
+    it('does not claim a handoff when video admission was refused', async () => {
+      doSpecificDownloadsSpy.mockResolvedValue({ queued: 0, acceptedIds: [], alreadyActiveIds: [retryVideo.youtubeId] });
+      await expect(downloadModule.enqueueAutoRetryJob({ retryVideos: [retryVideo], autoRetryAttempt: 1 }))
+        .resolves.toEqual({});
     });
 
     it('resolves owning channels for unmapped videos and passes channelId when unique', async () => {
@@ -1741,6 +1789,15 @@ describe('DownloadModule', () => {
 
       expect(jobModuleMock.addOrUpdateJob).toHaveBeenCalledWith(expect.any(Object), false, jobId);
       expect(result).toBe(jobId);
+    });
+
+    it('returns the admitted identity only to internal retry callers', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'Pending' });
+      const request = { body: { urls: ['https://youtu.be/abcdefghijk'], includeJobId: true } };
+      const legacy = await downloadModule.doSpecificDownloads(request);
+      expect(legacy).not.toHaveProperty('jobId');
+      const internal = await downloadModule.doSpecificDownloads(request, false, { includeJobId: true });
+      expect(internal).toMatchObject({ jobId: mockJobId, acceptedIds: ['abcdefghijk'] });
     });
 
     it('ignores a job id supplied in the request body', async () => {

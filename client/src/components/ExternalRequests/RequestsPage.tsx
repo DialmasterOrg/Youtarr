@@ -45,7 +45,8 @@ interface RequestsPageProps {
 }
 
 const RequestsPage: React.FC<RequestsPageProps> = ({ token }) => {
-  const compact = useMediaQuery('(max-width: 767px)');
+  // Leave room for the application sidebar and the table's review controls.
+  const compact = useMediaQuery('(max-width: 1439px)');
   const state = useExternalRequests(token);
   const {
     filters,

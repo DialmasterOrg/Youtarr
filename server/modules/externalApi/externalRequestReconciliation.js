@@ -1,46 +1,18 @@
 const { Op } = require('sequelize');
+const { parseAuxData } = require('../jobAuxData');
+const { MAX_AUTO_RETRY_COUNT } = require('../download/transient403RetryPlanner');
 
 const FINAL_JOB_STATUSES = new Set([
   'Complete', 'Complete with Warnings', 'Error', 'Failed', 'Terminated', 'Killed',
 ]);
 
 /**
- * Closes processing video requests whose download job has ended: completed
- * when the video is now on disk, failed otherwise. Runs from the job-ended
- * hook and the executor's sweep, never from reads, so a request's status does
- * not depend on who happens to read it.
+ * Follow each video's durable retry handoffs before deciding whether its
+ * download ended. Both job-ended events and the recovery sweep use this path;
+ * reads never drive request state. No transactions span the download work.
  */
 function createExternalRequestReconciliation({ models, now, jobLookup = () => null }) {
   const { ExternalRequest, Video, Job } = models;
-
-  async function endedJobIdsFor(records, knownEnded) {
-    const ended = new Set(knownEnded);
-    const unknown = [];
-    for (const record of records) {
-      const jobId = record.job_id || record.id;
-      if (ended.has(jobId)) continue;
-      const liveJob = jobLookup(jobId);
-      if (liveJob) {
-        if (FINAL_JOB_STATUSES.has(liveJob.status)) ended.add(jobId);
-      } else {
-        unknown.push(jobId);
-      }
-    }
-    if (unknown.length === 0) return ended;
-    const stored = await Job.findAll({
-      where: { id: { [Op.in]: [...new Set(unknown)] } },
-      attributes: ['id', 'status'],
-    });
-    const storedById = new Map(stored.map((job) => [job.id, job.status]));
-    for (const jobId of unknown) {
-      // A job neither running nor stored was lost (for example, with a
-      // restart before it was saved); its request can never complete.
-      if (!storedById.has(jobId) || FINAL_JOB_STATUSES.has(storedById.get(jobId))) {
-        ended.add(jobId);
-      }
-    }
-    return ended;
-  }
 
   async function resolveVideoRequests(records, { endedJobIds = [] } = {}) {
     const processing = records.filter(
@@ -52,24 +24,74 @@ function createExternalRequestReconciliation({ models, now, jobLookup = () => nu
       attributes: ['youtubeId'],
     });
     const downloaded = new Set(videos.map((video) => video.youtubeId));
-    const ended = await endedJobIdsFor(
-      processing.filter((record) => !downloaded.has(record.youtube_id)),
-      endedJobIds
-    );
-    const resolved = [];
+    const knownEnded = new Set(endedJobIds);
+    const jobs = new Map();
+
+    async function loadJobs(ids) {
+      const missing = [];
+      for (const id of new Set(ids)) {
+        if (jobs.has(id)) continue;
+        const live = jobLookup(id);
+        if (live) jobs.set(id, live);
+        else { jobs.set(id, null); missing.push(id); }
+      }
+      if (missing.length === 0) return;
+      const stored = await Job.findAll({
+        where: { id: { [Op.in]: missing } },
+        attributes: ['id', 'status', 'aux_data'],
+      });
+      for (const job of stored) jobs.set(job.id, { status: job.status, data: parseAuxData(job.aux_data) });
+    }
+
+    await loadJobs(processing.filter((record) => !downloaded.has(record.youtube_id))
+      .map((record) => record.job_id || record.id));
+    const decisions = [];
     for (const record of processing) {
       const finishedAt = now();
-      const values = downloaded.has(record.youtube_id)
+      let jobId = record.job_id || record.id;
+      let ended = false;
+      if (!downloaded.has(record.youtube_id)) {
+        const visited = new Set();
+        // The planner permits at most three retries. Bound malformed/cyclic
+        // history too, so corrupted job data cannot stall the executor.
+        for (let hop = 0; hop <= MAX_AUTO_RETRY_COUNT; hop += 1) {
+          if (visited.has(jobId)) { ended = true; break; }
+          visited.add(jobId);
+          await loadJobs([jobId]);
+          const job = jobs.get(jobId);
+          ended = !job || knownEnded.has(jobId) || FINAL_JOB_STATUSES.has(job.status);
+          if (!ended) break;
+          const failure = job?.data?.failedVideos?.find((video) => video.youtubeId === record.youtube_id);
+          if (!failure?.autoRetryQueued || typeof failure.autoRetryJobId !== 'string') break;
+          jobId = failure.autoRetryJobId;
+        }
+      }
+      decisions.push({ record, jobId, ended, finishedAt });
+    }
+    // A retry can persist its video and turn terminal after the first video
+    // query. Observe the final job first, then recheck presence before failing;
+    // otherwise a stale absence can win the CAS against the completion event.
+    const failedCandidates = decisions.filter(({ record, ended }) => ended && !downloaded.has(record.youtube_id));
+    if (failedCandidates.length > 0) {
+      const finishedVideos = await Video.findAll({
+        where: { youtubeId: [...new Set(failedCandidates.map(({ record }) => record.youtube_id))], removed: false },
+        attributes: ['youtubeId'],
+      });
+      finishedVideos.forEach((video) => downloaded.add(video.youtubeId));
+    }
+    const resolved = [];
+    for (const { record, jobId, ended, finishedAt } of decisions) {
+      const terminal = downloaded.has(record.youtube_id)
         ? { status: 'completed', completed_at: finishedAt }
-        : ended.has(record.job_id || record.id)
-          ? { status: 'failed', message: 'Download did not complete' }
-          : null;
-      if (!values) continue;
+        : ended ? { status: 'failed', message: 'Download did not complete' } : null;
+      if (!terminal && jobId === (record.job_id || record.id)) continue;
       const [updated] = await ExternalRequest.update(
-        { ...values, active_dedupe_key: null, updated_at: finishedAt },
-        { where: { id: record.id, status: 'processing' } }
+        { ...(terminal || {}), job_id: jobId,
+          ...(terminal ? { active_dedupe_key: null } : {}), updated_at: finishedAt },
+        // An old event/sweep cannot overwrite a newer retry handoff.
+        { where: { id: record.id, status: 'processing', job_id: record.job_id || null } }
       );
-      if (updated === 1) resolved.push(record.id);
+      if (updated === 1 && terminal) resolved.push(record.id);
     }
     return resolved;
   }

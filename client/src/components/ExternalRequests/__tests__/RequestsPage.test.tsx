@@ -345,8 +345,10 @@ describe('RequestsPage', () => {
     expect(within(screen.getByRole('dialog')).queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
   });
 
-  test('keeps request actions in a compact card on mobile', async () => {
-    (useMediaQuery as jest.Mock).mockReturnValue(true);
+  test.each([390, 834, 1280])('keeps review actions visible in cards at %ipx', async (width) => {
+    (useMediaQuery as jest.Mock).mockImplementation((query: string) =>
+      window.matchMedia(query).matches || width <= Number(query.match(/max-width: (\d+)px/)?.[1] || 0)
+    );
     mockedAxios.get.mockResolvedValueOnce(axiosResponse(page()));
     renderPage();
     const card = await screen.findByRole('article');

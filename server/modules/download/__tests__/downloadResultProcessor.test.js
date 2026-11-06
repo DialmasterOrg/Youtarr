@@ -27,10 +27,15 @@ const {
   reconcileArchive,
 } = require('../downloadResultProcessor');
 
-// Stand-in for YtdlpErrorTracker: only the failedVideos Map is read here
-const makeErrorTracker = (failedEntries = []) => ({
-  failedVideos: new Map(failedEntries)
-});
+// Stand-in for YtdlpErrorTracker: the failedVideos Map, plus dropping the
+// failures of subtitleOnlyIds the way dropSubtitleOnlyFailure does
+const makeErrorTracker = (failedEntries = [], subtitleOnlyIds = []) => {
+  const failedVideos = new Map(failedEntries);
+  return {
+    failedVideos,
+    dropSubtitleOnlyFailure: jest.fn((youtubeId) => subtitleOnlyIds.includes(youtubeId) && failedVideos.delete(youtubeId))
+  };
+};
 
 describe('downloadResultProcessor', () => {
   beforeEach(() => {
@@ -171,6 +176,40 @@ describe('downloadResultProcessor', () => {
       expect(failedVideosList[0]).toMatchObject({
         youtubeId: 'marked12345',
         error: 'Download error'
+      });
+    });
+
+    it('counts a video with a file as successful when its only failures came from subtitles', () => {
+      const videoData = [
+        { youtubeId: 'subtitle123', youTubeVideoName: 'Subtitled', youTubeChannelName: 'Chan', fileSize: '1000' }
+      ];
+      const errorTracker = makeErrorTracker(
+        [['subtitle123', { youtubeId: 'subtitle123', error: 'Did not get any data blocks' }]],
+        ['subtitle123']
+      );
+
+      const { successfulVideos, failedVideosList } = partitionDownloadResults(
+        videoData, errorTracker, []
+      );
+
+      expect({ successful: successfulVideos.length, failed: failedVideosList.length })
+        .toEqual({ successful: 1, failed: 0 });
+    });
+
+    it('keeps a video without a file failed even when its only failures came from subtitles', () => {
+      const videoData = [
+        { youtubeId: 'subtitle123', youTubeVideoName: 'Subtitled', youTubeChannelName: 'Chan', fileSize: null }
+      ];
+      const errorTracker = makeErrorTracker(
+        [['subtitle123', { youtubeId: 'subtitle123', error: 'Did not get any data blocks' }]],
+        ['subtitle123']
+      );
+
+      const { failedVideosList } = partitionDownloadResults(videoData, errorTracker, []);
+
+      expect(failedVideosList[0]).toMatchObject({
+        youtubeId: 'subtitle123',
+        error: 'Did not get any data blocks'
       });
     });
 

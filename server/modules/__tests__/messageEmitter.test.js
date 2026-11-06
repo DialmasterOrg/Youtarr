@@ -126,6 +126,132 @@ describe('messageEmitter', () => {
     });
   });
 
+  describe('keeping the last real result', () => {
+    const emit = (payload) => MessageEmitter.emitMessage('broadcast', null, 'download', 'downloadProgress', payload);
+    const lastBroadcastSummary = () => {
+      const calls = broadcastClients[0].send.mock.calls;
+      return JSON.parse(calls[calls.length - 1][0]).payload.finalSummary;
+    };
+    const realResult = () => ({
+      totalDownloaded: 12,
+      totalFailed: 1,
+      totalSkipped: 0,
+      jobType: 'Manually Added Urls',
+      completedAt: '2026-10-31T19:42:00.000Z',
+    });
+    const quietCheck = () => ({
+      totalDownloaded: 0,
+      totalFailed: 0,
+      totalSkipped: 9,
+      jobType: 'Channel Downloads',
+      completedAt: '2026-10-31T20:04:00.000Z',
+    });
+
+    test('a check that found nothing new shows the last real result and when it checked', () => {
+      emit({ finalSummary: realResult() });
+      emit({ clearPreviousSummary: true });
+      emit({ finalSummary: quietCheck() });
+
+      expect(lastBroadcastSummary()).toEqual({ ...realResult(), lastCheckedAt: '2026-10-31T20:04:00.000Z' });
+    });
+
+    test('replays the kept result to a client that connects after the check', () => {
+      emit({ finalSummary: realResult() });
+      emit({ clearPreviousSummary: true });
+      emit({ finalSummary: quietCheck() });
+
+      const expected = { totalDownloaded: 12, totalFailed: 1, lastCheckedAt: '2026-10-31T20:04:00.000Z' };
+      expect(MessageEmitter.getLastFinalActivity().finalSummary).toMatchObject(expected);
+      expect(MessageEmitter.getLastMessages()[0].payload.finalSummary).toMatchObject(expected);
+    });
+
+    test('a check with no earlier result is shown as it is', () => {
+      emit({ finalSummary: quietCheck() });
+
+      expect(lastBroadcastSummary()).toEqual(quietCheck());
+    });
+
+    test('a new real result replaces the kept one without a last checked time', () => {
+      emit({ finalSummary: realResult() });
+      emit({ finalSummary: quietCheck() });
+      const newer = { ...realResult(), totalDownloaded: 2, totalFailed: 0, completedAt: '2026-10-31T21:04:00.000Z' };
+      emit({ finalSummary: newer });
+
+      expect(lastBroadcastSummary()).toEqual(newer);
+    });
+
+    test.each([
+      ['totalDownloaded', 1],
+      ['totalFailed', 1],
+      ['totalAutoRetried', 1],
+      ['totalMembersOnly', 1],
+      ['totalTerminatedChannels', 1],
+      ['totalTerminationFailures', 1],
+      ['totalAlreadyDownloaded', 1],
+      ['totalNotAvailable', 1],
+      ['stoppedGroups', [{ group: 'Group 1/2', reason: 'bot check', terminated: false }]],
+      ['jobIssues', [{ status: 'Failed', reason: 'no space', byUser: false }]],
+    ])('%s counts as a real result that a later check keeps', (field, value) => {
+      emit({ finalSummary: { ...realResult(), totalDownloaded: 0, totalFailed: 0, [field]: value } });
+      emit({ finalSummary: quietCheck() });
+
+      expect(lastBroadcastSummary()).toMatchObject({ [field]: value, jobType: 'Manually Added Urls' });
+    });
+
+    test.each([
+      ['error', { error: true }],
+      ['warning', { warning: true, terminationReason: 'User requested termination' }],
+    ])('a job ending in %s with nothing to report is not treated as a finished check', (_name, flags) => {
+      emit({ finalSummary: realResult() });
+      emit({ finalSummary: quietCheck(), ...flags });
+
+      expect(lastBroadcastSummary()).toEqual(quietCheck());
+    });
+
+    test('a job that stopped early does not lose the kept result for the next check', () => {
+      emit({ finalSummary: realResult() });
+      emit({ finalSummary: quietCheck(), error: true });
+      emit({ finalSummary: { ...quietCheck(), completedAt: '2026-10-31T21:04:00.000Z' } });
+
+      expect(lastBroadcastSummary()).toEqual({ ...realResult(), lastCheckedAt: '2026-10-31T21:04:00.000Z' });
+    });
+
+    test.each([
+      ['job', { jobIssues: [{ status: 'Terminated', reason: 'User requested termination', byUser: true }] }],
+      ['group', { stoppedGroups: [{ group: 'Group 1/2', reason: 'User requested termination', terminated: true }] }],
+    ])('a %s the user stopped shows once, then a later check goes back to the earlier result', (_name, stop) => {
+      emit({ finalSummary: realResult() });
+      const stopped = { ...quietCheck(), ...stop };
+      emit({ finalSummary: stopped, warning: true });
+      expect(lastBroadcastSummary()).toEqual(stopped);
+
+      emit({ finalSummary: quietCheck() });
+
+      expect(lastBroadcastSummary()).toEqual({ ...realResult(), lastCheckedAt: '2026-10-31T20:04:00.000Z' });
+    });
+
+    test('a job the user stopped after it downloaded something is still a real result', () => {
+      emit({ finalSummary: realResult() });
+      const stopped = {
+        ...quietCheck(),
+        totalDownloaded: 3,
+        jobIssues: [{ status: 'Terminated', reason: 'User requested termination', byUser: true }],
+      };
+      emit({ finalSummary: stopped, warning: true });
+      emit({ finalSummary: quietCheck() });
+
+      expect(lastBroadcastSummary()).toMatchObject({ totalDownloaded: 3, lastCheckedAt: '2026-10-31T20:04:00.000Z' });
+    });
+
+    test('leaves the caller\'s summary alone, because notifications read it afterward', () => {
+      emit({ finalSummary: realResult() });
+      const payload = { finalSummary: quietCheck() };
+      emit(payload);
+
+      expect(payload.finalSummary).toEqual(quietCheck());
+    });
+  });
+
   test('handles undefined payload by creating empty object with timestamp', () => {
     MessageEmitter.emitMessage('broadcast', null, 'server', 'ping');
 

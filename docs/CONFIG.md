@@ -15,6 +15,7 @@ These settings can be changed from the Settings pages in the web UI.
 - [Kodi, Emby and Jellyfin Compatibility](#kodi-emby-and-jellyfin-compatibility)
 - [Cookie Config](#cookie-config)
 - [Notifications](#notifications)
+- [RSS Feeds](#rss-feeds)
 - [Download Performance](#download-performance)
 - [Advanced Settings](#advanced-settings)
 - [Auto-Removal Settings](#auto-removal-settings)
@@ -593,6 +594,25 @@ Each entry in the array is an object with the following properties:
 }
 ```
 
+### Notification Link Template
+- **Config Key**: `notificationLinkTemplate`
+- **Type**: `string`
+- **Default**: `""` (no links)
+- **Description**: A URL that Youtarr adds to each video in download notifications. The title of each video becomes a link.
+
+`{youtubeId}` is the only variable. Youtarr replaces it with the YouTube ID of the video. The template must be a full `http://` or `https://` URL of at most 500 characters. When the setting is empty, notifications do not change.
+
+The link appears in the services with rich formatting: Discord, Slack, Telegram and Email. Services that receive plain text have no link. Auto removal and download pause notifications have no link, because they do not list videos you can open.
+
+**Examples:**
+
+| Template | Where the link goes |
+|----------|---------------------|
+| `https://youtarr.example.com/videos?video={youtubeId}` | Opens the video in the Videos page of your Youtarr |
+| `https://www.youtube.com/watch?v={youtubeId}` | Opens the video on YouTube |
+
+The Videos page opens the video named in `?video=` and then removes the parameter from the URL. If no video has that ID, the page shows "Video not found".
+
 ### Rich Formatting
 
 For supported services, Youtarr sends beautifully formatted notifications with embeds, styled text, video cards, and timestamps. Services without rich formatting support receive plain text notifications.
@@ -649,6 +669,41 @@ If you previously used the `discordWebhookUrl` configuration option, Youtarr aut
 ```
 
 The old `discordWebhookUrl` and `notificationService` fields are automatically removed after migration. No manual action is required.
+
+## RSS Feeds
+
+Settings for the private RSS feed of downloaded videos, served at `/feeds/downloads.xml`. See [RSS Feeds](USAGE_GUIDE.md#rss-feeds) in the usage guide for setup.
+
+### Download Feed Enabled
+- **Config Key**: `downloadsFeedEnabled`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Description**: Turns the feed on. While it's off, the feed URL answers 404.
+
+### Download Feed Item Limit
+- **Config Key**: `downloadsFeedItemLimit`
+- **Type**: `number`
+- **Default**: `50`
+- **Range**: 10 to 200
+- **Description**: How many of the newest downloads the feed lists. A value outside the range is corrected at startup.
+
+### Download Feed Media Types
+- **Config Key**: `downloadsFeedMediaTypes`
+- **Type**: `array`
+- **Default**: `["video", "short", "livestream"]`
+- **Description**: Which video types the feed lists. At least one is required.
+
+### Download Feed Link Template
+- **Config Key**: `downloadsFeedLinkTemplate`
+- **Type**: `string`
+- **Default**: `""` (opens YouTube)
+- **Description**: Where clicking a feed item goes. It follows the same rules as the [Notification Link Template](#notification-link-template): a full `http://` or `https://` URL of at most 500 characters, with `{youtubeId}` as the only variable.
+
+### Download Feed Token
+- **Config Key**: `downloadsFeedToken`
+- **Type**: `string`
+- **Default**: Not set; Youtarr creates it the first time the feed is turned on
+- **Description**: The secret in the feed URL. Youtarr manages it: use **Create new URL** in Settings -> RSS Feeds to replace it. Settings saves never change it.
 
 ## Download Performance
 
@@ -805,6 +860,8 @@ volumes:
 For an SMB/CIFS share (Synology, QNAP, Windows file shares), see [Letting Docker Mount the Share](DOCKER.md#letting-docker-mount-the-share).
 
 **Simplest workaround:** Set `useTmpForDownloads: false` (the default). Downloads are staged inside the output directory itself, so the move is a same-filesystem rename — atomic and immune to this class of error. Note: if the NFS mount is stale, downloads will still fail, but they will fail *before* yt-dlp marks them as archived — so they'll be automatically retried on the next scheduled run rather than getting permanently stuck.
+
+**Health check timeout:** Before each download, Youtarr writes and deletes a probe file in the output directory and fails the job if that takes longer than 10 seconds ("Output directory health check timed out"). On a share that is slow but healthy, set the [`OUTPUT_DIR_HEALTHCHECK_TIMEOUT`](ENVIRONMENT_VARIABLES.md#output_dir_healthcheck_timeout) environment variable to a larger number of seconds. The same value also sets how long a truly stale mount takes to fail each job.
 
 ## Auto-Removal Settings
 

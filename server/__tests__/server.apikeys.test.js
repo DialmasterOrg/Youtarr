@@ -611,6 +611,21 @@ describe('API Key Module - Unit Tests', () => {
   });
 });
 
+describe('RSS feed routes', () => {
+  test('serves the download feed without a session check, because readers cannot log in', async () => {
+    const { app } = await createServerModule({ apiKeyModuleMock: createApiKeyModuleMock() });
+
+    expect(findRouteHandlers(app, 'get', '/feeds/downloads.xml')).toHaveLength(1);
+  });
+
+  test('puts a session check on the token endpoints', async () => {
+    const { app } = await createServerModule({ apiKeyModuleMock: createApiKeyModuleMock() });
+
+    expect(findRouteHandlers(app, 'get', '/api/feeds/downloads/token')).toHaveLength(2);
+    expect(findRouteHandlers(app, 'post', '/api/feeds/downloads/regenerate-token')).toHaveLength(2);
+  });
+});
+
 describe('API Key Routes - Integration Tests', () => {
   describe('POST /api/keys - Create API Key', () => {
     test('creates API key with valid session auth', async () => {

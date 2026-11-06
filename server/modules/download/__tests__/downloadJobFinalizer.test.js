@@ -97,6 +97,7 @@ const makeErrorTracker = (overrides = {}) => ({
   terminatedChannels: [],
   terminationFailures: [],
   membersOnlyVideoIds: new Set(),
+  upcomingVideoIds: new Set(),
   settlePersistence: jest.fn().mockResolvedValue(),
   ...overrides
 });
@@ -106,6 +107,8 @@ const makeRouter = (overrides = {}) => ({
   botDetected: false,
   httpForbiddenDetected: false,
   partialDestinations: new Set(),
+  archiveSkippedIds: new Set(),
+  filterSkippedCount: 0,
   emitCookiesSuggestion: jest.fn(),
   ...overrides
 });
@@ -397,6 +400,81 @@ describe('downloadJobFinalizer', () => {
       expect(notificationModule.sendDownloadNotification).toHaveBeenCalled();
     });
 
+    describe('per-video counts in the summary', () => {
+      const emittedFinalSummary = () => MessageEmitter.emitMessage.mock.calls.find(
+        (call) => call[4] && call[4].finalSummary
+      )[4].finalSummary;
+      const contextWithSkips = (overrides = {}) => makeContext({
+        router: makeRouter({ archiveSkippedIds: new Set(['aaaaaaaaaaa', 'bbbbbbbbbbb']), filterSkippedCount: 1 }),
+        errorTracker: makeErrorTracker({
+          upcomingVideoIds: new Set(['ccccccccccc']),
+          membersOnlyVideoIds: new Set(['ddddddddddd']),
+        }),
+        ...overrides,
+      });
+
+      it('accounts for each video in a job given specific videos', async () => {
+        await finalizeDownloadJob(contextWithSkips());
+
+        expect(emittedFinalSummary()).toMatchObject({
+          totalAlreadyDownloaded: 2,
+          totalNotAvailable: 2,
+          totalMembersOnly: 1,
+        });
+      });
+
+      it('names what it did not download in the text of a job given specific videos', async () => {
+        await finalizeDownloadJob(contextWithSkips());
+
+        const finalCall = MessageEmitter.emitMessage.mock.calls.find((call) => call[4] && call[4].finalSummary);
+        expect(finalCall[4].text).toBe('Download completed: 2 already downloaded, 2 not available');
+      });
+
+      it('leaves the videos a channel job looked at out of its text', async () => {
+        await finalizeDownloadJob(contextWithSkips({
+          jobType: 'Channel Downloads',
+          monitor: makeMonitor({ videoCount: { current: 1, total: 9, completed: 0, skipped: 9 } }),
+        }));
+
+        const finalCall = MessageEmitter.emitMessage.mock.calls.find((call) => call[4] && call[4].finalSummary);
+        expect(finalCall[4].text).toBe('Download completed: No new videos to download');
+      });
+
+      it('reports none of them for a channel job, which only restates its settings', async () => {
+        await finalizeDownloadJob(contextWithSkips({ jobType: 'Channel Downloads' }));
+
+        expect(emittedFinalSummary()).toMatchObject({
+          totalAlreadyDownloaded: 0,
+          totalNotAvailable: 0,
+          totalMembersOnly: 0,
+        });
+      });
+
+      it('hands a job\'s counts to its run', async () => {
+        downloadRunTracker.isActive.mockReturnValue(true);
+
+        await finalizeDownloadJob(contextWithSkips({ runId: 'run-1' }));
+
+        expect(downloadRunTracker.recordJobResult).toHaveBeenCalledWith('run-1', mockJobId, expect.objectContaining({
+          totalAlreadyDownloaded: 2,
+          totalNotAvailable: 2,
+          totalMembersOnly: 1,
+        }));
+      });
+
+      it('hands a channel job\'s raw members-only count to its run for the run record', async () => {
+        downloadRunTracker.isActive.mockReturnValue(true);
+
+        await finalizeDownloadJob(contextWithSkips({ jobType: 'Channel Downloads', runId: 'run-1' }));
+
+        expect(downloadRunTracker.recordJobResult).toHaveBeenCalledWith('run-1', mockJobId, expect.objectContaining({
+          totalAlreadyDownloaded: 0,
+          totalNotAvailable: 0,
+          totalMembersOnly: 1,
+        }));
+      });
+    });
+
     describe('job issues reported to the run', () => {
       beforeEach(() => {
         downloadRunTracker.isActive.mockReturnValue(true);
@@ -437,7 +515,7 @@ describe('downloadJobFinalizer', () => {
         it('reports no issue when every failed video went to the retry', async () => {
           endWith([failure('vid403aaaa1')]);
 
-          await finalizeDownloadJob(makeContext({ runId: 'run-1', code: 1, enqueueAutoRetry: jest.fn().mockResolvedValue() }));
+          await finalizeDownloadJob(makeContext({ runId: 'run-1', code: 1, enqueueAutoRetry: jest.fn().mockResolvedValue({ vid403aaaa1: 'retry-job-1' }) }));
 
           const [, , summary] = downloadRunTracker.recordJobResult.mock.calls[0];
           expect(summary).toMatchObject({ totalFailed: 0 });
@@ -447,7 +525,7 @@ describe('downloadJobFinalizer', () => {
         it('still reports the error when a failed video was not retried', async () => {
           endWith([failure('vid403aaaa1'), failure('vidprivate1', 'Private video. Sign in if you have been granted access')]);
 
-          await finalizeDownloadJob(makeContext({ runId: 'run-1', code: 1, enqueueAutoRetry: jest.fn().mockResolvedValue() }));
+          await finalizeDownloadJob(makeContext({ runId: 'run-1', code: 1, enqueueAutoRetry: jest.fn().mockResolvedValue({ vid403aaaa1: 'retry-job-1' }) }));
 
           expect(downloadRunTracker.recordJobResult).toHaveBeenCalledWith('run-1', mockJobId, expect.objectContaining({
             totalFailed: 1,
@@ -560,7 +638,7 @@ describe('downloadJobFinalizer', () => {
         const failure = make403Failure();
         primeFailure(failure);
         jobModule.getJob.mockReturnValue({ data: { overrideSettings: { resolution: '720' } } });
-        const enqueueAutoRetry = jest.fn().mockResolvedValue();
+        const enqueueAutoRetry = jest.fn().mockResolvedValue({ vid403aaaa1: 'retry-job-1' });
 
         await finalizeDownloadJob(makeContext({ code: 1, enqueueAutoRetry, runId: 'run-9' }));
 
@@ -584,13 +662,15 @@ describe('downloadJobFinalizer', () => {
         const failure = make403Failure();
         primeFailure(failure);
         jobModule.getJob.mockReturnValue({ data: {} });
-        const enqueueAutoRetry = jest.fn().mockResolvedValue();
+        const enqueueAutoRetry = jest.fn().mockResolvedValue({ vid403aaaa1: 'retry-job-1' });
 
         await finalizeDownloadJob(makeContext({ enqueueAutoRetry }));
 
         expect(failure.autoRetryQueued).toBe(true);
         const [, fields] = jobModule.updateJob.mock.calls[0];
-        expect(fields.data.failedVideos[0].autoRetryQueued).toBe(true);
+        expect(fields.data.failedVideos[0]).toMatchObject({
+          autoRetryQueued: true, autoRetryJobId: 'retry-job-1',
+        });
 
         const finalCall = MessageEmitter.emitMessage.mock.calls.find(
           (call) => call[4] && call[4].finalSummary
@@ -607,7 +687,7 @@ describe('downloadJobFinalizer', () => {
         primeFailure(failure);
         jobModule.getJob.mockReturnValue({ data: {} });
         downloadRunTracker.isActive.mockReturnValue(true);
-        const enqueueAutoRetry = jest.fn().mockResolvedValue();
+        const enqueueAutoRetry = jest.fn().mockResolvedValue({ vid403aaaa1: 'retry-job-1' });
 
         await finalizeDownloadJob(makeContext({ enqueueAutoRetry, runId: 'run-1' }));
 
@@ -623,7 +703,7 @@ describe('downloadJobFinalizer', () => {
         });
         primeFailure(failure);
         configModule.getCookiesPath.mockReturnValue('/app/config/cookies.user.txt');
-        const enqueueAutoRetry = jest.fn().mockResolvedValue();
+        const enqueueAutoRetry = jest.fn().mockResolvedValue({ vid403aaaa1: 'retry-job-1' });
 
         await finalizeDownloadJob(makeContext({
           code: 1,
@@ -655,6 +735,17 @@ describe('downloadJobFinalizer', () => {
 
         expect(enqueueAutoRetry).not.toHaveBeenCalled();
         expect(failure.autoRetryQueued).toBeUndefined();
+      });
+
+      it('does not mark failed videos as handed off when no retry was admitted', async () => {
+        const failure = make403Failure();
+        primeFailure(failure);
+        await finalizeDownloadJob(makeContext({ enqueueAutoRetry: jest.fn().mockResolvedValue({}) }));
+        expect(failure.autoRetryQueued).toBeUndefined();
+        expect(failure.autoRetryJobId).toBeUndefined();
+        expect(jobModule.updateJob.mock.calls[0][1].data.failedVideos).toContainEqual(
+          expect.objectContaining({ youtubeId: failure.youtubeId })
+        );
       });
 
       it('does not enqueue when bot detection fired', async () => {
@@ -803,7 +894,7 @@ describe('downloadJobFinalizer', () => {
         const failure = make403Failure();
         primeFailure(failure);
         jobModule.getJob.mockReturnValue({ data: {} });
-        const enqueueAutoRetry = jest.fn().mockResolvedValue();
+        const enqueueAutoRetry = jest.fn().mockResolvedValue({ vid403aaaa1: 'retry-job-1' });
 
         await finalizeDownloadJob(makeContext({ enqueueAutoRetry }));
 

@@ -41,6 +41,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-debug}
       - LOG_FILE_MAX_SIZE=${LOG_FILE_MAX_SIZE:-}
       - LOG_FILE_MAX_COUNT=${LOG_FILE_MAX_COUNT:-}
+      - OUTPUT_DIR_HEALTHCHECK_TIMEOUT=${OUTPUT_DIR_HEALTHCHECK_TIMEOUT:-}
       - TZ=${TZ:-UTC}
       - DB_HOST=youtarr-db
       - DB_PORT=3306

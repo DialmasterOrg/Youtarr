@@ -162,7 +162,10 @@ module.exports = function createJobRoutes({ verifyToken, jobModule, downloadModu
    *                 lastFinalActivity:
    *                   type: object
    *                   nullable: true
-   *                   description: Last stored final-state downloadProgress payload, if any
+   *                   description: >
+   *                     Last stored final-state downloadProgress payload, if any. After a
+   *                     job that found nothing new, its finalSummary is the last real
+   *                     result with lastCheckedAt added.
    *       500:
    *         description: Failed to get current download activity
    */

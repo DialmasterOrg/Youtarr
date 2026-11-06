@@ -125,6 +125,13 @@ export const CONFIG_FIELDS = {
   // Notifications
   notificationsEnabled: { default: false, trackChanges: true },
   appriseUrls: { default: [] as Array<{ url: string; name: string; richFormatting?: boolean }>, trackChanges: true },
+  notificationLinkTemplate: { default: '', trackChanges: true },
+
+  // Download RSS feed. Its token is server-owned and not part of this config.
+  downloadsFeedEnabled: { default: false, trackChanges: true },
+  downloadsFeedItemLimit: { default: 50, trackChanges: true },
+  downloadsFeedMediaTypes: { default: ['video', 'short', 'livestream'] as string[], trackChanges: true },
+  downloadsFeedLinkTemplate: { default: '', trackChanges: true },
 
   // Auto removal
   autoRemovalEnabled: { default: false, trackChanges: true },
@@ -267,6 +274,11 @@ export const DEFAULT_CONFIG: ConfigState = {
   prefixChannelNameInTitle: CONFIG_FIELDS.prefixChannelNameInTitle.default,
   notificationsEnabled: CONFIG_FIELDS.notificationsEnabled.default,
   appriseUrls: CONFIG_FIELDS.appriseUrls.default,
+  notificationLinkTemplate: CONFIG_FIELDS.notificationLinkTemplate.default,
+  downloadsFeedEnabled: CONFIG_FIELDS.downloadsFeedEnabled.default,
+  downloadsFeedItemLimit: CONFIG_FIELDS.downloadsFeedItemLimit.default,
+  downloadsFeedMediaTypes: CONFIG_FIELDS.downloadsFeedMediaTypes.default,
+  downloadsFeedLinkTemplate: CONFIG_FIELDS.downloadsFeedLinkTemplate.default,
   autoRemovalEnabled: CONFIG_FIELDS.autoRemovalEnabled.default,
   autoRemovalFreeSpaceThreshold: CONFIG_FIELDS.autoRemovalFreeSpaceThreshold.default,
   autoRemovalVideoAgeThreshold: CONFIG_FIELDS.autoRemovalVideoAgeThreshold.default,

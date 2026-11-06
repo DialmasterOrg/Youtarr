@@ -4,6 +4,7 @@
 
 const {
   escapeHtml,
+  buildVideoLink,
   formatDuration,
   buildTitle,
   getFailedCount,
@@ -88,9 +89,11 @@ function buildEmailHtml(title, subtitle, content) {
  * Format download notification as HTML email
  * @param {Object} finalSummary - Summary object from downloadExecutor
  * @param {Array} videoData - Array of video metadata objects
+ * @param {Object} [options]
+ * @param {string} [options.linkTemplate] - Link template that adds a link to each video
  * @returns {Object} Object with title and HTML body strings
  */
-function formatDownloadMessage(finalSummary, videoData) {
+function formatDownloadMessage(finalSummary, videoData, options = {}) {
   const { totalDownloaded, jobType } = finalSummary;
   const failedCount = getFailedCount(finalSummary);
   const terminatedCount = getTerminatedCount(finalSummary);
@@ -176,11 +179,12 @@ function formatDownloadMessage(finalSummary, videoData) {
       const channelName = escapeHtml(video.youTubeChannelName || 'Unknown Channel');
       const videoTitle = escapeHtml(video.youTubeVideoName || 'Unknown Title');
       const duration = formatDuration(video.duration);
+      const link = buildVideoLink(options.linkTemplate, video);
 
       content += `
       <div class="video-card">
         <div class="channel-name">📺 ${channelName}</div>
-        <div class="video-title">${videoTitle}</div>
+        <div class="video-title">${link ? `<a href="${escapeHtml(link)}">${videoTitle}</a>` : videoTitle}</div>
         <div class="duration">⏱️ ${duration}</div>
       </div>`;
     });

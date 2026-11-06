@@ -14,15 +14,27 @@ const metadataLimiter = rateLimit({
   validate: { trustProxy: false },
 });
 
+// Single video lookup rate limiter. A lookup can start a YouTube existence
+// check and a file check, so we cap the calls per IP.
+const videoLookupLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60, // 60 requests per minute per IP
+  message: { error: 'Too many video requests, please try again shortly' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { trustProxy: false },
+});
+
 /**
- * Creates video detail routes for metadata and streaming
+ * Creates video detail routes for a single video, its metadata and streaming
  * @param {Object} deps - Dependencies
  * @param {Function} deps.verifyToken - Token verification middleware
+ * @param {Object} deps.videosModule - Videos module (single video lookup)
  * @param {Object} deps.videoMetadataModule - Video metadata module
  * @param {Object} deps.mediaServers - Media server aggregate (watchStatusQueries)
  * @returns {express.Router}
  */
-function createVideoDetailRoutes({ verifyToken, videoMetadataModule, mediaServers }) {
+function createVideoDetailRoutes({ verifyToken, videosModule, videoMetadataModule, mediaServers }) {
   const router = express.Router();
 
   /**
@@ -37,6 +49,49 @@ function createVideoDetailRoutes({ verifyToken, videoMetadataModule, mediaServer
     }
     next();
   };
+
+  /**
+   * @swagger
+   * /api/videos/{youtubeId}:
+   *   get:
+   *     summary: Get one video by YouTube ID
+   *     description: Returns the video row in the same shape as a row of GET /getVideos. A video that automatic removal or the user deleted is still returned, with its removal fields set, until the trash is emptied.
+   *     tags: [Videos]
+   *     parameters:
+   *       - in: path
+   *         name: youtubeId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: YouTube video ID
+   *     responses:
+   *       200:
+   *         description: The video
+   *       400:
+   *         description: Invalid YouTube ID
+   *       404:
+   *         description: No video with this YouTube ID
+   *       500:
+   *         description: Internal server error
+   */
+  router.get('/api/videos/:youtubeId', videoLookupLimiter, verifyToken, async (req, res) => {
+    const { youtubeId } = req.params;
+
+    if (!youtubeId || !/^[A-Za-z0-9_-]{6,20}$/.test(youtubeId)) {
+      return res.status(400).json({ error: 'Invalid YouTube ID' });
+    }
+
+    try {
+      const video = await videosModule.getVideoByYoutubeId(youtubeId);
+      if (!video) {
+        return res.status(404).json({ error: 'Video not found' });
+      }
+      res.json(video);
+    } catch (err) {
+      req.log.error({ err, youtubeId }, 'Failed to get video');
+      res.status(500).json({ error: 'Failed to retrieve video' });
+    }
+  });
 
   /**
    * @swagger

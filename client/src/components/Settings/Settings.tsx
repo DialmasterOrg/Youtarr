@@ -19,6 +19,7 @@ import WatchStatusSection from '../Configuration/sections/WatchStatusSection';
 import { SponsorBlockSection } from '../Configuration/sections/SponsorBlockSection';
 import { CookieConfigSection } from '../Configuration/sections/CookieConfigSection';
 import { NotificationsSection } from '../Configuration/sections/NotificationsSection';
+import { RssFeedsSection } from '../Configuration/sections/RssFeedsSection';
 import { DownloadPerformanceSection } from '../Configuration/sections/DownloadPerformanceSection';
 import { YtdlpOptionsSection } from '../Configuration/sections/YtdlpOptionsSection';
 import { YtdlpUpdateSection } from '../Configuration/sections/YtdlpUpdateSection';
@@ -417,6 +418,18 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
                 config={config}
                 onConfigChange={handleConfigChange}
                 onMobileTooltipClick={setMobileTooltip}
+                setSnackbar={setSnackbar}
+              />
+            }
+          />
+          <Route
+            path="rss-feeds"
+            element={
+              <RssFeedsSection
+                token={token}
+                config={config}
+                savedConfig={initialConfig}
+                onConfigChange={handleConfigChange}
                 setSnackbar={setSnackbar}
               />
             }

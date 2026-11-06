@@ -9,6 +9,7 @@ This document provides a comprehensive reference for all environment variables s
 - [Authentication](#authentication)
 - [YouTube Cookies](#youtube-cookies)
 - [User and Permissions](#user-and-permissions)
+- [Output Directory](#output-directory)
 - [Platform Deployment](#platform-deployment)
 - [Development and Debugging](#development-and-debugging)
 - [Docker Configuration](#docker-configuration)
@@ -98,6 +99,8 @@ To use an external database:
 - When behind a VPN
 - When using reverse proxy with authentication
 - Platform deployments with external auth (e.g., Cloudflare Access)
+
+**Note:** The [RSS feed](USAGE_GUIDE.md#rss-feeds) still requires the secret in its URL when this is `false`.
 
 ### EXTERNAL_API_ENABLED
 **Required**: No
@@ -212,6 +215,15 @@ Note: *The `/path/to/youtube/videos` is just an example. Use the path you have c
 - `jobs/*` - Job state and artifacts
 - `server/images/*` - Thumbnails and cache
 - `${YOUTUBE_OUTPUT_DIR}` - Downloaded videos
+
+## Output Directory
+
+### OUTPUT_DIR_HEALTHCHECK_TIMEOUT
+**Required**: No
+**Default**: `10`
+**Format**: A whole number of seconds from `1` to `3600`, such as `45`.
+**Description**: Before each download, Youtarr writes and deletes a small probe file in the output directory, so a stale or unmounted share fails the job right away instead of hanging it. This is how long that check may take before the job fails with "Output directory health check timed out". The default is enough for local disks and most network shares. If the output directory is on a slow but healthy share (for example NFS backed by disks that spin up on demand), raise it. Only this check is affected, and a larger value also means a truly dead mount takes that much longer to fail each job in a sweep. A value outside the range, or one that is not a whole number, logs a warning and uses the default.
+**Note**: See [NFS Output Directory Considerations](CONFIG.md#nfs-output-directory-considerations) for mount options that help with stale shares.
 
 ## Platform Deployment
 

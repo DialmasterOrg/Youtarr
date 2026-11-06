@@ -442,6 +442,9 @@ npm run lint:backend
 
 # TypeScript type checking
 npm run lint:ts
+
+# Check that every path in .claude/rules still matches a file (also part of npm run lint)
+npm run lint:rules
 ```
 
 ### Pre-commit Hooks

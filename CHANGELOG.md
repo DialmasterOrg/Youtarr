@@ -1,5 +1,35 @@
 # Changelog
 
+## [v1.90.2](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.90.2) - 2026-10-27
+
+### Bug Fixes
+
+* **deps:** patch body-parser and multer security issues ([d827eed](https://github.com/DialmasterOrg/Youtarr/commit/d827eed7bedf49c21e970028416369668f96f436))
+* don't fail videos over an empty subtitle ([4066089](https://github.com/DialmasterOrg/Youtarr/commit/406608989907d6cf023c34741a363405df2d2a44)), closes [#958](https://github.com/DialmasterOrg/Youtarr/issues/958)
+* ignore SponsorBlock retry warnings in 403 detection ([51cf95e](https://github.com/DialmasterOrg/Youtarr/commit/51cf95ebd23e2e47cafb71e3f37d5211a0579d9a))
+* keep downloaded videos when SponsorBlock is unavailable ([6614851](https://github.com/DialmasterOrg/Youtarr/commit/66148511efc7e6bf22ae1e313ecef9be90173b93))
+
+
+### Documentation
+
+* update CHANGELOG for v1.90.1 [skip ci] ([18ebb18](https://github.com/DialmasterOrg/Youtarr/commit/18ebb1803263631ccdeccdc3fde3034239aa99f1))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.90.1...v1.90.2
+
+## [v1.90.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.90.1) - 2026-10-22
+
+### Bug Fixes
+
+* move image to Node 22 for eMudhra CA distrust ([30f9262](https://github.com/DialmasterOrg/Youtarr/commit/30f9262fdd748f4aac817862798587f9f89aac40))
+* **deps:** bump storybook to 10.6.2 ([489a7fc](https://github.com/DialmasterOrg/Youtarr/commit/489a7fcb127a2b08558c26a95397237aaf191c48))
+
+
+### Documentation
+
+* update CHANGELOG for v1.90.0 [skip ci] ([c6ee0f3](https://github.com/DialmasterOrg/Youtarr/commit/c6ee0f3de34c62a0fd83475f8bdc570f0236ec29))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.90.0...v1.90.1
+
 ## [v1.90.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.90.0) - 2026-10-20
 
 ### Features
