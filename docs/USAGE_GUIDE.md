@@ -211,7 +211,7 @@ Playlists don't get their own folder. Each video is saved under the channel that
 
 The same video never downloads twice just because it shows up in a playlist.
 
-Private, deleted, and members-only videos can't be accessed, so Youtarr leaves them out of the list and never downloads them. The video count reflects only the videos Youtarr can see.
+Private and deleted videos can't be accessed, so Youtarr leaves them out of the list and never downloads them. The video count reflects only the videos Youtarr can see. Members-only videos download only when cookies from an account that is a member of the channel are set up; see [Members-Only Videos](CONFIG.md#members-only-videos).
 
 ### The playlist detail page
 

@@ -594,6 +594,20 @@ module.exports = function createVideoRoutes({
    *                   type: integer
    *                 thumbnail:
    *                   type: string
+   *                 isMembersOnly:
+   *                   type: boolean
+   *                   description: The video is members-only and the configured cookies cannot download it
+   *                 membersAccess:
+   *                   type: string
+   *                   nullable: true
+   *                   enum: [no_cookies, unchecked, confirmed, denied, null]
+   *                   description: Whether the configured cookies can open a members-only video; null when the video is not members-only
+   *                 error:
+   *                   type: string
+   *                 errorCode:
+   *                   type: string
+   *                   enum: [COOKIES_REQUIRED, COOKIES_REJECTED]
+   *                   description: COOKIES_REJECTED means the video is members-only and the configured cookies could not be used to check access
    *       400:
    *         description: URL is required
    *       429:

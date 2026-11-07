@@ -192,6 +192,14 @@ describe('downloadJobFinalizer', () => {
       expect(membersAccess.recordDownloadOutcome).toHaveBeenCalledWith(expect.objectContaining({ usedCookies: false }));
     });
 
+    it('does not count a run whose cookies were dropped before yt-dlp started', async () => {
+      const membersAccess = require('../../membersAccess');
+
+      await finalizeDownloadJob(makeContext({ cookiesEnabled: true, cookiesPassed: false }));
+
+      expect(membersAccess.recordDownloadOutcome).toHaveBeenCalledWith(expect.objectContaining({ usedCookies: false }));
+    });
+
     it('still finishes the job when members-only access cannot be recorded', async () => {
       const membersAccess = require('../../membersAccess');
       membersAccess.recordDownloadOutcome.mockRejectedValueOnce(new Error('db down'));

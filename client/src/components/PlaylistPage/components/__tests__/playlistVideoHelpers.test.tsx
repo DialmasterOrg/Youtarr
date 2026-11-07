@@ -52,6 +52,12 @@ describe('isDownloadable', () => {
   });
 });
 
+describe('isDownloadable for previously downloaded members-only videos', () => {
+  test('keeps a deleted or missing members-only video selectable, as the channel page does', () => {
+    expect(isDownloadable(makeVideo({ previously_downloaded: true, members_access: 'denied' }))).toBe(true);
+  });
+});
+
 describe('isDeletable', () => {
   test('true for a downloaded video', () => {
     expect(isDeletable(makeVideo({ downloaded: true }))).toBe(true);
@@ -205,6 +211,12 @@ describe('showsMembersAccess', () => {
 
   test('hides the chip once the video is downloaded', () => {
     expect(showsMembersAccess(makeVideo({ members_access: 'confirmed', downloaded: true }))).toBe(false);
+  });
+});
+
+describe('showsMembersAccess for previously downloaded videos', () => {
+  test('shows the removal state instead of a members chip', () => {
+    expect(showsMembersAccess(makeVideo({ previously_downloaded: true, members_access: 'denied' }))).toBe(false);
   });
 });
 

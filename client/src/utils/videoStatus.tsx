@@ -55,7 +55,7 @@ export const getMembersAccessInfo = (access: MembersAccessState | null | undefin
     case 'unchecked':
       return {
         label: 'Members: not checked',
-        description: 'Members-only. Access is checked when the video is downloaded or opened; open it to check now.',
+        description: 'Members-only. Access has not been checked in the last 24 hours. It is checked on the next download, or open the video and choose Check access.',
         color: 'var(--warning)',
       };
     case 'denied':

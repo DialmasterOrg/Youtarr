@@ -1,4 +1,3 @@
-jest.mock('../configModule', () => ({ getCookiesPath: jest.fn(() => null) }));
 jest.mock('child_process');
 jest.mock('../../logger', () => ({
   info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn(),

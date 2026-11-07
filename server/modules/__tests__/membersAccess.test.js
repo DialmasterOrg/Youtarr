@@ -10,11 +10,19 @@ jest.mock('../../models/videomembersaccess', () => ({
   findAll: jest.fn(),
   bulkCreate: jest.fn(),
   update: jest.fn(),
+  destroy: jest.fn(),
 }));
-jest.mock('../../models/channelvideo', () => ({ findAll: jest.fn() }));
+jest.mock('../../models/channelvideo', () => ({ findAll: jest.fn(), update: jest.fn() }));
 
 const COOKIES_PATH = '/app/config/cookies.user.txt';
 const HOUR_MS = 60 * 60 * 1000;
+const NOW_SECONDS = Math.floor(Date.now() / 1000);
+
+// A Netscape cookie file holding one YouTube login cookie.
+function cookieFile(expirySeconds = NOW_SECONDS + 30 * 24 * 3600, name = 'SID') {
+  return `.youtube.com\tTRUE\t/\tTRUE\t${expirySeconds}\t${name}\tvalue\n`;
+}
+const LIVE_COOKIES = cookieFile();
 
 let fs;
 let configModule;
@@ -23,7 +31,7 @@ let VideoMembersAccess;
 let ChannelVideo;
 let membersAccess;
 
-function useCookieFile(contents = 'cookie-file', { size = 11, mtimeMs = 1000 } = {}) {
+function useCookieFile(contents = LIVE_COOKIES, { size = 11, mtimeMs = 1000 } = {}) {
   configModule.getCookiesPath.mockReturnValue(COOKIES_PATH);
   fs.statSync.mockReturnValue({ size, mtimeMs });
   fs.readFileSync.mockReturnValue(Buffer.from(contents));
@@ -52,12 +60,14 @@ beforeEach(() => {
   VideoMembersAccess.findAll.mockResolvedValue([]);
   VideoMembersAccess.bulkCreate.mockResolvedValue([]);
   VideoMembersAccess.update.mockResolvedValue([0]);
+  VideoMembersAccess.destroy.mockResolvedValue(0);
   ChannelVideo.findAll.mockResolvedValue([]);
+  ChannelVideo.update.mockResolvedValue([0]);
 });
 
 describe('getContext', () => {
   test('reports no cookies when none are configured', () => {
-    expect(membersAccess.getContext()).toEqual({ cookiesConfigured: false, cookieKey: null });
+    expect(membersAccess.getContext()).toEqual({ cookiesConfigured: false, cookieKey: null, loginCookiesLive: false });
   });
 
   test('keys the cookies by a hash of the file contents', () => {
@@ -91,7 +101,25 @@ describe('getContext', () => {
     configModule.getCookiesPath.mockReturnValue(COOKIES_PATH);
     fs.statSync.mockImplementation(() => { throw Object.assign(new Error('gone'), { code: 'ENOENT' }); });
 
-    expect(membersAccess.getContext()).toEqual({ cookiesConfigured: true, cookieKey: null });
+    expect(membersAccess.getContext()).toEqual({ cookiesConfigured: true, cookieKey: null, loginCookiesLive: false });
+  });
+
+  test('reports a live login when the file holds an unexpired login cookie', () => {
+    useCookieFile();
+
+    expect(membersAccess.getContext().loginCookiesLive).toBe(true);
+  });
+
+  test('reports no live login when the login cookies have expired', () => {
+    useCookieFile(cookieFile(NOW_SECONDS - 3600));
+
+    expect(membersAccess.getContext().loginCookiesLive).toBe(false);
+  });
+
+  test('reports no live login when the file holds no login cookie', () => {
+    useCookieFile(cookieFile(NOW_SECONDS + 3600, 'PREF'));
+
+    expect(membersAccess.getContext().loginCookiesLive).toBe(false);
   });
 });
 
@@ -142,6 +170,40 @@ describe('getStates', () => {
   });
 });
 
+describe('getFreshDeniedIds', () => {
+  test('asks only for denials made with the same cookies within 24 hours', async () => {
+    useCookieFile();
+    const context = membersAccess.getContext();
+    const before = Date.now();
+
+    await membersAccess.getFreshDeniedIds(context);
+
+    const { where } = VideoMembersAccess.findAll.mock.calls[0][0];
+    const { Op } = require('sequelize');
+    expect(where.access).toBe('denied');
+    expect(where.cookie_key).toBe(context.cookieKey);
+    const cutoff = where.checked_at[Op.gt].getTime();
+    expect(cutoff).toBeGreaterThanOrEqual(before - 24 * HOUR_MS);
+    expect(cutoff).toBeLessThanOrEqual(Date.now() - 24 * HOUR_MS);
+  });
+
+  test('drops recorded ids that are not video ids', async () => {
+    useCookieFile();
+    VideoMembersAccess.findAll.mockResolvedValue([{ youtube_id: 'aaaaaaaaaaa' }, { youtube_id: 'a)|.*|(?:b' }]);
+
+    await expect(membersAccess.getFreshDeniedIds(membersAccess.getContext())).resolves.toEqual(['aaaaaaaaaaa']);
+  });
+});
+
+describe('getFreshDeniedIdSet', () => {
+  test('is empty when the denials cannot be read', async () => {
+    useCookieFile();
+    VideoMembersAccess.findAll.mockRejectedValue(new Error('db down'));
+
+    await expect(membersAccess.getFreshDeniedIdSet()).resolves.toEqual(new Set());
+  });
+});
+
 describe('buildDownloadFilter', () => {
   test('keeps members-only videos out of a run without cookies', async () => {
     await expect(membersAccess.buildDownloadFilter({ cookiesEnabled: false })).resolves.toBe('availability!=subscriber_only');
@@ -159,6 +221,13 @@ describe('buildDownloadFilter', () => {
 
     await expect(membersAccess.buildDownloadFilter({ cookiesEnabled: true }))
       .resolves.toBe('id!~=\'^(?:aaaaaaaaaaa|bb-bbbbbbbb)$\'');
+  });
+
+  test('never puts a stored non-id into the regex', async () => {
+    useCookieFile();
+    VideoMembersAccess.findAll.mockResolvedValue([{ youtube_id: 'a(' }, { youtube_id: 'a)|.*|(?:b' }]);
+
+    await expect(membersAccess.buildDownloadFilter({ cookiesEnabled: true })).resolves.toBeNull();
   });
 
   test('attempts denied videos the user picked', async () => {
@@ -194,9 +263,48 @@ describe('recordFetchOutcome', () => {
   test('records a denial when the cookies were refused as a non-member', async () => {
     useCookieFile();
 
-    const state = await membersAccess.recordFetchOutcome('aaaaaaaaaaa', { errorMessage: 'ERROR: Join this channel to get access to members-only content' });
+    const state = await membersAccess.recordFetchOutcome('aaaaaaaaaaa', {
+      errorMessage: 'ERROR: Join this channel to get access to members-only content',
+      usedCookies: true,
+    });
 
     expect(state).toBe('denied');
+  });
+
+  test('records no verdict when yt-dlp ran without the cookies', async () => {
+    useCookieFile();
+
+    const state = await membersAccess.recordFetchOutcome('aaaaaaaaaaa', { errorMessage: 'Join this channel', usedCookies: false });
+
+    expect(state).toBe('unchecked');
+    expect(VideoMembersAccess.bulkCreate.mock.calls[0][0][0]).toMatchObject({ access: null });
+  });
+
+  test('records no verdict when the login cookies had expired', async () => {
+    useCookieFile(cookieFile(NOW_SECONDS - 3600));
+
+    await expect(membersAccess.recordFetchOutcome('aaaaaaaaaaa', { errorMessage: 'Join this channel', usedCookies: true }))
+      .resolves.toBe('unchecked');
+  });
+
+  test('forgets a video that is no longer members-only', async () => {
+    useCookieFile();
+
+    await membersAccess.recordFetchOutcome('aaaaaaaaaaa', { availability: 'public' });
+
+    expect(VideoMembersAccess.destroy).toHaveBeenCalledWith({ where: { youtube_id: 'aaaaaaaaaaa' } });
+    expect(ChannelVideo.update).toHaveBeenCalledWith(
+      { availability: 'public' },
+      { where: { youtube_id: 'aaaaaaaaaaa', availability: 'subscriber_only' } }
+    );
+  });
+
+  test('records nothing for an id that is not a video id', async () => {
+    useCookieFile();
+
+    await expect(membersAccess.recordFetchOutcome('a)|.*|(?:b', { errorMessage: 'Join this channel', usedCookies: true }))
+      .resolves.toBeNull();
+    expect(VideoMembersAccess.bulkCreate).not.toHaveBeenCalled();
   });
 
   test('records no verdict when YouTube rejected the cookies themselves', async () => {
@@ -217,7 +325,8 @@ describe('recordFetchOutcome', () => {
     useCookieFile();
     VideoMembersAccess.bulkCreate.mockRejectedValue(new Error('db down'));
 
-    await expect(membersAccess.recordFetchOutcome('aaaaaaaaaaa', { errorMessage: 'Join this channel' })).resolves.toBe('denied');
+    await expect(membersAccess.recordFetchOutcome('aaaaaaaaaaa', { errorMessage: 'Join this channel', usedCookies: true }))
+      .resolves.toBe('denied');
   });
 });
 
@@ -228,6 +337,22 @@ describe('recordDownloadOutcome', () => {
     await membersAccess.recordDownloadOutcome({ membersOnlyIds: new Set(['aaaaaaaaaaa']), downloadedIds: [], usedCookies: true });
 
     expect(VideoMembersAccess.bulkCreate.mock.calls[0][0][0]).toMatchObject({ access: 'denied' });
+  });
+
+  test('records no denial when the login cookies had expired', async () => {
+    useCookieFile(cookieFile(NOW_SECONDS - 3600));
+
+    await membersAccess.recordDownloadOutcome({ membersOnlyIds: new Set(['aaaaaaaaaaa']), downloadedIds: [], usedCookies: true });
+
+    expect(VideoMembersAccess.bulkCreate.mock.calls[0][0][0]).toMatchObject({ access: null });
+  });
+
+  test('records nothing for ids taken from a crafted title', async () => {
+    useCookieFile();
+
+    await membersAccess.recordDownloadOutcome({ membersOnlyIds: new Set(['a)|.*|(?:b']), downloadedIds: [], usedCookies: true });
+
+    expect(VideoMembersAccess.bulkCreate).not.toHaveBeenCalled();
   });
 
   test('records no denial from an anonymous run', async () => {

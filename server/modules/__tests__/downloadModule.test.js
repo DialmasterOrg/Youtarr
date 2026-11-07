@@ -1240,6 +1240,33 @@ describe('DownloadModule', () => {
       YtdlpCommandBuilderMock = require('../download/ytdlpCommandBuilder');
     });
 
+    it('passes the fresh-denial filter of the cookies to yt-dlp on a scheduled run', async () => {
+      const membersAccess = require('../membersAccess');
+      membersAccess.buildDownloadFilter.mockResolvedValueOnce('id!~=\'^(?:aaaaaaaaaaa)$\'');
+      const group = { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1', auto_download_enabled_tabs: 'video' }] };
+
+      await downloadModule.executeGroupDownload(group, mockJobId, 'Channel Downloads - Group 1/1 (1080p)', {}, true);
+
+      expect(membersAccess.buildDownloadFilter).toHaveBeenCalledWith({ cookiesEnabled: true });
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith(
+        '1080', false, null, undefined, null, false, { membersFilter: 'id!~=\'^(?:aaaaaaaaaaa)$\'' }
+      );
+    });
+
+    it('keeps members-only videos out of a scheduled run without cookies', async () => {
+      const membersAccess = require('../membersAccess');
+      const configModule = require('../configModule');
+      configModule.getCookiesPath.mockReturnValueOnce(null);
+      const group = { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1', auto_download_enabled_tabs: 'video' }] };
+
+      await downloadModule.executeGroupDownload(group, mockJobId, 'Channel Downloads - Group 1/1 (1080p)', {}, true);
+
+      expect(membersAccess.buildDownloadFilter).toHaveBeenCalledWith({ cookiesEnabled: false });
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith(
+        '1080', false, null, undefined, null, false, { membersFilter: 'availability!=subscriber_only' }
+      );
+    });
+
     it('should generate channels file from group channels', async () => {
       const group = {
         quality: '1080',
@@ -1743,7 +1770,7 @@ describe('DownloadModule', () => {
       expect(membersAccess.buildDownloadFilter).toHaveBeenCalledWith({ cookiesEnabled: true, skipDenied: false });
     });
 
-    it('leaves fresh members-only denials out of a playlist job', async () => {
+    it('keeps the cookies on record for a playlist job, whose denials were left out when it was queued', async () => {
       const membersAccess = require('../membersAccess');
       jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
 
@@ -1751,7 +1778,24 @@ describe('DownloadModule', () => {
         body: { urls: ['https://youtube.com/watch?v=abcdefghijk'], jobLabel: 'Playlist: Test Playlist' },
       });
 
-      expect(membersAccess.buildDownloadFilter).toHaveBeenCalledWith({ cookiesEnabled: true, skipDenied: true });
+      expect(membersAccess.clearVerdicts).not.toHaveBeenCalled();
+      expect(membersAccess.buildDownloadFilter).toHaveBeenCalledWith({ cookiesEnabled: true, skipDenied: false });
+    });
+
+    it('keeps members-only videos out of an External API request', async () => {
+      const membersAccess = require('../membersAccess');
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+
+      await downloadModule.doSpecificDownloads({
+        body: { urls: ['https://youtube.com/watch?v=abcdefghijk'], jobLabel: 'Manually Added Urls (external request)' },
+      });
+
+      expect(membersAccess.clearVerdicts).not.toHaveBeenCalled();
+      expect(membersAccess.buildDownloadFilter).toHaveBeenCalledWith({ cookiesEnabled: false, skipDenied: false });
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith(
+        '1080', false, null, false,
+        { cookiesEnabled: true, membersFilter: 'availability!=subscriber_only' }
+      );
     });
 
     it('should handle request object with body', async () => {
@@ -2652,6 +2696,22 @@ describe('DownloadModule', () => {
       await downloadModule.doPlaylistDownloads(mockPlaylist);
 
       expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('leaves videos the cookies were recently denied out of the queued URLs', async () => {
+      const membersAccess = require('../membersAccess');
+      membersAccess.getFreshDeniedIdSet.mockResolvedValueOnce(new Set(['vid002']));
+      PlaylistVideoMock.findAll.mockResolvedValue([
+        { youtube_id: 'vid001', channel_id: 'UC1' },
+        { youtube_id: 'vid002', channel_id: 'UC1' },
+      ]);
+      VideoMock.findOne.mockResolvedValue(null);
+      ChannelMock.findOne.mockResolvedValue({ channel_id: 'UC1' });
+      const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockImplementation(async ({ body }) => ({ queued: body.urls.length, acceptedIds: [], alreadyActiveIds: [] }));
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist);
+
+      expect(spy.mock.calls[0][0].body.urls).toEqual(['https://www.youtube.com/watch?v=vid001']);
     });
 
     it('returns without calling download machinery when all videos are already downloaded', async () => {

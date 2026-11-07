@@ -159,7 +159,10 @@ class VideoMetadataModule {
           // of treating the video as public until the next refetch.
           if (detectedMembersOnly) {
             fallbackMetadata.availability = 'subscriber_only';
-            fallbackMetadata.membersAccess = await membersAccess.recordFetchOutcome(youtubeId, { errorMessage: fetchErr.message });
+            fallbackMetadata.membersAccess = await membersAccess.recordFetchOutcome(youtubeId, {
+              errorMessage: fetchErr.message,
+              usedCookies: fetchErr.usedCookies === true,
+            });
           }
           return fallbackMetadata;
         }
@@ -263,7 +266,10 @@ class VideoMetadataModule {
         logger.warn({ err, youtubeId }, 'Could not check members-only access');
         return { membersAccess: await this._lookupMembersAccess(youtubeId, null), checked: false };
       }
-      const state = await membersAccess.recordFetchOutcome(youtubeId, { errorMessage: err.message });
+      const state = await membersAccess.recordFetchOutcome(youtubeId, {
+        errorMessage: err.message,
+        usedCookies: err.usedCookies === true,
+      });
       return { membersAccess: state, checked: true };
     }
   }

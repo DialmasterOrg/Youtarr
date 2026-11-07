@@ -12,6 +12,7 @@ paths:
   - "client/src/components/Configuration/sections/components/ExternalCookieNotes.tsx"
   - "client/src/components/Configuration/sections/components/CookieFile*.tsx"
   - "server/modules/membersAccess.js"
+  - "server/modules/membersAccessState.js"
   - "client/src/components/shared/MembersAccessChip.tsx"
   - "client/src/components/shared/VideoModal/hooks/useMembersAccessCheck.ts"
 ---
@@ -32,8 +33,11 @@ External and uploaded cookie files, how yt-dlp runs receive them, and the cookie
 
 ## Members-only access (`membersAccess`)
 
-- Without cookies every download keeps `availability!=subscriber_only` in its match filter; with cookies members-only videos are attempted, and fresh denials are excluded by id (`id!~=`), except in manual jobs, which clear the requested ids' verdicts first.
+- Without cookies every download keeps `availability!=subscriber_only` in its match filter; with cookies channel runs exclude fresh denials by id (`id!~=`). yt-dlp applies a match filter to a video URL only after fetching it, so playlist jobs drop denials from their URL lists before queuing.
+- Manual jobs clear the requested ids' verdicts and attempt them; External API requests (`EXTERNAL_REQUEST_JOB_LABEL`) keep the no-cookies filter, since they must not use the owner's membership.
 - A verdict (`video_members_access`) counts for 24 hours and only under the same `cookie_key` (SHA-256 of the cookie file, memoized by path, size and mtime), so replacing cookies retires every verdict without a write.
-- A "Join this channel" refusal records a denial only from a run that passed the cookies and printed no "cookies are no longer valid"/rotated warning: rejected cookies and anonymous retries get the same refusal as non-members.
-- Any successful yt-dlp read or download of a members-only video records `confirmed`; a cached `.info.json` proves nothing, so it reads the recorded state instead.
+- A "Join this channel" refusal records a denial only if yt-dlp really got `--cookies` (`child.cookiesPassed`; preparation drops it for an unusable file), the file holds a live login cookie (`cookieDetails`), and no "cookies are no longer valid"/rotated warning was printed.
+- Ids come from yt-dlp output an uploader can shape with a title and end up in a yt-dlp regex, so only `[A-Za-z0-9_-]{11}` ids are stored or put in the filter (`membersAccessState.isVideoId`).
+- Any successful yt-dlp read or download of a members-only video records `confirmed`; a successful read with another availability deletes the row and resets the channelvideos availability. A cached `.info.json` proves nothing, so it reads the recorded state instead.
 - A video without `members_access` reads as blocked on the client (`isMembersOnlyBlocked`), matching servers and failed lookups from before access was tracked.
+- `membersAccessState` holds the states and pure checks without models, so the Jest manual mock shares the real `isBlockedState`.

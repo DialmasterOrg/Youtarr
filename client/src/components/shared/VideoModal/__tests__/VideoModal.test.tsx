@@ -408,6 +408,53 @@ describe('VideoModal', () => {
     expect(mockVideoPlayerProps.current?.video?.status).toBe('never_downloaded');
   });
 
+  test('reports a check answer once to a parent that re-renders with a new callback', async () => {
+    axios.get.mockResolvedValue({ data: {} });
+    axios.post.mockResolvedValueOnce({ data: { membersAccess: 'confirmed' } });
+    const notified = jest.fn();
+    // Like ChannelVideos: an inline callback that updates the parent's state.
+    function Parent() {
+      const [, setOverrides] = React.useState<Record<string, unknown>>({});
+      return (
+        <MemoryRouter>
+          <VideoModal
+            open
+            onClose={jest.fn()}
+            video={{ ...neverDownloadedVideo, status: 'members_only', membersAccess: 'denied' }}
+            token="test-token"
+            onAvailabilityDetected={(id, availability, access) => {
+              notified(id, availability, access);
+              setOverrides((prev) => ({ ...prev, [id]: { availability, access } }));
+            }}
+          />
+        </MemoryRouter>
+      );
+    }
+    render(<Parent />);
+
+    await act(async () => { mockVideoPlayerProps.current?.membersAccessCheck?.onCheck(); });
+
+    await waitFor(() => { expect(notified).toHaveBeenCalledWith(neverDownloadedVideo.youtubeId, 'subscriber_only', 'confirmed'); });
+    expect(notified).toHaveBeenCalledTimes(1);
+  });
+
+  test('a check that finds the video is not members-only makes it downloadable', async () => {
+    axios.get.mockResolvedValue({ data: {} });
+    axios.post.mockResolvedValueOnce({ data: { membersAccess: null } });
+    const onAvailabilityDetected = jest.fn();
+
+    renderModal({
+      video: { ...neverDownloadedVideo, status: 'members_only', membersAccess: 'denied' },
+      onAvailabilityDetected,
+    });
+    await act(async () => { mockVideoPlayerProps.current?.membersAccessCheck?.onCheck(); });
+
+    await waitFor(() => {
+      expect(onAvailabilityDetected).toHaveBeenCalledWith(neverDownloadedVideo.youtubeId, null, null);
+    });
+    expect(mockVideoPlayerProps.current?.video?.status).toBe('never_downloaded');
+  });
+
   test('does not fire onAvailabilityDetected for non-members-only availability', () => {
     videoMetadataReturn.metadata = {
       availability: 'public',

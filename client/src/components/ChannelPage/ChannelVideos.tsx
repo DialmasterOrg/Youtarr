@@ -162,7 +162,7 @@ function ChannelVideos({
   const [modalVideo, setModalVideo] = useState<ChannelVideo | null>(null);
   const [localIgnoreStatus, setLocalIgnoreStatus] = useState<Record<string, boolean>>({});
   const [localProtectedStatus, setLocalProtectedStatus] = useState<Record<string, boolean>>({});
-  const [localAvailabilityStatus, setLocalAvailabilityStatus] = useState<Record<string, { availability: string; members_access?: MembersAccessState | null }>>({});
+  const [localAvailabilityStatus, setLocalAvailabilityStatus] = useState<Record<string, { availability: string | null; members_access?: MembersAccessState | null }>>({});
   const [localPublishedAtStatus, setLocalPublishedAtStatus] = useState<Record<string, string>>({});
 
   const {

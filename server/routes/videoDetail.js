@@ -121,6 +121,20 @@ function createVideoDetailRoutes({ verifyToken, videosModule, videoMetadataModul
    *     responses:
    *       200:
    *         description: Video metadata
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 availability:
+   *                   type: string
+   *                   nullable: true
+   *                   description: YouTube availability; `subscriber_only` marks a members-only video
+   *                 membersAccess:
+   *                   type: string
+   *                   nullable: true
+   *                   enum: [no_cookies, unchecked, confirmed, denied, null]
+   *                   description: Whether the configured cookies can open a members-only video; null when the video is not members-only
    *       400:
    *         description: Invalid YouTube ID
    *       500:

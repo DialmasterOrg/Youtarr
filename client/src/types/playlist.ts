@@ -74,6 +74,8 @@ export interface PlaylistVideo {
   video_resolution?: string | null;
   // Media server types with a played watch-status row for this video.
   watched_by?: string[];
+  // Set on the client from what the video modal learned; 'subscriber_only' marks members-only.
+  availability?: string | null;
   members_access?: MembersAccessState | null;
 }
 

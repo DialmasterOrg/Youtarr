@@ -138,7 +138,8 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
           ...data.metadata,
           media_type: data.metadata.media_type || 'video',
           isAlreadyDownloaded: data.isAlreadyDownloaded || false,
-          isMembersOnly: false  // Always false since we return early if true
+          isMembersOnly: false,  // Always false since we return early if true
+          membersAccess: data.membersAccess ?? null,
         };
 
         const alreadyInList = validatedVideos.some(v => v.youtubeId === videoInfo.youtubeId);

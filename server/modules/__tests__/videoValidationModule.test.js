@@ -445,6 +445,18 @@ describe('VideoValidationModule', () => {
       expect(result).toMatchObject({ isValidUrl: true, isMembersOnly: true, membersAccess: 'denied' });
     });
 
+    it('tells membersAccess whether the refused fetch got the cookies', async () => {
+      const membersAccess = require('../membersAccess');
+      ytDlpRunner.fetchMetadata.mockRejectedValue(Object.assign(
+        new Error('ERROR: [youtube] OOUclRI0Ae4: Join this channel to get access to members-only content'),
+        { usedCookies: true }
+      ));
+
+      await videoValidationModule.validateVideo('https://www.youtube.com/watch?v=OOUclRI0Ae4');
+
+      expect(membersAccess.recordFetchOutcome).toHaveBeenCalledWith('OOUclRI0Ae4', expect.objectContaining({ usedCookies: true }));
+    });
+
     it('reports rejected cookies instead of a membership verdict', async () => {
       const membersAccess = require('../membersAccess');
       membersAccess.recordFetchOutcome.mockResolvedValueOnce('unchecked');

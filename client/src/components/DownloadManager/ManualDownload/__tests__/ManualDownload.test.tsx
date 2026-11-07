@@ -38,6 +38,7 @@ jest.mock('../VideoChip', () => {
       <div
         data-testid={`video-chip-${video.youtubeId}`}
         data-enriching={isEnriching ? 'true' : 'false'}
+        data-members-access={video.membersAccess ?? ''}
       >
         <span>{video.videoTitle}</span>
         <button
@@ -223,6 +224,17 @@ describe('ManualDownload', () => {
     fireEvent.click(screen.getByTestId('validate-button'));
 
     expect(await screen.findByText(/the account in your cookies is not a member of this channel/)).toBeInTheDocument();
+  });
+
+  test('keeps the members-only access of a video the cookies can open', async () => {
+    mockedAxios.post.mockResolvedValueOnce({
+      data: { ...mockValidationResponse, membersAccess: 'confirmed' },
+    });
+
+    render(<ManualDownload onStartDownload={mockOnStartDownload} token={mockToken} />);
+    fireEvent.click(screen.getByTestId('validate-button'));
+
+    expect(await screen.findByTestId('video-chip-test123')).toHaveAttribute('data-members-access', 'confirmed');
   });
 
   test('shows the server message when YouTube rejected the cookies', async () => {

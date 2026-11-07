@@ -170,6 +170,8 @@ async function finalizeDownloadJob({
   onTempChannelsFileCleaned,
   enqueueAutoRetry = null,
   cookiesEnabled = Boolean(configModule.getCookiesPath()),
+  // Whether yt-dlp actually got --cookies; preparation drops it for an unusable file.
+  cookiesPassed = cookiesEnabled,
   anonymousRetry = false,
   stdioClosed = true,
 }) {
@@ -232,7 +234,7 @@ async function finalizeDownloadJob({
       await membersAccess.recordDownloadOutcome({
         membersOnlyIds: errorTracker.membersOnlyVideoIds,
         downloadedIds: videoData.map((video) => video.youtubeId),
-        usedCookies: cookiesEnabled && !anonymousRetry,
+        usedCookies: cookiesEnabled && cookiesPassed && !anonymousRetry,
         stderr: stderrBuffer,
       });
     } catch (err) {

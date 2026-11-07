@@ -44,7 +44,8 @@ export interface VideoModalProps {
   onIgnoreChanged?: (youtubeId: string, isIgnored: boolean) => void;
   onDownloadQueued?: (youtubeId: string) => void;
   onRatingChanged?: (youtubeId: string, rating: string | null) => void;
-  onAvailabilityDetected?: (youtubeId: string, availability: string, membersAccess?: MembersAccessState | null) => void;
+  // availability null: a check found the video is not members-only after all.
+  onAvailabilityDetected?: (youtubeId: string, availability: string | null, membersAccess?: MembersAccessState | null) => void;
   onPublishedDateDetected?: (youtubeId: string, isoDate: string) => void;
   allowIgnore?: boolean;
 }

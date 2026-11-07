@@ -27,6 +27,6 @@ describe('MembersAccessChip', () => {
 
     await user.hover(screen.getByText('Members: not checked'));
 
-    expect(await screen.findByRole('tooltip')).toHaveTextContent(/checked when the video is downloaded or opened/);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(/checked on the next download, or open the video and choose Check access/);
   });
 });

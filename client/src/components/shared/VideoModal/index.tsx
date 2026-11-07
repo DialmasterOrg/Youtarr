@@ -154,20 +154,30 @@ function VideoModal({
     : metadata?.membersAccess !== undefined
       ? metadata.membersAccess
       : localVideo.membersAccess;
-  const isMembersOnly = localVideo.status === 'members_only'
+  // A check that answers null found the video readable without membership:
+  // it is no longer members-only, whatever the page or metadata said.
+  const checkedNotMembersOnly = accessCheck.data === null;
+  const isMembersOnly = !checkedNotMembersOnly && (
+    localVideo.status === 'members_only'
     || metadata?.availability === 'subscriber_only'
-    || Boolean(membersAccess);
+    || Boolean(membersAccess)
+  );
 
   // Derive the members-only display here so VideoPlayer/VideoActions follow the
   // latest answer without a round trip: on the first open the prop's status is
   // stale (the backend stamps the channelvideos row during the fetch). Only a
   // video without a local file changes; a file says more than YouTube's rules.
   const displayVideo = useMemo(() => {
+    if (checkedNotMembersOnly) {
+      return localVideo.status === 'members_only'
+        ? { ...localVideo, membersAccess: null, status: 'never_downloaded' as const }
+        : { ...localVideo, membersAccess: null };
+    }
     if (!isMembersOnly) return localVideo;
     if (localVideo.status !== 'never_downloaded' && localVideo.status !== 'members_only') return localVideo;
     const blocked = isMembersOnlyBlocked({ availability: 'subscriber_only', members_access: membersAccess });
     return { ...localVideo, membersAccess, status: blocked ? 'members_only' as const : 'never_downloaded' as const };
-  }, [localVideo, isMembersOnly, membersAccess]);
+  }, [localVideo, isMembersOnly, membersAccess, checkedNotMembersOnly]);
 
   // Tell the parent what the metadata fetch learned about members-only access,
   // so list pages that read availability (e.g. ChannelVideos via
@@ -188,9 +198,18 @@ function VideoModal({
     }
   }, [metadata?.availability, metadata?.membersAccess, localVideo.status, video.youtubeId, onAvailabilityDetected]);
 
-  // An explicit check's answer reaches the list the same way.
+  // An explicit check's answer reaches the list the same way, once per answer:
+  // parents pass a new callback on every render, and updating the parent
+  // re-renders it, so without the ref this would loop.
+  const checkNotifiedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (accessCheck.data) {
+    if (accessCheck.data === undefined) return;
+    const key = `${video.youtubeId}:${accessCheck.data}`;
+    if (checkNotifiedRef.current === key) return;
+    checkNotifiedRef.current = key;
+    if (accessCheck.data === null) {
+      onAvailabilityDetected?.(video.youtubeId, null, null);
+    } else {
       onAvailabilityDetected?.(video.youtubeId, 'subscriber_only', accessCheck.data);
     }
   }, [accessCheck.data, video.youtubeId, onAvailabilityDetected]);

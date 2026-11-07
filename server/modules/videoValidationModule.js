@@ -5,7 +5,7 @@ const ChannelVideo = require('../models/channelvideo');
 const youtubeUrlParser = require('./youtubeUrlParser');
 const membersAccess = require('./membersAccess');
 
-const COOKIES_UNUSABLE_FOR_MEMBERS_ERROR = 'This video is members-only, and YouTube did not accept the configured cookies, so access could not be checked. Export fresh cookies and try again.';
+const COOKIES_UNUSABLE_FOR_MEMBERS_ERROR = 'This video is members-only, and the configured cookies could not be used to check access: they hold no signed-in YouTube session, have expired, or YouTube rejected them. Export fresh cookies and try again.';
 
 class VideoValidationModule {
   constructor() {
@@ -244,7 +244,10 @@ class VideoValidationModule {
         // Extract video ID from error message if possible, or use the one we parsed from URL
         const videoIdMatch = error.message.match(/\[youtube\]\s+([a-zA-Z0-9_-]{11}):/);
         const extractedVideoId = videoIdMatch ? videoIdMatch[1] : videoId;
-        const membersState = await membersAccess.recordFetchOutcome(extractedVideoId, { errorMessage: error.message });
+        const membersState = await membersAccess.recordFetchOutcome(extractedVideoId, {
+          errorMessage: error.message,
+          usedCookies: error.usedCookies === true,
+        });
 
         // Login trouble is not a verdict on the account's membership.
         if (membersState === membersAccess.STATE.UNCHECKED) {

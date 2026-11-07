@@ -179,6 +179,29 @@ describe('VideoPlayer', () => {
     expect(onCheck).toHaveBeenCalledTimes(1);
   });
 
+  test('offers a check for a members-only video whose answer is out of date', async () => {
+    const user = userEvent.setup();
+    const onCheck = jest.fn();
+    renderPlayer(
+      { status: 'never_downloaded', isDownloaded: false, filePath: null, membersAccess: 'unchecked' },
+      { membersAccessCheck: { onCheck, loading: false, error: null } }
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Check access' }));
+
+    expect(onCheck).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Download video' })).toBeInTheDocument();
+  });
+
+  test('offers no check for a video the cookies can open', () => {
+    renderPlayer(
+      { status: 'never_downloaded', isDownloaded: false, filePath: null, membersAccess: 'confirmed' },
+      { membersAccessCheck: { onCheck: jest.fn(), loading: false, error: null } }
+    );
+
+    expect(screen.queryByRole('button', { name: 'Check access' })).not.toBeInTheDocument();
+  });
+
   test('shows why a check failed', () => {
     renderPlayer(
       { status: 'members_only', isDownloaded: false, filePath: null, membersAccess: 'denied' },

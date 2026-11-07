@@ -11,6 +11,9 @@ export interface VideoInfo {
   availability?: string;
   isAlreadyDownloaded: boolean;
   isMembersOnly: boolean;
+  // Set for a members-only video the configured cookies can open (or have not
+  // been checked against), which stays in the list with a members chip.
+  membersAccess?: MembersAccessState | null;
   media_type?: string;
   isBulkImport?: boolean;
 }

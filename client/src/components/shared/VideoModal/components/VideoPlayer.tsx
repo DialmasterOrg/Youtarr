@@ -26,8 +26,40 @@ interface VideoPlayerProps {
   token: string | null;
   onDownloadClick: () => void;
   isMobile: boolean;
-  // Offered on a members-only video the configured cookies were denied.
+  // Offered on a members-only video the configured cookies were denied, or
+  // whose answer is out of date.
   membersAccessCheck?: MembersAccessCheckControl;
+}
+
+interface MembersAccessCheckButtonProps {
+  control: MembersAccessCheckControl;
+  label: string;
+  textSx: React.CSSProperties;
+}
+
+function MembersAccessCheckButton({ control, label, textSx }: MembersAccessCheckButtonProps) {
+  return (
+    <>
+      <Button
+        size="small"
+        variant="contained"
+        onClick={control.onCheck}
+        disabled={control.loading}
+        style={{ zIndex: 2 }}
+      >
+        {control.loading ? 'Checking…' : label}
+      </Button>
+      {control.error && (
+        <Typography
+          variant="body2"
+          role="alert"
+          sx={{ fontWeight: 500, textAlign: 'center', paddingLeft: 16, paddingRight: 16, ...textSx }}
+        >
+          {control.error}
+        </Typography>
+      )}
+    </>
+  );
 }
 
 const DEFAULT_LANDSCAPE_ASPECT_RATIO = 16 / 9;
@@ -296,49 +328,42 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile, membersAccessChe
                   : 'Add cookies from a member account in Settings to download this video'}
               </Typography>
               {video.membersAccess === 'denied' && membersAccessCheck && (
-                <>
-                  <Button
-                    size="small"
-                    variant="contained"
-                    onClick={membersAccessCheck.onCheck}
-                    disabled={membersAccessCheck.loading}
-                  >
-                    {membersAccessCheck.loading ? 'Checking…' : 'Check again'}
-                  </Button>
-                  {membersAccessCheck.error && (
-                    <Typography
-                      variant="body2"
-                      role="alert"
-                      sx={{
-                        color: '#0f172a',
-                        fontWeight: 500,
-                        textAlign: 'center',
-                        paddingLeft: 16,
-                        paddingRight: 16,
-                        textShadow:
-                          '0 0 4px rgba(255,255,255,0.95), 0 0 10px rgba(255,255,255,0.8), 0 0 16px rgba(255,255,255,0.55)',
-                      }}
-                    >
-                      {membersAccessCheck.error}
-                    </Typography>
-                  )}
-                </>
+                <MembersAccessCheckButton
+                  control={membersAccessCheck}
+                  label="Check again"
+                  textSx={{
+                    color: '#0f172a',
+                    textShadow:
+                      '0 0 4px rgba(255,255,255,0.95), 0 0 10px rgba(255,255,255,0.8), 0 0 16px rgba(255,255,255,0.55)',
+                  }}
+                />
               )}
             </>
           ) : (
-            <IconButton
-              onClick={onDownloadClick}
-              aria-label="Download video"
-              style={{
-                backgroundColor: 'var(--video-modal-overlay-action-background, var(--media-overlay-background-strong))',
-                color: 'var(--video-modal-overlay-action-foreground, var(--media-overlay-foreground))',
-                width: 'var(--video-modal-overlay-download-size, 90px)',
-                height: 'var(--video-modal-overlay-download-size, 90px)',
-                zIndex: 2,
-              }}
-            >
-              <DownloadIcon style={{ width: 'var(--video-modal-overlay-download-icon-size, 50px)', height: 'var(--video-modal-overlay-download-icon-size, 50px)' }} />
-            </IconButton>
+            <>
+              <IconButton
+                onClick={onDownloadClick}
+                aria-label="Download video"
+                style={{
+                  backgroundColor: 'var(--video-modal-overlay-action-background, var(--media-overlay-background-strong))',
+                  color: 'var(--video-modal-overlay-action-foreground, var(--media-overlay-foreground))',
+                  width: 'var(--video-modal-overlay-download-size, 90px)',
+                  height: 'var(--video-modal-overlay-download-size, 90px)',
+                  zIndex: 2,
+                }}
+              >
+                <DownloadIcon style={{ width: 'var(--video-modal-overlay-download-icon-size, 50px)', height: 'var(--video-modal-overlay-download-icon-size, 50px)' }} />
+              </IconButton>
+              {/* A saved .info.json is never re-fetched, so an out-of-date answer
+                  stays unchecked until the user asks. */}
+              {video.membersAccess === 'unchecked' && membersAccessCheck && (
+                <MembersAccessCheckButton
+                  control={membersAccessCheck}
+                  label="Check access"
+                  textSx={{ color: 'white', textShadow: OVERLAY_TEXT_SHADOW }}
+                />
+              )}
+            </>
           )}
         </Box>
       )}

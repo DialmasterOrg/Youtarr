@@ -440,17 +440,22 @@ With cookies enabled, members-only videos are downloaded like any other video
 when the account in the cookies is a member of the channel. Without cookies they
 are skipped, as before.
 
-- Each download, URL check, or video page opened asks YouTube whether the
+- Each download, URL check, or first look at a video asks YouTube whether the
   cookies can open the video and remembers the answer for 24 hours. Replacing or
-  editing the cookie file forgets every answer.
+  editing the cookie file forgets every answer. A video Youtarr has already
+  saved details for is not asked again on its own: once its answer is older
+  than 24 hours it shows as **Members: not checked** until the next download or
+  until you open it and choose **Check access**.
 - A video the account is not a member of is shown as **Members: no access** and
-  is left out of automatic channel and playlist downloads, retries, and
-  Download All for 24 hours. Open the video and choose **Check again** after
-  joining the channel, or add it manually: a manual download always asks again.
-- If YouTube rejects the cookies themselves (expired or rotated), nothing is
-  recorded about membership; refresh the cookies and try again.
-- Members-only playlists of a channel (`UUM...` playlist ids) are listed with
-  the cookies, so they can be followed like any other playlist.
+  is left out of automatic channel and playlist downloads and Download All for
+  24 hours. Open the video and choose **Check again** after joining the
+  channel, or add it manually: a manual download always asks again.
+- Nothing is recorded about membership when the cookies could not really be
+  used: the file has no signed-in YouTube session, its login cookies have
+  expired, YouTube rejected them (rotated), or the file could not be read for
+  the run. Refresh the cookies and try again.
+- Downloads requested through the External API never use the cookies'
+  membership: their members-only videos are skipped as without cookies.
 
 ### Custom Cookies Uploaded
 - **Config Key**: `customCookiesUploaded`

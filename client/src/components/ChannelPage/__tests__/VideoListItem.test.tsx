@@ -889,4 +889,29 @@ describe('VideoListItem Component', () => {
       expect(screen.queryByText('Watched')).not.toBeInTheDocument();
     });
   });
+  describe('Members-only access', () => {
+    test('shows the access chip and a checkbox for a video the cookies can open', () => {
+      const video = { ...mockVideo, availability: 'subscriber_only', members_access: 'confirmed' as const };
+      renderWithProviders(<VideoListItem {...defaultProps} video={video} />);
+
+      expect(screen.getByText('Members: access')).toBeInTheDocument();
+      expect(screen.getByRole('checkbox')).toBeInTheDocument();
+    });
+
+    test('shows the access chip and no checkbox for a video the cookies were denied', () => {
+      const video = { ...mockVideo, availability: 'subscriber_only', members_access: 'denied' as const };
+      renderWithProviders(<VideoListItem {...defaultProps} video={video} />);
+
+      expect(screen.getByText('Members: no access')).toBeInTheDocument();
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+
+    test('shows no access chip without cookies', () => {
+      const video = { ...mockVideo, availability: 'subscriber_only', members_access: 'no_cookies' as const };
+      renderWithProviders(<VideoListItem {...defaultProps} video={video} />);
+
+      expect(screen.queryByText(/^Members:/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+  });
 });
