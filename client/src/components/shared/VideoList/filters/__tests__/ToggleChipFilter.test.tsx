@@ -99,6 +99,96 @@ describe('ToggleChipFilter', () => {
     expect(screen.queryByLabelText('Remove')).not.toBeInTheDocument();
   });
 
+  test('announces only and exclude as pressed, and off as not pressed', () => {
+    const { unmount } = renderWithProviders(
+      <ToggleChipFilter {...defaultProps} value="exclude" onChange={jest.fn()} />
+    );
+    expect(screen.getByRole('button')).toHaveAttribute('aria-pressed', 'true');
+    unmount();
+
+    const { unmount: unmountOnly } = renderWithProviders(
+      <ToggleChipFilter {...defaultProps} value="only" onChange={jest.fn()} />
+    );
+    expect(screen.getByRole('button')).toHaveAttribute('aria-pressed', 'true');
+    unmountOnly();
+
+    renderWithProviders(
+      <ToggleChipFilter {...defaultProps} value="off" onChange={jest.fn()} />
+    );
+    expect(screen.getByRole('button')).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  describe('with a resting value other than off', () => {
+    const restingProps = {
+      ...defaultProps,
+      inactiveLabel: 'Deleted',
+      onlyLabel: 'Only: Deleted',
+      excludeLabel: 'Hide: Deleted',
+      offLabel: 'Show: Deleted',
+      restingValue: 'exclude' as const,
+    };
+
+    test('shows no delete affordance while resting at exclude', () => {
+      renderWithProviders(
+        <ToggleChipFilter {...restingProps} value="exclude" onChange={jest.fn()} />
+      );
+      expect(screen.getByText('Hide: Deleted')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Remove')).not.toBeInTheDocument();
+    });
+
+    test('looks neutral while resting, like other chips that are not filtering', () => {
+      renderWithProviders(
+        <ToggleChipFilter {...restingProps} value="exclude" onChange={jest.fn()} />
+      );
+      expect(screen.getByRole('button')).toHaveClass('chip-default');
+      expect(screen.getByRole('button')).not.toHaveClass('chip-warning');
+    });
+
+    test('announces the resting state as not pressed and the active off state as pressed', () => {
+      const { unmount } = renderWithProviders(
+        <ToggleChipFilter {...restingProps} value="exclude" onChange={jest.fn()} />
+      );
+      expect(screen.getByRole('button')).toHaveAttribute('aria-pressed', 'false');
+      unmount();
+
+      renderWithProviders(
+        <ToggleChipFilter {...restingProps} value="off" onChange={jest.fn()} />
+      );
+      expect(screen.getByRole('button')).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    test('labels the off state as showing, with a delete affordance back to resting', async () => {
+      const user = userEvent.setup();
+      const onChange = jest.fn();
+      renderWithProviders(
+        <ToggleChipFilter {...restingProps} value="off" onChange={onChange} />
+      );
+      expect(screen.getByText('Show: Deleted')).toBeInTheDocument();
+      await user.click(screen.getByLabelText('Remove'));
+      expect(onChange).toHaveBeenCalledWith('exclude');
+    });
+
+    test('delete from only returns to the resting value', async () => {
+      const user = userEvent.setup();
+      const onChange = jest.fn();
+      renderWithProviders(
+        <ToggleChipFilter {...restingProps} value="only" onChange={onChange} />
+      );
+      await user.click(screen.getByLabelText('Remove'));
+      expect(onChange).toHaveBeenCalledWith('exclude');
+    });
+
+    test('still cycles off -> only -> exclude -> off on click', async () => {
+      const user = userEvent.setup();
+      const onChange = jest.fn();
+      renderWithProviders(
+        <ToggleChipFilter {...restingProps} value="exclude" onChange={onChange} />
+      );
+      await user.click(screen.getByText('Hide: Deleted'));
+      expect(onChange).toHaveBeenCalledWith('off');
+    });
+  });
+
   test('renders the provided icon', () => {
     renderWithProviders(
       <ToggleChipFilter {...defaultProps} value="off" onChange={jest.fn()} />

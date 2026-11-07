@@ -8,7 +8,7 @@ When you subscribe to a YouTube playlist:
 
 1. Youtarr fetches the playlist metadata and video list from YouTube via `yt-dlp`.
 2. Selected existing videos and future discoveries (with auto-download enabled) download into the channel folder for their uploader (the channel is auto-created and hidden if it does not already exist).
-3. After each download (and after manual downloads of videos that happen to live in a tracked playlist), Youtarr syncs the playlist to every configured media server and regenerates the M3U file.
+3. After each download (and after manual downloads of videos that happen to live in a tracked playlist), Youtarr syncs the playlist to every configured media server and regenerates the M3U file. Deleting a downloaded video that is in a tracked playlist (from any page, or by automatic cleanup) does the same, so neither keeps listing the deleted file.
 4. The native server playlists keep the YouTube playlist's order by default; a per-playlist **Playlist order** setting can reverse it (see [Playlist order](#playlist-order)). Partially-downloaded playlists keep their relative ordering: position 1, 3, 5 stay 1, 3, 5, and position 2 slots in correctly when it later downloads.
 
 What Youtarr does **not** do for playlists:
@@ -96,7 +96,7 @@ Existing downloads are never converted or re-downloaded when the setting changes
 
 ## Replace semantics
 
-When a playlist's video list changes (new videos downloaded, ignored videos removed), Youtarr re-syncs:
+When a playlist's video list changes (new videos downloaded, ignored videos removed, downloaded files deleted), Youtarr re-syncs. Videos whose file was deleted are left out (a video marked missing stays, since its file may come back). If none of the playlist's videos has a file left, Plex empties the existing playlist, and Jellyfin and Emby, which cannot hold an empty playlist, delete it; it comes back on the next sync with items:
 
 - **Plex**: deletes existing items in place and PUTs the new URI list. Same playlist ID retained.
 - **Jellyfin / Emby**: deletes the entire playlist and recreates it. The `playlist_sync_state.server_playlist_id` is updated to point at the new ID. This is required because both servers' `DELETE /Playlists/{id}/Items` returns errors on current versions; full replace is the only reliable path.

@@ -1,10 +1,13 @@
 import { ScheduleSummary } from '../Configuration/sections/components/ScheduleSummary';
 import { ConfigState } from '../Configuration/types';
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Alert, Button, CircularProgress, Typography } from '../ui';
 import { ConfigurationCard } from '../Configuration/common/ConfigurationCard';
 import { useRescanStatus } from '../../hooks/useRescanStatus';
 import { formatDateTime } from '../../utils/formatters';
+import { REMOVED_VIDEOS_ANCHOR } from '../../utils/videoRemoval';
+import RemovedVideosCard from './components/RemovedVideosCard';
 
 interface MaintenanceSectionProps {
   token: string | null;
@@ -15,6 +18,13 @@ export function MaintenanceSection({ token, config }: MaintenanceSectionProps) {
   const { running, lastRun, loading, error, triggerRescan } = useRescanStatus(token);
   const persistentError = !running && lastRun?.status === 'error' ? lastRun.errorMessage : null;
   const transientError = error && error !== persistentError ? error : null;
+  const { hash } = useLocation();
+
+  // Links from the Videos page land on the deleted and missing videos card.
+  useEffect(() => {
+    if (hash !== `#${REMOVED_VIDEOS_ANCHOR}`) return;
+    document.getElementById(REMOVED_VIDEOS_ANCHOR)?.scrollIntoView?.({ block: 'start' });
+  }, [hash]);
 
   let statusLine: React.ReactNode;
   if (running) {
@@ -32,6 +42,7 @@ export function MaintenanceSection({ token, config }: MaintenanceSectionProps) {
         Last rescan: {formatDateTime(lastRun.completedAt)} ({lastRun.trigger}). Updated{' '}
         {lastRun.videosUpdated} videos, marked {lastRun.videosMarkedMissing} missing.
         {lastRun.status === 'timed-out' && ' (timed out; click to continue)'}
+        {lastRun.libraryCheckSkipped && ' The downloads folder check was skipped.'}
       </Typography>
     );
   } else {
@@ -43,6 +54,7 @@ export function MaintenanceSection({ token, config }: MaintenanceSectionProps) {
   }
 
   return (
+    <div className="flex flex-col gap-6">
     <ConfigurationCard title="Rescan files on disk">
       <div className="flex flex-col gap-4">
         <Typography variant="body2" color="text.secondary">
@@ -76,6 +88,15 @@ export function MaintenanceSection({ token, config }: MaintenanceSectionProps) {
         )}
       </div>
     </ConfigurationCard>
+
+    <section id={REMOVED_VIDEOS_ANCHOR} aria-label="Deleted and missing videos" className="scroll-mt-24">
+      <RemovedVideosCard
+        token={token}
+        onRescanAnyway={() => triggerRescan({ ignoreLibraryCheck: true })}
+        rescanRunning={running}
+      />
+    </section>
+    </div>
   );
 }
 

@@ -133,8 +133,9 @@ describe('useRescanStatus', () => {
     });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
+    let outcome: { started: boolean } | undefined;
     await act(async () => {
-      await result.current.triggerRescan();
+      outcome = await result.current.triggerRescan();
     });
 
     expect(mockedAxios.post).toHaveBeenCalledWith(
@@ -142,7 +143,29 @@ describe('useRescanStatus', () => {
       undefined,
       expect.objectContaining({ headers: { 'x-access-token': 'tok' } })
     );
+    expect(outcome).toEqual({ started: true });
     expect(result.current.error).toBeNull();
+    expect(result.current.running).toBe(true);
+  });
+
+  test('triggerRescan can ask to skip the downloads folder check', async () => {
+    mockedAxios.get.mockResolvedValueOnce({ data: { running: false, lastRun: null } });
+    mockedAxios.post.mockResolvedValueOnce({ status: 202, data: { status: 'started' } });
+
+    const { result } = renderHook(() => useRescanStatus('tok'), {
+      wrapper: makeWrapper([])
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.triggerRescan({ ignoreLibraryCheck: true });
+    });
+
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      '/api/maintenance/rescan-files',
+      { ignoreLibraryCheck: true },
+      expect.objectContaining({ headers: { 'x-access-token': 'tok' } })
+    );
     expect(result.current.running).toBe(true);
   });
 
@@ -159,10 +182,12 @@ describe('useRescanStatus', () => {
     });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
+    let outcome: { started: boolean } | undefined;
     await act(async () => {
-      await result.current.triggerRescan();
+      outcome = await result.current.triggerRescan();
     });
 
+    expect(outcome).toEqual({ started: false });
     expect(result.current.error).toBe('Rescan already in progress');
     expect(result.current.running).toBe(true);
   });
@@ -176,10 +201,12 @@ describe('useRescanStatus', () => {
     });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
+    let outcome: { started: boolean } | undefined;
     await act(async () => {
-      await result.current.triggerRescan();
+      outcome = await result.current.triggerRescan();
     });
 
+    expect(outcome).toEqual({ started: false });
     expect(result.current.running).toBe(false);
     expect(result.current.error).toBe('Network Error');
   });

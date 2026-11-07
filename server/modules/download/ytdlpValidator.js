@@ -14,7 +14,7 @@ const TIMEOUT_MS = 10_000;
  * exits 0 and silently accepts the invalid flag.
  *
  * Surfaces yt-dlp's stderr verbatim so the user sees the real error message.
- * @param {string[]} tokens - Tokenized custom args (already validated against denylist + positional check).
+ * @param {string[]} tokens - Canonical custom args from customArgsParser.checkCustomArgs (already allowlist-checked).
  * @returns {Promise<{ ok: boolean, stderr: string }>}
  */
 function dryRun(tokens) {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Alert, Box, Button, FormControlLabel, Switch, Typography } from '../../ui';
 import { Refresh as RefreshIcon, Download as DownloadIcon } from '../../../lib/icons';
-import InfoHint from './InfoHint';
+import InfoHint from '../../shared/InfoHint';
 import { Playlist } from '../../../types/playlist';
 import { MAX_PLAYLIST_VIDEOS } from '../playlistConstants';
 

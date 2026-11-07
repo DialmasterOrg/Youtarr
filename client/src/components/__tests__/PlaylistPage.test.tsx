@@ -12,6 +12,7 @@ const mockMarkVideoDeleted = jest.fn();
 const mockRefetchMeta = jest.fn();
 const mockIgnoreVideo = jest.fn();
 const mockUnignoreVideo = jest.fn();
+const mockDeleteVideosByYoutubeIds = jest.fn();
 let mockLocationState: unknown = null;
 
 const mockVideo: PlaylistVideo = {
@@ -162,6 +163,15 @@ jest.mock('../../hooks/usePlaylistMutations', () => ({
     toggleAutoDownload: (...args: unknown[]) => mockToggleAutoDownload(...args),
     ignoreVideo: (...args: unknown[]) => mockIgnoreVideo(...args),
     unignoreVideo: (...args: unknown[]) => mockUnignoreVideo(...args),
+  }),
+}));
+
+jest.mock('../shared/useVideoDeletion', () => ({
+  useVideoDeletion: () => ({
+    deleteVideos: jest.fn(),
+    deleteVideosByYoutubeIds: (...args: unknown[]) => mockDeleteVideosByYoutubeIds(...args),
+    loading: false,
+    error: null,
   }),
 }));
 
@@ -356,6 +366,101 @@ describe('PlaylistPage selected-download selection lifecycle', () => {
 
     const sortControl = screen.getByRole('button', { name: 'Sort' });
     expect(sortControl).toHaveTextContent('Playlist order');
+  });
+});
+
+describe('PlaylistPage mixed selection actions', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockDeleteVideosByYoutubeIds.mockResolvedValue({ success: true, deleted: ['vidC'], failed: [] });
+  });
+
+  const selectVideos = async (user: ReturnType<typeof userEvent.setup>, titles: string[]) => {
+    for (const title of titles) {
+      await user.click(screen.getByRole('checkbox', { name: `Select ${title}` }));
+    }
+  };
+
+  test('Download queues only the selected videos that are not downloaded', async () => {
+    const user = userEvent.setup();
+    mockTriggerDownload.mockResolvedValue(undefined);
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await selectVideos(user, ['Vid A', 'Vid C']);
+    await user.click(screen.getByTestId('selection-action-download'));
+    await user.click(await screen.findByTestId('mock-confirm-download'));
+
+    await waitFor(() => expect(mockTriggerDownload).toHaveBeenCalledWith(['vidA'], undefined));
+  });
+
+  test('Download is unavailable when only downloaded videos are selected', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await selectVideos(user, ['Vid C']);
+
+    expect(screen.getByTestId('selection-action-download')).toBeDisabled();
+  });
+
+  test('Delete is unavailable when no downloaded video is selected', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await selectVideos(user, ['Vid A']);
+
+    expect(screen.getByTestId('selection-action-delete')).toBeDisabled();
+  });
+
+  test('Delete confirms and removes only the selected downloaded videos', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await selectVideos(user, ['Vid A', 'Vid C']);
+    await user.click(screen.getByTestId('selection-action-delete'));
+    expect(await screen.findByText(/permanently delete 1 video from disk/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Delete Video' }));
+
+    await waitFor(() => expect(mockDeleteVideosByYoutubeIds).toHaveBeenCalledWith(['vidC'], 't'));
+  });
+
+  test('the delete confirmation says which selected videos it leaves alone', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await selectVideos(user, ['Vid A', 'Vid C']);
+    await user.click(screen.getByTestId('selection-action-delete'));
+
+    expect(
+      await screen.findByText('1 selected video will not be affected because it has no file on disk.')
+    ).toBeInTheDocument();
+  });
+
+  test('a delete marks the row deleted, reports it, and clears the selection', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await selectVideos(user, ['Vid A', 'Vid C']);
+    await user.click(screen.getByTestId('selection-action-delete'));
+    await user.click(await screen.findByRole('button', { name: 'Delete Video' }));
+
+    expect(await screen.findByText('Deleted 1 video')).toBeInTheDocument();
+    expect(mockMarkVideoDeleted).toHaveBeenCalledWith('vidC');
+    expect(screen.queryByText('2 selected')).not.toBeInTheDocument();
+  });
+
+  test('a failed delete keeps the selection so it can be retried', async () => {
+    const user = userEvent.setup();
+    mockDeleteVideosByYoutubeIds.mockResolvedValue({
+      success: false, deleted: [], failed: [{ youtubeId: 'vidC', error: 'Network Error' }],
+    });
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await selectVideos(user, ['Vid C']);
+    await user.click(screen.getByTestId('selection-action-delete'));
+    await user.click(await screen.findByRole('button', { name: 'Delete Video' }));
+
+    expect(await screen.findByText('Failed to delete video: Network Error')).toBeInTheDocument();
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
   });
 });
 

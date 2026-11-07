@@ -21,6 +21,7 @@ describe('useConfigSave', () => {
   };
 
   const mockSetInitialConfig = jest.fn();
+  const mockSetCustomArgsCheck = jest.fn();
   const mockSetSnackbar = jest.fn();
   const mockCheckPlexConnection = jest.fn();
 
@@ -39,6 +40,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -55,6 +57,7 @@ describe('useConfigSave', () => {
           token: null,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -80,6 +83,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -112,6 +116,7 @@ describe('useConfigSave', () => {
           token: null,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -140,6 +145,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -167,6 +173,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -198,6 +205,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: true,
           checkPlexConnection: mockCheckPlexConnection,
@@ -224,6 +232,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -254,6 +263,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -286,6 +296,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -317,6 +328,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -345,6 +357,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: true,
           checkPlexConnection: mockCheckPlexConnection,
@@ -369,6 +382,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -400,6 +414,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -431,6 +446,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -471,6 +487,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: plexConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: true,
           checkPlexConnection: mockCheckPlexConnection,
@@ -518,6 +535,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: sponsorBlockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -554,6 +572,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: autoRemovalConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -587,6 +606,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: cookiesConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -622,6 +642,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: notificationsConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -657,6 +678,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: subtitlesConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -678,6 +700,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -700,6 +723,7 @@ describe('useConfigSave', () => {
             token,
             config: mockConfig,
             setInitialConfig: mockSetInitialConfig,
+            setCustomArgsCheck: mockSetCustomArgsCheck,
             setSnackbar: mockSetSnackbar,
             hasPlexServerConfigured: false,
             checkPlexConnection: mockCheckPlexConnection,
@@ -724,6 +748,7 @@ describe('useConfigSave', () => {
             token: mockToken,
             config,
             setInitialConfig: mockSetInitialConfig,
+            setCustomArgsCheck: mockSetCustomArgsCheck,
             setSnackbar: mockSetSnackbar,
             hasPlexServerConfigured: false,
             checkPlexConnection: mockCheckPlexConnection,
@@ -749,6 +774,7 @@ describe('useConfigSave', () => {
             token: mockToken,
             config: mockConfig,
             setInitialConfig: mockSetInitialConfig,
+            setCustomArgsCheck: mockSetCustomArgsCheck,
             setSnackbar: mockSetSnackbar,
             hasPlexServerConfigured,
             checkPlexConnection: mockCheckPlexConnection,
@@ -785,6 +811,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -820,6 +847,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: emptyConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -856,6 +884,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: numericConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -895,6 +924,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: booleanConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -933,6 +963,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: httpsConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: true,
           checkPlexConnection: mockCheckPlexConnection,
@@ -966,6 +997,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: codecConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -1002,6 +1034,7 @@ describe('useConfigSave', () => {
             token: mockToken,
             config: mockConfig,
             setInitialConfig: mockSetInitialConfig,
+            setCustomArgsCheck: mockSetCustomArgsCheck,
             setSnackbar: mockSetSnackbar,
             hasPlexServerConfigured: false,
             checkPlexConnection: mockCheckPlexConnection,
@@ -1013,6 +1046,7 @@ describe('useConfigSave', () => {
         token: newToken,
         config: newConfig,
         setInitialConfig: newSetInitialConfig,
+        setCustomArgsCheck: mockSetCustomArgsCheck,
         setSnackbar: newSetSnackbar,
         hasPlexServerConfigured: true,
         checkPlexConnection: newCheckPlexConnection,
@@ -1060,6 +1094,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -1094,6 +1129,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -1116,6 +1152,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -1134,6 +1171,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -1157,6 +1195,7 @@ describe('useConfigSave', () => {
           token: mockToken,
           config: mockConfig,
           setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
           setSnackbar: mockSetSnackbar,
           hasPlexServerConfigured: false,
           checkPlexConnection: mockCheckPlexConnection,
@@ -1184,6 +1223,75 @@ describe('useConfigSave', () => {
       });
     });
   });
+
+  describe('Saved custom args check', () => {
+    const savedCheck = {
+      blocked: [],
+      warnings: [{ given: '--extract-audio', option: '--extract-audio', reason: 'audio only' }],
+      errors: [],
+    };
+
+    const renderSave = () =>
+      renderHook(() =>
+        useConfigSave({
+          token: mockToken,
+          config: mockConfig,
+          setInitialConfig: mockSetInitialConfig,
+          setCustomArgsCheck: mockSetCustomArgsCheck,
+          setSnackbar: mockSetSnackbar,
+          hasPlexServerConfigured: false,
+          checkPlexConnection: mockCheckPlexConnection,
+        })
+      );
+
+    test('applies the check of the saved custom args from the save response', async () => {
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: jest.fn().mockResolvedValueOnce({ status: 'success', customArgsCheck: savedCheck }),
+      });
+
+      await renderSave().result.current.saveConfig();
+
+      expect(mockSetCustomArgsCheck).toHaveBeenCalledWith(savedCheck);
+    });
+
+    test('clears the check when the saved custom args are blank', async () => {
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: jest.fn().mockResolvedValueOnce({ status: 'success', customArgsCheck: null }),
+      });
+
+      await renderSave().result.current.saveConfig();
+
+      expect(mockSetCustomArgsCheck).toHaveBeenCalledWith(null);
+    });
+
+    test('keeps the current check when the save response is not JSON', async () => {
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: jest.fn().mockRejectedValueOnce(new SyntaxError('Unexpected token')),
+      });
+
+      await expect(renderSave().result.current.saveConfig()).resolves.toBe(true);
+
+      expect(mockSetCustomArgsCheck).not.toHaveBeenCalled();
+    });
+
+    test('keeps the current check when the save fails', async () => {
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: jest.fn().mockResolvedValueOnce({ error: 'not valid', customArgsCheck: savedCheck }),
+      });
+
+      await renderSave().result.current.saveConfig();
+
+      expect(mockSetCustomArgsCheck).not.toHaveBeenCalled();
+    });
+  });
 });
 
 
@@ -1198,7 +1306,7 @@ test('schedule errors preserve the draft and clear when the affected field is ed
     }),
   });
   const { result } = renderHook(() => useConfigSave({
-    token: 'token', config, setInitialConfig, setSnackbar: jest.fn(),
+    token: 'token', config, setInitialConfig, setCustomArgsCheck: jest.fn(), setSnackbar: jest.fn(),
     hasPlexServerConfigured: false, checkPlexConnection: jest.fn(),
   }));
   await act(async () => { expect(await result.current.saveConfig()).toBe(false); });

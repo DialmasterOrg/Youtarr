@@ -291,17 +291,22 @@ class PlexAdapter extends BaseAdapter {
         params: this._plParams(),
         timeout: REQUEST_TIMEOUT_MS,
       });
-      const machineId = await this._getMachineId();
-      const uri = `server://${machineId}/com.plexapp.plugins.library/library/metadata/${itemIds.join(',')}`;
-      await axios.put(`${this.url}/playlists/${playlistId}/items`, null, {
-        params: this._plParams({ uri }),
-        timeout: REQUEST_TIMEOUT_MS,
-      });
+      // Deleting the items already emptied it; an empty uri is not a valid item list.
+      if (itemIds.length > 0) {
+        const machineId = await this._getMachineId();
+        const uri = `server://${machineId}/com.plexapp.plugins.library/library/metadata/${itemIds.join(',')}`;
+        await axios.put(`${this.url}/playlists/${playlistId}/items`, null, {
+          params: this._plParams({ uri }),
+          timeout: REQUEST_TIMEOUT_MS,
+        });
+      }
       return { id: playlistId };
     } catch (err) {
       const status = err.response?.status;
       if (status === 404 || status === 403) {
         logger.warn({ status, playlistId }, 'plex _replaceInPlace: stored id unreachable, creating fresh');
+        // Plex cannot create an empty playlist; with nothing to list, none is needed.
+        if (itemIds.length === 0) return { id: null };
         if (!opts.name) throw err;
         return this.createPlaylist(opts.name, itemIds, { public: !!opts.public, mediaType: opts.mediaType });
       }
@@ -343,6 +348,7 @@ class PlexAdapter extends BaseAdapter {
         // pile up duplicates: adopt an existing same-named playlist if present.
         const sameName = scopePlaylists.find((p) => p.title === opts.name);
         if (sameName) return this._replaceInPlace(sameName.ratingKey, itemIds, opts);
+        if (itemIds.length === 0) return { id: null };
         return this.createPlaylist(opts.name, itemIds, { public: !!opts.public, mediaType: opts.mediaType });
       }
     }

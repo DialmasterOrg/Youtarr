@@ -5,6 +5,7 @@ const { channelDownloadAllJobLabel } = require('./download/jobTypes');
 const { MEDIA_TAB_TYPE_MAP } = require('./tabsUtils');
 const logger = require('../logger');
 const videoActivity = require('./download/videoActivity');
+const { findArchiveOnlyIds } = require('./archiveOnlyIds');
 
 const WATCH_URL_PREFIX = 'https://www.youtube.com/watch?v=';
 
@@ -46,9 +47,14 @@ class ChannelDownloadAllModule {
     // those stay in the yt-dlp archive, so yt-dlp would skip them and the
     // preview count would overstate.
     const downloaded = new Set(existing.map((video) => video.youtubeId));
+    // So is anything the archive lists without a row (e.g. emptied from the
+    // trash with its archive entry kept): yt-dlp skips those too.
+    const archiveOnly = await findArchiveOnlyIds(
+      candidates.map((row) => row.youtube_id).filter((id) => !downloaded.has(id))
+    );
 
     return candidates
-      .filter((row) => !downloaded.has(row.youtube_id) && !videoActivity.isActive(row.youtube_id))
+      .filter((row) => !downloaded.has(row.youtube_id) && !archiveOnly.has(row.youtube_id) && !videoActivity.isActive(row.youtube_id))
       .map((row) => ({ youtube_id: row.youtube_id, duration: row.duration }));
   }
 

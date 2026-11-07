@@ -21,20 +21,41 @@ function createMaintenanceRoutes({
    * /api/maintenance/rescan-files:
    *   post:
    *     summary: Kick off a manual filesystem rescan
+   *     description: >
+   *       With `ignoreLibraryCheck: true` ("Rescan anyway") the scan skips the check that keeps an unmounted
+   *       drive or share from getting every video marked missing. Only for a downloads folder the user emptied
+   *       on purpose; the scheduled rescan never skips it.
    *     tags: [Maintenance]
+   *     requestBody:
+   *       required: false
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               ignoreLibraryCheck:
+   *                 type: boolean
+   *                 default: false
    *     responses:
    *       202:
    *         description: Rescan started
+   *       400:
+   *         description: ignoreLibraryCheck was not a boolean
    *       409:
    *         description: A rescan is already in progress, or the task cannot start (reason in the body)
    *       503:
    *         description: The task is not registered yet (server still starting or database unavailable)
    */
   router.post('/api/maintenance/rescan-files', verifyToken, async (req, res) => {
+    const { ignoreLibraryCheck = false } = req.body || {};
+    if (typeof ignoreLibraryCheck !== 'boolean') {
+      return res.status(400).json({ error: 'ignoreLibraryCheck must be true or false' });
+    }
     try {
       const outcome = await scheduledTaskManager.runNow('videoRescanFrequency', {
         trigger: 'manual',
         enforceCooldown: false,
+        args: { ignoreLibraryCheck },
       });
       if (!outcome.started) {
         return sendRunBlocked(res, outcome, { running: 'Rescan already in progress' });

@@ -9,6 +9,8 @@ import { useMediaQuery } from './hooks/useMediaQuery';
 jest.mock('axios', () => ({
   get: jest.fn(),
   post: jest.fn(),
+  isAxiosError: (error: unknown) =>
+    Boolean((error as { isAxiosError?: boolean } | null)?.isAxiosError),
   interceptors: {
     request: {
       use: jest.fn(),
@@ -116,6 +118,28 @@ jest.mock('./components/DatabaseErrorOverlay', () => {
     );
   };
 });
+
+jest.mock('./providers/WebSocketProvider', () => ({
+  __esModule: true,
+  default: function MockWebSocketProvider({
+    token,
+    onSessionCheckNeeded,
+    children,
+  }: {
+    token: string | null;
+    onSessionCheckNeeded?: () => void;
+    children: React.ReactNode;
+  }) {
+    const React = require('react');
+    return React.createElement(
+      React.Fragment,
+      null,
+      React.createElement('div', { 'data-testid': 'websocket-token' }, token ?? 'none'),
+      React.createElement('button', { onClick: onSessionCheckNeeded }, 'Simulate session check'),
+      children
+    );
+  },
+}));
 
 // Mock localStorage
 const localStorageMock = {
@@ -287,6 +311,69 @@ describe('App Component', () => {
     expect(localStorageMock.removeItem).toHaveBeenCalledWith('authToken');
     expect(localStorageMock.removeItem).toHaveBeenCalledWith('plexAuthToken');
     expect(localStorageMock.removeItem).toHaveBeenCalledTimes(2);
+  });
+
+  test('gives the WebSocket connection the session token', async () => {
+    localStorageMock.getItem.mockReturnValue('test-token');
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /logout/i })).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('websocket-token')).toHaveTextContent('test-token');
+  });
+
+  test('takes the session token away from the WebSocket connection on logout', async () => {
+    const user = userEvent.setup();
+    localStorageMock.getItem.mockReturnValue('test-token');
+
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: /logout/i }));
+
+    expect(screen.getByTestId('websocket-token')).toHaveTextContent('none');
+  });
+
+  describe('WebSocket session check', () => {
+    // Rejects /auth/validate with the given status; other GETs succeed.
+    const rejectValidation = (status: number) => {
+      let validation: Promise<unknown> = Promise.resolve();
+      axios.get.mockImplementation((url: string) => {
+        if (url === '/auth/validate') {
+          validation = Promise.reject({ isAxiosError: true, response: { status } });
+          return validation;
+        }
+        return Promise.resolve({ data: { version: 'v1.0.0' } });
+      });
+      return () => validation.catch(() => undefined);
+    };
+
+    const runSessionCheck = async (status: number) => {
+      const user = userEvent.setup();
+      const validationSettled = rejectValidation(status);
+      localStorageMock.getItem.mockReturnValue('test-token');
+      render(<App />);
+      await screen.findByRole('button', { name: /logout/i });
+
+      await user.click(screen.getByRole('button', { name: 'Simulate session check' }));
+      await act(async () => {
+        await validationSettled();
+      });
+    };
+
+    test('signs out when the server rejects the session', async () => {
+      await runSessionCheck(401);
+
+      expect(screen.getByTestId('websocket-token')).toHaveTextContent('none');
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('authToken');
+    });
+
+    test('stays signed in when the session check fails for another reason', async () => {
+      await runSessionCheck(500);
+
+      expect(screen.getByTestId('websocket-token')).toHaveTextContent('test-token');
+    });
   });
 
   test('validates auth token on mount', async () => {

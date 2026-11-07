@@ -1,6 +1,7 @@
 const { Sequelize } = require('sequelize');
 const logger = require('./logger');
 const databaseHealth = require('./modules/databaseHealthModule');
+const databaseSocket = require('./modules/databaseSocket');
 
 // Configure SQL query logging based on LOG_SQL environment variable
 const sqlLogging = process.env.LOG_SQL === 'true'
@@ -30,7 +31,10 @@ const sequelize = new Sequelize(
       charset: 'utf8mb4',
       // Additional connection options for better utf8mb4 support
       supportBigNumbers: true,
-      bigNumberStrings: true
+      bigNumberStrings: true,
+      // Reuses the database's known address so new connections don't wait
+      // behind hung internet DNS lookups during an outage.
+      stream: databaseSocket.connect
     },
     define: {
       charset: 'utf8mb4',

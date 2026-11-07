@@ -1,4 +1,4 @@
-const { v4: uuidv4 } = require('uuid');
+const { v4: uuidv4, validate: uuidValidate } = require('uuid');
 const fs = require('fs');
 const fsPromises = fs.promises;
 const path = require('path');
@@ -19,6 +19,7 @@ const downloadCleanup = require('./download/downloadCleanup');
 const { serializeAuxData, parseAuxData } = require('./jobAuxData');
 const storageGuard = require('./storageGuard');
 const { unchangedSinceRead } = require('./videoRowGuard');
+const { REMOVAL_REASONS, removedColumns, presentColumns } = require('./videoRemovalState');
 const videosModule = require('./videosModule');
 const logger = require('../logger');
 
@@ -232,13 +233,14 @@ class JobModule {
           if (resolvedPath) {
             videoData.filePath = resolvedPath;
             videoData.fileSize = resolvedStats?.size !== undefined ? resolvedStats.size.toString() : null;
-            videoData.removed = false;
+            Object.assign(videoData, presentColumns());
           } else {
-            // File not found, but we still want to record the expected metadata location
+            // File not found: record the expected location but leave the removal
+            // columns alone, so a video deleted in-app while its job ran stays
+            // deleted and a new row simply awaits the file check.
             const assumedPath = actualFilePath || `${fallbackBasePath}.mp4`;
             videoData.filePath = assumedPath;
             videoData.fileSize = null;
-            videoData.removed = false;
           }
 
           // Upsert video into Videos table and ensure JobVideo relationship exists
@@ -584,7 +586,7 @@ class JobModule {
     }
   }
 
-  async addOrUpdateJob(jobData, isNextJob = false) {
+  async addOrUpdateJob(jobData, isNextJob = false, preferredJobId = null) {
     let jobId;
     const inProgressJobId = this.getInProgressJobId();
     if (!isNextJob) {
@@ -592,12 +594,16 @@ class JobModule {
         // If there is a job in progress, create a new job with status Pending
         logger.info({ jobType: jobData.jobType }, 'A job is already in progress. Adding job to the queue');
         jobData.status = 'Pending';
-        jobId = await this.addJob(jobData);
+        jobId = preferredJobId
+          ? await this.addJob(jobData, preferredJobId)
+          : await this.addJob(jobData);
       } else {
         // Otherwise, add a job with status In Progress
         logger.info({ jobType: jobData.jobType }, 'Adding job to jobs list as In Progress');
         jobData.status = 'In Progress';
-        jobId = await this.addJob(jobData);
+        jobId = preferredJobId
+          ? await this.addJob(jobData, preferredJobId)
+          : await this.addJob(jobData);
       }
     } else if (isNextJob && !inProgressJobId) {
       // If this is a next job and there's no job in progress, update its status to In Progress
@@ -973,7 +979,7 @@ class JobModule {
                 fileSize: files ? sizeOf(files.videoFileSize) : null,
                 audioFilePath: files ? files.audioFilePath : null,
                 audioFileSize: files ? sizeOf(files.audioFileSize) : null,
-                removed: !files,
+                ...(files ? presentColumns() : removedColumns(REMOVAL_REASONS.NOT_FOUND)),
               });
               videosUpserts += 1;
               if (!files && unreadableOnDisk > 0) recreatedUnverified += 1;
@@ -991,7 +997,7 @@ class JobModule {
             // column, which the zero-rows conflict check relies on.
             if (foundFile) {
               const [affected] = await Video.update(
-                { filePath: foundFile.path, fileSize: foundFile.size, removed: false },
+                { filePath: foundFile.path, fileSize: foundFile.size, ...presentColumns() },
                 { where: unchangedSinceRead(videoInstance) }
               );
               if (affected === 0) {
@@ -1161,6 +1167,45 @@ class JobModule {
     return this.jobs;
   }
 
+  // The videos still linked to a job, as Download History shows them.
+  async _loadJobVideos(jobId) {
+    const jobVideos = await JobVideo.findAll({
+      where: { job_id: jobId }
+    });
+
+    const videos = [];
+    for (const jobVideo of jobVideos) {
+      const video = await Video.findOne({ where: { id: jobVideo.video_id } });
+      if (video) {
+        videos.push(video.dataValues);
+      }
+    }
+    return videos;
+  }
+
+  /**
+   * Refresh the in-memory video lists of the given jobs from the database,
+   * after their rows changed outside the download path (emptying the trash
+   * deletes jobvideos rows). Jobs not held in memory are skipped; a failure
+   * is logged and the job keeps its previous list.
+   * @param {string[]} jobIds
+   */
+  async reloadJobVideos(jobIds) {
+    for (const jobId of jobIds || []) {
+      const job = this.jobs[jobId];
+      if (!job) continue;
+      try {
+        const videos = await this._loadJobVideos(jobId);
+        if (!job.data) {
+          job.data = {};
+        }
+        job.data.videos = videos;
+      } catch (err) {
+        logger.error({ err, jobId }, 'Error reloading videos for job');
+      }
+    }
+  }
+
   // Lets listing pages (e.g. Download History) refetch when a job is enqueued or starts.
   emitJobsUpdated(jobId, status) {
     MessageEmitter.emitMessage('broadcast', null, 'download', 'jobsUpdated', {
@@ -1169,8 +1214,13 @@ class JobModule {
     });
   }
 
-  async addJob(job) {
-    const jobId = uuidv4(); // Generate a new UUID
+  async addJob(job, preferredJobId = null) {
+    // Trusted internal callers may supply a stable UUID so enqueueing can be
+    // retried safely across an external-request persistence boundary.
+    if (preferredJobId != null && !uuidValidate(preferredJobId)) {
+      throw new Error('Preferred job id must be a UUID');
+    }
+    const jobId = preferredJobId || uuidv4();
     if (isSpecificUrlDownloadJob(job.jobType) && Array.isArray(job.data?.urls)) {
       const admission = videoActivity.claim(jobId, job.data.urls);
       job.data.urls = admission.acceptedUrls;
@@ -1264,17 +1314,7 @@ class JobModule {
       // This is especially important for multi-group downloads where each group
       // updates the job with only its own videos, potentially losing earlier videos
       try {
-        const jobVideos = await JobVideo.findAll({
-          where: { job_id: jobId }
-        });
-
-        const videos = [];
-        for (const jobVideo of jobVideos) {
-          const video = await Video.findOne({ where: { id: jobVideo.video_id } });
-          if (video) {
-            videos.push(video.dataValues);
-          }
-        }
+        const videos = await this._loadJobVideos(jobId);
 
         // Update in-memory structure with complete video list from DB
         if (!job.data) {

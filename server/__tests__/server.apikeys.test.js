@@ -346,6 +346,11 @@ const createServerModule = ({
           describe: jest.fn(() => ''),
         }));
         jest.doMock('express-rate-limit', () => jest.fn(() => (req, res, next) => next()));
+        jest.doMock('swagger-jsdoc', () => jest.fn(() => ({
+          openapi: '3.0.0',
+          paths: {},
+          components: { schemas: {} },
+        })));
         jest.doMock('https', () => ({ get: jest.fn() }));
         jest.doMock('fs', () => ({
           readFileSync: jest.fn(() => ''),
@@ -603,6 +608,21 @@ describe('API Key Module - Unit Tests', () => {
       const storedKey = apiKeyModule._getKeys().find(k => k.id === created.id);
       expect(storedKey).toBeUndefined();
     });
+  });
+});
+
+describe('RSS feed routes', () => {
+  test('serves the download feed without a session check, because readers cannot log in', async () => {
+    const { app } = await createServerModule({ apiKeyModuleMock: createApiKeyModuleMock() });
+
+    expect(findRouteHandlers(app, 'get', '/feeds/downloads.xml')).toHaveLength(1);
+  });
+
+  test('puts a session check on the token endpoints', async () => {
+    const { app } = await createServerModule({ apiKeyModuleMock: createApiKeyModuleMock() });
+
+    expect(findRouteHandlers(app, 'get', '/api/feeds/downloads/token')).toHaveLength(2);
+    expect(findRouteHandlers(app, 'post', '/api/feeds/downloads/regenerate-token')).toHaveLength(2);
   });
 });
 
@@ -879,6 +899,24 @@ describe('API Key Authentication - Security Tests', () => {
       expect(validated).toBeNull();
     });
 
+    test('rejects an external-role key before the legacy download handler', async () => {
+      const apiKeyModuleMock = createApiKeyModuleMock();
+      apiKeyModuleMock.validateApiKey.mockResolvedValue({
+        id: 99, name: 'External', key_prefix: '12345678', role: 'request',
+      });
+      const { app } = await createServerModule({ apiKeyModuleMock });
+      const [verifyToken] = findRouteHandlers(app, 'post', '/api/videos/download');
+      const req = createMockRequest({
+        method: 'POST', path: '/api/videos/download', headers: { 'x-api-key': '12345678external' },
+      });
+      const res = createMockResponse();
+
+      await verifyToken(req, res, jest.fn());
+
+      expect(res.statusCode).toBe(403);
+      expect(res.body).toEqual({ error: 'External API keys cannot access the download endpoint' });
+    });
+
     test('rejects request without URL', async () => {
       const apiKeyModuleMock = createApiKeyModuleMock();
       const created = await apiKeyModuleMock.createApiKey('Download Key');
@@ -925,17 +963,93 @@ describe('API Key Authentication - Security Tests', () => {
       expect(res.body.error).toContain('YouTube');
     });
 
-    test('rejects playlist URLs - single video only', async () => {
+    test('rejects a non-string URL as an invalid format', async () => {
       const apiKeyModuleMock = createApiKeyModuleMock();
       const created = await apiKeyModuleMock.createApiKey('Download Key');
-      
+
       const { app } = await createServerModule({ apiKeyModuleMock });
 
       const handlers = findRouteHandlers(app, 'post', '/api/videos/download');
       const downloadHandler = handlers[handlers.length - 1];
 
       const req = createMockRequest({
-        body: { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf' },
+        body: { url: 12345 },
+        headers: { 'x-api-key': created.key },
+        authType: 'api_key',
+        apiKeyId: created.id
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(res.body.error).toBe('Invalid YouTube URL format');
+    });
+
+    test('queues only the video when a watch URL also names a playlist', async () => {
+      const apiKeyModuleMock = createApiKeyModuleMock();
+      const created = await apiKeyModuleMock.createApiKey('Download Key');
+
+      const { app, downloadModuleMock } = await createServerModule({ apiKeyModuleMock });
+
+      const handlers = findRouteHandlers(app, 'post', '/api/videos/download');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf&index=3' },
+        headers: { 'x-api-key': created.key },
+        authType: 'api_key',
+        apiKeyId: created.id
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(downloadModuleMock.doGroupedManualDownloads).toHaveBeenCalledWith({
+        body: expect.objectContaining({ urls: ['https://www.youtube.com/watch?v=dQw4w9WgXcQ'] })
+      });
+    });
+
+    test.each([
+      'https://m.youtube.com/watch?v=dQw4w9WgXcQ',
+      'https://music.youtube.com/watch?v=dQw4w9WgXcQ&list=RDAMVMdQw4w9WgXcQ',
+      'https://youtu.be/dQw4w9WgXcQ?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf',
+      'https://www.youtube.com/live/dQw4w9WgXcQ',
+      'https://www.youtube.com/embed/dQw4w9WgXcQ',
+    ])('queues the canonical watch URL for %s', async (url) => {
+      const apiKeyModuleMock = createApiKeyModuleMock();
+      const created = await apiKeyModuleMock.createApiKey('Download Key');
+
+      const { app, downloadModuleMock } = await createServerModule({ apiKeyModuleMock });
+
+      const handlers = findRouteHandlers(app, 'post', '/api/videos/download');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { url },
+        headers: { 'x-api-key': created.key },
+        authType: 'api_key',
+        apiKeyId: created.id
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(downloadModuleMock.doGroupedManualDownloads).toHaveBeenCalledWith({
+        body: expect.objectContaining({ urls: ['https://www.youtube.com/watch?v=dQw4w9WgXcQ'] })
+      });
+    });
+
+    test('rejects playlist page URLs - single video only', async () => {
+      const apiKeyModuleMock = createApiKeyModuleMock();
+      const created = await apiKeyModuleMock.createApiKey('Download Key');
+
+      const { app } = await createServerModule({ apiKeyModuleMock });
+
+      const handlers = findRouteHandlers(app, 'post', '/api/videos/download');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { url: 'https://www.youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf' },
         headers: { 'x-api-key': created.key },
         authType: 'api_key',
         apiKeyId: created.id
@@ -957,7 +1071,6 @@ describe('API Key Authentication - Security Tests', () => {
       const handlers = findRouteHandlers(app, 'post', '/api/videos/download');
       const downloadHandler = handlers[handlers.length - 1];
 
-      // Channel URLs don't match the video URL pattern, so they're rejected
       const req = createMockRequest({
         body: { url: 'https://www.youtube.com/@LinusTechTips' },
         headers: { 'x-api-key': created.key },
@@ -969,8 +1082,7 @@ describe('API Key Authentication - Security Tests', () => {
       await downloadHandler(req, res);
 
       expect(res.statusCode).toBe(400);
-      // Channel URLs fail the video URL regex validation
-      expect(res.body.error).toContain('YouTube URL');
+      expect(res.body.error).toContain('single video');
     });
 
     test('accepts various valid YouTube URL formats', async () => {

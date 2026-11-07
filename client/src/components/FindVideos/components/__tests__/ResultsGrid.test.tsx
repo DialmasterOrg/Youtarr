@@ -85,6 +85,12 @@ describe('ResultsGrid', () => {
     expect(screen.getAllByTestId('skeleton')).toHaveLength(30);
   });
 
+  test('loading in table mode on desktop renders a table-shaped skeleton', () => {
+    render(<ResultsGrid {...baseProps} loading viewMode="table" pageSize={10} />);
+    expect(screen.getByTestId('results-skeleton-table')).toBeInTheDocument();
+    expect(screen.queryByTestId('results-skeleton-list')).not.toBeInTheDocument();
+  });
+
   test('error: renders message and Try again triggers onRetry', () => {
     const onRetry = jest.fn();
     render(<ResultsGrid {...baseProps} error="Search failed" onRetry={onRetry} />);
@@ -170,6 +176,12 @@ describe('ResultsGrid', () => {
           dispatchEvent: () => false,
         }),
       });
+    });
+
+    test('loading in table mode renders a list-shaped skeleton', () => {
+      render(<ResultsGrid {...baseProps} loading viewMode="table" pageSize={10} />);
+      expect(screen.getByTestId('results-skeleton-list')).toBeInTheDocument();
+      expect(screen.queryByTestId('results-skeleton-table')).not.toBeInTheDocument();
     });
 
     test('viewMode=table renders ResultsListMobile instead of ResultsTable', () => {

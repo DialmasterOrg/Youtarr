@@ -6,6 +6,8 @@
   "added": false
 },*/
 
+import type { RemovalReason } from '../utils/videoRemoval';
+
 export interface ChannelVideo {
   activity?: 'queued' | 'downloading';
   id?: number;
@@ -19,6 +21,10 @@ export interface ChannelVideo {
   thumbnail: string;
   added: boolean;
   removed?: boolean;
+  // Why the file is gone (see utils/videoRemoval): 'not_found' = missing, anything else = deleted
+  removed_reason?: RemovalReason | null;
+  removed_at?: string | null;
+  removed_detail?: string | null;
   // Listed in the download archive without a database record, so a download
   // skips it unless re-downloading is allowed. Never true for ignored videos.
   inArchive?: boolean;

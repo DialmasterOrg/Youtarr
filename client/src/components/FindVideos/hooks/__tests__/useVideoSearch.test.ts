@@ -122,4 +122,56 @@ describe('useVideoSearch', () => {
     unmount();
     expect(signalRef?.aborted).toBe(true);
   });
+
+  describe('last search cache', () => {
+    beforeEach(() => { window.sessionStorage.clear(); });
+
+    test('remembers a successful search for the session', async () => {
+      axios.post.mockResolvedValueOnce({ data: { results: [{ youtubeId: 'a', title: 'A' }] } });
+      const { result } = renderHook(() => useVideoSearch('token'));
+      await act(async () => { await result.current.search('minecraft', 50); });
+
+      expect(JSON.parse(window.sessionStorage.getItem('findVideos.lastSearch') ?? '')).toEqual({
+        query: 'minecraft', count: 50, results: [{ youtubeId: 'a', title: 'A' }],
+      });
+    });
+
+    test('restores the remembered results without a request when asked for the same query', () => {
+      window.sessionStorage.setItem('findVideos.lastSearch', JSON.stringify({
+        query: 'minecraft', count: 10, results: [{ youtubeId: 'a', title: 'A' }],
+      }));
+      const { result } = renderHook(() => useVideoSearch('token', { restoreQuery: 'minecraft' }));
+
+      expect(result.current.results).toEqual([{ youtubeId: 'a', title: 'A' }]);
+      expect(result.current.restored).toEqual({ query: 'minecraft', count: 10 });
+      expect(axios.post).not.toHaveBeenCalled();
+    });
+
+    test('ignores the remembered results for a different query', () => {
+      window.sessionStorage.setItem('findVideos.lastSearch', JSON.stringify({
+        query: 'minecraft', count: 10, results: [{ youtubeId: 'a', title: 'A' }],
+      }));
+      const { result } = renderHook(() => useVideoSearch('token', { restoreQuery: 'terraria' }));
+
+      expect(result.current.results).toEqual([]);
+      expect(result.current.restored).toBeNull();
+    });
+
+    test('ignores the remembered results when no query is asked for', () => {
+      window.sessionStorage.setItem('findVideos.lastSearch', JSON.stringify({
+        query: 'minecraft', count: 10, results: [{ youtubeId: 'a', title: 'A' }],
+      }));
+      const { result } = renderHook(() => useVideoSearch('token'));
+
+      expect(result.current.results).toEqual([]);
+      expect(result.current.restored).toBeNull();
+    });
+
+    test('ignores a remembered entry it cannot read', () => {
+      window.sessionStorage.setItem('findVideos.lastSearch', '{not json');
+      const { result } = renderHook(() => useVideoSearch('token', { restoreQuery: 'minecraft' }));
+      expect(result.current.results).toEqual([]);
+      expect(result.current.restored).toBeNull();
+    });
+  });
 });

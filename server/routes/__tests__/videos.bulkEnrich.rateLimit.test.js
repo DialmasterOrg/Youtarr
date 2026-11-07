@@ -29,6 +29,7 @@ function buildApp({ enricherStub }) {
     videosModule: {},
     downloadModule: {},
     videoOembedEnricher: enricherStub,
+    youtubeUrlParser: require('../../modules/youtubeUrlParser'),
   });
   app.use(router);
   return app;

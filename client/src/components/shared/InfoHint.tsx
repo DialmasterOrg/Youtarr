@@ -1,6 +1,6 @@
 import React from 'react';
-import { Tooltip } from '../../ui';
-import { Info as InfoIcon } from '../../../lib/icons';
+import { Tooltip } from '../ui';
+import { Info as InfoIcon } from '../../lib/icons';
 
 interface InfoHintProps {
   label: string;

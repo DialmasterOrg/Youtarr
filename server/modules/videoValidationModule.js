@@ -179,31 +179,6 @@ class VideoValidationModule {
   }
 
   /**
-   * Check if a YouTube video exists using the oEmbed API
-   * @param {string} youtubeId - YouTube video ID (11 characters)
-   * @returns {Promise<boolean>} - True if video exists, false otherwise
-   */
-  async checkVideoExistsOnYoutube(youtubeId) {
-    logger.debug({ youtubeId }, 'Checking if video exists on YouTube');
-    try {
-      const oEmbedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${youtubeId}&format=json`;
-
-      const response = await fetch(oEmbedUrl, {
-        method: 'HEAD',
-        redirect: 'follow'
-      });
-
-      // If status is not 404, video exists
-      // 403 means private and inaccessible
-      return response.status !== 404 && response.status !== 403;
-    } catch (error) {
-      logger.warn({ err: error, youtubeId }, 'Error checking if video exists on YouTube, assuming video exists');
-      // If there's a network error or other issue, assume video exists
-      return true;
-    }
-  }
-
-  /**
    * Main validation function
    * @param {string} url - YouTube URL to validate
    * @returns {Promise<Object>} - Validation response

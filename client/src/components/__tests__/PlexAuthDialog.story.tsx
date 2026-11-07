@@ -10,6 +10,7 @@ const meta: Meta<typeof PlexAuthDialog> = {
     onClose: fn(),
     onSuccess: fn(),
     currentApiKey: 'existing-plex-token',
+    token: 'storybook-session-token',
   },
 };
 

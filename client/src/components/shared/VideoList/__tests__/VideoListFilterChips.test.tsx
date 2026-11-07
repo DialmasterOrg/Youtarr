@@ -169,6 +169,48 @@ describe('VideoListFilterChips', () => {
     expect(onMissingChange).toHaveBeenCalledWith('off');
   });
 
+  describe('a chip whose resting value is not off (the Videos page hides deleted videos by default)', () => {
+    test('renders no chip and counts nothing while at its resting value', () => {
+      const filters: FilterConfig[] = [
+        { id: 'deleted', value: 'exclude', onChange: jest.fn(), defaultValue: 'exclude' },
+      ];
+      renderWithProviders(<VideoListFilterChips filters={filters} />);
+      expect(screen.queryByTestId('video-list-filter-chips')).not.toBeInTheDocument();
+      expect(countActiveFilters(filters)).toBe(0);
+    });
+
+    test('renders a "Show" chip when turned off, counts it, and clicking it returns to the resting value', async () => {
+      const user = userEvent.setup();
+      const onChange = jest.fn();
+      const filters: FilterConfig[] = [
+        { id: 'deleted', value: 'off', onChange, defaultValue: 'exclude' },
+      ];
+      renderWithProviders(<VideoListFilterChips filters={filters} />);
+      expect(screen.getByText('Show: Deleted')).toBeInTheDocument();
+      expect(countActiveFilters(filters)).toBe(1);
+      await user.click(screen.getByTestId('CancelIcon'));
+      expect(onChange).toHaveBeenCalledWith('exclude');
+    });
+
+    test('clearAllFilters returns it to its resting value, not off', () => {
+      const onChange = jest.fn();
+      const filters: FilterConfig[] = [
+        { id: 'deleted', value: 'only', onChange, defaultValue: 'exclude' },
+      ];
+      clearAllFilters(filters);
+      expect(onChange).toHaveBeenCalledWith('exclude');
+    });
+
+    test('a chip without a resting value still rests at off', () => {
+      const filters: FilterConfig[] = [
+        { id: 'protected', value: 'only', onChange: jest.fn() },
+      ];
+      renderWithProviders(<VideoListFilterChips filters={filters} />);
+      expect(screen.getByText(/Only: Protected/i)).toBeInTheDocument();
+      expect(countActiveFilters(filters)).toBe(1);
+    });
+  });
+
   test('countActiveFilters counts missing and ignored when on', () => {
     const filters: FilterConfig[] = [
       { id: 'protected', value: 'only', onChange: jest.fn() },

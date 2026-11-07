@@ -138,6 +138,40 @@ async function removeVideoFromArchive(videoId) {
   }
 }
 
+// Remove a purge chunk in one rewrite. The caller holds archiveAccess until
+// the purge finishes, so yt-dlp cannot append to the file during replacement.
+// Returns how many lines went; the file is left alone when none would.
+async function removeVideosFromArchive(youtubeIds) {
+  const wanted = new Set((youtubeIds || []).filter(Boolean));
+  if (wanted.size === 0) return 0;
+
+  const lines = readCompleteListLines();
+  const kept = lines.filter((line) => {
+    const parts = line.split(/\s+/).filter(Boolean);
+    return !(parts.length >= 2 && parts[0] === 'youtube' && wanted.has(parts[1]));
+  });
+  const removed = lines.length - kept.length;
+  if (removed === 0) return 0;
+
+  const content = kept.join('\n') + (kept.length > 0 ? '\n' : '');
+  const archivePath = getArchivePath();
+  const tempPath = `${archivePath}.purge.tmp`;
+  try {
+    // A disk-full/write error must leave the original archive intact for retry.
+    fs.writeFileSync(tempPath, content, 'utf-8');
+    fs.renameSync(tempPath, archivePath);
+  } catch (err) {
+    try {
+      fs.unlinkSync(tempPath);
+    } catch (cleanupError) {
+      if (cleanupError.code !== 'ENOENT') logger.warn({ err: cleanupError }, 'Could not clean up temporary purge archive');
+    }
+    throw err;
+  }
+  logger.info({ removed }, 'Removed videos from archive');
+  return removed;
+}
+
 module.exports = {
   getArchivePath,
   readCompleteListLines,
@@ -146,4 +180,5 @@ module.exports = {
   filterArchivedVideoIds,
   addVideoToArchive,
   removeVideoFromArchive,
+  removeVideosFromArchive,
 };

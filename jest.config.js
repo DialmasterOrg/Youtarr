@@ -18,6 +18,6 @@ module.exports = {
     coverageReporters: ['text', 'lcov', 'html'],
     testTimeout: 10000,
     setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
-    testPathIgnorePatterns: ['<rootDir>/migrations/__tests__/externalApiDatabase\\.integration\\.test\\.js$'],
+    testPathIgnorePatterns: ['<rootDir>/server/testing/externalRuntime.database.test.js', '<rootDir>/migrations/__tests__/externalApiDatabase\\.integration\\.test\\.js$'],
     maxWorkers: 1
 };

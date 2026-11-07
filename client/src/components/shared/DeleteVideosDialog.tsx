@@ -18,7 +18,7 @@ interface DeleteVideosDialogProps {
   onClose: () => void;
   onConfirm: () => void;
   videoCount: number;
-  // Selected videos excluded from deletion because their file is already missing
+  // Selected videos excluded from deletion because they have no file on disk
   skippedCount?: number;
 }
 
@@ -58,8 +58,8 @@ const DeleteVideosDialog: React.FC<DeleteVideosDialogProps> = ({
             <Alert severity="info">
               <Typography variant="body2">
                 {skippedCount === 1
-                  ? '1 selected video will not be affected because its file is already missing from disk.'
-                  : `${skippedCount} selected videos will not be affected because their files are already missing from disk.`}
+                  ? '1 selected video will not be affected because it has no file on disk.'
+                  : `${skippedCount} selected videos will not be affected because they have no file on disk.`}
               </Typography>
             </Alert>
           )}

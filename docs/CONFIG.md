@@ -15,11 +15,12 @@ These settings can be changed from the Settings pages in the web UI.
 - [Kodi, Emby and Jellyfin Compatibility](#kodi-emby-and-jellyfin-compatibility)
 - [Cookie Config](#cookie-config)
 - [Notifications](#notifications)
+- [RSS Feeds](#rss-feeds)
 - [Download Performance](#download-performance)
 - [Advanced Settings](#advanced-settings)
 - [Auto-Removal Settings](#auto-removal-settings)
 - [Storage Limits (Download Pause)](#storage-limits-download-pause)
-- [API Keys & External Access](#api-keys--external-access)
+- [API Keys & Bookmarklet](#api-keys--bookmarklet)
 - [yt-dlp Auto-Update](#yt-dlp-auto-update)
 - [Filesystem Rescan](#filesystem-rescan)
 - [Logging](#logging)
@@ -191,7 +192,9 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
 - **Default**: `"en"`
 - **Description**: Preferred subtitle language(s) when downloading subtitle files for videos (ISO 639-1 code)
 - **Examples**: `"en"` (English), `"es"` (Spanish), `"fr"` (French)
-- **Note**: Only displayed when subtitles are enabled
+- **Variants**: Each selected language also matches YouTube's regional and script variants of it, so `"en"` downloads an uploaded `en-GB` or `en-US` track and `"zh"` downloads `zh-Hans`, `zh-Hant` or `zh-SG`. Each track is written as its own `.srt` file (for example `.en-GB.srt`). yt-dlp requests the auto-generated track for the bare code as well, and YouTube's machine translations include `pt-PT` next to `pt`, so after the download Youtarr prunes per selected language: when the video has uploaded tracks for it, only those are kept; otherwise the auto-generated track for the bare code is kept and other auto-generated variants are dropped (`pt-PT`); when there is no bare track either, everything is kept (Chinese has no bare `zh` auto-generated track, so `zh-Hans` and `zh-Hant` are both kept). Every requested track costs one subtitle request plus a 5-second pause, including the ones pruned afterwards: `pt` fetches `pt-PT` on every video with auto-generated captions, and `zh` fetches both scripts.
+- **Auto-generated captions**: With no uploaded track for a selected language, the auto-generated captions are kept: the video's own when it is spoken in that language, otherwise YouTube's machine translation into it, as before. The original-language auto captions (`en-orig`) are never matched by a bare code; `"en-orig"` is the "English (Original/Uploaded)" option in the UI.
+- **Note**: Only displayed when subtitles are enabled. A value hand-edited into `config.json` that is not a bare language code (such as `"pt-BR"`, yt-dlp's `"all"` alias, an exclusion like `"-live_chat"`, or a yt-dlp regex) is passed to yt-dlp unchanged. Pruning runs only when every entry is a plain language code (`"en"`, `"en-orig"`, `"pt-BR"`) and the custom yt-dlp arguments do not set `--sub-langs`, `--srt-langs` or `--all-subs` (or an abbreviation yt-dlp accepts, such as `--sub-lang`); a code listed verbatim is never pruned.
 
 ### Dark Mode
 - **Config Key**: `darkModeEnabled`
@@ -591,6 +594,25 @@ Each entry in the array is an object with the following properties:
 }
 ```
 
+### Notification Link Template
+- **Config Key**: `notificationLinkTemplate`
+- **Type**: `string`
+- **Default**: `""` (no links)
+- **Description**: A URL that Youtarr adds to each video in download notifications. The title of each video becomes a link.
+
+`{youtubeId}` is the only variable. Youtarr replaces it with the YouTube ID of the video. The template must be a full `http://` or `https://` URL of at most 500 characters. When the setting is empty, notifications do not change.
+
+The link appears in the services with rich formatting: Discord, Slack, Telegram and Email. Services that receive plain text have no link. Auto removal and download pause notifications have no link, because they do not list videos you can open.
+
+**Examples:**
+
+| Template | Where the link goes |
+|----------|---------------------|
+| `https://youtarr.example.com/videos?video={youtubeId}` | Opens the video in the Videos page of your Youtarr |
+| `https://www.youtube.com/watch?v={youtubeId}` | Opens the video on YouTube |
+
+The Videos page opens the video named in `?video=` and then removes the parameter from the URL. If no video has that ID, the page shows "Video not found".
+
 ### Rich Formatting
 
 For supported services, Youtarr sends beautifully formatted notifications with embeds, styled text, video cards, and timestamps. Services without rich formatting support receive plain text notifications.
@@ -647,6 +669,41 @@ If you previously used the `discordWebhookUrl` configuration option, Youtarr aut
 ```
 
 The old `discordWebhookUrl` and `notificationService` fields are automatically removed after migration. No manual action is required.
+
+## RSS Feeds
+
+Settings for the private RSS feed of downloaded videos, served at `/feeds/downloads.xml`. See [RSS Feeds](USAGE_GUIDE.md#rss-feeds) in the usage guide for setup.
+
+### Download Feed Enabled
+- **Config Key**: `downloadsFeedEnabled`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Description**: Turns the feed on. While it's off, the feed URL answers 404.
+
+### Download Feed Item Limit
+- **Config Key**: `downloadsFeedItemLimit`
+- **Type**: `number`
+- **Default**: `50`
+- **Range**: 10 to 200
+- **Description**: How many of the newest downloads the feed lists. A value outside the range is corrected at startup.
+
+### Download Feed Media Types
+- **Config Key**: `downloadsFeedMediaTypes`
+- **Type**: `array`
+- **Default**: `["video", "short", "livestream"]`
+- **Description**: Which video types the feed lists. At least one is required.
+
+### Download Feed Link Template
+- **Config Key**: `downloadsFeedLinkTemplate`
+- **Type**: `string`
+- **Default**: `""` (opens YouTube)
+- **Description**: Where clicking a feed item goes. It follows the same rules as the [Notification Link Template](#notification-link-template): a full `http://` or `https://` URL of at most 500 characters, with `{youtubeId}` as the only variable.
+
+### Download Feed Token
+- **Config Key**: `downloadsFeedToken`
+- **Type**: `string`
+- **Default**: Not set; Youtarr creates it the first time the feed is turned on
+- **Description**: The secret in the feed URL. Youtarr manages it: use **Create new URL** in Settings -> RSS Feeds to replace it. Settings saves never change it.
 
 ## Download Performance
 
@@ -739,9 +796,13 @@ The old `discordWebhookUrl` and `notificationService` fields are automatically r
 - **Type**: `string`
 - **Default**: `""` (empty)
 - **Description**: Free-form yt-dlp arguments appended to every invocation. Tokenized shell-style (single/double quotes and backslash-escapes supported). Maximum length: 2000 characters.
-- **Blocked flags**: For safety, several flags are rejected at save time and silently dropped at command-build time. The full list is in `server/modules/download/customArgsParser.js`; it includes (among others) `--exec`, `--netrc-cmd`, `-o`/`--output`, `-P`/`--paths`, `--print-to-file`, `--external-downloader`/`--downloader`, `--external-downloader-args`/`--downloader-args`, `--cookies`/`--cookies-from-browser`, `--ffmpeg-location`, `--config-location`, `--batch-file`, `--load-info-json`, `--download-archive`, plus the flags that have dedicated config fields (`--proxy`, `-4`/`-6`, `--limit-rate`, `--sleep-requests`).
+- **Allowed options**: Each option you enter is resolved to its canonical yt-dlp name (so shortened names and short forms like `-N 4` or `--embed-th` work) and checked against an allowlist in `server/modules/download/ytdlpOptionTable.js`. Options fall into three groups:
+  - **Allowed**: safe tuning knobs (format, retries, subtitles, geo-bypass, ffmpeg embeds, etc.) are accepted as entered.
+  - **Allowed with a warning**: safe options that usually break downloads or override something Youtarr manages (e.g. `--simulate`, `--quiet`, `--extract-audio`, `--no-match-filters`), including options that change the file types Youtarr looks for (`.mp4` video, `.mp3` audio, `.jpg` thumbnails), such as `--merge-output-format`, `--recode-video`, `--audio-format`, and `--convert-thumbnails`. They still run; the Settings page shows why they may cause problems.
+  - **Blocked**: options that can run programs or load code (`--exec`, `--use-postprocessor`, `--plugin-dirs`, ...) or pass raw arguments to other programs (`--postprocessor-args`, `--downloader-args`), read or write files on the server (`--batch-file`, `--load-info-json`, `--config-locations`, ...), rewrite the video details Youtarr names files from (`--parse-metadata`, `--replace-in-metadata`), replace the yt-dlp binary (`--update`, `--update-to`), put credentials or sign-in data in plain text or in the logs (`--username`, `--password`, `--netrc`, `--add-headers`, `--print-traffic`, ...), remove Youtarr's own post-processing (`--no-exec`), or take over a resource Youtarr manages (`--output`/`--paths`, `--cookies`, `--download-archive`, `--proxy`, `-4`/`-6`, `--limit-rate`, `--sleep-requests`). Anything Youtarr does not recognize is blocked too (fail closed).
+- **What happens to a blocked option**: a blocked option (and its values) is skipped; the rest of your options still apply. Options Youtarr cannot read are skipped too: a missing value skips everything after it, and an unclosed quote skips all custom args. The Settings page lists what is skipped and why for the saved args (on load and after each Save), and for unsaved edits when you click Validate. Saving a *changed* value that contains a blocked option is rejected (400); an unchanged value is not re-checked, so saving other settings is never blocked by previously-saved custom args.
 - **Order**: Custom args are appended LAST in the yt-dlp command, after Youtarr's managed flags. Per yt-dlp's last-wins semantics, your flags can override managed ones (e.g. `--retries 5` overrides Youtarr's default `--retries 2`).
-- **Note**: Power-user feature. Incorrect flags can prevent downloads from working entirely or break Youtarr's behavior in unexpected ways. Use the "Validate Arguments" button in the UI to argparse-check your args against yt-dlp before saving. The validation does not gate save — invalid args can still be saved and will only surface failures at download time.
+- **Note**: Power-user feature. Incorrect flags can prevent downloads from working entirely or break Youtarr's behavior in unexpected ways. Use the "Validate Arguments" button in the UI to check your args before saving; it reports blocked and risky options and argparse-checks the rest against yt-dlp.
 
 ### Use External Temporary Directory
 - **Config Key**: `useTmpForDownloads`
@@ -799,6 +860,8 @@ volumes:
 For an SMB/CIFS share (Synology, QNAP, Windows file shares), see [Letting Docker Mount the Share](DOCKER.md#letting-docker-mount-the-share).
 
 **Simplest workaround:** Set `useTmpForDownloads: false` (the default). Downloads are staged inside the output directory itself, so the move is a same-filesystem rename — atomic and immune to this class of error. Note: if the NFS mount is stale, downloads will still fail, but they will fail *before* yt-dlp marks them as archived — so they'll be automatically retried on the next scheduled run rather than getting permanently stuck.
+
+**Health check timeout:** Before each download, Youtarr writes and deletes a probe file in the output directory and fails the job if that takes longer than 10 seconds ("Output directory health check timed out"). On a share that is slow but healthy, set the [`OUTPUT_DIR_HEALTHCHECK_TIMEOUT`](ENVIRONMENT_VARIABLES.md#output_dir_healthcheck_timeout) environment variable to a larger number of seconds. The same value also sets how long a truly stale mount takes to fail each job.
 
 ## Auto-Removal Settings
 
@@ -898,9 +961,9 @@ When combining these with Auto Removal, set the pause usage limit at or above `a
 - **Examples**: `"1GB"`, `"50GB"`, `"1TB"` (the UI offers 1 GB, 5 GB, 10 GB, 50 GB, 100 GB, 250 GB, 500 GB, and 1 TB)
 - **Note**: Uses the same `df`-based measurement as the storage indicator. Some mounts (network shares, overlays, bind mounts) report free space incorrectly; use `downloadPauseUsageLimit` instead on those.
 
-## API Keys & External Access
+## API Keys & Bookmarklet
 
-Settings for API key authentication used by bookmarklets, mobile shortcuts, and automation tools.
+Settings for API key authentication used by the "Send to Youtarr" bookmarklet, mobile shortcuts, and automation tools. The rate limit field is on Settings -> API Keys & Bookmarklet, below the key list.
 
 ### API Key Rate Limit
 - **Config Key**: `apiKeyRateLimit`

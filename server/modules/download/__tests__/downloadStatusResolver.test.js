@@ -67,6 +67,19 @@ describe('downloadStatusResolver', () => {
       const flags = computeOutcomeFlags({ ...baseInput, code: 0, subtitleFailureCount: 1 });
       expect(flags.hasOnlySubtitleFailures).toBe(false);
     });
+
+    it('keeps SponsorBlock failures as handled warnings when mixed with expected skips', () => {
+      const flags = computeOutcomeFlags({ ...baseInput, sponsorBlockFailureCount: 2, expectedSkipCount: 1 });
+      expect(flags).toMatchObject({ hasOnlyExpectedSkips: false, hasOnlyHandledErrors: true });
+    });
+
+    it.each([
+      { failedCount: 1 }, { unexpectedErrorCount: 1 }, { botDetected: true },
+      { httpForbiddenDetected: true }, { code: 2 }
+    ])('does not hide real failures behind a SponsorBlock warning: %j', (failure) => {
+      const flags = computeOutcomeFlags({ ...baseInput, sponsorBlockFailureCount: 1, ...failure });
+      expect(flags.hasOnlyHandledErrors).toBe(false);
+    });
   });
 
   describe('describeNonZeroExit', () => {
@@ -81,6 +94,15 @@ describe('downloadStatusResolver', () => {
       flags: noFlags,
       failureDetails: null
     };
+
+    it('describes both optional subtitle and SponsorBlock failures', () => {
+      const result = describeNonZeroExit({
+        ...baseInput, videoCount: 2, videoDataCount: 2,
+        subtitleFailureCount: 1, sponsorBlockFailureCount: 2,
+        flags: { hasOnlyHandledErrors: true, hasOnlySubtitleFailures: true }
+      });
+      expect(result.notes).toBe('1 subtitle download failed; the videos themselves downloaded; SponsorBlock unavailable for 2 videos');
+    });
 
     it('reports status Killed when the process was SIGKILLed', () => {
       const result = describeNonZeroExit({ ...baseInput, code: 137, signal: 'SIGKILL' });
@@ -353,15 +375,28 @@ describe('downloadStatusResolver', () => {
       expect(result.finalState).toBe('complete');
     });
 
-    it('mentions skipped existing videos in the final text', () => {
+    it('names requested videos that were already downloaded in the final text', () => {
       const result = resolveFinalPresentation({
         ...baseInput,
         videoDataCount: 1,
         skippedCount: 3,
+        alreadyDownloadedCount: 3,
         videoCount: 1,
         monitorCompletedCount: 1
       });
-      expect(result.finalText).toBe('Download completed: 1 video downloaded, 3 already existed');
+      expect(result.finalText).toBe('Download completed: 1 video downloaded, 3 already downloaded');
+    });
+
+    it('names requested videos that were not available in the final text', () => {
+      const result = resolveFinalPresentation({ ...baseInput, skippedCount: 1, notAvailableCount: 1 });
+
+      expect(result.finalText).toBe('Download completed: 1 not available');
+    });
+
+    it('leaves videos a job only looked at out of the final text', () => {
+      const result = resolveFinalPresentation({ ...baseInput, skippedCount: 9, monitorCompletedCount: 0 });
+
+      expect(result.finalText).toBe('Download completed: No new videos to download');
     });
 
     it('reports warning for a single handled termination on exit 1', () => {

@@ -333,6 +333,16 @@ You **do not** need to rebuild for:
 - New migration files - `./migrations/` is mounted; the same container restart runs them.
 - Frontend changes while the Vite dev server is running - Vite HMR updates the browser.
 
+### Regenerating the yt-dlp Option List
+
+The custom yt-dlp options check (`server/modules/download/ytdlpOptionTable.js`) resolves options against `server/modules/download/ytdlpOptionSpecs.js`, which is generated from yt-dlp's own parser. Regenerate it from time to time so options added by newer yt-dlp releases are recognized (until then they are blocked as unknown), then classify any new option in `ytdlpOptionTable.js`:
+
+```bash
+docker exec -i youtarr-dev python3 - /opt/yt-dlp/yt-dlp \
+  < scripts/generate-ytdlp-option-specs.py \
+  > server/modules/download/ytdlpOptionSpecs.js
+```
+
 ### Benefits of This Approach
 
 - ✅ Tests your code in the actual Docker environment it will run in
@@ -432,6 +442,9 @@ npm run lint:backend
 
 # TypeScript type checking
 npm run lint:ts
+
+# Check that every path in .claude/rules still matches a file (also part of npm run lint)
+npm run lint:rules
 ```
 
 ### Pre-commit Hooks
@@ -445,7 +458,7 @@ git commit --no-verify
 
 ### Running Tests
 
-All tests run on your host machine (not in Docker) since they're isolated unit tests:
+The unit suites run on your host machine without a database:
 
 ```bash
 # Run all tests (backend + frontend)
@@ -463,6 +476,15 @@ npm run test:coverage
 # Watch mode (backend)
 npm run test:watch
 ```
+
+### External API Database Tests
+
+The separate external API integration suite requires a disposable MariaDB 10.3
+or MySQL 8.0 server. It runs the real migrations and model-backed request,
+approval, quota, and catalog flows without contacting YouTube. Follow the
+[database setup and query-plan commands](EXTERNAL_API.md#database-integration-and-query-plans)
+to run both engines, including rollback/reapply and the synthetic index report.
+The ordinary backend Jest command does not run these database tests.
 
 ### External Cookie Validation Tests
 
@@ -680,7 +702,7 @@ router.get('/api/your-endpoint', verifyToken, async (req, res) => {
 
 ### WebSocket Events
 
-WebSocket shares the HTTP port (3011 in container, 3087 on host) and emits:
+WebSocket shares the HTTP port (3011 in container, 3087 on host) at path `/ws`. Unless `AUTH_ENABLED=false`, it requires an active session token: browsers cannot set headers on the handshake, so the client offers two subprotocols, `youtarr` and `youtarr.auth.<session token>`, and the server answers with `youtarr`. Connections without a valid session are refused with 401 before the handshake (API keys are not accepted), and an open connection is closed once its session expires or is revoked. To listen from a script: `new WebSocket('ws://localhost:3087/ws', ['youtarr', 'youtarr.auth.' + token])`. It emits:
 - `downloadProgress` - Download progress updates
 - `downloadComplete` - Video download finished
 - `jobsUpdated` - Download job enqueued or started

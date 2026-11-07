@@ -727,7 +727,7 @@ describe('DownloadHistory', () => {
     test('desktop summary row shows "N missing" chip when at least one video is removed', () => {
       const job = makeMultiVideoJob('job-multi', [
         makeVideo({ id: 1, youtubeId: 'v1', youTubeVideoName: 'Video A' }),
-        makeVideo({ id: 2, youtubeId: 'v2', youTubeVideoName: 'Video B', removed: true }),
+        makeVideo({ id: 2, youtubeId: 'v2', youTubeVideoName: 'Video B', removed: true, removed_reason: 'not_found' }),
         makeVideo({ id: 3, youtubeId: 'v3', youTubeVideoName: 'Video C' }),
       ]);
 
@@ -735,6 +735,34 @@ describe('DownloadHistory', () => {
 
       expect(screen.getByText('Multiple (3)')).toBeInTheDocument();
       expect(screen.getByText('1 missing')).toBeInTheDocument();
+    });
+
+    test('desktop summary row counts deleted videos separately from missing ones', () => {
+      const job = makeMultiVideoJob('job-multi-deleted', [
+        makeVideo({ id: 1, youtubeId: 'v1', youTubeVideoName: 'Video A' }),
+        makeVideo({ id: 2, youtubeId: 'v2', youTubeVideoName: 'Video B', removed: true, removed_reason: 'user_deleted' }),
+        makeVideo({ id: 3, youtubeId: 'v3', youTubeVideoName: 'Video C', removed: true, removed_reason: 'not_found' }),
+      ]);
+
+      render(<DownloadHistory {...defaultProps} jobs={[job]} expanded={{ 'job-multi-deleted': true }} />);
+
+      expect(screen.getByText('1 deleted')).toBeInTheDocument();
+      expect(screen.getByText('1 missing')).toBeInTheDocument();
+      expect(screen.getByText('Deleted')).toBeInTheDocument();
+      expect(screen.getByText('Missing')).toBeInTheDocument();
+    });
+
+    test('explains a single deleted video in the singular', async () => {
+      const user = userEvent.setup();
+      const job = makeMultiVideoJob('job-one-deleted', [
+        makeVideo({ id: 1, youtubeId: 'v1', youTubeVideoName: 'Video A' }),
+        makeVideo({ id: 2, youtubeId: 'v2', youTubeVideoName: 'Video B', removed: true, removed_reason: 'user_deleted' }),
+      ]);
+
+      render(<DownloadHistory {...defaultProps} jobs={[job]} />);
+      await user.hover(screen.getByText('1 deleted'));
+
+      expect(await screen.findByRole('tooltip')).toHaveTextContent('1 of 2 videos was deleted by Youtarr or marked as deleted');
     });
 
     test('desktop summary row hides the aggregate chip when no videos are removed', () => {
@@ -752,7 +780,7 @@ describe('DownloadHistory', () => {
     test('desktop expanded row shows "Missing" chip next to removed videos only', () => {
       const job = makeMultiVideoJob('job-multi-expanded', [
         makeVideo({ id: 1, youtubeId: 'v1', youTubeVideoName: 'Kept Video' }),
-        makeVideo({ id: 2, youtubeId: 'v2', youTubeVideoName: 'Gone Video', removed: true }),
+        makeVideo({ id: 2, youtubeId: 'v2', youTubeVideoName: 'Gone Video', removed: true, removed_reason: 'not_found' }),
       ]);
 
       render(
@@ -771,7 +799,7 @@ describe('DownloadHistory', () => {
     test('mobile summary card shows "N missing" chip when at least one video is removed', () => {
       const job = makeMultiVideoJob('job-mobile-multi', [
         makeVideo({ id: 1, youtubeId: 'v1' }),
-        makeVideo({ id: 2, youtubeId: 'v2', removed: true }),
+        makeVideo({ id: 2, youtubeId: 'v2', removed: true, removed_reason: 'not_found' }),
       ]);
 
       render(<DownloadHistory {...defaultProps} jobs={[job]} isMobile />);
@@ -795,7 +823,7 @@ describe('DownloadHistory', () => {
     test('mobile expanded card shows per-video "Missing" chip only for removed videos', () => {
       const job = makeMultiVideoJob('job-mobile-expanded', [
         makeVideo({ id: 1, youtubeId: 'v1', youTubeVideoName: 'Present Video' }),
-        makeVideo({ id: 2, youtubeId: 'v2', youTubeVideoName: 'Removed Video', removed: true }),
+        makeVideo({ id: 2, youtubeId: 'v2', youTubeVideoName: 'Removed Video', removed: true, removed_reason: 'not_found' }),
       ]);
 
       render(

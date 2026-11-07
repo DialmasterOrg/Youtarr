@@ -779,4 +779,61 @@ youtube video2
       );
     });
   });
+
+  describe('removeVideosFromArchive', () => {
+    test('drops every listed id in one rewrite and reports how many lines went', async () => {
+      fs.readFileSync.mockReturnValue('youtube video1\nyoutube video2\nyoutube video3\nyoutube video4');
+
+      const removed = await ArchiveModule.removeVideosFromArchive(['video2', 'video4', 'notthere']);
+
+      expect(removed).toBe(2);
+      expect(fs.writeFileSync).toHaveBeenCalledTimes(1);
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        `${mockArchivePath}.purge.tmp`,
+        'youtube video1\nyoutube video3\n',
+        'utf-8'
+      );
+      expect(fs.renameSync).toHaveBeenCalledWith(`${mockArchivePath}.purge.tmp`, mockArchivePath);
+    });
+
+    test('leaves the file alone when given no ids', async () => {
+      fs.readFileSync.mockReturnValue('youtube video1');
+
+      expect(await ArchiveModule.removeVideosFromArchive([])).toBe(0);
+      expect(fs.writeFileSync).not.toHaveBeenCalled();
+    });
+
+    test('leaves the file alone when none of the ids are listed', async () => {
+      fs.readFileSync.mockReturnValue('youtube video1');
+
+      expect(await ArchiveModule.removeVideosFromArchive(['video9'])).toBe(0);
+      expect(fs.writeFileSync).not.toHaveBeenCalled();
+    });
+
+    test('writes an empty file when every line goes', async () => {
+      fs.readFileSync.mockReturnValue('youtube video1\nyoutube video2');
+
+      expect(await ArchiveModule.removeVideosFromArchive(['video1', 'video2'])).toBe(2);
+      expect(fs.writeFileSync).toHaveBeenCalledWith(`${mockArchivePath}.purge.tmp`, '', 'utf-8');
+    });
+
+    test('keeps the original archive when writing its replacement fails', async () => {
+      fs.readFileSync.mockReturnValue('youtube video1\nyoutube video2');
+      fs.writeFileSync.mockImplementation(() => { throw new Error('ENOSPC'); });
+
+      await expect(ArchiveModule.removeVideosFromArchive(['video1'])).rejects.toThrow('ENOSPC');
+
+      expect(fs.renameSync).not.toHaveBeenCalled();
+      expect(fs.writeFileSync).toHaveBeenCalledWith(`${mockArchivePath}.purge.tmp`, 'youtube video2\n', 'utf-8');
+      expect(fs.unlinkSync).toHaveBeenCalledWith(`${mockArchivePath}.purge.tmp`);
+    });
+
+    test('propagates replacement failures so the database transaction can roll back', async () => {
+      fs.readFileSync.mockReturnValue('youtube video1\nyoutube video2');
+      fs.renameSync.mockImplementation(() => { throw new Error('EACCES'); });
+
+      await expect(ArchiveModule.removeVideosFromArchive(['video1'])).rejects.toThrow('EACCES');
+      expect(fs.unlinkSync).toHaveBeenCalledWith(`${mockArchivePath}.purge.tmp`);
+    });
+  });
 });

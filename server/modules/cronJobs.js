@@ -78,6 +78,9 @@ function initialize(deps = {}) {
     let failure = null;
     try {
       result = await videoDeletionModule.performAutomaticCleanup();
+      // Skipped while the downloads folder looks unmounted: nothing to report
+      // or tidy, and the run history should say why nothing happened.
+      if (result.skipped) return skippedRun(result.skipped.message);
 
       if (result.totalDeleted > 0) {
         logger.info({
@@ -105,11 +108,18 @@ function initialize(deps = {}) {
     let orphans = NO_ORPHAN_RESULT;
     try {
       const removal = await videoDeletionModule.cleanupOrphanDirectories();
-      orphans = { removed: (removal && removal.removed) || [], errors: (removal && removal.errors) || [] };
+      orphans = {
+        removed: (removal && removal.removed) || [],
+        errors: (removal && removal.errors) || [],
+        skipped: (removal && removal.skipped) || null,
+      };
     } catch (error) {
       logger.error({ err: error }, 'Error during orphan directory cleanup');
       orphans = { removed: [], errors: [error.message || 'Unknown error'] };
     }
+    // With auto-removal off, the sweep is the run's only work, so its skip
+    // (downloads folder looks unmounted) is the run's outcome.
+    if (!failure && orphans.skipped && result.totalDeleted === 0) return skippedRun(orphans.skipped.message);
     return failure || describeCleanup(result, orphans);
   };
 
@@ -151,11 +161,15 @@ function initialize(deps = {}) {
   // ============================================================================
   // VIDEO METADATA BACKFILL
   // ============================================================================
-  jobs.videoRescanFrequency = async ({ trigger = 'scheduled' } = {}) => {
+  jobs.videoRescanFrequency = async ({ trigger = 'scheduled', ignoreLibraryCheck = false } = {}) => {
     logger.info({ trigger }, 'Starting video metadata backfill');
     try {
-      // Await completion so another occurrence can't overlap this one.
-      const result = await videosModule.backfillVideoMetadata({ trigger });
+      // Await completion so another occurrence can't overlap this one. Only a
+      // manual run (Rescan anyway) may skip the unmounted-drive check.
+      const result = await videosModule.backfillVideoMetadata({
+        trigger,
+        ignoreLibraryCheck: trigger === 'manual' && ignoreLibraryCheck === true,
+      });
       if (result && result.timedOut) {
         logger.info('Video metadata backfill reached time limit, will continue at the next scheduled run');
       } else if (!result || result.status !== 'error') {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import VideoActivityProvider from './providers/VideoActivityProvider';
+import WebSocketProvider from './providers/WebSocketProvider';
 import './App.css';
 import packageJson from '../package.json';
 import axios from 'axios';
@@ -123,6 +124,28 @@ function AppContent() {
       window.location.href = '/login';
     }
   };
+
+  // The WebSocket saw signs of an ended session. Sign out only when the
+  // server confirms the token is invalid, never on an outage.
+  const handleSessionCheckNeeded = useCallback(() => {
+    const checkedToken = token;
+    if (!checkedToken) {
+      return;
+    }
+    axios
+      .get('/auth/validate', { headers: { 'x-access-token': checkedToken } })
+      .catch((error: unknown) => {
+        const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+        if (status !== 401 && status !== 403) {
+          return;
+        }
+        // A login completed while this check ran keeps its new token
+        if (localStorage.getItem('authToken') === checkedToken) {
+          localStorage.removeItem('authToken');
+        }
+        setToken((current) => (current === checkedToken ? null : current));
+      });
+  }, [token]);
 
   const handleDatabaseRetry = () => {
     // In Vitest/jsdom, Location.reload can trigger an unimplemented navigation path.
@@ -453,6 +476,7 @@ function AppContent() {
   }, [fetchYtDlpVersionInfo]);
 
   return (
+    <WebSocketProvider token={token} onSessionCheckNeeded={handleSessionCheckNeeded}>
     <VideoActivityProvider token={token}>
         {/* Database Error Overlay - shows when database is unavailable or recovered */}
         {(dbStatus === 'error' || dbRecovered) && (
@@ -591,6 +615,7 @@ function AppContent() {
           </Alert>
         </Snackbar>
       </VideoActivityProvider>
+    </WebSocketProvider>
   );
 }
 

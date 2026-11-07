@@ -38,6 +38,7 @@ describe('PlexAuthDialog', () => {
         onClose={onClose}
         onSuccess={onSuccess}
         currentApiKey="abc123"
+        token="session-token"
       />
     );
 
@@ -69,6 +70,7 @@ describe('PlexAuthDialog', () => {
         open
         onClose={onClose}
         onSuccess={onSuccess}
+        token="session-token"
       />
     );
 
@@ -77,7 +79,7 @@ describe('PlexAuthDialog', () => {
     );
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/plex/auth-url');
+      expect(global.fetch).toHaveBeenCalledWith('/plex/auth-url', expect.any(Object));
     });
 
     expect(window.open).toHaveBeenCalledWith('https://plex.example/auth', '_blank');
@@ -114,11 +116,11 @@ describe('PlexAuthDialog', () => {
       .mockResolvedValue({ ok: true, json: async () => ({ authToken: null }) });
 
     const { unmount } = render(
-      <PlexAuthDialog open onClose={onClose} onSuccess={onSuccess} />
+      <PlexAuthDialog open onClose={onClose} onSuccess={onSuccess} token="session-token" />
     );
     await user.click(screen.getByRole('button', { name: /authenticate with plex/i }));
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/plex/auth-url');
+      expect(global.fetch).toHaveBeenCalledWith('/plex/auth-url', expect.any(Object));
     });
 
     unmount();
@@ -140,7 +142,7 @@ describe('PlexAuthDialog', () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ authToken: 'token-abc' }) });
 
     const { unmount } = render(
-      <PlexAuthDialog open onClose={onClose} onSuccess={onSuccess} />
+      <PlexAuthDialog open onClose={onClose} onSuccess={onSuccess} token="session-token" />
     );
     await user.click(screen.getByRole('button', { name: /authenticate with plex/i }));
     await act(async () => {
@@ -178,6 +180,7 @@ describe('PlexAuthDialog', () => {
         open
         onClose={onClose}
         onSuccess={onSuccess}
+        token="session-token"
       />
     );
 
@@ -213,6 +216,7 @@ describe('PlexAuthDialog', () => {
         open
         onClose={onClose}
         onSuccess={onSuccess}
+        token="session-token"
       />
     );
 
@@ -227,5 +231,82 @@ describe('PlexAuthDialog', () => {
     });
 
     expect(window.open).not.toHaveBeenCalled();
+  });
+
+  test('sends the session token with the auth URL request and PIN checks', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    (window.open as jest.Mock).mockReturnValue({ focus: jest.fn(), close: jest.fn() });
+
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ authUrl: 'https://plex.example/auth', pinId: 'pin123' })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ authToken: 'token-abc' })
+      });
+
+    render(
+      <PlexAuthDialog open onClose={onClose} onSuccess={onSuccess} token="session-token" />
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: /authenticate with plex/i })
+    );
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith('/plex/auth-url', {
+        headers: { 'x-access-token': 'session-token' }
+      });
+    });
+
+    await act(async () => {
+      jest.advanceTimersByTime(5000);
+    });
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith('/plex/check-pin/pin123', {
+        headers: { 'x-access-token': 'session-token' }
+      });
+    });
+  });
+
+  test('shows an error when a PIN check is rejected', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    const popup = { focus: jest.fn(), close: jest.fn() };
+    (window.open as jest.Mock).mockReturnValue(popup);
+
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ authUrl: 'https://plex.example/auth', pinId: 'pin123' })
+      })
+      .mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: async () => ({ error: 'Invalid or expired token' })
+      });
+
+    render(
+      <PlexAuthDialog open onClose={onClose} onSuccess={onSuccess} token="session-token" />
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: /authenticate with plex/i })
+    );
+
+    await act(async () => {
+      jest.advanceTimersByTime(5000);
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Failed to check authentication status/i)
+      ).toBeInTheDocument();
+    });
+
+    expect(onSuccess).not.toHaveBeenCalled();
+    expect(popup.close).toHaveBeenCalled();
   });
 });

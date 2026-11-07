@@ -179,6 +179,36 @@ describe('CronJobs', () => {
       expect(mockLogger.info).toHaveBeenCalledWith('Running automatic video cleanup cron job');
     });
 
+    test('records a skipped run and leaves folders alone when cleanup skipped an unmounted downloads folder', async () => {
+      mockVideoDeletionModule.performAutomaticCleanup.mockResolvedValue({
+        skipped: { reason: 'empty', message: 'The downloads folder is empty.' },
+        totalDeleted: 0,
+        freedBytes: 0,
+        errors: []
+      });
+      const scheduledTasks = require('../scheduledTaskManager');
+
+      const outcome = await scheduledTasks.runNow('autoRemovalFrequency', { trigger: 'manual' });
+      const record = await outcome.completion;
+
+      expect(record).toEqual(expect.objectContaining({ status: 'skipped', outcome: 'skipped', message: 'The downloads folder is empty.' }));
+      expect(mockVideoDeletionModule.cleanupOrphanDirectories).not.toHaveBeenCalled();
+    });
+
+    test('records a skipped run when only the orphan sweep ran and it skipped an unmounted downloads folder', async () => {
+      // Auto-removal off: performAutomaticCleanup returns before its own check.
+      mockVideoDeletionModule.performAutomaticCleanup.mockResolvedValue({ totalDeleted: 0, freedBytes: 0, errors: [] });
+      mockVideoDeletionModule.cleanupOrphanDirectories.mockResolvedValue({
+        removed: [], errors: [], skipped: { reason: 'empty', message: 'The downloads folder is empty.' }
+      });
+      const scheduledTasks = require('../scheduledTaskManager');
+
+      const outcome = await scheduledTasks.runNow('autoRemovalFrequency', { trigger: 'manual' });
+      const record = await outcome.completion;
+
+      expect(record).toEqual(expect.objectContaining({ status: 'skipped', outcome: 'skipped', message: 'The downloads folder is empty.' }));
+    });
+
     test('should log success when videos are deleted', async () => {
       mockVideoDeletionModule.performAutomaticCleanup.mockResolvedValue({
         totalDeleted: 5,
@@ -428,6 +458,26 @@ describe('CronJobs', () => {
 
       expect(mockVideosModule.backfillVideoMetadata).toHaveBeenCalled();
       expect(mockLogger.info).toHaveBeenCalledWith({ trigger: 'scheduled' }, 'Starting video metadata backfill');
+    });
+
+    test('never skips the downloads folder check on a scheduled run', async () => {
+      mockVideosModule.backfillVideoMetadata.mockResolvedValue({ timedOut: false });
+
+      await backfillCallback();
+
+      expect(mockVideosModule.backfillVideoMetadata).toHaveBeenCalledWith({ trigger: 'scheduled', ignoreLibraryCheck: false });
+    });
+
+    test('passes a manual request to skip the downloads folder check through to the backfill', async () => {
+      mockVideosModule.backfillVideoMetadata.mockResolvedValue({ timedOut: false });
+      const scheduledTasks = require('../scheduledTaskManager');
+
+      const outcome = await scheduledTasks.runNow('videoRescanFrequency', {
+        trigger: 'manual', enforceCooldown: false, args: { ignoreLibraryCheck: true },
+      });
+      await outcome.completion;
+
+      expect(mockVideosModule.backfillVideoMetadata).toHaveBeenCalledWith({ trigger: 'manual', ignoreLibraryCheck: true });
     });
 
     test('should log success when backfill completes without timeout', async () => {
@@ -901,7 +951,7 @@ describe('CronJobs', () => {
       const scheduledTaskManager = require('../scheduledTaskManager');
       const outcome = await scheduledTaskManager.runNow('videoRescanFrequency', { trigger: 'manual' });
       await outcome.completion;
-      expect(mockVideosModule.backfillVideoMetadata).toHaveBeenCalledWith({ trigger: 'manual' });
+      expect(mockVideosModule.backfillVideoMetadata).toHaveBeenCalledWith({ trigger: 'manual', ignoreLibraryCheck: false });
     });
 
     test('the rescan reports as running while the module lock is held', () => {

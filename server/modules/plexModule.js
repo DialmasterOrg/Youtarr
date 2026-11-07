@@ -215,12 +215,13 @@ class PlexModule {
   }
 
   /**
+   * Check the PIN with plex.tv and return its auth token to the caller.
+   * The token is never written to config here: the Settings page saves it
+   * through the authenticated test-connection and config routes.
+   * With a key already stored, the token is validated against the configured
+   * server and must match the stored key.
    *
-   * Check the PIN against the Plex server
-   * IF there is no token in your config, then SET it (for first time setup)
-   * Otherwise, validate the token against your config
-   *
-   * @returns
+   * @returns {Promise<{ authToken: string | null }>}
    */
   async checkPin(pinId) {
     logger.debug({ pinId }, 'Checking Plex PIN');
@@ -241,12 +242,8 @@ class PlexModule {
     }
 
     const currentPlexApiKey = configModule.getConfig().plexApiKey;
-    // If there is not currently a token in the config, SET it
-    if (!currentPlexApiKey || currentPlexApiKey == '') {
-      let currentConfig = configModule.getConfig();
-      currentConfig.plexApiKey = authToken;
-      configModule.updateConfig(currentConfig);
-      return { authToken };
+    if (!currentPlexApiKey) {
+      return { authToken: authToken || null };
     }
 
     if (authToken) {

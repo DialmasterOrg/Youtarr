@@ -11,6 +11,7 @@ This guide provides step-by-step instructions for common tasks in Youtarr. After
 - [Configure Automation](#configure-automation)
 - [Configure SponsorBlock](#configure-sponsorblock)
 - [Enable Download Notifications](#enable-download-notifications)
+- [RSS Feeds](#rss-feeds)
 - [Re-download Missing Videos](#re-download-missing-videos)
 - [Rescan Files on Disk](#rescan-files-on-disk)
 - [Organize Channels with Multi-Library Support](#organize-channels-with-multi-library-support)
@@ -24,6 +25,8 @@ This guide provides step-by-step instructions for common tasks in Youtarr. After
 ## Download Individual Videos
 
 Download specific YouTube videos manually without subscribing to channels.
+
+To queue videos while you browse YouTube instead, set up the **Send to Youtarr** bookmarklet or a phone shortcut. A tip on the Manual Download page links to its setup page; see [External Access with API Keys](#external-access-with-api-keys).
 
 Video listings and the video preview show **Queued…** while a known video is waiting and **Downloading…** while it is being prepared, transferred, or post-processed. Busy videos cannot be selected for another download. Status updates automatically across tabs, including when an individual video finishes within a larger batch.
 
@@ -225,7 +228,7 @@ Open a playlist to manage it:
 - **Public on media servers**: makes the playlist visible to other users on Jellyfin and Emby. Plex playlists are always created under one account and shared manually, so this setting doesn't affect Plex.
 - **Sync now** and **Rebuild .m3u file**: push the current state to your servers or regenerate the `.m3u` on demand. Sync runs in the background and can take a minute or two while your media server's library scan finishes.
 
-In the video list you can sort by playlist order, reverse order, discovery time, download time, or newest publication date, filter by download state with the **Show** control (All videos / Downloaded / Not downloaded), filter by watch status with the **Watched** control (see [Track Watch Status from Media Servers](#track-watch-status-from-media-servers)), exclude videos you don't want, and select specific videos to download with **Download Selected**. Excluded videos are skipped when downloading the playlist and removed from synced server playlists; if the file is already on disk, it stays there. Videos whose file was deleted after downloading count as not downloaded.
+In the video list you can sort by playlist order, reverse order, discovery time, download time, or newest publication date, filter by download state with the **Show** control (All videos / Downloaded / Not downloaded), filter by watch status with the **Watched** control (see [Track Watch Status from Media Servers](#track-watch-status-from-media-servers)), exclude videos you don't want, and select videos to act on: **Download** fetches the selected videos that aren't on disk, and **Delete** removes the selected downloaded videos from disk (after a confirmation). Excluded videos are skipped when downloading the playlist and removed from synced server playlists; if the file is already on disk, it stays there. Videos whose file was deleted after downloading count as not downloaded.
 
 Discovery means when Youtarr first saw a video in this playlist; it is not the date the owner added it on YouTube. Downloading never changes discovery order. Videos discovered in the same refresh share a timestamp and use playlist order as a tie-break. Publication dates stay visible in every sort, including in the existing-video review list. Sorting by discovery or download time shows that date below Published in both the desktop table and cards on narrower screens. The Downloaded line is omitted for videos without a local file. Tap or click a discovery or download date to expand its full timestamp. Missing dates display as Unknown and sort last. Sorting the page or changing media-server playback order never changes automatic download eligibility.
 
@@ -366,15 +369,45 @@ Get notified when new videos finish downloading. Notifications are delivered thr
 
 **Note**: Download notifications are sent when a run downloads at least one new video, or when a run fails with a diagnosed cause or stops early. They are batched: a scheduled download run sends one summary covering all of its channels and playlists, not one message per video. Youtarr also sends notifications when automatic cleanup deletes videos and when downloads pause or resume because of a storage limit.
 
+## RSS Feeds
+
+Youtarr can publish a private RSS feed of the videos it has downloaded, so you can see what's new in your RSS reader instead of getting a notification for each download run. The feed is off by default, and it doesn't change your notifications.
+
+1. **Open Youtarr Settings -> RSS Feeds** and turn on **Enable the download feed**
+
+2. **Save configuration**
+
+3. **Copy the feed URL** and add it to your RSS reader
+
+Each downloaded video is one item in the feed, newest first, with its thumbnail, title, channel, length, upload date and the start of its description. New videos appear shortly after they finish downloading. Failed downloads aren't listed, and deleted videos drop off the feed.
+
+You can also choose:
+
+- **Videos in the feed**: how many of the newest downloads the feed lists (50 by default)
+- **Clicking an item opens**: YouTube, this Youtarr, or a custom link such as your media server. A custom link uses `{youtubeId}` for the video ID.
+- **Include**: videos, Shorts and livestreams
+
+**Keep the URL private.** RSS readers can't log in, so the URL contains a long random secret, and anyone with the URL can see your video titles, descriptions and thumbnails (but not the video files). An online reader also stores what it fetches, and a reverse proxy can record the URL in its logs. If the URL gets out, click **Create new URL**: the old URL stops working right away, and you'll need to add the new one to your reader.
+
+**Things to know:**
+
+- Online readers like Feedly need to reach your Youtarr over the internet. A reader on your home network doesn't.
+- If you use a login proxy like Authelia or Cloudflare Access, add an exception for the `/feeds/` path, because a reader can't get past the login page. See [the API key instructions](API_INTEGRATION.md#cors-error--blocked-by-external-auth-cloudflare-zero-trust-authelia-etc) for how to add one, using `/feeds/` as the path. Youtarr checks the secret in the URL even with `AUTH_ENABLED=false`, so this exception is safe in both setups.
+- Re-downloading a video won't show it as new in most readers, because it's still the same feed item.
+- Big "Download all" jobs show up in the feed too. The feed still only lists the newest videos, up to your limit.
+- The feed doesn't contain the video files, so readers won't download them.
+
 ## Re-download Missing Videos
 
 Videos can become "missing" if they're manually deleted from disk. This feature helps you recover them by fetching the file from YouTube again. The same flow also works for videos still on disk (the new download replaces the existing file, which is handy for upgrading quality); videos that have been removed from YouTube are skipped automatically.
 
 > **Note**: If the file still exists somewhere (you moved it, renamed its folder, or converted it to a different format), use [Rescan Files on Disk](#rescan-files-on-disk) instead. Rescan reconciles Youtarr's database with what's already on disk without re-downloading.
 
+Youtarr tells two kinds of gone-from-disk videos apart. **Deleted** (grey) means Youtarr removed the file itself, through a delete in the app or automatic cleanup, or you marked it as deleted; the Videos page hides these by default behind the **Deleted** filter chip, and remembers it when you turn them back on. **Missing** (red) means Youtarr expected a file and could not find it; these stay visible so you can check on them. Hover over or tap either chip, or open the video, for the reason in plain words. When a missing video really is gone, select it and choose **Mark as deleted** (or use the same button in the video's window, from any page), or mark them all from **Settings -> Maintenance & Rescan**, where **Empty trash...** can also forget deleted and missing videos entirely (see [Troubleshooting](TROUBLESHOOTING.md#deleted-vs-missing-videos-and-emptying-the-trash) for what that removes and how it treats the download archive). Both kinds can be re-downloaded with the steps below.
+
 1. **Identify missing videos**
    - Go to "Downloaded Videos" or a specific channel's video page
-   - Look for videos marked with a cloud-off icon (indicates missing from disk)
+   - Look for videos marked with a cloud-off icon (missing from disk) or a trash icon (deleted); on the Videos page, turn the **Deleted** filter chip off to see deleted videos
    - The video metadata is still in Youtarr's database, but the file is gone
 
 2. **Select videos to re-download**
@@ -406,6 +439,8 @@ Common cases:
 You can also start a rescan with **Run now** on the Rescan files on disk card in **Settings -> Scheduling**.
 
 A scan also runs daily on a schedule and once at server startup, so changes you make outside Youtarr will eventually be picked up even if you don't trigger a manual rescan.
+
+If the downloads folder is missing or empty when the scan runs, as it is while a drive or network share is unmounted, the scan does not mark anything missing: it records a run that names the folder and asks whether the drive is mounted, and the Videos page shows the same warning. If only some of its `__subfolders` are empty or unreadable, just the videos stored in those subfolders are left alone; an empty subfolder no video is stored in (for example one a channel was moved out of) does not count. Mount the share and run it again. If the folder really is empty because you removed the files yourself, **Rescan anyway...** on the Deleted and missing videos card runs the scan without that check; it marks every video whose file is gone as missing, and **Mark all missing as deleted** then asks you to confirm that you emptied the folder yourself before marking them.
 
 **Supported file extensions**: `.mp4`, `.webm`, `.mkv`, `.m4v`, `.avi` for video, plus `.mp3` for audio-only downloads. Youtarr only writes `.mp4` (or `.mp3` for audio-only), but the rescan recognizes any of these so transcoding outside Youtarr won't orphan your library. Files must keep the `[<youtube-id>]` segment in their filename (the 11-character ID in brackets that yt-dlp writes by default) for Youtarr to match them back to the database.
 
@@ -518,16 +553,23 @@ Search YouTube from inside Youtarr and see which results you already have, which
 1. **Open Find Videos on YouTube**
    - In the sidebar, expand **Videos** and click **Find Videos on YouTube**
    - Enter a search query (up to 200 characters)
-   - Pick a result count (10, 25, 50, or 100), optionally choose a minimum duration, and click Search
+   - Pick a result count (10, 25, 50, or 100), optionally choose a minimum duration (**1+ min** hides Shorts), and click Search
+   - The query is kept in the page address, so the browser's Back button returns you to the same results without searching again
 
 2. **Results**
-   - Sorted newest-to-oldest by YouTube's approximate publish date (accurate to within a day or two, same fidelity as the channel videos page)
+   - Listed in YouTube's own relevance order by default. Sort by published date, views, duration, title, or channel from the table's column headers on desktop (click a header again to reverse it, a third time to return to relevance) or from the **Sort** menu on phones and in grid view
+   - Desktop opens results in a table; the toggle beside the Search button switches to a grid of cards. The choice, the sort, and the minimum duration are remembered
+   - Each result shows the channel, duration, how long ago it was published (the exact date on hover), and the view count; videos of a minute or less carry a **Short** badge
+   - Live and upcoming streams are left out, since a download would record the stream
    - If a minimum duration is selected, shorter results are hidden in the browser and the page shows how many results were filtered out
-   - Each card shows the channel, duration, upload date, and a status chip:
+   - A status chip appears only when there is something to know:
      - **Downloaded**: already in your library
-     - **Missing**: previously downloaded but removed from disk
-     - **Not Downloaded**: new result, not yet saved
-   - Click a result to open the video detail modal, where you can download, play (if downloaded), or ignore it
+     - **Deleted**: previously downloaded and removed by Youtarr
+     - **Missing**: previously downloaded but gone from disk
+     - **Queued** / **Downloading**: on its way
+   - Channel names link to the channel page for channels you follow (marked **Subscribed**); other channel names offer to add the channel
+   - The download icon on a row queues that one video; tick several and use the selection bar to download them together
+   - Click a result to open the video detail modal, where you can download, play (if downloaded), or open it on YouTube
 
 3. **Notes**
    - Rate-limited to 10 searches per minute per session; server-side timeout is 60 seconds
@@ -546,6 +588,7 @@ Click any thumbnail on the Videos page or a channel page to open a video detail 
    - For downloaded videos, the modal shows the downloaded format's dimensions from the video metadata, with the quality tier alongside when it isn't obvious from the numbers (e.g. `608x1080 (1080p)` for a vertical video); video listings show a small tier chip based on the file's measured on-disk resolution
    - For downloaded videos, data is served from the cached `.info.json`
    - For videos not yet downloaded, Youtarr fetches metadata on demand via yt-dlp (this can take a few seconds on the first open)
+   - Metadata fetched this way is cached in `jobs/info` for three weeks after it was fetched, then removed by the nightly file rescan; a downloaded video's metadata stays until you empty the trash
 
 3. **In-browser playback**
    - Downloaded videos stream directly from Youtarr through the built-in player; no media server required
@@ -659,8 +702,8 @@ Send videos to Youtarr from anywhere using API keys. This enables one-click down
 
 ### Create an API Key
 
-1. **Open Settings -> API Keys**
-   - Click "Settings" in the navigation menu, then open the **API Keys** page
+1. **Open Settings -> API Keys & Bookmarklet**
+   - Click "Settings" in the navigation menu, then open the **API Keys & Bookmarklet** page
 
 2. **Create a new key**
    - Click "Create Key"
@@ -678,6 +721,7 @@ After creating an API key, you can set up a bookmarklet to send videos with one 
 1. **Get the bookmarklet**
    - In the key creation dialog, drag the "📥 Send to Youtarr" button to your bookmarks bar
    - Or copy the bookmarklet code and create a bookmark manually
+   - The button is only shown in that dialog. If you close it before saving the button, create another key to get a new one
 
 2. **Use the bookmarklet**
    - Navigate to any YouTube video page
@@ -701,7 +745,7 @@ For detailed setup instructions and code examples, see the [API Integration Guid
 
 ### Manage Your API Keys
 
-- **View keys**: Settings -> API Keys shows all your keys
+- **View keys**: Settings -> API Keys & Bookmarklet shows all your keys
 - **Monitor usage**: Check "Last Used" and "Uses" columns to track activity
 - **Delete keys**: Click the trash icon to revoke a key instantly
 - **Rate limiting**: Adjust requests per minute to prevent abuse

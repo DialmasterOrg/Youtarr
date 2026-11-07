@@ -15,6 +15,10 @@ jest.mock('../../fileCheckModule', () => mockFactories.mockFileCheckModule());
 jest.mock('../../youtubeApi', () => mockFactories.mockYoutubeApi());
 jest.mock('../../archiveModule', () => ({ filterArchivedVideoIds: jest.fn() }));
 jest.mock('../../../db', () => mockFactories.mockDb());
+jest.mock('../../youtubeExistenceCheck', () => ({
+  check: jest.fn().mockResolvedValue('exists'),
+  EXISTENCE: { EXISTS: 'exists', REMOVED: 'removed', UNKNOWN: 'unknown' },
+}));
 
 // yt-dlp --dump-json output: one JSON document per line.
 const toEntryLines = (entries) => entries.map((entry) => `${JSON.stringify(entry)}\n`).join('');
@@ -206,6 +210,12 @@ describe('channelVideosService', () => {
   });
 
   describe('getChannelVideos', () => {
+    test('rejects an unknown channel with CHANNEL_NOT_FOUND', async () => {
+      await expect(channelVideosService.getChannelVideos('UCmissing')).rejects.toMatchObject({
+        code: 'CHANNEL_NOT_FOUND',
+      });
+    });
+
     test('should return paginated videos with stats', async () => {
       const Video = require('../../../models/video');
       const mockChannel = {
@@ -260,6 +270,59 @@ describe('channelVideosService', () => {
 
       expect(result.videos.map((v) => v.youtube_id)).toEqual(['video1']);
       expect(result.totalCount).toBe(1);
+    });
+
+    describe('YouTube existence check', () => {
+      let youtubeExistenceCheck;
+
+      const getUncheckedVideo = async () => {
+        const Video = require('../../../models/video');
+        Channel.findOne.mockResolvedValue({
+          ...mockChannelData,
+          lastFetchedByTab: JSON.stringify({ video: new Date().toISOString() }),
+          auto_download_enabled_tabs: 'video'
+        });
+        ChannelVideo.findAll.mockResolvedValue([
+          { youtube_id: 'video1', publishedAt: new Date().toISOString(), toJSON() { return this; } }
+        ]);
+        ChannelVideo.count.mockResolvedValue(1);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+        return channelVideosService.getChannelVideos('UC123', 1, 50);
+      };
+
+      beforeEach(() => {
+        youtubeExistenceCheck = require('../../youtubeExistenceCheck');
+      });
+
+      test('records the check time when YouTube still has the video', async () => {
+        await getUncheckedVideo();
+
+        expect(ChannelVideo.update).toHaveBeenCalledWith(
+          { youtube_removed_checked_at: expect.any(Date) },
+          { where: { youtube_id: 'video1', channel_id: 'UC123' } }
+        );
+      });
+
+      test('marks the video removed when YouTube reports it gone', async () => {
+        youtubeExistenceCheck.check.mockResolvedValueOnce('removed');
+
+        const result = await getUncheckedVideo();
+
+        expect(ChannelVideo.update).toHaveBeenCalledWith(
+          { youtube_removed: true, youtube_removed_checked_at: expect.any(Date) },
+          { where: { youtube_id: 'video1', channel_id: 'UC123' } }
+        );
+        expect(result.videos[0].youtube_removed).toBe(true);
+      });
+
+      test('leaves the video unchecked when YouTube does not answer', async () => {
+        youtubeExistenceCheck.check.mockResolvedValueOnce('unknown');
+
+        const result = await getUncheckedVideo();
+
+        expect(ChannelVideo.update).not.toHaveBeenCalled();
+        expect(result.videos[0].youtube_removed_checked_at).toBeUndefined();
+      });
     });
 
     describe('maxRating', () => {

@@ -62,8 +62,35 @@ const findRouteHandler = (app, method, routePath) => {
   return handlers[handlers.length - 1];
 };
 
+/**
+ * Runs a route's full handler chain (route-level middleware such as
+ * verifyToken included) against mock req/res objects, stopping at the first
+ * handler that responds instead of calling next().
+ * @param {Object} app - Express application
+ * @param {string} method - HTTP method (get, post, etc.)
+ * @param {string} routePath - Route path to run
+ * @param {Object} req - Mock request
+ * @param {Object} res - Mock response
+ */
+const runRouteHandlers = async (app, method, routePath, req, res) => {
+  const handlers = findRouteHandlers(app, method, routePath);
+  for (const handler of handlers) {
+    let nextCalled = false;
+    await handler(req, res, (err) => {
+      if (err) {
+        throw err;
+      }
+      nextCalled = true;
+    });
+    if (!nextCalled) {
+      return;
+    }
+  }
+};
+
 module.exports = {
   findRouteHandlers,
-  findRouteHandler
+  findRouteHandler,
+  runRouteHandlers
 };
 

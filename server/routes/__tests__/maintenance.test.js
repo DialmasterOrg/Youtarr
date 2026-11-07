@@ -59,8 +59,27 @@ describe('Maintenance routes', () => {
       expect(res.status).toBe(202);
       expect(res.body).toEqual({ status: 'started', trigger: 'manual' });
       expect(mockScheduledTaskManager.runNow).toHaveBeenCalledWith(
-        'videoRescanFrequency', { trigger: 'manual', enforceCooldown: false }
+        'videoRescanFrequency', { trigger: 'manual', enforceCooldown: false, args: { ignoreLibraryCheck: false } }
       );
+    });
+
+    test('forwards a request to skip the downloads folder check', async () => {
+      mockScheduledTaskManager.runNow.mockResolvedValue({ started: true, completion: Promise.resolve({}) });
+
+      const res = await request(app).post('/api/maintenance/rescan-files').send({ ignoreLibraryCheck: true });
+
+      expect(res.status).toBe(202);
+      expect(mockScheduledTaskManager.runNow).toHaveBeenCalledWith(
+        'videoRescanFrequency', { trigger: 'manual', enforceCooldown: false, args: { ignoreLibraryCheck: true } }
+      );
+    });
+
+    test('rejects a non-boolean ignoreLibraryCheck', async () => {
+      const res = await request(app).post('/api/maintenance/rescan-files').send({ ignoreLibraryCheck: 'yes' });
+
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: 'ignoreLibraryCheck must be true or false' });
+      expect(mockScheduledTaskManager.runNow).not.toHaveBeenCalled();
     });
 
     test('returns 409 when already running', async () => {

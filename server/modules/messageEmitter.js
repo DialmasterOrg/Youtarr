@@ -1,12 +1,49 @@
 const WebSocket = require('ws');
+const { hasFailureStop } = require('./notifications/utils');
 
 // Store only the final state of the last download, not the entire history
 let lastDownloadState = null;
+// The last summary that had something to report. A check that finds nothing new
+// shows this instead of its own empty summary, so the hourly sweep doesn't hide
+// what the last real job did.
+let lastResultSummary = null;
+
+const RESULT_COUNT_FIELDS = [
+  'totalDownloaded',
+  'totalFailed',
+  'totalAutoRetried',
+  'totalMembersOnly',
+  'totalTerminatedChannels',
+  'totalTerminationFailures',
+  'totalAlreadyDownloaded',
+  'totalNotAvailable',
+];
+
+// A stop the user asked for is not a result on its own: it shows once as a
+// warning, and the next check goes back to the earlier result.
+function hasResult(summary) {
+  return RESULT_COUNT_FIELDS.some((field) => summary[field] > 0) || hasFailureStop(summary);
+}
+
+function resolveSummaryToShow({ finalSummary, error, warning }) {
+  if (hasResult(finalSummary)) {
+    lastResultSummary = finalSummary;
+    return finalSummary;
+  }
+  // A job that failed or was stopped did not finish looking, so it can't say
+  // when Youtarr last checked.
+  if (error || warning || !lastResultSummary) return finalSummary;
+  return { ...lastResultSummary, lastCheckedAt: finalSummary.completedAt };
+}
 
 module.exports = {
   emitMessage: (destination, clientId, source, type, payload) => {
     payload = payload || {};
     payload.dateTimeStamp = new Date().getTime();
+    // A copy, because callers still read their own summary (notifications do).
+    if (destination === 'broadcast' && type === 'downloadProgress' && payload.finalSummary) {
+      payload = { ...payload, finalSummary: resolveSummaryToShow(payload) };
+    }
     const message = {
       destination: destination,
       source: source,

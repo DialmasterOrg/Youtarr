@@ -149,6 +149,9 @@ describe('VideoMetadataProcessor', () => {
         audioFilePath: null,
         audioFileSize: null,
         removed: false,
+        removed_reason: null,
+        removed_at: null,
+        removed_detail: null,
         video_resolution: null
       });
 
@@ -403,6 +406,9 @@ describe('VideoMetadataProcessor', () => {
         audioFilePath: null,
         audioFileSize: null,
         removed: false,
+        removed_reason: null,
+        removed_at: null,
+        removed_detail: null,
         video_resolution: null
       });
     });

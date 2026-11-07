@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import { EnabledChannel, PaginatedVideosResponse, VideoData } from '../../../types/VideoData';
+import { EnabledChannel, LibraryWarning, PaginatedVideosResponse, VideoData } from '../../../types/VideoData';
 import { ChipFilterMode } from '../../shared/VideoList/types';
 
 export interface UseVideosDataParams {
@@ -16,6 +16,7 @@ export interface UseVideosDataParams {
   maxRatingFilter: string;
   protectedFilter: ChipFilterMode;
   missingFilter: ChipFilterMode;
+  deletedFilter: ChipFilterMode;
   watchedFilter: ChipFilterMode;
   useInfiniteScroll: boolean;
 }
@@ -27,6 +28,9 @@ export interface UseVideosDataResult {
   totalPages: number;
   uniqueChannels: string[];
   enabledChannels: EnabledChannel[];
+  // How many deleted videos the current filters hide; null unless deleted are excluded.
+  hiddenDeletedCount: number | null;
+  libraryWarning: LibraryWarning | null;
   loading: boolean;
   loadError: string | null;
   refetch: () => Promise<void>;
@@ -55,6 +59,7 @@ export function useVideosData({
   maxRatingFilter,
   protectedFilter,
   missingFilter,
+  deletedFilter,
   watchedFilter,
   useInfiniteScroll,
 }: UseVideosDataParams): UseVideosDataResult {
@@ -63,6 +68,8 @@ export function useVideosData({
   const [totalPages, setTotalPages] = useState(1);
   const [uniqueChannels, setUniqueChannels] = useState<string[]>([]);
   const [enabledChannels, setEnabledChannels] = useState<EnabledChannel[]>([]);
+  const [hiddenDeletedCount, setHiddenDeletedCount] = useState<number | null>(null);
+  const [libraryWarning, setLibraryWarning] = useState<LibraryWarning | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const latestRequestId = useRef(0);
@@ -86,6 +93,7 @@ export function useVideosData({
     if (maxRatingFilter) params.append('maxRating', maxRatingFilter);
     if (protectedFilter !== 'off') params.append('protectedFilter', protectedFilter);
     if (missingFilter !== 'off') params.append('missingFilter', missingFilter);
+    if (deletedFilter !== 'off') params.append('deletedFilter', deletedFilter);
     if (watchedFilter !== 'off') params.append('watchedFilter', watchedFilter);
 
     try {
@@ -113,6 +121,8 @@ export function useVideosData({
       setTotalPages(response.data.totalPages);
       setUniqueChannels(response.data.channels || []);
       setEnabledChannels(response.data.enabledChannels || []);
+      setHiddenDeletedCount(response.data.hiddenDeletedCount ?? null);
+      setLibraryWarning(response.data.libraryWarning ?? null);
     } catch (error) {
       if (requestId !== latestRequestId.current) {
         return;
@@ -139,6 +149,7 @@ export function useVideosData({
     maxRatingFilter,
     protectedFilter,
     missingFilter,
+    deletedFilter,
     watchedFilter,
     useInfiniteScroll,
   ]);
@@ -154,6 +165,8 @@ export function useVideosData({
     totalPages,
     uniqueChannels,
     enabledChannels,
+    hiddenDeletedCount,
+    libraryWarning,
     loading,
     loadError,
     refetch: fetchVideos,

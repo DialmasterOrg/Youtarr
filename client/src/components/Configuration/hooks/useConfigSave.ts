@@ -1,15 +1,27 @@
 import { useCallback, useState } from 'react';
 import { SCHEDULE_FIELDS, ScheduleFieldErrors } from '../schedules';
-import { ConfigState, SnackbarState } from '../types';
+import { ConfigState, CustomArgsCheck, SnackbarState } from '../types';
 import { CONFIG_UPDATED_EVENT } from '../../../hooks/useConfig';
 
 interface UseConfigSaveParams {
   token: string | null;
   config: ConfigState;
   setInitialConfig: React.Dispatch<React.SetStateAction<ConfigState | null>>;
+  setCustomArgsCheck: React.Dispatch<React.SetStateAction<CustomArgsCheck | null>>;
   setSnackbar: React.Dispatch<React.SetStateAction<SnackbarState>>;
   hasPlexServerConfigured: boolean;
   checkPlexConnection: () => void;
+}
+
+// The server's allowlist check of the custom yt-dlp args it just saved. Returns
+// undefined when the body can't be read, so the caller keeps what it has.
+async function getSavedCustomArgsCheck(response: Response): Promise<CustomArgsCheck | null | undefined> {
+  try {
+    const body = await response.json();
+    return body?.customArgsCheck ?? null;
+  } catch {
+    return undefined;
+  }
 }
 
 async function getSaveError(response: Response): Promise<{ error: string; fieldErrors: ScheduleFieldErrors }> {
@@ -32,6 +44,7 @@ export const useConfigSave = ({
   token,
   config,
   setInitialConfig,
+  setCustomArgsCheck,
   setSnackbar,
   hasPlexServerConfigured,
   checkPlexConnection,
@@ -74,6 +87,11 @@ export const useConfigSave = ({
       setFieldErrors({});
       setInitialConfig(config);
 
+      const savedCustomArgsCheck = await getSavedCustomArgsCheck(response);
+      if (savedCustomArgsCheck !== undefined) {
+        setCustomArgsCheck(savedCustomArgsCheck);
+      }
+
       if (typeof window !== 'undefined') {
         const configUpdatedEvent = new CustomEvent<ConfigState>(CONFIG_UPDATED_EVENT, {
           detail: config,
@@ -102,7 +120,7 @@ export const useConfigSave = ({
     } finally {
       setIsSaving(false);
     }
-  }, [token, config, setInitialConfig, setSnackbar, hasPlexServerConfigured, checkPlexConnection]);
+  }, [token, config, setInitialConfig, setCustomArgsCheck, setSnackbar, hasPlexServerConfigured, checkPlexConnection]);
 
   return {
     saveConfig,

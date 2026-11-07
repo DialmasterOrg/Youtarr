@@ -23,6 +23,7 @@ interface UseVideoModalActionsParams {
   video: VideoModalData;
   token: string | null;
   onVideoDeleted?: (youtubeId: string) => void;
+  onMarkedDeleted?: (youtubeId: string) => void;
   onProtectionChanged?: (youtubeId: string, isProtected: boolean) => void;
   onIgnoreChanged?: (youtubeId: string, isIgnored: boolean) => void;
   onDownloadQueued?: (youtubeId: string) => void;
@@ -37,12 +38,14 @@ interface UseVideoModalActionsReturn {
   downloadDialogOpen: boolean;
   ratingDialogOpen: boolean;
   protectionLoading: boolean;
+  markDeletedPending: boolean;
   setDeleteDialogOpen: (open: boolean) => void;
   setDownloadDialogOpen: (open: boolean) => void;
   setRatingDialogOpen: (open: boolean) => void;
   handleProtectionToggle: () => Promise<void>;
   handleDeleteConfirm: () => Promise<void>;
   handleIgnoreToggle: () => Promise<void>;
+  handleMarkDeleted: () => Promise<void>;
   handleDownloadConfirm: (settings: DownloadSettings | null) => Promise<void>;
   handleRatingApply: (rating: string | null) => Promise<void>;
   handleSnackbarClose: () => void;
@@ -59,6 +62,7 @@ export function useVideoModalActions({
   video,
   token,
   onVideoDeleted,
+  onMarkedDeleted,
   onProtectionChanged,
   onIgnoreChanged,
   onDownloadQueued,
@@ -83,11 +87,17 @@ export function useVideoModalActions({
       audioFilePath: current.audioFilePath ?? null,
       audioFileSize: current.audioFileSize ?? null,
       addedAt: current.addedAt ?? null,
+      removal: {
+        reason: current.removedReason ?? null,
+        at: current.removedAt ?? null,
+        detail: current.removedDetail ?? null,
+      },
     }));
   }, [statuses, video.youtubeId]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
   const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
+  const [markDeletedPending, setMarkDeletedPending] = useState(false);
   const [snackbar, setSnackbar] = useState<SnackbarState>({
     open: false,
     message: '',
@@ -187,6 +197,36 @@ export function useVideoModalActions({
     }
   }, [localVideo.isIgnored, localVideo.youtubeId, localVideo.channelId, token, showSnackbar, onIgnoreChanged]);
 
+  // A missing video whose file is really gone becomes deleted; the record stays.
+  const handleMarkDeleted = useCallback(async () => {
+    if (!localVideo.databaseId) return;
+    setMarkDeletedPending(true);
+    try {
+      const response = await axios.post<{ updated: number }>(
+        '/api/videos/mark-deleted',
+        { videoIds: [localVideo.databaseId] },
+        { headers: { 'x-access-token': token || '' } }
+      );
+      // Zero rows: the file came back, or the video was marked elsewhere, while
+      // the modal was open. Say so rather than claim a change that did not happen.
+      if (response.data.updated === 0) {
+        showSnackbar('Not marked: this video is no longer missing.', 'error');
+        return;
+      }
+      setLocalVideo((prev) => ({
+        ...prev,
+        status: 'deleted',
+        removal: { reason: 'marked_deleted', at: new Date().toISOString(), detail: null },
+      }));
+      onMarkedDeleted?.(localVideo.youtubeId);
+      showSnackbar('Marked as deleted', 'success');
+    } catch (err: unknown) {
+      showSnackbar(extractErrorMessage(err, 'Failed to mark the video as deleted'), 'error');
+    } finally {
+      setMarkDeletedPending(false);
+    }
+  }, [localVideo.databaseId, localVideo.youtubeId, token, showSnackbar, onMarkedDeleted]);
+
   const handleDownloadConfirm = useCallback(async (settings: DownloadSettings | null) => {
     setDownloadDialogOpen(false);
     if (snapshot.videos[localVideo.youtubeId]?.state) {
@@ -256,12 +296,14 @@ export function useVideoModalActions({
     downloadDialogOpen,
     ratingDialogOpen,
     protectionLoading: protection.loading,
+    markDeletedPending,
     setDeleteDialogOpen,
     setDownloadDialogOpen,
     setRatingDialogOpen,
     handleProtectionToggle,
     handleDeleteConfirm,
     handleIgnoreToggle,
+    handleMarkDeleted,
     handleDownloadConfirm,
     handleRatingApply,
     handleSnackbarClose,

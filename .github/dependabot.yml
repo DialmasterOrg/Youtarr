@@ -1,0 +1,11 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: dev
+    schedule: { interval: weekly }
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci

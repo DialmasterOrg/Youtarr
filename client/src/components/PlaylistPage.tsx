@@ -30,10 +30,12 @@ import PlaylistWatchedFilterControl from './PlaylistPage/components/PlaylistWatc
 import { useVideoSelection } from './shared/VideoList/hooks/useVideoSelection';
 import VideoListSelectionPill from './shared/VideoList/VideoListSelectionPill';
 import { SelectionAction } from './shared/VideoList/types';
-import { Download as DownloadIcon } from '../lib/icons';
+import { Delete as DeleteIcon, Download as DownloadIcon } from '../lib/icons';
 import PlaylistFollowingDialog, { FollowingDialogMode } from './PlaylistPage/components/PlaylistFollowingDialog';
 import PlaylistSettingsDialog from './PlaylistPage/components/PlaylistSettingsDialog';
-import { toDownloadFileProps } from './PlaylistPage/components/playlistVideoHelpers';
+import { isDeletable, isDownloadable, toModalData } from './PlaylistPage/components/playlistVideoHelpers';
+import { usePlaylistVideoDeletion } from './PlaylistPage/hooks/usePlaylistVideoDeletion';
+import DeleteVideosDialog from './shared/DeleteVideosDialog';
 import DownloadSettingsDialog from './DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from './DownloadManager/ManualDownload/types';
 import SubscriptionsBackButton from './shared/SubscriptionsBackButton';
@@ -48,33 +50,6 @@ interface SnackbarState {
   open: boolean;
   message: string;
   severity: 'success' | 'error' | 'info' | 'warning';
-}
-
-function toModalData(v: PlaylistVideo): VideoModalData {
-  const status = v.youtube_removed || v.previously_downloaded
-    ? 'missing'
-    : v.downloaded
-      ? 'downloaded'
-      : 'never_downloaded';
-  return {
-    youtubeId: v.youtube_id,
-    title: v.title || v.youtube_id,
-    channelName: v.channel_name || '',
-    thumbnailUrl: v.thumbnail || `https://i.ytimg.com/vi/${v.youtube_id}/hqdefault.jpg`,
-    duration: v.duration,
-    publishedAt: v.published_at,
-    addedAt: v.downloaded_at ?? null,
-    mediaType: 'video',
-    status,
-    isDownloaded: v.downloaded,
-    ...toDownloadFileProps(v),
-    isProtected: false,
-    isIgnored: v.ignored,
-    normalizedRating: null,
-    ratingSource: null,
-    databaseId: v.video_id,
-    channelId: v.channel_id,
-  };
 }
 
 function PlaylistPage({ token }: PlaylistPageProps) {
@@ -187,11 +162,26 @@ function PlaylistPage({ token }: PlaylistPageProps) {
   const selectionClearRef = useRef<() => void>(() => {});
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
+  // One selection holds downloaded and not-downloaded videos; each action
+  // applies to the selected videos it fits.
+  const videosById = useMemo(() => new Map(videos.map((v) => [v.youtube_id, v])), [videos]);
+  const idsThatFit = useCallback(
+    (ids: string[], fits: (video: PlaylistVideo) => boolean) =>
+      ids.filter((id) => {
+        const video = videosById.get(id);
+        return Boolean(video && fits(video));
+      }),
+    [videosById]
+  );
+
+  const deletion = usePlaylistVideoDeletion({ token, markVideoDeleted, refetchMeta });
+
   const handleDownloadSelected = useCallback((ids: string[]) => {
-    if (!ids.length) return;
-    setPendingDownload({ mode: 'selected', ids });
+    const downloadable = idsThatFit(ids, isDownloadable);
+    if (!downloadable.length) return;
+    setPendingDownload({ mode: 'selected', ids: downloadable });
     setDownloadDialogOpen(true);
-  }, []);
+  }, [idsThatFit]);
 
   const handleConfirmDownload = useCallback(
     async (settings: DownloadSettings | null) => {
@@ -231,22 +221,29 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     return videos.filter((v) => ids.has(v.youtube_id) && v.previously_downloaded).length;
   }, [pendingDownload, videos]);
 
-  const downloadActions = useMemo<SelectionAction<string>[]>(
+  const selectionActions = useMemo<SelectionAction<string>[]>(
     () => [
       {
         id: 'download',
-        label: 'Download Selected',
+        label: 'Download',
         intent: 'success',
         icon: <DownloadIcon size={14} />,
-        onClick: (ids) => {
-          void handleDownloadSelected(ids);
-        },
+        disabled: (ids) => idsThatFit(ids, isDownloadable).length === 0,
+        onClick: handleDownloadSelected,
+      },
+      {
+        id: 'delete',
+        label: 'Delete',
+        intent: 'danger',
+        icon: <DeleteIcon size={14} />,
+        disabled: (ids) => deletion.loading || idsThatFit(ids, isDeletable).length === 0,
+        onClick: (ids) => deletion.requestDelete(idsThatFit(ids, isDeletable)),
       },
     ],
-    [handleDownloadSelected]
+    [handleDownloadSelected, idsThatFit, deletion.loading, deletion.requestDelete]
   );
 
-  const selection = useVideoSelection<string>({ actions: downloadActions });
+  const selection = useVideoSelection<string>({ actions: selectionActions });
   useEffect(() => {
     const eligible = selection.selectedIds.filter(id => !snapshot.videos[id]?.state);
     if (eligible.length !== selection.selectedIds.length) selection.set(eligible);
@@ -342,6 +339,14 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     },
     [playlist, ignoreVideo, markVideoIgnored, refetchMeta, videos, showSnackbar]
   );
+
+  const handleConfirmDelete = async () => {
+    const outcome = await deletion.confirmDelete();
+    if (!outcome) return;
+    showSnackbar(outcome.message, outcome.severity);
+    // Nothing deleted: keep the selection so the user can retry.
+    if (outcome.deletedIds.length > 0) selection.clear();
+  };
 
   const handleVideoDeleted = useCallback(
     (ytId: string) => {
@@ -573,6 +578,14 @@ function PlaylistPage({ token }: PlaylistPageProps) {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      <DeleteVideosDialog
+        open={deletion.dialogOpen}
+        onClose={deletion.cancelDelete}
+        onConfirm={() => { void handleConfirmDelete(); }}
+        videoCount={deletion.pendingCount}
+        skippedCount={selection.count - deletion.pendingCount}
+      />
 
       {modalVideo && (
         <VideoModal

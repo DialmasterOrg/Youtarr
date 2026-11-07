@@ -12,14 +12,20 @@ class MockWebSocket {
   static CLOSED = 3;
 
   url: string;
+  protocols: string | string[] | undefined;
   readyState: number;
   onopen: ((event: Event) => void) | null = null;
   onclose: ((event: CloseEvent) => void) | null = null;
   onerror: ((event: Event) => void) | null = null;
   onmessage: ((event: MessageEvent) => void) | null = null;
 
-  constructor(url: string) {
+  constructor(url: string, protocols?: string | string[]) {
+    // Browsers throw a SyntaxError for a subprotocol that is not a valid token
+    if ([protocols].flat().some((protocol) => protocol !== undefined && /\s/.test(protocol))) {
+      throw new SyntaxError('Invalid subprotocol');
+    }
     this.url = url;
+    this.protocols = protocols;
     this.readyState = WebSocket.CONNECTING;
     MockWebSocket.instances.push(this);
   }
@@ -36,6 +42,8 @@ class MockWebSocket {
     MockWebSocket.instances = [];
   }
 }
+
+const TEST_TOKEN = 'session-token';
 
 // Mock Notification API
 const mockNotification = {
@@ -149,7 +157,7 @@ describe('WebSocketProvider', () => {
 
   test('renders children correctly', () => {
     render(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <div data-testid="child">Test Child</div>
       </WebSocketProvider>
     );
@@ -159,7 +167,7 @@ describe('WebSocketProvider', () => {
 
   test('creates WebSocket connection on mount', async () => {
     render(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <TestConsumer />
       </WebSocketProvider>
     );
@@ -174,7 +182,7 @@ describe('WebSocketProvider', () => {
 
   test('uses correct WebSocket URL in development mode', () => {
     render(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <TestConsumer />
       </WebSocketProvider>
     );
@@ -186,7 +194,7 @@ describe('WebSocketProvider', () => {
   test('uses correct WebSocket URL in production mode with custom port', () => {
     setMockLocation('http://localhost:3087/');
     render(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <div />
       </WebSocketProvider>
     );
@@ -197,7 +205,7 @@ describe('WebSocketProvider', () => {
   test('uses WSS protocol for HTTPS connections', () => {
     setMockLocation('https://localhost/');
     render(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <div />
       </WebSocketProvider>
     );
@@ -207,7 +215,7 @@ describe('WebSocketProvider', () => {
 
   test('resets retry counter on connection open', async () => {
     render(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <TestConsumer />
       </WebSocketProvider>
     );
@@ -247,7 +255,7 @@ describe('WebSocketProvider', () => {
 
   test('handles WebSocket connection close and reconnects with backoff', async () => {
     render(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <TestConsumer />
       </WebSocketProvider>
     );
@@ -276,7 +284,7 @@ describe('WebSocketProvider', () => {
 
   test('implements exponential backoff for reconnection', () => {
     render(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <TestConsumer />
       </WebSocketProvider>
     );
@@ -300,7 +308,7 @@ describe('WebSocketProvider', () => {
 
   test('resets retry counter on successful connection', async () => {
     render(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <TestConsumer />
       </WebSocketProvider>
     );
@@ -351,7 +359,7 @@ describe('WebSocketProvider', () => {
 
   test('handles WebSocket error events', () => {
     render(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <TestConsumer />
       </WebSocketProvider>
     );
@@ -370,7 +378,7 @@ describe('WebSocketProvider', () => {
 
   test('subscribes to messages and filters them correctly', async () => {
     const { rerender } = render(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <TestConsumer />
       </WebSocketProvider>
     );
@@ -387,7 +395,7 @@ describe('WebSocketProvider', () => {
     });
 
     rerender(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <TestConsumer />
       </WebSocketProvider>
     );
@@ -413,7 +421,7 @@ describe('WebSocketProvider', () => {
     mockNotification.permission = 'granted';
 
     render(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <TestConsumer />
       </WebSocketProvider>
     );
@@ -444,7 +452,7 @@ describe('WebSocketProvider', () => {
     mockNotification.requestPermission.mockResolvedValue('granted');
 
     render(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <TestConsumer />
       </WebSocketProvider>
     );
@@ -475,7 +483,7 @@ describe('WebSocketProvider', () => {
     mockNotification.permission = 'denied';
 
     render(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <TestConsumer />
       </WebSocketProvider>
     );
@@ -502,7 +510,7 @@ describe('WebSocketProvider', () => {
     mockNotification.permission = 'granted';
 
     render(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <TestConsumer />
       </WebSocketProvider>
     );
@@ -530,7 +538,7 @@ describe('WebSocketProvider', () => {
     delete (window as any).Notification;
 
     render(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <TestConsumer />
       </WebSocketProvider>
     );
@@ -593,7 +601,7 @@ describe('WebSocketProvider', () => {
     };
 
     render(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <TestComponent />
       </WebSocketProvider>
     );
@@ -634,7 +642,7 @@ describe('WebSocketProvider', () => {
 
   test('cleans up WebSocket connection on unmount', () => {
     const { unmount } = render(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <TestConsumer />
       </WebSocketProvider>
     );
@@ -673,7 +681,7 @@ describe('WebSocketProvider', () => {
     };
 
     render(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <TestComponent />
       </WebSocketProvider>
     );
@@ -709,7 +717,7 @@ describe('WebSocketProvider', () => {
 
   test('caps reconnection delay at 30 seconds', () => {
     render(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <TestConsumer />
       </WebSocketProvider>
     );
@@ -744,7 +752,7 @@ describe('WebSocketProvider', () => {
     };
 
     render(
-      <WebSocketProvider>
+      <WebSocketProvider token={TEST_TOKEN}>
         <TestComponent />
       </WebSocketProvider>
     );
@@ -756,10 +764,208 @@ describe('WebSocketProvider', () => {
     expect(typeof contextValue.unsubscribe).toBe('function');
   });
 
+  describe('session token', () => {
+    test('does not connect without a session token', () => {
+      render(
+        <WebSocketProvider token={null}>
+          <TestConsumer />
+        </WebSocketProvider>
+      );
+
+      expect(MockWebSocket.instances).toHaveLength(0);
+      expect(screen.getByTestId('socket-status')).toHaveTextContent('disconnected');
+    });
+
+    test('offers the session token as a subprotocol', () => {
+      render(
+        <WebSocketProvider token={TEST_TOKEN}>
+          <div />
+        </WebSocketProvider>
+      );
+
+      expect(MockWebSocket.instances[0].protocols).toEqual([
+        'youtarr',
+        'youtarr.auth.session-token',
+      ]);
+    });
+
+    test('connects once a session token is set', () => {
+      const { rerender } = render(
+        <WebSocketProvider token={null}>
+          <div />
+        </WebSocketProvider>
+      );
+
+      rerender(
+        <WebSocketProvider token={TEST_TOKEN}>
+          <div />
+        </WebSocketProvider>
+      );
+
+      expect(MockWebSocket.instances).toHaveLength(1);
+    });
+
+    test('reconnects with the new token when the session token changes', () => {
+      const { rerender } = render(
+        <WebSocketProvider token={TEST_TOKEN}>
+          <div />
+        </WebSocketProvider>
+      );
+
+      rerender(
+        <WebSocketProvider token="next-token">
+          <div />
+        </WebSocketProvider>
+      );
+
+      expect(MockWebSocket.instances).toHaveLength(2);
+      expect(MockWebSocket.instances[0].readyState).toBe(MockWebSocket.CLOSED);
+      expect(MockWebSocket.instances[1].protocols).toEqual(['youtarr', 'youtarr.auth.next-token']);
+    });
+
+    test('closes the connection and stays disconnected when the session token is cleared', () => {
+      const { rerender } = render(
+        <WebSocketProvider token={TEST_TOKEN}>
+          <TestConsumer />
+        </WebSocketProvider>
+      );
+
+      rerender(
+        <WebSocketProvider token={null}>
+          <TestConsumer />
+        </WebSocketProvider>
+      );
+      act(() => {
+        jest.advanceTimersByTime(60 * 1000);
+      });
+
+      expect(MockWebSocket.instances).toHaveLength(1);
+      expect(MockWebSocket.instances[0].readyState).toBe(MockWebSocket.CLOSED);
+      expect(screen.getByTestId('socket-status')).toHaveTextContent('disconnected');
+    });
+
+    test('keeps rendering when the browser rejects the token as a subprotocol', () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      render(
+        <WebSocketProvider token="not a valid token">
+          <div data-testid="child">Still here</div>
+        </WebSocketProvider>
+      );
+
+      expect(screen.getByTestId('child')).toBeInTheDocument();
+      expect(MockWebSocket.instances).toHaveLength(0);
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('session check', () => {
+    const latestSocket = () => MockWebSocket.instances[MockWebSocket.instances.length - 1];
+
+    const openLatest = () => {
+      act(() => {
+        latestSocket().onopen?.(new Event('open'));
+      });
+    };
+
+    // Closes the newest socket with the given code, then lets the backoff
+    // timer open the next one.
+    const closeLatest = (code: number) => {
+      act(() => {
+        latestSocket().onclose?.(new CloseEvent('close', { code }));
+      });
+      act(() => {
+        jest.advanceTimersByTime(30 * 1000);
+      });
+    };
+
+    const mountWithSessionCheck = () => {
+      const onSessionCheckNeeded = jest.fn();
+      render(
+        <WebSocketProvider token={TEST_TOKEN} onSessionCheckNeeded={onSessionCheckNeeded}>
+          <div />
+        </WebSocketProvider>
+      );
+      return onSessionCheckNeeded;
+    };
+
+    test('asks for a session check when the server ends the session', () => {
+      const onSessionCheckNeeded = mountWithSessionCheck();
+
+      openLatest();
+      closeLatest(1008);
+
+      expect(onSessionCheckNeeded).toHaveBeenCalledTimes(1);
+    });
+
+    test('does not ask for a session check when open connections drop', () => {
+      const onSessionCheckNeeded = mountWithSessionCheck();
+
+      [1, 2, 3].forEach(() => {
+        openLatest();
+        closeLatest(1006);
+      });
+
+      expect(onSessionCheckNeeded).not.toHaveBeenCalled();
+    });
+
+    test('asks for a session check after three connection attempts in a row never open', () => {
+      const onSessionCheckNeeded = mountWithSessionCheck();
+
+      closeLatest(1006);
+      closeLatest(1006);
+      expect(onSessionCheckNeeded).not.toHaveBeenCalled();
+      closeLatest(1006);
+
+      expect(onSessionCheckNeeded).toHaveBeenCalledTimes(1);
+    });
+
+    test('asks again on every third attempt in a row that never opens', () => {
+      const onSessionCheckNeeded = mountWithSessionCheck();
+
+      [1, 2, 3, 4, 5, 6].forEach(() => closeLatest(1006));
+
+      expect(onSessionCheckNeeded).toHaveBeenCalledTimes(2);
+    });
+
+    test('keeps asking after the browser comes back online', () => {
+      const onSessionCheckNeeded = mountWithSessionCheck();
+
+      [1, 2, 3].forEach(() => closeLatest(1006));
+      act(() => {
+        window.dispatchEvent(new Event('online'));
+      });
+      [1, 2, 3].forEach(() => closeLatest(1006));
+
+      expect(onSessionCheckNeeded).toHaveBeenCalledTimes(2);
+    });
+
+    test('counts only attempts in a row that never open', () => {
+      const onSessionCheckNeeded = mountWithSessionCheck();
+
+      [1, 2].forEach(() => closeLatest(1006));
+      openLatest();
+      closeLatest(1006);
+      [1, 2].forEach(() => closeLatest(1006));
+
+      expect(onSessionCheckNeeded).not.toHaveBeenCalled();
+    });
+
+    test('asks again once a connection has opened in between', () => {
+      const onSessionCheckNeeded = mountWithSessionCheck();
+
+      [1, 2, 3].forEach(() => closeLatest(1006));
+      openLatest();
+      closeLatest(1008);
+
+      expect(onSessionCheckNeeded).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe('connection resilience', () => {
     test('does not close the socket after a successful reconnect', async () => {
       render(
-        <WebSocketProvider>
+        <WebSocketProvider token={TEST_TOKEN}>
           <TestConsumer />
         </WebSocketProvider>
       );
@@ -801,7 +1007,7 @@ describe('WebSocketProvider', () => {
     test('StrictMode double-mount results in a single live socket', () => {
       render(
         <React.StrictMode>
-          <WebSocketProvider>
+          <WebSocketProvider token={TEST_TOKEN}>
             <div data-testid="child" />
           </WebSocketProvider>
         </React.StrictMode>
@@ -815,7 +1021,7 @@ describe('WebSocketProvider', () => {
 
     test('reconnects immediately when the browser comes back online', () => {
       render(
-        <WebSocketProvider>
+        <WebSocketProvider token={TEST_TOKEN}>
           <TestConsumer />
         </WebSocketProvider>
       );
@@ -850,7 +1056,7 @@ describe('WebSocketProvider', () => {
 
     test('reconnects when the tab becomes visible with a dead socket', () => {
       render(
-        <WebSocketProvider>
+        <WebSocketProvider token={TEST_TOKEN}>
           <TestConsumer />
         </WebSocketProvider>
       );
@@ -875,7 +1081,7 @@ describe('WebSocketProvider', () => {
 
     test('reports a disconnected socket while the connection is down', async () => {
       render(
-        <WebSocketProvider>
+        <WebSocketProvider token={TEST_TOKEN}>
           <TestConsumer />
         </WebSocketProvider>
       );
@@ -917,7 +1123,7 @@ describe('WebSocketProvider', () => {
       };
 
       render(
-        <WebSocketProvider>
+        <WebSocketProvider token={TEST_TOKEN}>
           <TestComponent />
         </WebSocketProvider>
       );

@@ -6,10 +6,15 @@ jest.mock('fs', () => ({
   }
 }));
 
+// What the check writes when a file is gone, and when it is (back) on disk.
+const MISSING_COLUMNS = { removed: true, removed_reason: 'not_found', removed_at: expect.any(Date), removed_detail: null };
+const PRESENT_COLUMNS = { removed: false, removed_reason: null, removed_at: null, removed_detail: null };
+
 describe('FileCheckModule', () => {
   let fileCheckModule;
   let mockFs;
   let mockVideo;
+  let mockLibraryRootCheck;
 
   beforeEach(() => {
     jest.resetModules();
@@ -25,7 +30,97 @@ describe('FileCheckModule', () => {
       Video: mockVideo
     }));
 
+    // The downloads folder looks mounted unless a test says otherwise.
+    mockLibraryRootCheck = {
+      ...jest.requireActual('../libraryRootCheck'),
+      checkLibraryRoot: jest.fn().mockResolvedValue({ ok: true }),
+    };
+    jest.doMock('../libraryRootCheck', () => mockLibraryRootCheck);
+    jest.doMock('../configModule', () => ({ directoryPath: '/videos' }));
+
     fileCheckModule = require('../fileCheckModule');
+  });
+
+  describe('while the downloads folder looks unmounted', () => {
+    const failedCheck = { ok: false, reason: 'empty', path: '/videos', message: 'The downloads folder is empty.' };
+    const presentRow = (id, youtubeId) => ({
+      id, youtubeId, filePath: `/videos/channel/${youtubeId}.mp4`, fileSize: '1000', removed: false
+    });
+
+    test('holds back the missing mark and reports how many rows it held', async () => {
+      mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(failedCheck);
+      mockFs.stat.mockRejectedValue({ code: 'ENOENT' });
+
+      const result = await fileCheckModule.checkVideoFiles([presentRow(1, 'abc123'), presentRow(2, 'def456')]);
+
+      expect(result.updates).toEqual([]);
+      expect(result.videos.map((v) => v.removed)).toEqual([false, false]);
+      expect(result.libraryWarning).toEqual({ reason: 'empty', path: '/videos', message: failedCheck.message, heldBack: 2 });
+      expect(mockLibraryRootCheck.checkLibraryRoot).toHaveBeenCalledTimes(1);
+      expect(mockLibraryRootCheck.checkLibraryRoot).toHaveBeenCalledWith('/videos');
+    });
+
+    test('still records a present file\'s new size', async () => {
+      mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(failedCheck);
+      mockFs.stat.mockResolvedValue({ size: 2000 });
+
+      const result = await fileCheckModule.checkVideoFiles([presentRow(1, 'abc123')]);
+
+      expect(result.updates).toEqual([{ id: 1, fileSize: 2000 }]);
+      expect(result.libraryWarning).toBeNull();
+    });
+
+    describe('when only a subfolder looks unmounted', () => {
+      const emptySubfolder = { ok: false, reason: 'subfolder-empty', path: '/videos/__Music', message: 'The subfolder __Music is empty.' };
+      const rowAt = (id, filePath) => ({ id, youtubeId: `vid${id}`, filePath, fileSize: '1000', removed: false });
+
+      test('still marks a video stored outside that subfolder missing', async () => {
+        mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(emptySubfolder);
+        mockFs.stat.mockRejectedValue({ code: 'ENOENT' });
+
+        const result = await fileCheckModule.checkVideoFiles([rowAt(1, '/videos/__Videos/channel/vid1.mp4')]);
+
+        expect(result.updates).toEqual([{ id: 1, ...MISSING_COLUMNS }]);
+        expect(result.libraryWarning).toBeNull();
+      });
+
+      test('holds back only the videos under that subfolder', async () => {
+        mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(emptySubfolder);
+        mockFs.stat.mockRejectedValue({ code: 'ENOENT' });
+
+        const result = await fileCheckModule.checkVideoFiles([
+          rowAt(1, '/videos/__Music/artist/vid1.mp4'),
+          rowAt(2, '/videos/__Videos/channel/vid2.mp4'),
+        ]);
+
+        expect(result.updates).toEqual([{ id: 2, ...MISSING_COLUMNS }]);
+        expect(result.libraryWarning).toEqual(expect.objectContaining({ reason: 'subfolder-empty', heldBack: 1 }));
+      });
+
+      test('holds back the videos under every failing subfolder, not just the first', async () => {
+        mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue({
+          ...emptySubfolder, paths: ['/videos/__Music', '/videos/__Kids'], message: 'The subfolders __Music and __Kids are empty.',
+        });
+        mockFs.stat.mockRejectedValue({ code: 'ENOENT' });
+
+        const result = await fileCheckModule.checkVideoFiles([
+          rowAt(1, '/videos/__Music/artist/vid1.mp4'),
+          rowAt(2, '/videos/__Kids/channel/vid2.mp4'),
+        ]);
+
+        expect(result.updates).toEqual([]);
+        expect(result.libraryWarning).toEqual(expect.objectContaining({ heldBack: 2 }));
+      });
+    });
+
+    test('does not run the check when no row would be marked missing', async () => {
+      mockFs.stat.mockResolvedValue({ size: 1000 });
+
+      const result = await fileCheckModule.checkVideoFiles([presentRow(1, 'abc123')]);
+
+      expect(mockLibraryRootCheck.checkLibraryRoot).not.toHaveBeenCalled();
+      expect(result.libraryWarning).toBeNull();
+    });
   });
 
   describe('checkVideoFiles', () => {
@@ -61,12 +156,13 @@ describe('FileCheckModule', () => {
           id: 1,
           youtubeId: 'abc123',
           filePath: '/videos/channel/video.mp4',
-          removed: true
+          ...MISSING_COLUMNS
         }
       ]);
       expect(result.updates).toEqual([
-        { id: 1, removed: true }
+        { id: 1, ...MISSING_COLUMNS }
       ]);
+      expect(result.libraryWarning).toBeNull();
       expect(mockFs.stat).toHaveBeenCalledWith('/videos/channel/video.mp4');
     });
 
@@ -87,6 +183,27 @@ describe('FileCheckModule', () => {
       expect(result.videos).toEqual(videos);
       expect(result.updates).toEqual([]);
       expect(mockFs.stat).toHaveBeenCalledWith('/videos/channel/video.mp4');
+    });
+
+    test('leaves a deleted video deleted while its file is still gone', async () => {
+      const videos = [
+        {
+          id: 1,
+          youtubeId: 'abc123',
+          filePath: '/videos/channel/video.mp4',
+          removed: true,
+          removed_reason: 'user_deleted',
+          removed_at: new Date('2026-10-03T00:00:00Z'),
+          removed_detail: null
+        }
+      ];
+
+      mockFs.stat.mockRejectedValueOnce({ code: 'ENOENT' });
+
+      const result = await fileCheckModule.checkVideoFiles(videos);
+
+      expect(result.videos).toEqual(videos);
+      expect(result.updates).toEqual([]);
     });
 
     test('should mark video as not removed when file exists', async () => {
@@ -110,13 +227,35 @@ describe('FileCheckModule', () => {
           youtubeId: 'abc123',
           filePath: '/videos/channel/video.mp4',
           fileSize: '1000',
-          removed: false
+          ...PRESENT_COLUMNS
         }
       ]);
       expect(result.updates).toEqual([
-        { id: 1, removed: false }
+        { id: 1, ...PRESENT_COLUMNS }
       ]);
       expect(mockFs.stat).toHaveBeenCalledWith('/videos/channel/video.mp4');
+    });
+
+    test('clears the recorded reason when a deleted video\'s file is back', async () => {
+      const videos = [
+        {
+          id: 1,
+          youtubeId: 'abc123',
+          filePath: '/videos/channel/video.mp4',
+          fileSize: '1000',
+          removed: true,
+          removed_reason: 'user_deleted',
+          removed_at: new Date('2026-10-03T00:00:00Z'),
+          removed_detail: null
+        }
+      ];
+
+      mockFs.stat.mockResolvedValueOnce({ size: 1000 });
+
+      const result = await fileCheckModule.checkVideoFiles(videos);
+
+      expect(result.updates).toEqual([{ id: 1, ...PRESENT_COLUMNS }]);
+      expect(result.videos[0]).toEqual(expect.objectContaining(PRESENT_COLUMNS));
     });
 
     test('should update fileSize when it has changed', async () => {
@@ -218,14 +357,14 @@ describe('FileCheckModule', () => {
           youtubeId: 'abc123',
           filePath: '/videos/channel/video1.mp4',
           fileSize: '1000',
-          removed: true
+          ...MISSING_COLUMNS
         },
         {
           id: 2,
           youtubeId: 'def456',
           filePath: '/videos/channel/video2.mp4',
           fileSize: '2000',
-          removed: false
+          ...PRESENT_COLUMNS
         },
         {
           id: 3,
@@ -241,8 +380,8 @@ describe('FileCheckModule', () => {
         }
       ]);
       expect(result.updates).toEqual([
-        { id: 1, removed: true },
-        { id: 2, removed: false },
+        { id: 1, ...MISSING_COLUMNS },
+        { id: 2, ...PRESENT_COLUMNS },
         { id: 4, fileSize: 4000 }
       ]);
     });
@@ -460,7 +599,7 @@ describe('FileCheckModule', () => {
 
       // Marked removed, but filePath/fileSize must NOT appear in the update
       expect(result.updates).toHaveLength(1);
-      expect(result.updates[0]).toEqual({ id: 1, removed: true });
+      expect(result.updates[0]).toEqual({ id: 1, ...MISSING_COLUMNS });
       expect(result.updates[0].filePath).toBeUndefined();
       expect(result.updates[0].fileSize).toBeUndefined();
     });
@@ -502,7 +641,7 @@ describe('FileCheckModule', () => {
       const result = await fileCheckModule.checkVideoFiles(videos);
 
       expect(result.updates).toHaveLength(1);
-      expect(result.updates[0]).toEqual({ id: 1, removed: true });
+      expect(result.updates[0]).toEqual({ id: 1, ...MISSING_COLUMNS });
       expect(result.updates[0].audioFilePath).toBeUndefined();
     });
   });
@@ -528,7 +667,7 @@ describe('FileCheckModule', () => {
       );
     });
 
-    test('should update removed status only', async () => {
+    test('marks missing only while the row is still present, so a delete landing meanwhile wins', async () => {
       const updates = [
         { id: 1, removed: true }
       ];
@@ -538,11 +677,23 @@ describe('FileCheckModule', () => {
       expect(mockVideo.update).toHaveBeenCalledTimes(1);
       expect(mockVideo.update).toHaveBeenCalledWith(
         { removed: true },
-        { where: { id: 1 } },
+        { where: { id: 1, removed: false } },
       );
     });
 
-    test('should update both fileSize and removed status', async () => {
+    test('writes the removal reason columns along with the flag', async () => {
+      const at = new Date('2026-10-03T00:00:00Z');
+      await fileCheckModule.applyVideoUpdates([
+        { id: 1, removed: true, removed_reason: 'not_found', removed_at: at, removed_detail: null }
+      ]);
+
+      expect(mockVideo.update).toHaveBeenCalledWith(
+        { removed: true, removed_reason: 'not_found', removed_at: at, removed_detail: null },
+        { where: { id: 1, removed: false } },
+      );
+    });
+
+    test('restores a row only while it is still removed', async () => {
       const updates = [
         { id: 1, fileSize: 2000, removed: false }
       ];
@@ -552,7 +703,7 @@ describe('FileCheckModule', () => {
       expect(mockVideo.update).toHaveBeenCalledTimes(1);
       expect(mockVideo.update).toHaveBeenCalledWith(
         { fileSize: 2000, removed: false },
-        { where: { id: 1 } },
+        { where: { id: 1, removed: true } },
       );
     });
 
@@ -569,12 +720,12 @@ describe('FileCheckModule', () => {
       expect(mockVideo.update).toHaveBeenNthCalledWith(
         1,
         { fileSize: 2000, removed: false },
-        { where: { id: 1 } },
+        { where: { id: 1, removed: true } },
       );
       expect(mockVideo.update).toHaveBeenNthCalledWith(
         2,
         { removed: true },
-        { where: { id: 2 } },
+        { where: { id: 2, removed: false } },
       );
       expect(mockVideo.update).toHaveBeenNthCalledWith(
         3,
@@ -592,7 +743,7 @@ describe('FileCheckModule', () => {
 
       expect(mockVideo.update).toHaveBeenCalledWith(
         { removed: false },
-        { where: { id: 1 } },
+        { where: { id: 1, removed: true } },
       );
     });
 
@@ -605,7 +756,7 @@ describe('FileCheckModule', () => {
 
       expect(mockVideo.update).toHaveBeenCalledWith(
         { removed: true },
-        { where: { id: 1 } },
+        { where: { id: 1, removed: false } },
       );
     });
 
@@ -668,7 +819,7 @@ describe('FileCheckModule', () => {
 
       expect(mockVideo.update).toHaveBeenCalledWith(
         { filePath: '/videos/channel/video [abc123].mkv', fileSize: 5000, removed: false },
-        { where: { id: 1 } },
+        { where: { id: 1, removed: true } },
       );
     });
 

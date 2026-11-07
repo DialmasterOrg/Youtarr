@@ -544,7 +544,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       if (youtubeIds.length > 0 && Video) {
         const downloaded = await Video.findAll({
           where: { youtubeId: youtubeIds },
-          attributes: ['id', 'youtubeId', 'youTubeVideoName', 'youTubeChannelName', 'duration', 'originalDate', 'removed', 'youtube_removed', 'filePath', 'fileSize', 'audioFilePath', 'audioFileSize', 'video_resolution'],
+          attributes: ['id', 'youtubeId', 'youTubeVideoName', 'youTubeChannelName', 'duration', 'originalDate', 'removed', 'removed_reason', 'removed_at', 'removed_detail', 'youtube_removed', 'filePath', 'fileSize', 'audioFilePath', 'audioFileSize', 'video_resolution'],
         });
         downloaded.forEach((v) => downloadedById.set(v.youtubeId, v));
       }
@@ -586,6 +586,10 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
           thumbnail: youtubeRemoved ? localThumb : flatThumb,
           downloaded: isDownloaded,
           previously_downloaded: previouslyDownloaded,
+          // Why the file is gone (see videoRemovalState): tells Deleted from Missing.
+          removed_reason: dl?.removed_reason ?? null,
+          removed_at: dl?.removed_at ?? null,
+          removed_detail: dl?.removed_detail ?? null,
           youtube_removed: youtubeRemoved,
           video_id: dl?.id ?? null,
           file_path: dl?.filePath ?? null,

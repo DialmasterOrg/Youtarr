@@ -8,10 +8,15 @@ const {
 
 const SAMPLE_INFO_JSON_PATH = path.join(__dirname, 'sample-video.info.json');
 
-// yt-dlp invocation per template is ~150-300ms locally and ~500-800ms in
-// constrained environments. Two parallel calls are issued per preview, so we
-// cap the timeout generously for slow hosts.
-const TIMEOUT_MS = 5000;
+// One render takes ~0.6s on a desktop PC but ~7.4s on a low-end NAS CPU
+// (Synology DS1513+, issue #981), and two renders run in parallel per
+// preview. The limit leaves room for slow hosts while still catching a hung
+// yt-dlp.
+const TIMEOUT_MS = 20000;
+const TIMEOUT_CODE = 'YTDLP_TIMEOUT';
+const TIMEOUT_MESSAGE =
+  `The filename template could not be checked: yt-dlp took longer than ${TIMEOUT_MS / 1000} seconds. ` +
+  'The server may be busy; try again in a moment.';
 
 // Small LRU; Map preserves insertion order, so we evict the oldest entry when
 // the cache fills.
@@ -64,8 +69,21 @@ class FilenamePreview {
 
   async _renderOne(template) {
     const args = this._renderArgs(template);
-    const stdout = await ytDlpRunner.run(args, { timeoutMs: TIMEOUT_MS });
-    return stdout.trim();
+    try {
+      const stdout = await ytDlpRunner.run(args, { timeoutMs: TIMEOUT_MS });
+      return stdout.trim();
+    } catch (err) {
+      if (!this.isTimeoutError(err)) throw err;
+      // A timeout says nothing about the template, so replace the runner's
+      // message with one that doesn't read as a rejection.
+      const timeoutError = new Error(TIMEOUT_MESSAGE);
+      timeoutError.code = TIMEOUT_CODE;
+      throw timeoutError;
+    }
+  }
+
+  isTimeoutError(err) {
+    return Boolean(err) && err.code === TIMEOUT_CODE;
   }
 
   /**
@@ -74,7 +92,8 @@ class FilenamePreview {
    * simulator's approximation) and their lengths.
    *
    * Throws on yt-dlp rejection; the route handler maps the error to 400 with
-   * the yt-dlp stderr in `error.message`.
+   * the yt-dlp stderr in `error.message`. A timeout throws an error with code
+   * YTDLP_TIMEOUT whose message is ready to show as is.
    *
    * @param {string} prefix
    * @returns {Promise<{fileLine: string, folderLine: string, fileLineLength: number, folderLineLength: number}>}
@@ -107,15 +126,19 @@ class FilenamePreview {
    * "%(title)Z": unsupported format character 'Z' (0x5a) at index 8`).
    *
    * @param {string} prefix
-   * @returns {Promise<{ok: true} | {ok: false, error: string}>}
+   * @returns {Promise<{ok: true} | {ok: false, error: string, timedOut: boolean}>}
    */
   async validateTemplate(prefix) {
     try {
       await this.previewTemplate(prefix);
       return { ok: true };
     } catch (err) {
-      logger.warn({ err: err.message }, 'filenamePreview rejected template');
-      return { ok: false, error: err.message };
+      const timedOut = this.isTimeoutError(err);
+      logger.warn(
+        { err: err.message },
+        timedOut ? 'filenamePreview timed out' : 'filenamePreview rejected template'
+      );
+      return { ok: false, error: err.message, timedOut };
     }
   }
 

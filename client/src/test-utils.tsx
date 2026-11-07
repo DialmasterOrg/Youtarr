@@ -21,13 +21,13 @@ export function createMockWebSocketContext(): NonNullable<WebSocketValue> {
 
 export function renderWithProviders(
   ui: React.ReactElement,
-  opts?: { websocketValue?: WebSocketValue }
+  opts?: { websocketValue?: WebSocketValue; initialEntries?: string[] }
 ) {
   const value = opts?.websocketValue ?? createMockWebSocketContext();
 
   function Wrapper({ children }: { children: React.ReactNode }) {
     return (
-      <MemoryRouter>
+      <MemoryRouter initialEntries={opts?.initialEntries}>
         <ThemeEngineProvider>
           <WebSocketContext.Provider value={value}>
             <TooltipProvider>

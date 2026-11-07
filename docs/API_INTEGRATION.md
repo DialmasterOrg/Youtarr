@@ -38,7 +38,7 @@ API keys are the recommended authentication method for external integrations. Th
 
 #### Creating an API Key
 
-1. Navigate to **Settings -> API Keys** in Youtarr
+1. Navigate to **Settings -> API Keys & Bookmarklet** in Youtarr
 2. Click **Create Key**
 3. Enter a descriptive name (e.g., "iPhone Shortcut", "Bookmarklet")
 4. **Important**: Copy and save the key immediately - it will not be shown again!
@@ -65,6 +65,8 @@ You can also use session tokens (the same tokens used by the web UI) via the `x-
 Add a single YouTube video to the download queue.
 
 > **Scope Limitation**: This endpoint only accepts individual video URLs. Playlist URLs, channel URLs, and batch requests are not supported via API keys. Use the web UI for those operations.
+
+Accepted URLs are watch, Shorts, live, and embed links on `youtube.com`, `m.youtube.com`, or `music.youtube.com`, plus `youtu.be` links. A watch URL opened from a playlist (`watch?v=VIDEO_ID&list=...`) downloads only that video; the playlist part is ignored.
 
 **Headers:**
 | Header | Required | Description |
@@ -154,7 +156,7 @@ Delete an API key.
 
 API keys are rate-limited to prevent abuse. The default limit is **10 requests per minute** per API key.
 
-You can adjust this limit with the **Rate Limit (requests/min)** field on **Settings -> API Keys**.
+You can adjust this limit with the **Rate Limit (requests/min)** field on **Settings -> API Keys & Bookmarklet**.
 
 When rate limited, you'll receive a `429` response with:
 ```json
@@ -354,7 +356,7 @@ The bookmarklet only works on youtube.com or youtu.be pages. Make sure you're on
 
 ### 429 Rate Limited
 - Wait a minute before trying again
-- Consider increasing the rate limit in Settings -> API Keys
+- Consider increasing the rate limit in Settings -> API Keys & Bookmarklet
 
 ### CORS Error / Blocked by External Auth (Cloudflare Zero Trust, Authelia, etc.)
 

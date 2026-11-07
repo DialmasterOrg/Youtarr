@@ -6,6 +6,7 @@ const youtubeApi = require('./youtubeApi');
 
 const SEARCH_TIMEOUT_MS = 60_000;
 const ALLOWED_COUNTS = [10, 25, 50, 100];
+const LIVE_STATUSES_TO_SKIP = new Set(['is_live', 'is_upcoming']);
 
 class SearchCanceledError extends Error {
   constructor() { super('Search canceled'); this.name = 'SearchCanceledError'; }
@@ -54,8 +55,10 @@ class VideoSearchModule {
       source = 'yt-dlp';
     }
 
+    // Results stay in the order the source returned them: YouTube's relevance
+    // ranking is the one thing a client cannot recompute, so every other order
+    // is the client's to apply.
     if (results.length > 0) await this._applyLocalStatus(results);
-    this._sortByPublishedAtDesc(results);
     logger.info({ query, count, resultCount: results.length, source }, 'video search complete');
     return results;
   }
@@ -69,6 +72,8 @@ class VideoSearchModule {
       if (!trimmed) continue;
       try {
         const entry = JSON.parse(trimmed);
+        // The API path drops these too; a download would record a live stream indefinitely.
+        if (LIVE_STATUSES_TO_SKIP.has(entry.live_status)) continue;
         const normalized = this._normalize(entry);
         if (normalized.youtubeId && seenIds.has(normalized.youtubeId)) continue;
         if (normalized.youtubeId) seenIds.add(normalized.youtubeId);
@@ -119,17 +124,6 @@ class VideoSearchModule {
 
   async _applyLocalStatus(results) {
     await applyLocalVideoStatus(results);
-  }
-
-  _sortByPublishedAtDesc(results) {
-    results.sort((a, b) => {
-      if (a.publishedAt && b.publishedAt) {
-        return b.publishedAt.localeCompare(a.publishedAt);
-      }
-      if (a.publishedAt) return -1;
-      if (b.publishedAt) return 1;
-      return 0;
-    });
   }
 }
 

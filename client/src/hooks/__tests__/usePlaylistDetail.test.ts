@@ -463,6 +463,27 @@ describe('usePlaylistDetail sorting and pagination', () => {
     expect(axios.get).toHaveBeenCalledTimes(callsBefore);
   });
 
+  test('markVideoDeleted records the row as deleted in Youtarr', async () => {
+    axios.get.mockImplementation((url: string) => {
+      if (url.endsWith('/videos')) {
+        return Promise.resolve({ data: { total: 1, videos: [makeVideo(1, { downloaded: true })] } });
+      }
+      return Promise.resolve({ data: { playlist: { playlist_id: 'PL1' } } });
+    });
+
+    const { result } = renderHook(() =>
+      usePlaylistDetail({ token: 't', playlistId: 'PL1' })
+    );
+
+    await waitFor(() => expect(result.current.videos).toHaveLength(1));
+
+    act(() => {
+      result.current.markVideoDeleted('vid1');
+    });
+
+    expect(result.current.videos[0].removed_reason).toBe('user_deleted');
+  });
+
   test('refetchMeta updates the count without reloading the video list', async () => {
     let count = 5;
     axios.get.mockImplementation((url: string) => {

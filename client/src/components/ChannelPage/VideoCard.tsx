@@ -12,7 +12,8 @@ import { CalendarToday as CalendarTodayIcon, Block as BlockIcon, CheckCircleOutl
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml, formatAddedDateTime } from '../../utils/formatters';
-import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle } from '../../utils/videoStatus';
+import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle, isRemovedStatus } from '../../utils/videoStatus';
+import RemovalDescription, { REMOVAL_TOOLTIP_CLASS } from '../shared/RemovalDescription';
 import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
@@ -58,7 +59,7 @@ function VideoCard({
   const status = getVideoStatus(video);
   // Check if video is still live (not "was_live" and not null/undefined)
   const isStillLive = video.live_status && video.live_status !== 'was_live';
-  const isDownloadSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !isStillLive;
+  const isDownloadSelectable = (status === 'never_downloaded' || isRemovedStatus(status) || status === 'ignored') && !isStillLive;
   const isDeleteSelectable = video.added && !video.removed && !isStillLive;
   const isDownloadAllowed = selectionMode !== 'delete';
   const isDeleteAllowed = selectionMode !== 'download';
@@ -390,19 +391,25 @@ function VideoCard({
                   style={{ ...SHARED_STATUS_CHIP_SMALL_STYLE, flexShrink: 0 }}
                 />
                 <WatchedChip watchedBy={video.watchedBy || []} />
-                <Chip
-                  icon={getStatusIcon(status)}
-                  label={statusLabel}
-                  size="small"
-                  color={getStatusColor(status)}
-                  variant={getStatusChipVariant(status)}
-                  style={{
-                    flex: '0 0 auto',
-                    minWidth: 'fit-content',
-                    ...SHARED_THEMED_CHIP_SMALL_STYLE,
-                    ...getStatusChipStyle(status),
-                  }}
-                />
+                <Tooltip
+                  title={isRemovedStatus(status) ? <RemovalDescription row={video} /> : ''}
+                  enterTouchDelay={0}
+                  className={REMOVAL_TOOLTIP_CLASS}
+                >
+                  <Chip
+                    icon={getStatusIcon(status)}
+                    label={statusLabel}
+                    size="small"
+                    color={getStatusColor(status)}
+                    variant={getStatusChipVariant(status)}
+                    style={{
+                      flex: '0 0 auto',
+                      minWidth: 'fit-content',
+                      ...SHARED_THEMED_CHIP_SMALL_STYLE,
+                      ...getStatusChipStyle(status),
+                    }}
+                  />
+                </Tooltip>
               </div>
             </div>
           </div>

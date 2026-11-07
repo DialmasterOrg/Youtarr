@@ -5,8 +5,59 @@ import {
   formatAddedDate,
   formatAddedDateTime,
   formatAddedDateParts,
+  formatCompactCount,
+  formatRelativeDate,
   uploadDateToIso,
 } from '../formatters';
+
+describe('formatCompactCount', () => {
+  test('shows small counts in full with locale grouping', () => {
+    expect(formatCompactCount(850)).toBe('850');
+    expect(formatCompactCount(0)).toBe('0');
+  });
+
+  test('abbreviates thousands to one decimal, dropping a trailing .0', () => {
+    expect(formatCompactCount(12_500)).toBe('12.5K');
+    expect(formatCompactCount(12_000)).toBe('12K');
+  });
+
+  test('abbreviates millions', () => {
+    expect(formatCompactCount(1_500_000)).toBe('1.5M');
+    expect(formatCompactCount(554_299)).toBe('554.3K');
+  });
+});
+
+describe('formatRelativeDate', () => {
+  const now = new Date('2026-10-20T12:00:00Z');
+  const daysAgo = (days: number) => new Date(now.getTime() - days * 86_400_000).toISOString();
+
+  test('returns null for missing or unparseable input', () => {
+    expect(formatRelativeDate(null, now)).toBeNull();
+    expect(formatRelativeDate('garbage', now)).toBeNull();
+  });
+
+  test('describes the last two days in words', () => {
+    expect(formatRelativeDate(daysAgo(0), now)).toBe('today');
+    expect(formatRelativeDate(daysAgo(1), now)).toBe('yesterday');
+  });
+
+  test('counts days under a week, weeks under a month, months under a year', () => {
+    expect(formatRelativeDate(daysAgo(3), now)).toBe('3 days ago');
+    expect(formatRelativeDate(daysAgo(7), now)).toBe('1 week ago');
+    expect(formatRelativeDate(daysAgo(20), now)).toBe('2 weeks ago');
+    expect(formatRelativeDate(daysAgo(31), now)).toBe('1 month ago');
+    expect(formatRelativeDate(daysAgo(200), now)).toBe('6 months ago');
+  });
+
+  test('counts whole years beyond that', () => {
+    expect(formatRelativeDate(daysAgo(365), now)).toBe('1 year ago');
+    expect(formatRelativeDate(daysAgo(5 * 365 + 3), now)).toBe('5 years ago');
+  });
+
+  test('treats a date in the future (clock skew, approximate dates) as today', () => {
+    expect(formatRelativeDate(daysAgo(-2), now)).toBe('today');
+  });
+});
 
 describe('formatters date helpers', () => {
   describe('parseDate', () => {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { Typography } from '../../ui';
-import { Plus } from '../../../lib/icons';
+import { Typography } from '../ui';
+import { Plus } from '../../lib/icons';
 
 interface ChannelNameDisplayProps {
   channelName: string;

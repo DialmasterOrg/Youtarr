@@ -19,6 +19,7 @@ import WatchStatusSection from '../Configuration/sections/WatchStatusSection';
 import { SponsorBlockSection } from '../Configuration/sections/SponsorBlockSection';
 import { CookieConfigSection } from '../Configuration/sections/CookieConfigSection';
 import { NotificationsSection } from '../Configuration/sections/NotificationsSection';
+import { RssFeedsSection } from '../Configuration/sections/RssFeedsSection';
 import { DownloadPerformanceSection } from '../Configuration/sections/DownloadPerformanceSection';
 import { YtdlpOptionsSection } from '../Configuration/sections/YtdlpOptionsSection';
 import { YtdlpUpdateSection } from '../Configuration/sections/YtdlpUpdateSection';
@@ -66,9 +67,11 @@ export function Settings({ token }: SettingsProps) {
     isPlatformManaged,
     deploymentEnvironment,
     loggingStatus,
+    customArgsCheck,
     loading: isLoading,
     setConfig,
     setInitialConfig,
+    setCustomArgsCheck,
   } = useConfig(token);
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -137,6 +140,7 @@ export function Settings({ token }: SettingsProps) {
     token,
     config,
     setInitialConfig,
+    setCustomArgsCheck,
     setSnackbar,
     hasPlexServerConfigured,
     checkPlexConnection,
@@ -412,6 +416,18 @@ export function Settings({ token }: SettingsProps) {
             }
           />
           <Route
+            path="rss-feeds"
+            element={
+              <RssFeedsSection
+                token={token}
+                config={config}
+                savedConfig={initialConfig}
+                onConfigChange={handleConfigChange}
+                setSnackbar={setSnackbar}
+              />
+            }
+          />
+          <Route
             path="downloading"
             element={
               <>
@@ -435,6 +451,7 @@ export function Settings({ token }: SettingsProps) {
                   onConfigChange={handleConfigChange}
                   onMobileTooltipClick={setMobileTooltip}
                   token={token}
+                  savedCustomArgsCheck={customArgsCheck}
                 />
               </>
             }
@@ -531,6 +548,7 @@ export function Settings({ token }: SettingsProps) {
         open={openPlexAuthDialog}
         onClose={() => setOpenPlexAuthDialog(false)}
         onSuccess={handlePlexAuthSuccess}
+        token={token}
       />
 
       <Snackbar

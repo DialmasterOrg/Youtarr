@@ -39,8 +39,13 @@ export const WithCustomArgs: Story = {
   },
 };
 
-export const WithDenylistedFlag: Story = {
+export const WithBlockedSavedOption: Story = {
   args: {
-    config: { ...DEFAULT_CONFIG, ytdlpCustomArgs: '--exec rm' },
+    config: { ...DEFAULT_CONFIG, ytdlpCustomArgs: '--no-mtime --exec rm' },
+    savedCustomArgsCheck: {
+      blocked: [{ given: '--exec', option: '--exec', reason: 'can run programs or load code on the server' }],
+      warnings: [],
+      errors: [],
+    },
   },
 };

@@ -138,8 +138,15 @@ describe('VideoCard', () => {
     );
     expect(screen.getByText('Available')).toBeInTheDocument();
     unmount();
-    renderCard({ video: { ...baseVideo, removed: true } });
+    renderCard({ video: { ...baseVideo, removed: true, removed_reason: 'not_found' } });
     expect(screen.getByText('Missing')).toBeInTheDocument();
+  });
+
+  test('shows a neutral Deleted chip for a video Youtarr removed', () => {
+    renderCard({ video: { ...baseVideo, removed: true, removed_reason: 'auto_removal', removed_detail: 'older than 30 days' } });
+    expect(screen.getByText('Deleted')).toBeInTheDocument();
+    expect(screen.queryByText('Missing')).not.toBeInTheDocument();
+    expect(screen.queryByText('Available')).not.toBeInTheDocument();
   });
 
   test('delete button calls onDeleteSingle with the video id', () => {

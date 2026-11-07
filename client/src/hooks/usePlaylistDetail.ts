@@ -245,7 +245,14 @@ export const usePlaylistDetail = ({
     setVideos((prev) =>
       prev.map((v) =>
         v.youtube_id === youtubeId
-          ? { ...v, downloaded: false, previously_downloaded: true }
+          ? {
+              ...v,
+              downloaded: false,
+              previously_downloaded: true,
+              removed_reason: 'user_deleted',
+              removed_at: new Date().toISOString(),
+              removed_detail: null,
+            }
           : v
       )
     );

@@ -106,7 +106,7 @@ describe('VideoListItem Component', () => {
     });
 
     test('renders "Missing" status for removed video', () => {
-      const removedVideo = { ...mockVideo, added: true, removed: true };
+      const removedVideo = { ...mockVideo, added: true, removed: true, removed_reason: 'not_found' as const };
       renderWithProviders(<VideoListItem {...defaultProps} video={removedVideo} />);
       expect(screen.getByText('Missing')).toBeInTheDocument();
     });
@@ -238,7 +238,7 @@ describe('VideoListItem Component', () => {
     });
 
     test('renders checkbox for missing videos', () => {
-      const missingVideo = { ...mockVideo, added: true, removed: true };
+      const missingVideo = { ...mockVideo, added: true, removed: true, removed_reason: 'not_found' as const };
       renderWithProviders(<VideoListItem {...defaultProps} video={missingVideo} />);
       expect(screen.getByRole('checkbox')).toBeInTheDocument();
     });
@@ -476,7 +476,7 @@ describe('VideoListItem Component', () => {
     });
 
     test('does not render delete checkbox for missing videos', () => {
-      const missingVideo = { ...mockVideo, added: true, removed: true };
+      const missingVideo = { ...mockVideo, added: true, removed: true, removed_reason: 'not_found' as const };
       renderWithProviders(<VideoListItem {...defaultProps} video={missingVideo} selectionMode="delete" />);
       expect(screen.queryByLabelText(/mark for deletion/i)).not.toBeInTheDocument();
     });
@@ -511,7 +511,7 @@ describe('VideoListItem Component', () => {
     });
 
     test('renders ignore button for missing videos', () => {
-      const missingVideo = { ...mockVideo, added: true, removed: true };
+      const missingVideo = { ...mockVideo, added: true, removed: true, removed_reason: 'not_found' as const };
       renderWithProviders(<VideoListItem {...defaultProps} video={missingVideo} />);
       expect(screen.getByTestId('BlockIcon')).toBeInTheDocument();
       expect(screen.getByLabelText('Click to ignore')).toBeInTheDocument();
@@ -758,7 +758,7 @@ describe('VideoListItem Component', () => {
     });
 
     test('renders CloudOffIcon for missing videos', () => {
-      const missingVideo = { ...mockVideo, added: true, removed: true };
+      const missingVideo = { ...mockVideo, added: true, removed: true, removed_reason: 'not_found' as const };
       renderWithProviders(<VideoListItem {...defaultProps} video={missingVideo} />);
       expect(screen.getByTestId('CloudOffIcon')).toBeInTheDocument();
     });

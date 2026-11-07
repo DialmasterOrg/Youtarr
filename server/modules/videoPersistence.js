@@ -5,6 +5,7 @@ const ChannelVideo = require('../models/channelvideo');
 const channelVideoReanchor = require('./channelVideoReanchor');
 const { PUBLISHED_AT_SOURCE } = require('./constants/publishedAtSource');
 const VideoMetadataProcessor = require('./download/videoMetadataProcessor');
+const { REMOVAL_COLUMNS, presentColumns } = require('./videoRemovalState');
 const logger = require('../logger');
 
 /**
@@ -44,12 +45,13 @@ class VideoPersistence {
     }
 
     if (hasVerifiedFile) {
-      data.removed = false;
+      Object.assign(data, presentColumns());
       data.last_downloaded_at = new Date();
       logger.debug({ youtubeId: video.youtubeId, fileSize: video.fileSize, audioFileSize: video.audioFileSize, isNewVideo }, 'Setting last_downloaded_at - file verified');
     } else {
       if (!isNewVideo) {
-        delete data.removed;
+        // Nothing verified: leave the row's removed state and reason alone.
+        for (const column of REMOVAL_COLUMNS) delete data[column];
       }
       logger.debug({ youtubeId: video.youtubeId, filePath: video.filePath, fileSize: video.fileSize, isNewVideo }, 'NOT setting last_downloaded_at - hasVerifiedFile is false');
     }

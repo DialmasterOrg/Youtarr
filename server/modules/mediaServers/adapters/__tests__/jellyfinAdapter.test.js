@@ -168,6 +168,17 @@ describe('JellyfinAdapter', () => {
     expect(result).toEqual({ id: 'new-pl-id' });
   });
 
+  test('replacePlaylistItems with no items deletes the playlist instead of creating an empty one', async () => {
+    axios.delete.mockResolvedValueOnce({});
+    const adapter = new JellyfinAdapter(cfg);
+
+    const result = await adapter.replacePlaylistItems('old-pl-id', [], { name: 'YT: Something' });
+
+    expect(axios.delete).toHaveBeenCalledWith(expect.stringContaining('/Items/old-pl-id'), expect.any(Object));
+    expect(axios.post).not.toHaveBeenCalled();
+    expect(result).toEqual({ id: null });
+  });
+
   test('replacePlaylistItems throws when opts.name is missing', async () => {
     const adapter = new JellyfinAdapter(cfg);
     await expect(adapter.replacePlaylistItems('old', ['i1'], {})).rejects.toThrow(/opts\.name/);

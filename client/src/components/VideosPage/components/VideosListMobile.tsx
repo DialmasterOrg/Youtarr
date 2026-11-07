@@ -1,7 +1,9 @@
 import React from 'react';
 import VideoActivityChip from '../../shared/VideoActivityChip';
 import { Box, Typography, Chip, Checkbox, Stack } from '../../ui';
-import { AlertCircle as ErrorOutlineIcon } from 'lucide-react';
+import { AlertCircle as ErrorOutlineIcon, Trash2 as DeletedIcon } from 'lucide-react';
+import { DELETED_OVERLAY_BACKGROUND, getRemovalState } from '../../../utils/videoRemoval';
+import RemovalDescription from '../../shared/RemovalDescription';
 import { formatDuration, formatYTDate } from '../../../utils';
 import { formatAddedDateTime, formatFileSize } from '../../../utils/formatters';
 import { getMediaTypeInfo } from '../../../utils/videoStatus';
@@ -14,7 +16,7 @@ import ThumbnailClickOverlay from '../../shared/ThumbnailClickOverlay';
 import AvailabilityChip from '../../shared/AvailabilityChip';
 import WatchedChip from '../../shared/WatchedChip';
 import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../../shared/chipStyles';
-import ChannelNameDisplay from './ChannelNameDisplay';
+import ChannelNameDisplay from '../../shared/ChannelNameDisplay';
 
 export interface VideosListMobileProps {
   videos: VideoData[];
@@ -169,7 +171,9 @@ function VideosListMobile({
                   style={{
                     position: 'absolute',
                     inset: 0,
-                    backgroundColor: 'rgba(244, 67, 54, 0.3)',
+                    backgroundColor: getRemovalState(video.removed, video.removed_reason) === 'missing'
+                      ? 'rgba(244, 67, 54, 0.3)'
+                      : DELETED_OVERLAY_BACKGROUND,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -177,10 +181,17 @@ function VideosListMobile({
                     pointerEvents: 'none',
                   }}
                 >
-                  <ErrorOutlineIcon
-                    className="text-destructive"
-                    style={{ fontSize: '1.5rem' }}
-                  />
+                  {getRemovalState(video.removed, video.removed_reason) === 'missing' ? (
+                    <ErrorOutlineIcon
+                      className="text-destructive"
+                      style={{ fontSize: '1.5rem' }}
+                    />
+                  ) : (
+                    <DeletedIcon
+                      className="text-muted-foreground"
+                      style={{ fontSize: '1.5rem' }}
+                    />
+                  )}
                 </Box>
               )}
               {video.duration ? (
@@ -300,9 +311,9 @@ function VideosListMobile({
                   style={compactRatingChipStyle}
                 />
                 {video.removed ? (
-                  <AvailabilityChip isAvailable={false} compact />
+                  <AvailabilityChip state={getRemovalState(video.removed, video.removed_reason)} tooltip={<RemovalDescription row={video} />} compact />
                 ) : video.fileSize ? (
-                  <AvailabilityChip isAvailable={true} compact />
+                  <AvailabilityChip state="present" compact />
                 ) : null}
                 <WatchedChip watchedBy={video.watchedBy || []} compact />
               </Stack>

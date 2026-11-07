@@ -15,6 +15,8 @@ export interface RescanLastRun {
   videosScanned: number;
   filesFoundOnDisk: number;
   errorMessage: string | null;
+  // A "Rescan anyway" run, which skipped the unmounted-drive check.
+  libraryCheckSkipped?: boolean;
 }
 
 interface RescanStatusResponse {
@@ -28,12 +30,22 @@ interface RescanStatusPayload {
   lastRun?: RescanLastRun | null;
 }
 
+export interface TriggerRescanOptions {
+  // Rescan anyway: skip the unmounted-drive check, for a folder emptied on purpose.
+  ignoreLibraryCheck?: boolean;
+}
+
+export interface TriggerRescanOutcome {
+  // False when the server refused (already running) or the request failed; `error` says why.
+  started: boolean;
+}
+
 export interface UseRescanStatusReturn {
   running: boolean;
   lastRun: RescanLastRun | null;
   loading: boolean;
   error: string | null;
-  triggerRescan: () => Promise<void>;
+  triggerRescan: (options?: TriggerRescanOptions) => Promise<TriggerRescanOutcome>;
 }
 
 export function useRescanStatus(token: string | null): UseRescanStatusReturn {
@@ -88,21 +100,24 @@ export function useRescanStatus(token: string | null): UseRescanStatusReturn {
     return () => ws.unsubscribe(callback);
   }, [ws]);
 
-  const triggerRescan = useCallback(async () => {
+  const triggerRescan = useCallback(async (options?: TriggerRescanOptions): Promise<TriggerRescanOutcome> => {
     setError(null);
     setRunning(true);
     const headers = token ? { 'x-access-token': token } : undefined;
+    const body = options?.ignoreLibraryCheck ? { ignoreLibraryCheck: true } : undefined;
     try {
-      await axios.post('/api/maintenance/rescan-files', undefined, { headers });
+      await axios.post('/api/maintenance/rescan-files', body, { headers });
+      return { started: true };
     } catch (err: unknown) {
       if (axios.isAxiosError(err) && err.response?.status === 409) {
         const data = err.response.data as { error?: string } | undefined;
         setError(data?.error ?? 'Rescan already in progress');
-        return;
+        return { started: false };
       }
       setRunning(false);
       const message = err instanceof Error ? err.message : 'Failed to start rescan';
       setError(message);
+      return { started: false };
     }
   }, [token]);
 

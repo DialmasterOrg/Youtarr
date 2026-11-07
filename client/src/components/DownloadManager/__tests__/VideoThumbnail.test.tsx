@@ -74,14 +74,28 @@ describe('VideoThumbnail', () => {
     expect(screen.queryByTestId('video-thumbnail-missing-overlay')).not.toBeInTheDocument();
   });
 
-  test('renders the missing overlay when video.removed is true', () => {
-    renderThumbnail({ video: { ...baseVideo, removed: true } });
+  test('renders the missing overlay when the file was not found', () => {
+    renderThumbnail({ video: { ...baseVideo, removed: true, removed_reason: 'not_found' } });
 
     expect(screen.getByTestId('video-thumbnail-missing-overlay')).toBeInTheDocument();
+    expect(screen.queryByTestId('video-thumbnail-deleted-overlay')).not.toBeInTheDocument();
+  });
+
+  test('renders the neutral deleted overlay when Youtarr removed the file', () => {
+    renderThumbnail({ video: { ...baseVideo, removed: true, removed_reason: 'user_deleted' } });
+
+    expect(screen.getByTestId('video-thumbnail-deleted-overlay')).toBeInTheDocument();
+    expect(screen.queryByTestId('video-thumbnail-missing-overlay')).not.toBeInTheDocument();
+  });
+
+  test('treats a video removed before the reason was recorded as deleted', () => {
+    renderThumbnail({ video: { ...baseVideo, removed: true } });
+
+    expect(screen.getByTestId('video-thumbnail-deleted-overlay')).toBeInTheDocument();
   });
 
   test('shows missing overlay on top of the "No thumbnail" fallback for a removed video', () => {
-    renderThumbnail({ hasError: true, video: { ...baseVideo, removed: true } });
+    renderThumbnail({ hasError: true, video: { ...baseVideo, removed: true, removed_reason: 'not_found' } });
 
     expect(screen.getByText('No thumbnail')).toBeInTheDocument();
     expect(screen.getByTestId('video-thumbnail-missing-overlay')).toBeInTheDocument();

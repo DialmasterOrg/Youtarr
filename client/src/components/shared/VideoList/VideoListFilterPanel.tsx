@@ -82,6 +82,8 @@ function renderFilter(filter: FilterConfig, compact: boolean): React.ReactNode {
         inactiveLabel={noun}
         onlyLabel={`Only: ${noun}`}
         excludeLabel={`Hide: ${noun}`}
+        offLabel={`Show: ${noun}`}
+        restingValue={filter.defaultValue}
       />
     );
   }

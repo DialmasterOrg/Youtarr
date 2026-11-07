@@ -34,8 +34,15 @@ describe('PlaylistVideoCard', () => {
     expect(onToggle).toHaveBeenCalledWith('dl1');
   });
 
-  test('renders no checkbox for an already-downloaded video', () => {
-    render(<PlaylistVideoCard {...baseProps} video={makeVideo({ downloaded: true })} />);
+  test('renders a checkbox for a downloaded video so it can be deleted', () => {
+    const onToggle = jest.fn();
+    render(<PlaylistVideoCard {...baseProps} onToggle={onToggle} video={makeVideo({ youtube_id: 'done', downloaded: true })} />);
+    fireEvent.click(screen.getByRole('checkbox'));
+    expect(onToggle).toHaveBeenCalledWith('done');
+  });
+
+  test('renders no checkbox while the video is downloading', () => {
+    render(<PlaylistVideoCard {...baseProps} video={makeVideo({ activity: 'downloading' })} />);
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 

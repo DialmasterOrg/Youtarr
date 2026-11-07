@@ -9,6 +9,8 @@ const { parseAdditionalTags } = require('./additionalTags');
 const tempPathManager = require('./download/tempPathManager');
 const downloadSettingsResolver = require('./download/downloadSettingsResolver');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
+const { selectSubtitleFilesToPrune } = require('./download/subtitleSidecarPruner');
+const { slimInfoJson } = require('./infoJsonSlimmer');
 const { JobVideoDownload } = require('../models');
 const videoPersistence = require('./videoPersistence');
 const { VIDEO_PERSISTED_MARKER } = require('./constants/outputMarkers');
@@ -287,6 +289,34 @@ async function copyChannelBackdropIfNeeded(channelId, channelFolderPath) {
   }
 }
 
+// Delete the subtitle sidecars that subtitleSidecarPruner marks as extra for
+// this video: auto-generated tracks superseded by an uploaded track of the
+// same language, or extra machine-translated variants next to the bare one.
+async function pruneSubtitleSidecars(videoDirectory, fileNames, youtubeId, jsonData) {
+  const config = configModule.getConfig() || {};
+  if (!config.subtitlesEnabled) return;
+
+  const subtitles = jsonData && jsonData.subtitles;
+  const uploadedCodes = subtitles && typeof subtitles === 'object' ? Object.keys(subtitles) : undefined;
+  const toPrune = selectSubtitleFilesToPrune({
+    fileNames,
+    youtubeId,
+    uploadedCodes,
+    subtitleLanguage: config.subtitleLanguage,
+    ytdlpCustomArgs: config.ytdlpCustomArgs,
+  });
+
+  for (const fileName of toPrune) {
+    const subtitlePath = path.join(videoDirectory, fileName);
+    try {
+      await fs.remove(subtitlePath);
+      logger.info({ subtitlePath }, '[Post-Process] Removed extra subtitle track for a selected language');
+    } catch (err) {
+      logger.warn({ err, subtitlePath }, '[Post-Process] Failed to remove extra subtitle track');
+    }
+  }
+}
+
 // Parse the per-video owner-channel map (YOUTARR_OWNER_CHANNEL_MAP, set for
 // playlist downloads). Maps youtube_id -> owning channel_id, from the per-video
 // attribution captured at playlist sync. An entry wins over the .info.json
@@ -361,8 +391,9 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
 // Main execution wrapped in async IIFE to handle async operations
 (async () => {
   if (fs.existsSync(jsonPath)) {
-    // Read the JSON file to get the upload_date
-    const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+    // Read the JSON file to get the upload_date. Every later write of
+    // jsonData (temp path, then jobs/info) saves the slimmed copy.
+    const jsonData = slimInfoJson(JSON.parse(fs.readFileSync(jsonPath, 'utf-8')));
 
     // Parse the upload_date (format: YYYYMMDD) into a Date object
     let uploadDate = null;
@@ -749,6 +780,17 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
             logger.info({ vttPath }, '[Post-Process] Removing original vtt subtitle');
             await fs.remove(vttPath);
           }
+        }
+
+        // yt-dlp is asked for every regional and script variant of each
+        // selected subtitle language and cannot prefer an uploaded "en-GB"
+        // over the auto-generated "en", so keep the preferred track(s) per
+        // language here.
+        // Best effort: a leftover extra subtitle must never block the move.
+        try {
+          await pruneSubtitleSidecars(videoDirectory, filesInDir, id, jsonData);
+        } catch (err) {
+          logger.warn({ err, videoDirectory }, '[Post-Process] Subtitle pruning failed; keeping every subtitle file');
         }
 
         if (outgoingFlat) {

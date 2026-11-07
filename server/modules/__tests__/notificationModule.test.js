@@ -842,6 +842,31 @@ describe('NotificationModule Integration', () => {
       );
     });
 
+    it('passes the link template from the config to the formatter', async () => {
+      mockGetConfig.mockReturnValue({
+        notificationsEnabled: true,
+        appriseUrls: [{ url: 'tgram://bot_token/chat_id', name: 'Telegram', richFormatting: true }],
+        notificationLinkTemplate: 'https://youtarr.example.com/videos?video={youtubeId}'
+      });
+      const formatSpy = jest.spyOn(telegramFormatter, 'formatDownloadMessage');
+
+      try {
+        const sendPromise = notificationModule.sendDownloadNotification(baseNotificationData);
+        setImmediate(() => {
+          mockProcess.emit('close', 0);
+        });
+        await sendPromise;
+
+        expect(formatSpy).toHaveBeenCalledWith(
+          baseNotificationData.finalSummary,
+          baseNotificationData.videoData,
+          { linkTemplate: 'https://youtarr.example.com/videos?video={youtubeId}' }
+        );
+      } finally {
+        formatSpy.mockRestore();
+      }
+    });
+
     it('should skip notification when not configured', async () => {
       mockGetConfig.mockReturnValue({
         notificationsEnabled: false,

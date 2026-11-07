@@ -1,8 +1,9 @@
 import React from 'react';
-import { CheckCircle as CheckCircleIcon, CloudOff as CloudOffIcon, Lock as LockIcon, NewReleases as NewReleasesIcon, Schedule as ScheduleIcon, VideoLibrary as VideoLibraryIcon, Block as BlockIcon } from '../lib/icons';
+import { CheckCircle as CheckCircleIcon, CloudOff as CloudOffIcon, Lock as LockIcon, NewReleases as NewReleasesIcon, Schedule as ScheduleIcon, VideoLibrary as VideoLibraryIcon, Block as BlockIcon, Trash2 as Trash2Icon } from '../lib/icons';
 import { ChannelVideo } from '../types/ChannelVideo';
+import { getRemovalState } from './videoRemoval';
 
-export type VideoStatus = 'never_downloaded' | 'downloaded' | 'missing' | 'members_only' | 'ignored' | 'queued' | 'downloading';
+export type VideoStatus = 'never_downloaded' | 'downloaded' | 'missing' | 'deleted' | 'members_only' | 'ignored' | 'queued' | 'downloading';
 
 export const getVideoStatus = (video: ChannelVideo): VideoStatus => {
   if (video.activity) return video.activity;
@@ -15,11 +16,14 @@ export const getVideoStatus = (video: ChannelVideo): VideoStatus => {
   if (!video.added) {
     return 'never_downloaded';
   }
-  if (video.removed) {
-    return 'missing';
-  }
-  return 'downloaded';
+  const removalState = getRemovalState(video.removed, video.removed_reason);
+  return removalState === 'present' ? 'downloaded' : removalState;
 };
+
+// Previously downloaded, but the file is gone: deleted by Youtarr (or marked
+// as deleted), or missing from disk.
+export const isRemovedStatus = (status: VideoStatus): status is 'missing' | 'deleted' =>
+  status === 'missing' || status === 'deleted';
 
 export const getStatusColor = (status: VideoStatus) => {
   switch (status) {
@@ -32,8 +36,8 @@ export const getStatusColor = (status: VideoStatus) => {
       return 'error';
     case 'never_downloaded':
       return 'warning';
+    case 'deleted':
     case 'members_only':
-      return 'default';
     case 'ignored':
       return 'default';
     default:
@@ -51,6 +55,8 @@ export const getStatusIcon = (status: VideoStatus) => {
       return <CheckCircleIcon size={16} data-testid="CheckCircleIcon" />;
     case 'missing':
       return <CloudOffIcon size={16} data-testid="CloudOffIcon" />;
+    case 'deleted':
+      return <Trash2Icon size={16} data-testid="Trash2Icon" />;
     case 'members_only':
       return <LockIcon size={16} data-testid="LockIcon" />;
     case 'ignored':
@@ -70,6 +76,8 @@ export const getStatusLabel = (status: VideoStatus) => {
       return 'Downloaded';
     case 'missing':
       return 'Missing';
+    case 'deleted':
+      return 'Deleted';
     case 'members_only':
       return 'Members Only';
     case 'ignored':
@@ -109,6 +117,8 @@ export const getStatusChipStyle = (status: VideoStatus): React.CSSProperties => 
         backgroundColor: 'transparent',
         color: 'var(--warning)',
       };
+    // Deleted is a neutral state, not a warning: Youtarr removed the file on purpose.
+    case 'deleted':
     case 'ignored':
       return {
         backgroundColor: 'transparent',

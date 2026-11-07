@@ -22,7 +22,10 @@ describe('video activity endpoints', () => {
       isPausedError: jest.fn((err) => Boolean(err && err.code === 'DOWNLOADS_PAUSED')),
       refresh: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
     };
-    app.use(require('../videos')({ verifyToken, videosModule: {}, downloadModule, videoLocalStatus: { applyLocalVideoStatus }, storageGuard }));
+    app.use(require('../videos')({
+      verifyToken, videosModule: {}, downloadModule, videoLocalStatus: { applyLocalVideoStatus }, storageGuard,
+      youtubeUrlParser: require('../../modules/youtubeUrlParser'),
+    }));
     app.use(require('../jobs')({ verifyToken, jobModule: {}, downloadModule, videoActivity: activity, storageGuard }));
   });
 

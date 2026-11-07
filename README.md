@@ -1,7 +1,7 @@
 # Youtarr
 
-![Backend Coverage](https://img.shields.io/badge/Backend_Coverage-91%25-brightgreen)
-![Frontend Coverage](https://img.shields.io/badge/Frontend_Coverage-89%25-brightgreen)
+![Backend Coverage](https://img.shields.io/badge/Backend_Coverage-90%25-brightgreen)
+![Frontend Coverage](https://img.shields.io/badge/Frontend_Coverage-90%25-brightgreen)
 ![CI Status](https://github.com/DialmasterOrg/Youtarr/workflows/CI%20-%20Lint%20and%20Test/badge.svg)
 
 Youtarr is a self-hosted YouTube downloader that automatically downloads videos from your favorite channels and playlists. It provides metadata for multiple media servers, mirrors your subscribed YouTube playlists into Plex, Jellyfin, and Emby as native playlists, pulls watch status back from those servers so you can filter your library by what's been watched, and offers optional Plex integration for automatic library refreshes. Learn more at [youtarr.com](https://youtarr.com).
@@ -27,6 +27,7 @@ https://github.com/user-attachments/assets/a80548fc-bcf9-4ad0-889c-dbd5aac250ee
 ## Key Features
 
 - **Smart Downloads**: Pre-validate manually pasted URLs with metadata preview before downloading
+- **Send to Youtarr Bookmarklet**: Queue the YouTube video you're watching with one click from your browser's bookmarks bar, or from your phone with Apple Shortcuts or Tasker. Set it up in Settings -> API Keys & Bookmarklet ([guide](docs/API_INTEGRATION.md#bookmarklet-setup))
 - **Channel Subscriptions**: Subscribe to channels and auto-download new videos, shorts, and streams with per-tab controls
 - **Playlist Subscriptions**: Subscribe to YouTube playlists and auto-download their videos into the right channel folders; Youtarr mirrors each playlist into Plex, Jellyfin, and Emby as a native playlist and writes a universal `.m3u` file for any other player
 - **Browse Channels**: View and search all videos from subscribed channels with advanced filtering, tabbed views for Videos/Shorts/Streams, and contextual publish date accuracy tips

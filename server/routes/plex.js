@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const logger = require('../logger');
-const { isAuthConfigured } = require('../modules/authState');
 
 /**
  * Creates Plex routes
@@ -207,7 +206,6 @@ module.exports = function createPlexRoutes({ verifyToken, plexModule, configModu
    *     summary: Get Plex auth URL
    *     description: Get the Plex OAuth authentication URL for linking a Plex account.
    *     tags: [Plex]
-   *     security: []
    *     responses:
    *       200:
    *         description: Plex auth URL
@@ -220,22 +218,16 @@ module.exports = function createPlexRoutes({ verifyToken, plexModule, configModu
    *                   type: string
    *                 pinId:
    *                   type: string
+   *       401:
+   *         description: Invalid or expired session token
+   *       403:
+   *         description: No session token provided
    *       500:
    *         description: Failed to get auth URL
    *       503:
    *         description: Authentication not configured
    */
-  router.get('/plex/auth-url', async (req, res) => {
-    const config = configModule.getConfig();
-
-    if (process.env.AUTH_ENABLED !== 'false' && !isAuthConfigured(config)) {
-      return res.status(503).json({
-        error: 'Authentication not configured',
-        requiresSetup: true,
-        message: 'Please complete initial setup first'
-      });
-    }
-
+  router.get('/plex/auth-url', verifyToken, async (req, res) => {
     try {
       const result = await plexModule.getAuthUrl();
       res.json(result);
@@ -252,7 +244,6 @@ module.exports = function createPlexRoutes({ verifyToken, plexModule, configModu
    *     summary: Check Plex PIN status
    *     description: Check if a Plex OAuth PIN has been authorized.
    *     tags: [Plex]
-   *     security: []
    *     parameters:
    *       - in: path
    *         name: pinId
@@ -272,22 +263,16 @@ module.exports = function createPlexRoutes({ verifyToken, plexModule, configModu
    *                   type: boolean
    *                 authToken:
    *                   type: string
+   *       401:
+   *         description: Invalid or expired session token
+   *       403:
+   *         description: No session token provided
    *       500:
    *         description: Failed to check PIN
    *       503:
    *         description: Authentication not configured
    */
-  router.get('/plex/check-pin/:pinId', async (req, res) => {
-    const config = configModule.getConfig();
-
-    if (process.env.AUTH_ENABLED !== 'false' && !isAuthConfigured(config)) {
-      return res.status(503).json({
-        error: 'Authentication not configured',
-        requiresSetup: true,
-        message: 'Please complete initial setup first'
-      });
-    }
-
+  router.get('/plex/check-pin/:pinId', verifyToken, async (req, res) => {
     try {
       const { pinId } = req.params;
       const result = await plexModule.checkPin(pinId);

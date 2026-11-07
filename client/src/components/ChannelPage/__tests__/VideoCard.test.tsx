@@ -125,7 +125,7 @@ describe('VideoCard Component', () => {
     });
 
     test('renders "Missing" status for removed video', () => {
-      const removedVideo = { ...mockVideo, added: true, removed: true };
+      const removedVideo = { ...mockVideo, added: true, removed: true, removed_reason: 'not_found' as const };
       renderWithProviders(<VideoCard {...defaultProps} video={removedVideo} />);
       expect(screen.getByText('Missing')).toBeInTheDocument();
     });
@@ -242,7 +242,7 @@ describe('VideoCard Component', () => {
     });
 
     test('renders checkbox for missing videos', () => {
-      const missingVideo = { ...mockVideo, added: true, removed: true };
+      const missingVideo = { ...mockVideo, added: true, removed: true, removed_reason: 'not_found' as const };
       renderWithProviders(<VideoCard {...defaultProps} video={missingVideo} />);
       expect(screen.getByRole('checkbox')).toBeInTheDocument();
     });
@@ -442,7 +442,7 @@ describe('VideoCard Component', () => {
     });
 
     test('does not render delete checkbox for missing videos', () => {
-      const missingVideo = { ...mockVideo, added: true, removed: true };
+      const missingVideo = { ...mockVideo, added: true, removed: true, removed_reason: 'not_found' as const };
       renderWithProviders(<VideoCard {...defaultProps} video={missingVideo} selectionMode="delete" />);
       expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     });
@@ -475,7 +475,7 @@ describe('VideoCard Component', () => {
     });
 
     test('renders ignore button for missing videos', () => {
-      const missingVideo = { ...mockVideo, added: true, removed: true };
+      const missingVideo = { ...mockVideo, added: true, removed: true, removed_reason: 'not_found' as const };
       renderWithProviders(<VideoCard {...defaultProps} video={missingVideo} />);
       expect(screen.getByTestId('BlockIcon')).toBeInTheDocument();
     });
@@ -849,7 +849,7 @@ describe('VideoCard Component', () => {
     });
 
     test('renders CloudOffIcon for missing videos', () => {
-      const missingVideo = { ...mockVideo, added: true, removed: true };
+      const missingVideo = { ...mockVideo, added: true, removed: true, removed_reason: 'not_found' as const };
       renderWithProviders(<VideoCard {...defaultProps} video={missingVideo} />);
       expect(screen.getByTestId('CloudOffIcon')).toBeInTheDocument();
     });

@@ -345,6 +345,8 @@ describe('channelThumbnails', () => {
       mockResponse = {
         statusCode: 200,
         pipe: jest.fn(),
+        on: jest.fn(),
+        resume: jest.fn(),
         headers: {},
       };
     });
@@ -406,6 +408,72 @@ describe('channelThumbnails', () => {
       await expect(promise).rejects.toThrow('ECONNREFUSED');
       expect(mockWriteStream.close).toHaveBeenCalled();
       expect(fsExtra.unlinkSync).toHaveBeenCalled();
+    });
+
+    test('rejects and removes the partial file when the connection drops mid-download', async () => {
+      fsExtra.unlinkSync = jest.fn();
+      realHttps.get = jest.fn((url, opts, cb) => {
+        cb(mockResponse);
+        return mockRequest;
+      });
+
+      const promise = channelThumbnails.downloadImageToFile('https://example.com/thumb.jpg', 'channelthumb-UC123.jpg');
+      const responseErrorHandler = mockResponse.on.mock.calls.find(c => c[0] === 'error')[1];
+      responseErrorHandler(Object.assign(new Error('aborted'), { code: 'ECONNRESET' }));
+
+      await expect(promise).rejects.toThrow('aborted');
+      expect(fsExtra.unlinkSync).toHaveBeenCalled();
+    });
+
+    test('rejects when the image file cannot be written', async () => {
+      fsExtra.unlinkSync = jest.fn();
+      realHttps.get = jest.fn(() => mockRequest);
+
+      const promise = channelThumbnails.downloadImageToFile('https://example.com/thumb.jpg', 'channelthumb-UC123.jpg');
+      const fileErrorHandler = mockWriteStream.on.mock.calls.find(c => c[0] === 'error')[1];
+      fileErrorHandler(Object.assign(new Error('permission denied'), { code: 'EACCES' }));
+
+      await expect(promise).rejects.toThrow('permission denied');
+    });
+
+    test('releases the connection when the image file cannot be written', async () => {
+      fsExtra.unlinkSync = jest.fn();
+      realHttps.get = jest.fn(() => mockRequest);
+
+      const promise = channelThumbnails.downloadImageToFile('https://example.com/thumb.jpg', 'channelthumb-UC123.jpg');
+      const fileErrorHandler = mockWriteStream.on.mock.calls.find(c => c[0] === 'error')[1];
+      fileErrorHandler(Object.assign(new Error('no space left on device'), { code: 'ENOSPC' }));
+
+      await expect(promise).rejects.toThrow('no space left on device');
+      expect(mockRequest.destroy).toHaveBeenCalled();
+    });
+
+    test('still rejects with the real error when the partial file is already gone', async () => {
+      fsExtra.unlinkSync = jest.fn(() => {
+        throw Object.assign(new Error('no such file'), { code: 'ENOENT' });
+      });
+      realHttps.get = jest.fn(() => mockRequest);
+
+      const promise = channelThumbnails.downloadImageToFile('https://example.com/thumb.jpg', 'channelthumb-UC123.jpg');
+      const timeoutHandler = mockRequest.on.mock.calls.find(c => c[0] === 'timeout')[1];
+
+      expect(() => timeoutHandler()).not.toThrow();
+      await expect(promise).rejects.toThrow('Thumbnail download timed out');
+    });
+
+    test('leaves the file alone when a later error follows a finished download', async () => {
+      fsExtra.unlinkSync = jest.fn();
+      realHttps.get = jest.fn((url, opts, cb) => {
+        cb(mockResponse);
+        return mockRequest;
+      });
+
+      const promise = channelThumbnails.downloadImageToFile('https://example.com/thumb.jpg', 'channelthumb-UC123.jpg');
+      mockWriteStream.on.mock.calls.find(c => c[0] === 'finish')[1]();
+      await promise;
+      mockRequest.on.mock.calls.find(c => c[0] === 'error')[1](new Error('socket hang up'));
+
+      expect(fsExtra.unlinkSync).not.toHaveBeenCalled();
     });
   });
 });

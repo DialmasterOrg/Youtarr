@@ -47,47 +47,72 @@ describe('POST /api/ytdlp/validate-args', () => {
     expect(res.body.error).toMatch(/2000/);
   });
 
-  test('returns 400 on parse error', async () => {
+  test('returns 400 on an unterminated quote', async () => {
     const app = makeApp();
     const res = await supertest(app)
       .post('/api/ytdlp/validate-args')
       .send({ args: '--user-agent \'unterminated' });
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/parse error/i);
+    expect(res.body.error).toMatch(/quote/i);
   });
 
-  test('returns 400 with the offending flag on denylisted input', async () => {
+  test('returns 400 with the offending flag on blocked input, and never runs the dry-run', async () => {
     const app = makeApp();
     const res = await supertest(app)
       .post('/api/ytdlp/validate-args')
       .send({ args: '--exec rm' });
     expect(res.status).toBe(400);
     expect(res.body.error).toContain('--exec');
+    expect(res.body.customArgsCheck.blocked[0].option).toBe('--exec');
+    expect(ytdlpValidator.dryRun).not.toHaveBeenCalled();
   });
 
-  test('returns 200 { ok: true } when dryRun succeeds', async () => {
+  test('returns both parse errors and blocked flags when the input has both', async () => {
+    const app = makeApp();
+    const res = await supertest(app)
+      .post('/api/ytdlp/validate-args')
+      .send({ args: 'stray --exec rm' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/"stray"/);
+    expect(res.body.customArgsCheck.errors[0]).toMatch(/"stray"/);
+    expect(res.body.customArgsCheck.blocked[0].option).toBe('--exec');
+  });
+
+  test('returns 200 { ok: true } with canonical args handed to the dry-run', async () => {
     ytdlpValidator.dryRun.mockResolvedValueOnce({ ok: true, stderr: '' });
     const app = makeApp();
     const res = await supertest(app)
       .post('/api/ytdlp/validate-args')
-      .send({ args: '--no-mtime' });
+      .send({ args: '-N 4' });
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true, message: 'Arguments parsed successfully' });
-    expect(ytdlpValidator.dryRun).toHaveBeenCalledWith(['--no-mtime']);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.message).toMatch(/parsed/i);
+    expect(ytdlpValidator.dryRun).toHaveBeenCalledWith(['--concurrent-fragments', '4']);
   });
 
-  test('returns 200 { ok: false, stderr } when yt-dlp argparse fails', async () => {
+  test('returns warnings for an accepted-but-risky flag', async () => {
+    ytdlpValidator.dryRun.mockResolvedValueOnce({ ok: true, stderr: '' });
+    const app = makeApp();
+    const res = await supertest(app)
+      .post('/api/ytdlp/validate-args')
+      .send({ args: '--extract-audio' });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.warnings[0].option).toBe('--extract-audio');
+  });
+
+  test('returns 200 { ok: false, stderr } when yt-dlp argparse rejects an allowed flag value', async () => {
     ytdlpValidator.dryRun.mockResolvedValueOnce({
       ok: false,
-      stderr: 'yt-dlp: error: no such option: --bogus',
+      stderr: 'yt-dlp: error: invalid int value',
     });
     const app = makeApp();
     const res = await supertest(app)
       .post('/api/ytdlp/validate-args')
-      .send({ args: '--bogus' });
+      .send({ args: '--retries abc' });
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(false);
-    expect(res.body.stderr).toContain('--bogus');
+    expect(res.body.stderr).toContain('invalid int value');
   });
 });
 

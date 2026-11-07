@@ -275,6 +275,28 @@ describe('VideoMetadataModule', () => {
       expect(mockFs.writeFile).toHaveBeenCalled();
     });
 
+    test('leaves automatic_captions out of the cached file', async () => {
+      mockFs.access.mockRejectedValue(new Error('ENOENT'));
+      mockYtDlpRunner.fetchMetadata.mockResolvedValue({
+        description: 'Fetched description',
+        upload_date: '20240101',
+        subtitles: { en: [{ ext: 'vtt' }] },
+        automatic_captions: { 'en-de': [{ ext: 'vtt' }] },
+      });
+      mockFs.mkdir.mockResolvedValue(undefined);
+      mockFs.writeFile.mockResolvedValue(undefined);
+      mockVideo.findOne.mockResolvedValue(null);
+
+      await videoMetadataModule.getVideoMetadata('xyz789');
+
+      const [, written] = mockFs.writeFile.mock.calls[0];
+      expect(JSON.parse(written)).toEqual({
+        description: 'Fetched description',
+        upload_date: '20240101',
+        subtitles: { en: [{ ext: 'vtt' }] },
+      });
+    });
+
     test('returns all-null metadata when yt-dlp also fails', async () => {
       mockFs.access.mockRejectedValue(new Error('ENOENT'));
       mockYtDlpRunner.fetchMetadata.mockRejectedValue(new Error('yt-dlp failed'));
@@ -492,6 +514,54 @@ describe('VideoMetadataModule', () => {
         expect.objectContaining({ youtubeId: 'cachefail1' }),
         'Failed to cache .info.json'
       );
+    });
+  });
+
+  describe('getCachedVideoMetadata', () => {
+    test('returns curated metadata from a cached .info.json', async () => {
+      mockFs.readFile.mockResolvedValue(JSON.stringify({
+        description: 'Cached description',
+        view_count: 7,
+        upload_date: '20240315',
+        availability: 'public',
+      }));
+      mockVideo.findOne.mockResolvedValue(null);
+
+      const result = await videoMetadataModule.getCachedVideoMetadata('abc123');
+
+      expect(result).toEqual(expect.objectContaining({
+        description: 'Cached description', viewCount: 7, uploadDate: '20240315',
+      }));
+      expect(mockFs.readFile).toHaveBeenCalledWith('/test/jobs/info/abc123.info.json', 'utf8');
+    });
+
+    test('returns null without running yt-dlp when nothing is cached', async () => {
+      mockFs.readFile.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }));
+
+      await expect(videoMetadataModule.getCachedVideoMetadata('abc123')).resolves.toBeNull();
+      expect(mockYtDlpRunner.fetchMetadata).not.toHaveBeenCalled();
+      expect(mockYoutubeApi.client.getVideoMetadata).not.toHaveBeenCalled();
+    });
+
+    test('returns null for an unparseable cache file', async () => {
+      mockFs.readFile.mockResolvedValue('not json');
+
+      await expect(videoMetadataModule.getCachedVideoMetadata('abc123')).resolves.toBeNull();
+    });
+
+    test('never writes backfills to the database', async () => {
+      const update = jest.fn();
+      mockFs.readFile.mockResolvedValue(JSON.stringify({
+        upload_date: '20240316', availability: 'subscriber_only',
+      }));
+      mockVideo.findOne.mockResolvedValue({ youtubeId: 'abc123', originalDate: null, update });
+
+      await videoMetadataModule.getCachedVideoMetadata('abc123');
+
+      expect(update).not.toHaveBeenCalled();
+      expect(mockChannelVideo.update).not.toHaveBeenCalled();
+      expect(mockChannelVideoReanchor.applyExactDateForVideo).not.toHaveBeenCalled();
+      expect(mockFs.writeFile).not.toHaveBeenCalled();
     });
   });
 

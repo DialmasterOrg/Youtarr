@@ -2,7 +2,12 @@
 jest.mock('../../modules/filenamePreview', () => ({
   previewTemplate: jest.fn(),
   validateTemplate: jest.fn().mockResolvedValue({ ok: true }),
+  isTimeoutError: jest.fn(() => false),
 }));
+
+const TIMEOUT_MESSAGE =
+  'The filename template could not be checked: yt-dlp took longer than 20 seconds. ' +
+  'The server may be busy; try again in a moment.';
 
 const express = require('express');
 const supertest = require('supertest');
@@ -76,6 +81,8 @@ beforeEach(() => {
   filenamePreview.validateTemplate.mockReset();
   filenamePreview.validateTemplate.mockResolvedValue({ ok: true });
   filenamePreview.previewTemplate.mockReset();
+  filenamePreview.isTimeoutError.mockReset();
+  filenamePreview.isTimeoutError.mockReturnValue(false);
 });
 
 describe('externally managed cookie routes', () => {
@@ -221,6 +228,16 @@ describe('POST /api/cookies/test', () => {
   });
 });
 
+describe('GET /getconfig', () => {
+  test('leaves out the download feed token, which only its own session route returns', async () => {
+    const { app, configModule } = makeApp();
+    configModule._config.downloadsFeedToken = 'saved-token';
+    const res = await supertest(app).get('/getconfig');
+    expect(res.status).toBe(200);
+    expect(res.body).not.toHaveProperty('downloadsFeedToken');
+  });
+});
+
 describe('POST /updateconfig', () => {
   test('returns 200 when ytdlpCustomArgs is empty', async () => {
     const { app } = makeApp();
@@ -264,26 +281,98 @@ describe('POST /updateconfig', () => {
     );
   });
 
-  test('returns 400 with the offending flag when ytdlpCustomArgs contains a denylisted flag', async () => {
+  test('returns 400 with the offending flag when a changed ytdlpCustomArgs contains a blocked flag', async () => {
     const { app, configModule } = makeApp();
     const res = await supertest(app)
       .post('/updateconfig')
       .send({ ytdlpCustomArgs: '--exec "rm -rf /"' });
     expect(res.status).toBe(400);
     expect(res.body.error).toContain('--exec');
+    expect(res.body.customArgsCheck.blocked[0].option).toBe('--exec');
     expect(configModule.updateConfig).not.toHaveBeenCalled();
   });
 
-  test('returns 400 on unterminated-quote parse error', async () => {
+  test('never persists a client-supplied customArgsCheck field', async () => {
+    const { app, configModule } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ ytdlpCustomArgs: '--no-mtime', customArgsCheck: { blocked: [{ option: 'injected' }] } });
+    expect(res.status).toBe(200);
+    const saved = configModule.updateConfig.mock.calls[0][0];
+    expect(saved).not.toHaveProperty('customArgsCheck');
+  });
+
+  test('does not re-check ytdlpCustomArgs that are unchanged from the saved value', async () => {
+    const { app, configModule } = makeApp();
+    // Simulate a saved value that would now be rejected if re-checked.
+    configModule._config.ytdlpCustomArgs = '--exec "rm -rf /"';
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ ytdlpCustomArgs: '--exec "rm -rf /"', channelAutoDownload: true });
+    expect(res.status).toBe(200);
+    expect(configModule.updateConfig).toHaveBeenCalled();
+  });
+
+  test('returns the check of unchanged saved ytdlpCustomArgs so the client can refresh its notices', async () => {
+    const { app, configModule } = makeApp();
+    configModule._config.ytdlpCustomArgs = '--exec "rm -rf /"';
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ ytdlpCustomArgs: '--exec "rm -rf /"' });
+    expect(res.body.customArgsCheck.blocked[0].option).toBe('--exec');
+  });
+
+  test('returns a null customArgsCheck after saving blank ytdlpCustomArgs', async () => {
+    const { app, configModule } = makeApp();
+    configModule._config.ytdlpCustomArgs = '--exec "rm -rf /"';
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ ytdlpCustomArgs: '' });
+    expect(res.status).toBe(200);
+    expect(res.body.customArgsCheck).toBeNull();
+  });
+
+  test('names both a stray token and a blocked flag in the 400 error', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ ytdlpCustomArgs: 'stray --exec rm' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/"stray"/);
+    expect(res.body.error).toMatch(/--exec/);
+  });
+
+  test('saves changed ytdlpCustomArgs that only warn, and returns the warnings', async () => {
+    const { app, configModule } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ ytdlpCustomArgs: '--extract-audio' });
+    expect(res.status).toBe(200);
+    expect(configModule.updateConfig).toHaveBeenCalled();
+    expect(res.body.customArgsCheck.warnings[0].option).toBe('--extract-audio');
+  });
+
+  test('resolves an abbreviated flag before saving', async () => {
+    const { app, configModule } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ ytdlpCustomArgs: '-N 4' });
+    expect(res.status).toBe(200);
+    expect(configModule.updateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ ytdlpCustomArgs: '-N 4' })
+    );
+  });
+
+  test('returns 400 on an unterminated quote in a changed value', async () => {
     const { app } = makeApp();
     const res = await supertest(app)
       .post('/updateconfig')
       .send({ ytdlpCustomArgs: '--user-agent \'unterminated' });
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/parse error/i);
+    expect(res.body.error).toMatch(/quote/i);
   });
 
-  test('returns 400 when ytdlpCustomArgs exceeds 2000 characters', async () => {
+  test('returns 400 when a changed ytdlpCustomArgs exceeds 2000 characters', async () => {
     const { app } = makeApp();
     const longArgs = '--no-mtime '.repeat(200); // ~2200 chars
     const res = await supertest(app)
@@ -354,6 +443,131 @@ describe('POST /updateconfig', () => {
       expect(res.status).toBe(400);
       expect(res.body).toEqual({ error: 'Log level must be Default, Warn, Info or Debug' });
       expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('notificationLinkTemplate validation', () => {
+    test.each([
+      '',
+      '   ',
+      'https://youtarr.example.com/videos?video={youtubeId}',
+      'http://192.168.1.10:3087/videos?video={youtubeId}',
+    ])('accepts %p', async (value) => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({ notificationLinkTemplate: value });
+      expect(res.status).toBe(200);
+      expect(configModule.updateConfig).toHaveBeenCalled();
+    });
+
+    test('trims the saved template', async () => {
+      const { app, configModule } = makeApp();
+      await supertest(app)
+        .post('/updateconfig')
+        .send({ notificationLinkTemplate: '  https://youtarr.example.com/?video={youtubeId}  ' });
+      expect(configModule.updateConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ notificationLinkTemplate: 'https://youtarr.example.com/?video={youtubeId}' })
+      );
+    });
+
+    test.each([
+      ['not a URL', 'youtarr.example.com/{youtubeId}'],
+      ['not http or https', 'javascript:alert(1)//{youtubeId}'],
+      ['an unknown variable', 'https://youtarr.example.com/{id}'],
+      ['too long', `https://youtarr.example.com/${'a'.repeat(500)}`],
+      ['not text', 42],
+    ])('rejects a template that is %s without saving', async (_label, value) => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({ notificationLinkTemplate: value });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/^Link template/);
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+
+    test('does not re-check a template that is unchanged from the saved value', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.notificationLinkTemplate = 'edited by hand';
+      const res = await supertest(app)
+        .post('/updateconfig')
+        .send({ notificationLinkTemplate: 'edited by hand' });
+      expect(res.status).toBe(200);
+      expect(configModule.updateConfig).toHaveBeenCalled();
+    });
+  });
+
+  describe('download feed settings', () => {
+    test('keeps the saved token when the client sends a different one', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.downloadsFeedToken = 'saved-token';
+      await supertest(app).post('/updateconfig').send({ downloadsFeedToken: 'stale-token' });
+      expect(configModule.updateConfig.mock.calls[0][0].downloadsFeedToken).toBe('saved-token');
+    });
+
+    test('keeps the saved token when the client sends none, as the Settings page does', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.downloadsFeedToken = 'saved-token';
+      await supertest(app).post('/updateconfig').send({ downloadsFeedEnabled: true });
+      expect(configModule.updateConfig.mock.calls[0][0].downloadsFeedToken).toBe('saved-token');
+    });
+
+    test('accepts valid settings', async () => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({
+        downloadsFeedItemLimit: 100,
+        downloadsFeedMediaTypes: ['video', 'short'],
+      });
+      expect(res.status).toBe(200);
+      expect(configModule.updateConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ downloadsFeedItemLimit: 100, downloadsFeedMediaTypes: ['video', 'short'] })
+      );
+    });
+
+    test.each([9, 201, 1.5, '50'])('rejects the item limit %p without saving', async (value) => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({ downloadsFeedItemLimit: value });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/whole number from 10 to 200/);
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+
+    test.each([
+      ['an empty list', []],
+      ['an unknown type', ['podcast']],
+      ['text', 'video'],
+    ])('rejects media types that are %s without saving', async (_label, value) => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({ downloadsFeedMediaTypes: value });
+      expect(res.status).toBe(400);
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+
+    test('rejects an invalid link template without saving', async () => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app)
+        .post('/updateconfig')
+        .send({ downloadsFeedLinkTemplate: 'javascript:alert(1)//{youtubeId}' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/^Link template/);
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+
+    test('trims the saved link template', async () => {
+      const { app, configModule } = makeApp();
+      await supertest(app)
+        .post('/updateconfig')
+        .send({ downloadsFeedLinkTemplate: '  https://plex.example.com/{youtubeId}  ' });
+      expect(configModule.updateConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ downloadsFeedLinkTemplate: 'https://plex.example.com/{youtubeId}' })
+      );
+    });
+
+    test('does not re-check a link template that is unchanged from the saved value', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.downloadsFeedLinkTemplate = 'edited by hand';
+      const res = await supertest(app)
+        .post('/updateconfig')
+        .send({ downloadsFeedLinkTemplate: 'edited by hand' });
+      expect(res.status).toBe(200);
+      expect(configModule.updateConfig).toHaveBeenCalled();
     });
   });
 
@@ -536,10 +750,11 @@ describe('POST /updateconfig - videoFilenamePrefix validation', () => {
     expect(configModule.updateConfig).not.toHaveBeenCalled();
   });
 
-  test('blocks save with 400 on any filenamePreview failure (yt-dlp ships with the app)', async () => {
+  test('blocks save with 400 when yt-dlp times out checking the template', async () => {
     filenamePreview.validateTemplate.mockResolvedValueOnce({
       ok: false,
-      error: 'yt-dlp process timed out after 5000ms',
+      error: TIMEOUT_MESSAGE,
+      timedOut: true,
     });
     const { app, configModule } = makeApp();
     const res = await supertest(app)
@@ -547,8 +762,21 @@ describe('POST /updateconfig - videoFilenamePrefix validation', () => {
       .send({ videoFilenamePrefix: '%(title).76B' });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/timed out/);
     expect(configModule.updateConfig).not.toHaveBeenCalled();
+  });
+
+  test('reports a save timeout without calling the template rejected', async () => {
+    filenamePreview.validateTemplate.mockResolvedValueOnce({
+      ok: false,
+      error: TIMEOUT_MESSAGE,
+      timedOut: true,
+    });
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ videoFilenamePrefix: '%(title).76B' });
+
+    expect(res.body.error).toBe(TIMEOUT_MESSAGE);
   });
 
   test('forwards unexpected save errors to Express error handling', async () => {
@@ -651,16 +879,24 @@ describe('POST /api/config/filename-preview', () => {
     expect(res.body.error).toMatch(/incomplete format key/);
   });
 
-  test('returns 400 with yt-dlp message on timeout (yt-dlp ships with the app, so any failure blocks)', async () => {
-    filenamePreview.previewTemplate.mockRejectedValueOnce(new Error(
-      'yt-dlp process timed out after 5000ms'
-    ));
+  test('returns 400 when yt-dlp times out rendering the preview', async () => {
+    filenamePreview.previewTemplate.mockRejectedValueOnce(new Error(TIMEOUT_MESSAGE));
+    filenamePreview.isTimeoutError.mockReturnValueOnce(true);
     const { app } = makeApp();
     const res = await supertest(app)
       .post('/api/config/filename-preview')
       .send({ prefix: '%(title).76B' });
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/timed out/);
+  });
+
+  test('reports a preview timeout without calling the template rejected', async () => {
+    filenamePreview.previewTemplate.mockRejectedValueOnce(new Error(TIMEOUT_MESSAGE));
+    filenamePreview.isTimeoutError.mockReturnValueOnce(true);
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/api/config/filename-preview')
+      .send({ prefix: '%(title).76B' });
+    expect(res.body.error).toBe(TIMEOUT_MESSAGE);
   });
 });
 
@@ -737,4 +973,33 @@ describe('schedule configuration', () => {
     const res = await supertest(app).get('/getconfig');
     expect(res.body.logging).toEqual(LOGGING_STATUS);
   });
+
+  test('reports a customArgsCheck for saved custom args that are now blocked', async () => {
+    const { app, configModule } = makeApp();
+    configModule._config.ytdlpCustomArgs = '--no-mtime --exec rm';
+    const res = await supertest(app).get('/getconfig');
+    expect(res.body.customArgsCheck.blocked[0].option).toBe('--exec');
+  });
+
+  test('customArgsCheck is null when no custom args are saved', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app).get('/getconfig');
+    expect(res.body.customArgsCheck).toBeNull();
+  });
 });
+
+test.each([[undefined, false], ['false', false], ['invalid', false], ['true', true]])(
+  'reports effective external API availability for %s', async (value, enabled) => {
+    const original = process.env.EXTERNAL_API_ENABLED;
+    try {
+      if (value === undefined) delete process.env.EXTERNAL_API_ENABLED;
+      else process.env.EXTERNAL_API_ENABLED = value;
+      const { app } = makeApp();
+      const response = await supertest(app).get('/getconfig').expect(200);
+      expect(response.body.isPlatformManaged.externalApiEnabled).toBe(enabled);
+    } finally {
+      if (original === undefined) delete process.env.EXTERNAL_API_ENABLED;
+      else process.env.EXTERNAL_API_ENABLED = original;
+    }
+  }
+);

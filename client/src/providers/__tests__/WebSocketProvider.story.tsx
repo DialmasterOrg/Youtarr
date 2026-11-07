@@ -13,7 +13,7 @@ const meta: Meta<typeof WebSocketProvider> = {
   title: 'Providers/WebSocketProvider',
   component: WebSocketProvider,
   render: () => (
-    <WebSocketProvider>
+    <WebSocketProvider token="storybook-token">
       <ContextConsumer />
     </WebSocketProvider>
   ),

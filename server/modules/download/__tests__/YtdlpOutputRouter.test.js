@@ -37,6 +37,8 @@ const makeErrorTracker = () => ({
   currentVideoId: null,
   trackVideoStart: jest.fn(),
   trackVideoFromDestination: jest.fn(),
+  trackSubtitleWrite: jest.fn(),
+  trackDownloadDestination: jest.fn(),
   handleErrorLine: jest.fn().mockReturnValue(false),
   handleWarningLine: jest.fn().mockReturnValue(false)
 });
@@ -116,6 +118,21 @@ describe('YtdlpOutputRouter', () => {
     });
   });
 
+  describe('filter skip counting', () => {
+    it('counts each video the match filter rejects', () => {
+      router.handleStdoutChunk('[download] First does not pass filter (availability!=subscriber_only), skipping ..\n');
+      router.handleStdoutChunk('[download] Second does not pass filter (availability!=subscriber_only), skipping ..\n');
+
+      expect(router.filterSkippedCount).toBe(2);
+    });
+
+    it('does not count archive skips', () => {
+      router.handleStdoutChunk('[download] aaaaaaaaaaa: has already been recorded in the archive\n');
+
+      expect(router.filterSkippedCount).toBe(0);
+    });
+  });
+
   it('uses the current video for filter skips, not an ID-shaped title word', () => {
     videoActivity.claim('job-123', ['https://youtu.be/Introducing']);
     router.handleStdoutChunk(Buffer.from('[youtube] Extracting URL: https://youtu.be/aaaaaaaaaaa\n'));
@@ -138,6 +155,18 @@ describe('YtdlpOutputRouter', () => {
       router.handleStdoutChunk('[youtube] Extracting URL: https://youtube.com/watch?v=abc123XYZ_d\n');
 
       expect(errorTracker.trackVideoStart).toHaveBeenCalledWith('abc123XYZ_d');
+    });
+
+    it('passes the path from subtitle-writing lines to the error tracker', () => {
+      router.handleStdoutChunk('[info] Writing video subtitles to: /tmp/youtarr/Channel/Title [abc123XYZ_d].en.vtt\n');
+
+      expect(errorTracker.trackSubtitleWrite).toHaveBeenCalledWith('/tmp/youtarr/Channel/Title [abc123XYZ_d].en.vtt');
+    });
+
+    it('passes every download destination to the error tracker', () => {
+      router.handleStdoutChunk('[download] Destination: /tmp/youtarr/Channel/Title [abc123XYZ_d].f137.mp4\n');
+
+      expect(errorTracker.trackDownloadDestination).toHaveBeenCalledWith('/tmp/youtarr/Channel/Title [abc123XYZ_d].f137.mp4');
     });
 
     it('records partial destinations and creates a JobVideoDownload tracking entry', () => {

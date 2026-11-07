@@ -152,18 +152,25 @@ function VideoListFilterChips({ filters }: VideoListFilterChipsProps) {
     }
 
     if (isStatusFilter(filter)) {
-      if (filter.value === 'off') continue;
+      // A chip at its resting value is not a filter the user applied.
+      const resting = filter.defaultValue ?? 'off';
+      if (filter.value === resting) continue;
       const { Icon, noun } = STATUS_CHIP_DESCRIPTORS[filter.id];
+      const label = filter.value === 'only'
+        ? `Only: ${noun}`
+        : filter.value === 'exclude'
+          ? `Hide: ${noun}`
+          : `Show: ${noun}`;
       chips.push(
         <Chip
           key={filter.id}
           icon={<Icon size={14} />}
-          label={filter.value === 'only' ? `Only: ${noun}` : `Hide: ${noun}`}
+          label={label}
           size="small"
-          onDelete={() => filter.onChange('off')}
-          onClick={() => filter.onChange('off')}
+          onDelete={() => filter.onChange(resting)}
+          onClick={() => filter.onChange(resting)}
           deleteIcon={<CloseIcon data-testid="CancelIcon" size={14} />}
-          color={filter.value === 'only' ? 'primary' : 'warning'}
+          color={filter.value === 'exclude' ? 'warning' : 'primary'}
           variant="outlined"
         />
       );
@@ -208,7 +215,7 @@ export function countActiveFilters(filters: FilterConfig[]): number {
     else if (filter.id === 'dateRange' && !filter.hidden && (filter.dateFrom !== null || filter.dateTo !== null)) count++;
     else if (filter.id === 'dateRangeString' && !filter.hidden && (filter.dateFrom || filter.dateTo)) count++;
     else if (filter.id === 'maxRating' && filter.value) count++;
-    else if (isStatusFilter(filter) && filter.value !== 'off') count++;
+    else if (isStatusFilter(filter) && filter.value !== (filter.defaultValue ?? 'off')) count++;
     else if (filter.id === 'channel' && filter.value) count++;
   }
   return count;
@@ -232,7 +239,7 @@ export function clearAllFilters(filters: FilterConfig[]): void {
     } else if (filter.id === 'maxRating') {
       filter.onChange('');
     } else if (isStatusFilter(filter)) {
-      filter.onChange('off');
+      filter.onChange(filter.defaultValue ?? 'off');
     } else if (filter.id === 'channel') {
       filter.onChange('');
     }

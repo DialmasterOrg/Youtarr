@@ -35,26 +35,52 @@ describe('PlaylistVideoTable selection', () => {
     expect(onToggle).toHaveBeenCalledWith('dl1');
   });
 
-  test('does not render a row checkbox for an already-downloaded video', () => {
+  test('renders a row checkbox for a downloaded video so it can be deleted', () => {
+    const onToggle = jest.fn();
     render(
-      <PlaylistVideoTable {...baseProps} videos={[makeVideo({ youtube_id: 'done', downloaded: true })]} />
+      <PlaylistVideoTable
+        {...baseProps}
+        onToggle={onToggle}
+        videos={[makeVideo({ youtube_id: 'done', title: 'Done', downloaded: true })]}
+      />
     );
-    // Only the header select-all checkbox exists.
-    expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Done' }));
+    expect(onToggle).toHaveBeenCalledWith('done');
   });
 
-  test('header select-all selects all downloadable ids', () => {
+  test('does not render a row checkbox for a never-downloaded video removed on YouTube', () => {
+    render(
+      <PlaylistVideoTable {...baseProps} videos={[makeVideo({ youtube_id: 'gone', title: 'Gone', youtube_removed: true })]} />
+    );
+    expect(screen.queryByRole('checkbox', { name: 'Select Gone' })).not.toBeInTheDocument();
+  });
+
+  test('header select-all selects downloaded and not-downloaded videos', () => {
     const onSelectAll = jest.fn();
     render(
       <PlaylistVideoTable
         {...baseProps}
         onSelectAll={onSelectAll}
-        videos={[makeVideo({ youtube_id: 'a' }), makeVideo({ youtube_id: 'b', downloaded: true })]}
+        videos={[
+          makeVideo({ youtube_id: 'a' }),
+          makeVideo({ youtube_id: 'b', downloaded: true }),
+          makeVideo({ youtube_id: 'c', youtube_removed: true }),
+        ]}
       />
     );
-    const header = screen.getAllByRole('checkbox')[0];
-    fireEvent.click(header);
-    expect(onSelectAll).toHaveBeenCalledWith(['a']);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select all videos' }));
+    expect(onSelectAll).toHaveBeenCalledWith(['a', 'b']);
+  });
+
+  test('shows the channel under the title instead of in its own column', () => {
+    render(<PlaylistVideoTable {...baseProps} videos={[makeVideo({ channel_name: 'Some Channel' })]} />);
+    expect(screen.getByText('Some Channel')).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Channel' })).not.toBeInTheDocument();
+  });
+
+  test('has no separate Actions column', () => {
+    render(<PlaylistVideoTable {...baseProps} videos={[makeVideo()]} />);
+    expect(screen.queryByRole('columnheader', { name: 'Actions' })).not.toBeInTheDocument();
   });
 
   test('shows italic Unknown when published_at is missing', () => {
@@ -65,8 +91,8 @@ describe('PlaylistVideoTable selection', () => {
 
   test('renders the Exclude action and fires onIgnore', () => {
     const onIgnore = jest.fn();
-    render(<PlaylistVideoTable {...baseProps} onIgnore={onIgnore} videos={[makeVideo({ youtube_id: 'x' })]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Exclude' }));
+    render(<PlaylistVideoTable {...baseProps} onIgnore={onIgnore} videos={[makeVideo({ youtube_id: 'x', title: 'Clip X' })]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Exclude Clip X' }));
     expect(onIgnore).toHaveBeenCalledWith('x');
   });
 
@@ -76,10 +102,10 @@ describe('PlaylistVideoTable selection', () => {
       <PlaylistVideoTable
         {...baseProps}
         onUnignore={onUnignore}
-        videos={[makeVideo({ youtube_id: 'x', ignored: true })]}
+        videos={[makeVideo({ youtube_id: 'x', title: 'Clip X', ignored: true })]}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Include' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Include Clip X' }));
     expect(onUnignore).toHaveBeenCalledWith('x');
   });
 

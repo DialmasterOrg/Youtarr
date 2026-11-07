@@ -1,7 +1,9 @@
 import React from 'react';
 import { Box, Typography, Skeleton, Tooltip, Chip, Accordion, AccordionSummary, AccordionDetails } from '../../../ui';
-import { formatDate } from '../../../../utils/formatters';
+import { formatDate, stripInternalPath } from '../../../../utils/formatters';
 import { tierFromDimensions } from '../../../../utils/videoResolution';
+import { isRemovedStatus } from '../../../../utils/videoStatus';
+import { describeRemoval } from '../../../../utils/videoRemoval';
 import { VideoModalData, VideoExtendedMetadata } from '../types';
 
 interface VideoTechnicalProps {
@@ -13,8 +15,6 @@ interface VideoTechnicalProps {
 const BYTES_PER_KB = 1024;
 const BYTES_PER_MB = 1024 * 1024;
 const BYTES_PER_GB = 1024 * 1024 * 1024;
-
-const INTERNAL_PATH_PREFIX = '/usr/src/app/data/';
 
 function formatFileSize(bytes: number): string {
   if (bytes >= BYTES_PER_GB) {
@@ -29,12 +29,6 @@ function formatFileSize(bytes: number): string {
   return `${bytes} B`;
 }
 
-function stripInternalPath(filePath: string): string {
-  if (filePath.startsWith(INTERNAL_PATH_PREFIX)) {
-    return filePath.slice(INTERNAL_PATH_PREFIX.length);
-  }
-  return filePath;
-}
 
 function getOrientationLabel(ratio: number): string {
   if (ratio > 1) return 'Landscape';
@@ -63,15 +57,21 @@ function formatDownloadedResolution(
 interface DetailRowProps {
   label: string;
   value: string;
+  // A sentence rather than a short value: left-aligned so it reads on a phone.
+  prose?: boolean;
 }
 
-function DetailRow({ label, value }: DetailRowProps) {
+function DetailRow({ label, value, prose = false }: DetailRowProps) {
   return (
     <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, paddingTop: 4, paddingBottom: 4 }}>
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>
         {label}
       </Typography>
-      <Typography variant="body2" color="text.primary" sx={{ fontWeight: 500, textAlign: 'right', wordBreak: 'break-word' }}>
+      <Typography
+        variant="body2"
+        color="text.primary"
+        sx={{ fontWeight: 500, textAlign: prose ? 'left' : 'right', wordBreak: 'break-word' }}
+      >
         {value}
       </Typography>
     </Box>
@@ -154,7 +154,12 @@ function VideoTechnical({ video, metadata, loading }: VideoTechnicalProps) {
   const hasAudioFile = video.audioFilePath !== null;
   const relatedFiles = !loading ? (metadata?.relatedFiles ?? null) : null;
   const addedDate = formatDate(video.addedAt);
-  const showFileDetails = video.isDownloaded || video.status === 'missing';
+  const showFileDetails = video.isDownloaded || isRemovedStatus(video.status);
+  // Why there is no file, in plain words, so nobody has to find the tooltip.
+  // The file row below shows the path, so the sentence leaves it out.
+  const removalStatus = isRemovedStatus(video.status)
+    ? describeRemoval(video.status, video.removal ?? undefined)
+    : null;
 
   return (
     <Box style={{ display: 'flex', flexDirection: 'column', gap: 'var(--video-modal-section-gap, 12px)' }}>
@@ -209,6 +214,7 @@ function VideoTechnical({ video, metadata, loading }: VideoTechnicalProps) {
           <AccordionSummary>File Details</AccordionSummary>
           <AccordionDetails>
             <Box>
+              {removalStatus && <DetailRow label="Status" value={removalStatus} prose />}
               {hasVideoFile && (
                 <FileRow
                   label="Video"

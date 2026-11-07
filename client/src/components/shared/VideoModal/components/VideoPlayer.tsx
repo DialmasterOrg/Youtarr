@@ -9,7 +9,9 @@ import {
   Close as CloseIcon,
   WarningAmber as WarningAmberIcon,
   Lock as LockIcon,
+  Trash2 as DeletedIcon,
 } from '../../../../lib/icons';
+import { isRemovedStatus } from '../../../../utils/videoStatus';
 import { VideoModalData } from '../types';
 import { YOUTUBE_URL_BASE } from '../constants';
 
@@ -22,6 +24,13 @@ interface VideoPlayerProps {
 
 const DEFAULT_LANDSCAPE_ASPECT_RATIO = 16 / 9;
 const DEFAULT_PORTRAIT_ASPECT_RATIO = 9 / 16;
+// Labels over an arbitrary thumbnail: white with a dark shadow reads on light and dark images.
+const OVERLAY_TEXT_SHADOW = '0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.6)';
+const OVERLAY_ICON_SHADOW = 'drop-shadow(0 1px 3px rgba(0,0,0,0.8))';
+// A phone's player is too short for the full-size icon, label, and button stacked.
+const MOBILE_OVERLAY_ICON_SIZE = 32;
+const MOBILE_DOWNLOAD_BUTTON_SIZE = '56px';
+const MOBILE_DOWNLOAD_ICON_SIZE = '32px';
 
 function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerProps) {
   const [playbackStarted, setPlaybackStarted] = useState(false);
@@ -36,7 +45,7 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
     setStreamAspectRatio(null);
   }, [video.youtubeId]);
 
-  const canStream = video.isDownloaded && video.status !== 'missing';
+  const canStream = video.isDownloaded && !isRemovedStatus(video.status);
   const playbackType: 'video' | 'audio' =
     !video.filePath && video.audioFilePath ? 'audio' : 'video';
   const streamUrl = token
@@ -174,7 +183,7 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
           {streamError ? (
             <>
               <CloudOffIcon size={48} color="white" />
-              <Typography variant="body2" sx={{ color: 'common.white' }}>
+              <Typography variant="body2" sx={{ color: 'white' }}>
                 {playbackType === 'audio' ? 'Unable to stream audio' : 'Unable to stream video'}
               </Typography>
               <Link
@@ -205,15 +214,19 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
           ) : video.status === 'ignored' ? (
             <>
               <BlockIcon size={48} color="white" />
-              <Typography variant="body1" sx={{ color: 'common.white', fontWeight: 500 }}>
+              <Typography variant="body1" sx={{ color: 'white', fontWeight: 500 }}>
                 Ignored
               </Typography>
             </>
-          ) : video.status === 'missing' ? (
+          ) : isRemovedStatus(video.status) ? (
             <>
-              <WarningAmberIcon size={48} color="var(--warning)" />
-              <Typography variant="body1" sx={{ color: 'common.white', fontWeight: 500 }}>
-                File Missing
+              {video.status === 'deleted' ? (
+                <DeletedIcon size={isMobile ? MOBILE_OVERLAY_ICON_SIZE : 48} color="white" style={{ filter: OVERLAY_ICON_SHADOW }} />
+              ) : (
+                <WarningAmberIcon size={isMobile ? MOBILE_OVERLAY_ICON_SIZE : 48} color="var(--warning)" style={{ filter: OVERLAY_ICON_SHADOW }} />
+              )}
+              <Typography variant="body1" sx={{ color: 'white', fontWeight: 600, textShadow: OVERLAY_TEXT_SHADOW }}>
+                {video.status === 'deleted' ? 'File Deleted' : 'File Missing'}
               </Typography>
               <IconButton
                 onClick={onDownloadClick}
@@ -221,12 +234,17 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
                 style={{
                   backgroundColor: 'var(--video-modal-overlay-action-background, var(--media-overlay-background-strong))',
                   color: 'var(--video-modal-overlay-action-foreground, var(--media-overlay-foreground))',
-                  width: 'var(--video-modal-overlay-download-size, 90px)',
-                  height: 'var(--video-modal-overlay-download-size, 90px)',
+                  width: isMobile ? MOBILE_DOWNLOAD_BUTTON_SIZE : 'var(--video-modal-overlay-download-size, 90px)',
+                  height: isMobile ? MOBILE_DOWNLOAD_BUTTON_SIZE : 'var(--video-modal-overlay-download-size, 90px)',
                   zIndex: 2,
                 }}
               >
-                <DownloadIcon style={{ width: 'var(--video-modal-overlay-download-icon-size, 50px)', height: 'var(--video-modal-overlay-download-icon-size, 50px)' }} />
+                <DownloadIcon
+                  style={{
+                    width: isMobile ? MOBILE_DOWNLOAD_ICON_SIZE : 'var(--video-modal-overlay-download-icon-size, 50px)',
+                    height: isMobile ? MOBILE_DOWNLOAD_ICON_SIZE : 'var(--video-modal-overlay-download-icon-size, 50px)',
+                  }}
+                />
               </IconButton>
             </>
           ) : video.status === 'members_only' ? (

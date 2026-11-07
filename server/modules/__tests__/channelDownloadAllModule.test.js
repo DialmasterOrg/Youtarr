@@ -4,6 +4,7 @@ jest.mock('../../models', () => ({
   Channel: { findOne: jest.fn() },
 }));
 jest.mock('../downloadModule', () => ({ doSpecificDownloads: jest.fn() }));
+jest.mock('../archiveOnlyIds', () => ({ findArchiveOnlyIds: jest.fn() }));
 jest.mock('../../logger', () => ({
   info: jest.fn(),
   debug: jest.fn(),
@@ -14,6 +15,7 @@ jest.mock('../../logger', () => ({
 const ChannelVideo = require('../../models/channelvideo');
 const { Video, Channel } = require('../../models');
 const downloadModule = require('../downloadModule');
+const { findArchiveOnlyIds } = require('../archiveOnlyIds');
 const channelDownloadAllModule = require('../channelDownloadAllModule');
 
 const CHANNEL_ID = 'UC123';
@@ -33,6 +35,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   ChannelVideo.findAll.mockResolvedValue([]);
   Video.findAll.mockResolvedValue([]);
+  findArchiveOnlyIds.mockResolvedValue(new Set());
   Channel.findOne.mockResolvedValue(channelRow);
   downloadModule.doSpecificDownloads.mockImplementation(async ({ body }) => ({ queued: body.urls.length }));
 });
@@ -92,6 +95,25 @@ describe('getDownloadableVideos', () => {
     expect(Video.findAll).toHaveBeenCalledWith(
       expect.objectContaining({ where: { youtubeId: ['a', 'b', 'c'] } })
     );
+  });
+
+  it('excludes videos the download archive lists without a row, such as emptied from the trash', async () => {
+    ChannelVideo.findAll.mockResolvedValue([cv('a'), cv('b'), cv('c')]);
+    Video.findAll.mockResolvedValue([{ youtubeId: 'a', removed: true }]);
+    findArchiveOnlyIds.mockResolvedValue(new Set(['b']));
+
+    const result = await channelDownloadAllModule.getDownloadableVideos(CHANNEL_ID, 'videos');
+
+    expect(result.map((v) => v.youtube_id)).toEqual(['c']);
+  });
+
+  it('looks up the archive only for videos without a row', async () => {
+    ChannelVideo.findAll.mockResolvedValue([cv('a'), cv('b')]);
+    Video.findAll.mockResolvedValue([{ youtubeId: 'a', removed: true }]);
+
+    await channelDownloadAllModule.getDownloadableVideos(CHANNEL_ID, 'videos');
+
+    expect(findArchiveOnlyIds).toHaveBeenCalledWith(['b']);
   });
 
   it('does not query the videos table when no candidates exist', async () => {

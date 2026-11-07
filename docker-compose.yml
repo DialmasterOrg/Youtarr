@@ -67,6 +67,8 @@ services:
       DB_NAME: ${DB_NAME:-youtarr}
       # Optional: Disable authentication (for platforms with external auth like Elfhosted)
       AUTH_ENABLED: ${AUTH_ENABLED:-}
+      # Optional: Enable the separately authenticated versioned external API
+      EXTERNAL_API_ENABLED: ${EXTERNAL_API_ENABLED:-false}
       # Optional: Seed initial admin credentials for headless deployments
       AUTH_PRESET_USERNAME: ${AUTH_PRESET_USERNAME:-}
       AUTH_PRESET_PASSWORD: ${AUTH_PRESET_PASSWORD:-}
@@ -79,6 +81,8 @@ services:
       # Optional: rolling log files in config/logs (defaults: 10MB per file, 5 older files kept)
       LOG_FILE_MAX_SIZE: ${LOG_FILE_MAX_SIZE:-}
       LOG_FILE_MAX_COUNT: ${LOG_FILE_MAX_COUNT:-}
+      # Optional: seconds the pre-download write check of the output directory may take (default 10; raise for a slow NFS share)
+      OUTPUT_DIR_HEALTHCHECK_TIMEOUT: ${OUTPUT_DIR_HEALTHCHECK_TIMEOUT:-}
       # This is just informational and lets the app know where the videos will be stored on the host
       YOUTUBE_OUTPUT_DIR: ${YOUTUBE_OUTPUT_DIR}
       # Optional: Custom data path for platforms like Elfhosted (defaults to /usr/src/app/data)
