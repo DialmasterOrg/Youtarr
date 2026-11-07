@@ -307,6 +307,51 @@ These variables are used by docker-compose.yml but not directly by the applicati
 - Application port: 3087 (host) → 3011 (container)
 - Database port: 3321 inside the Docker network only
 
+## Gluetun Integration
+
+### VPN_SERVICE_PROVIDER
+**Required**: Yes
+**Description**: Provider for Gluetun to use.
+**Note**: See https://github.com/qdm12/gluetun-wiki/tree/main/setup/providers for a list of supported providers and setup. May require modifying your Docker Compose file to add additional needed settings (based on provider).
+
+### Wireguard
+
+#### WIREGUARD_PRIVATE_KEY
+
+**Required**: Yes
+**Description**: The Wireguard private key your provider gives you.
+
+#### WIREGUARD_ADDRESSES
+
+**Required**: Yes
+**Description**: The Wireguard address your provider gives you.
+
+#### WIREGUARD_PRESHARED_KEY
+
+**Required**: No, depending on your provider.
+**Description**: The preshared Wireguard key your provider gives you.
+
+#### WIREGUARD_MTU
+
+**Required**: No
+**Default**: `1420`
+**Description**: Used for MTU tuning for better WireGuard speeds.
+**Note**: See https://github.com/qdm12/gluetun-wiki/blob/main/setup/options/wireguard.md for info.
+
+### FIREWALL_OUTBOUND_SUBNETS
+
+**Required**: By default, no. If you are using media integrations, yes.
+**Description**: Allows Youtarr to reach other devices on your network (like Plex, Jellyfin, & Emby)
+**Format**: CIDR format
+**Note**: See https://github.com/qdm12/gluetun-wiki/blob/main/setup/options/firewall.md for more info.
+
+### GLUETUN_CONTAINER_NAME
+
+**Required**: No
+**Default**: `youtarr-gluetun`
+**Description**: Gluetun's container name.
+**Note**: Useful if running multiple Gluetun containers.
+
 ## Best Practices
 
 ### Security

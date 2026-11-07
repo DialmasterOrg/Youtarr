@@ -5,7 +5,7 @@ export const ROOT = path.resolve(new URL('../..', import.meta.url).pathname);
 const rootMarkdownFiles = ['README.md', 'CONTRIBUTING.md', 'SECURITY.md', 'CHANGELOG.md', 'LICENSE.md', 'CONTRIBUTORS.md'];
 
 const sectionFor = (source) => {
-  if (/^(INSTALLATION|DOCKER|platforms\/)/.test(source)) return 'Getting Started';
+  if (/^(INSTALLATION|DOCKER|GLUETUN|platforms\/)/.test(source)) return 'Getting Started';
   if (/^(USAGE_GUIDE|MEDIA_|YOUTARR_(VS_|DOWNLOADS_)|media-servers\/)/.test(source)) return 'Using Youtarr';
   if (/^(CONFIG|ENVIRONMENT|AUTHENTICATION|DATABASE|BACKUP_RESTORE|TROUBLESHOOTING)/.test(source)) return 'Operations';
   if (/^(DEVELOPMENT|API_INTEGRATION|development\/)/.test(source)) return 'Developers';

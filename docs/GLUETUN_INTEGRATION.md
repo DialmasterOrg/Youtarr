@@ -11,6 +11,9 @@ If you use `host.docker.internal` for anything, add `172.17.0.0/16` (or your bri
 
 ## Installation
 
+### New Youtarr installation:
+See [docs/INSTALLATION.md](INSTALLATION.md) for details.
+
 ### Existing Youtarr installation:
 1. Back up Youtarr and Youtarr's database
    - While adding Gluetun and using the new Docker Compose files does not mess with Youtarr or its database, it is always recommended to back up Youtarr and its database when modifying its setup.
