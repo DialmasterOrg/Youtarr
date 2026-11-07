@@ -2,9 +2,10 @@
 
 [Gluetun](https://github.com/qdm12/gluetun) is a powerful Docker container for running a WireGuard or OpenVPN tunnel for your Docker containers or other devices on your network.
 
-**Important:** Gluetun and Youtarr are tied together. Restarting Gluetun will restart Youtarr.
+**Important:** Restart Gluetun with docker compose restart gluetun so Youtarr restarts with it. If Gluetun restarts on its own, run docker compose restart youtarr afterwards.
 
 **Note:** This is a basic guide to configuring Youtarr to use Gluetun for downloading media. To avoid breaking changes, Gluetun is locked to the `v3` image.
+If you use `host.docker.internal` for anything, add `172.17.0.0/16` (or your bridge subnet) here, or use the LAN IP instead.
 
 ---
 
@@ -18,7 +19,8 @@
    - `VPN_SERVICE_PROVIDER`
    - `WIREGUARD_PRIVATE_KEY`
    - `WIREGUARD_ADDRESSES`
-**Note:** If you are using named-volume storage or an external database, uncomment the appropriate `COMPOSE_FILE` lines 
+
+   **Note:** If you are using named-volume storage or an external database, uncomment the appropriate `COMPOSE_FILE` lines 
 3. Set `FIREWALL_OUTBOUND_SUBNETS` if Youtarr needs to reach Plex, Jellyfin, Emby, or an external DB on your LAN. Otherwise, that traffic goes into the VPN and will time out.
 4. Reverse proxy users (Traefik, NPM, etc.)
    - Domain name users will need to point the upstream domain name from your Youtarr instance to Gluetun.
