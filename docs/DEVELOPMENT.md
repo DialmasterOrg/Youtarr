@@ -44,10 +44,11 @@ If you set `YOUTARR_IMAGE` in `.env`, remove or comment that line first, otherwi
 
 For development, you'll need:
 
-1. **Node.js 20.19+ and npm 11.10+** (needed for the build script that compiles the client and installs dependencies before Docker runs)
-2. **Docker** and Docker Compose (v2 or v1)
-3. **Git** for version control
-4. A code editor (VS Code recommended)
+1. **A compatible OS**. Ubuntu 26.10 is recomended (LTS versions are not supported due to having older npm versions)
+2. **Node.js 20.19+ and npm 11.10+** (needed for the build script that compiles the client and installs dependencies before Docker runs)
+3. **Docker** and Docker Compose (v2 or v1)
+4. **Git** for version control
+5. A code editor (VS Code recommended)
 
 **Note:** Runtime dependencies (MariaDB, yt-dlp, ffmpeg, Node) run inside the dev containers, but the `build-dev` script uses your host Node.js to install packages and build the frontend before the Docker image is created.
 
