@@ -7,6 +7,7 @@ Before setting up Youtarr, ensure you have:
 1. **Docker & Docker Compose** installed on your system
 2. **Bash Shell** (Git Bash for Windows users)
 3. **Git** to clone the repository
+4. Some network and VPN knowledge, and a VPN provider if using Gluetun
 
 ## Quick Start Guide
 
@@ -70,6 +71,14 @@ If you prefer to use standard `docker compose up` commands:
    YOUTUBE_OUTPUT_DIR=/path/to/your/videos
    ```
 
+> **Important:**
+> If using Gluetun, you must set all the required variables, or else it will fail.
+>
+> Example:
+> - `VPN_SERVICE_PROVIDER`
+> - `WIREGUARD_PRIVATE_KEY`
+> - `WIREGUARD_ADDRESSES`
+
    Optionally configure other settings:
    - `YOUTARR_HOST_PORT=3087` - Change this if you need the web interface on a different host port
    - For **headless deployments** (e.g., Unraid, NAS, remote VPS), you have two options:
@@ -78,6 +87,7 @@ If you prefer to use standard `docker compose up` commands:
    - `AUTH_ENABLED=false` - Only if behind external authentication (VPN, reverse proxy)
    - `TRUST_PROXY=false` - Recommended when exposing Youtarr directly without a reverse proxy. Leave unset for the current backwards-compatible default.
    - `LOG_LEVEL` - Set to `debug` for troubleshooting, `info` for normal/production use (default), `warn` for minimal logging
+   - If using Gluetun, set `FIREWALL_OUTBOUND_SUBNETS` if Youtarr needs to reach Plex, Jellyfin, Emby, or an external DB on your LAN. Otherwise, that traffic goes into the VPN and will time out.
 
    See: [ENVIRONMENT VARIABLES](ENVIRONMENT_VARIABLES.md) for more details
 
@@ -85,10 +95,19 @@ If you prefer to use standard `docker compose up` commands:
    ```bash
    docker compose up -d
    ```
+   If using Gluetun, start with the [docker-compose.gluetun.yml](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose.gluetun.yml) file.
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.gluetun.yml up -d
+   ```
 
    > **Docker Desktop/ARM/NAS users**: For a fresh install, use the named-volume database override to avoid MariaDB bind-mount issues on virtualized filesystems:
    > ```bash
    > docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
+   > ```
+   >
+   > If using Gluetun, use the [docker-compose.gluetun.yml](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose.gluetun.yml) file.
+   > ```bash
+   > docker compose -f docker-compose.yml -f docker-compose.gluetun.yml -f docker-compose.arm.yml up -d
    > ```
    > If you already have data in `./database/`, use `./scripts/migrate-to-named-volume.sh` instead. See [Database Management](DATABASE.md#migrating-from-bind-mount-to-named-volume) and [Troubleshooting](TROUBLESHOOTING.md#docker-desktop--arm-incorrect-information-in-file-errors) for details.
 
