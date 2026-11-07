@@ -25,6 +25,7 @@ const LANGUAGE_OPTIONS: LanguageOption[] = [
   { code: 'zh', label: 'Chinese' },
   { code: 'ar', label: 'Arabic' },
   { code: 'hi', label: 'Hindi' },
+  { code: 'pl', label: 'Polish' },
 ];
 
 function SubtitleLanguageSelector({

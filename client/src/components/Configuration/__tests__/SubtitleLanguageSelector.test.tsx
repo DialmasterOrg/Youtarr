@@ -51,6 +51,7 @@ describe('SubtitleLanguageSelector Component', () => {
       expect(screen.getByRole('option', { name: 'Chinese' })).toBeInTheDocument();
       expect(screen.getByRole('option', { name: 'Arabic' })).toBeInTheDocument();
       expect(screen.getByRole('option', { name: 'Hindi' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Polish' })).toBeInTheDocument();
     });
 
     test('renders with disabled state correctly', () => {
@@ -296,7 +297,7 @@ describe('SubtitleLanguageSelector Component', () => {
     });
 
     test('handles very long comma-separated list', () => {
-      const allLanguages = 'en,en-orig,es,fr,de,ja,pt,it,ru,ko,zh,ar,hi';
+      const allLanguages = 'en,en-orig,es,fr,de,ja,pt,it,ru,ko,zh,ar,hi,pl';
       renderWithProviders(<SubtitleLanguageSelector {...defaultProps} value={allLanguages} />);
 
       expect(screen.getByText('English')).toBeInTheDocument();
@@ -449,6 +450,7 @@ describe('SubtitleLanguageSelector Component', () => {
         { code: 'zh', label: 'Chinese' },
         { code: 'ar', label: 'Arabic' },
         { code: 'hi', label: 'Hindi' },
+        { code: 'pl', label: 'Polish' },
       ];
 
       for (const mapping of expectedMappings) {
@@ -457,7 +459,7 @@ describe('SubtitleLanguageSelector Component', () => {
     });
 
     test('displays correct chips for all supported languages', () => {
-      const allCodes = 'en,en-orig,es,fr,de,ja,pt,it,ru,ko,zh,ar,hi';
+      const allCodes = 'en,en-orig,es,fr,de,ja,pt,it,ru,ko,zh,ar,hi,pl';
       renderWithProviders(<SubtitleLanguageSelector {...defaultProps} value={allCodes} />);
 
       const expectedLabels = [
@@ -474,6 +476,7 @@ describe('SubtitleLanguageSelector Component', () => {
         'Chinese',
         'Arabic',
         'Hindi',
+        'Polish',
       ];
 
       for (const label of expectedLabels) {
