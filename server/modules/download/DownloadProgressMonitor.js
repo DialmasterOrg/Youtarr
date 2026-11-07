@@ -289,18 +289,19 @@ class DownloadProgressMonitor {
     return this.lastVideoInfo;
   }
 
-  // A merged download names its video format first and its audio format last.
-  // Without that announcement, fall back to the extension: VP9 and AV1 video
-  // above 1080p arrives as .webm, so .webm counts as video unless announced
-  // as the audio format.
+  // .webm is the only extension that can be either stream: VP9 and AV1 video
+  // above 1080p arrives as .webm, and so does opus audio. A merged download
+  // announces its audio format last, so a .webm counts as video unless it is
+  // that last format.
   streamStateFor(formatId, ext) {
-    const ids = this.requestedFormatIds;
-    if (ids.length > 1) {
-      if (formatId === ids[0]) return 'downloading_video';
-      if (formatId === ids[ids.length - 1]) return 'downloading_audio';
-    }
     const lowerExt = ext.toLowerCase();
-    if (['mp4', 'webm', 'mkv', 'mov'].includes(lowerExt)) return 'downloading_video';
+    if (lowerExt === 'webm') {
+      const ids = this.requestedFormatIds;
+      return ids.length > 1 && formatId === ids[ids.length - 1]
+        ? 'downloading_audio'
+        : 'downloading_video';
+    }
+    if (['mp4', 'mkv', 'mov'].includes(lowerExt)) return 'downloading_video';
     if (['m4a', 'opus', 'mp3', 'ogg', 'aac'].includes(lowerExt)) return 'downloading_audio';
     return null;
   }
@@ -330,7 +331,7 @@ class DownloadProgressMonitor {
 
     // Remember which formats this video downloads, e.g. "315+140-1" is video
     // format 315 merged with audio format 140-1.
-    const formatsMatch = line.match(/\[info\] [^:]+: Downloading \d+ format\(s\): (\S+)/);
+    const formatsMatch = line.match(/\[info\] [^:]+: Downloading \d+ format\(s\): ([^\s,]+)/);
     if (formatsMatch) {
       this.requestedFormatIds = formatsMatch[1].split('+');
       return null;

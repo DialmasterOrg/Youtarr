@@ -367,6 +367,17 @@ describe('DownloadProgressMonitor', () => {
         expect(monitor.determineState('[download] Destination: file.f251.webm')).toBe('downloading_audio');
       });
 
+      it('should tell streams apart by extension when audio is listed first', () => {
+        monitor.determineState('[info] abc123: Downloading 1 format(s): 140+137');
+        expect(monitor.determineState('[download] Destination: file.f140.m4a')).toBe('downloading_audio');
+        expect(monitor.determineState('[download] Destination: file.f137.mp4')).toBe('downloading_video');
+      });
+
+      it('should read only the first of several comma-separated format selections', () => {
+        expect(monitor.determineState('[info] abc123: Downloading 2 format(s): 242+140, 18')).toBeNull();
+        expect(monitor.requestedFormatIds).toEqual(['242', '140']);
+      });
+
       it('should show progress through a 4K webm download', () => {
         monitor.processProgress('', '[info] Fi_OAQqil0s: Downloading 1 format(s): 315+140-1', {});
         monitor.processProgress('', '[info] Writing video metadata as JSON to: /path/file.info.json', {});
