@@ -3,6 +3,9 @@ const archiveModule = require('./archiveModule');
 const logger = require('../logger');
 const ChannelVideo = require('../models/channelvideo');
 const youtubeUrlParser = require('./youtubeUrlParser');
+const membersAccess = require('./membersAccess');
+
+const COOKIES_UNUSABLE_FOR_MEMBERS_ERROR = 'This video is members-only, and YouTube did not accept the configured cookies, so access could not be checked. Export fresh cookies and try again.';
 
 class VideoValidationModule {
   constructor() {
@@ -78,10 +81,13 @@ class VideoValidationModule {
    * @param {string} videoId - YouTube video ID
    * @param {Object} metadata - yt-dlp metadata
    * @param {boolean} isDuplicate - Whether video is already downloaded
+   * @param {string|null} [membersState] - membersAccess state, null when the video is not members-only
    * @returns {Object} - Formatted response
    */
-  toValidationResponse(videoId, metadata, isDuplicate) {
-    const isMembersOnly = metadata.availability === 'subscriber_only';
+  toValidationResponse(videoId, metadata, isDuplicate, membersState = null) {
+    // yt-dlp read the video, so the cookies it ran with can open it; only a
+    // run without cookies leaves a members-only video blocked.
+    const isMembersOnly = membersAccess.isBlockedState(membersState);
     const availabilityProvided = Boolean(metadata.availability);
 
     const contentRating = metadata.contentRating || metadata.content_rating || null;
@@ -91,6 +97,7 @@ class VideoValidationModule {
       isValidUrl: true,
       isAlreadyDownloaded: isDuplicate,
       isMembersOnly: isMembersOnly,
+      membersAccess: membersState,
       metadata: {
         youtubeId: videoId,
         url: `https://www.youtube.com/watch?v=${videoId}`,
@@ -210,8 +217,9 @@ class VideoValidationModule {
       const metadata = await this.fetchVideoMetadata(canonicalUrl, { timeoutMs: 60000 });
 
       const isDuplicateVideo = await this.isDuplicate(videoId);
+      const membersState = await membersAccess.recordFetchOutcome(videoId, { availability: metadata.availability || null });
 
-      const response = this.toValidationResponse(videoId, metadata, isDuplicateVideo);
+      const response = this.toValidationResponse(videoId, metadata, isDuplicateVideo, membersState);
 
       if (response.metadata && !response.metadata.media_type) {
         response.metadata.media_type = 'video';
@@ -236,12 +244,23 @@ class VideoValidationModule {
         // Extract video ID from error message if possible, or use the one we parsed from URL
         const videoIdMatch = error.message.match(/\[youtube\]\s+([a-zA-Z0-9_-]{11}):/);
         const extractedVideoId = videoIdMatch ? videoIdMatch[1] : videoId;
+        const membersState = await membersAccess.recordFetchOutcome(extractedVideoId, { errorMessage: error.message });
+
+        // Login trouble is not a verdict on the account's membership.
+        if (membersState === membersAccess.STATE.UNCHECKED) {
+          return {
+            isValidUrl: false,
+            error: COOKIES_UNUSABLE_FOR_MEMBERS_ERROR,
+            errorCode: 'COOKIES_REJECTED',
+          };
+        }
 
         // Return a valid response indicating it's members-only
         const membersOnlyResponse = {
           isValidUrl: true,
           isAlreadyDownloaded: false,
           isMembersOnly: true,
+          membersAccess: membersState,
           metadata: {
             youtubeId: extractedVideoId,
             url: `https://www.youtube.com/watch?v=${extractedVideoId}`,

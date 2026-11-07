@@ -1,4 +1,5 @@
 import type { RemovalReason } from '../utils/videoRemoval';
+import type { MembersAccessState } from './ChannelVideo';
 
 // Saved output order for the .m3u file and media server playlist sync.
 export type PlaylistSortOrderSetting = 'default' | 'reversed';
@@ -73,6 +74,7 @@ export interface PlaylistVideo {
   video_resolution?: string | null;
   // Media server types with a played watch-status row for this video.
   watched_by?: string[];
+  members_access?: MembersAccessState | null;
 }
 
 export interface MediaServerStatus {

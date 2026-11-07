@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { isDeletable, isDownloadable, isSelectable, statusLabel, PublishedDate, toDownloadFileProps, toModalData } from '../playlistVideoHelpers';
+import { isDeletable, isDownloadable, isSelectable, showsMembersAccess, statusLabel, PublishedDate, toDownloadFileProps, toModalData } from '../playlistVideoHelpers';
 import { PlaylistVideo } from '../../../../types/playlist';
 
 function makeVideo(overrides: Partial<PlaylistVideo> = {}): PlaylistVideo {
@@ -41,6 +41,14 @@ describe('isDownloadable', () => {
   });
   test('true even when ignored (explicit selection overrides ignore)', () => {
     expect(isDownloadable(makeVideo({ ignored: true }))).toBe(true);
+  });
+
+  test('blocks a members-only video the cookies were denied, as the channel page does', () => {
+    expect(isDownloadable(makeVideo({ members_access: 'denied' }))).toBe(false);
+  });
+
+  test('allows a members-only video the cookies can open', () => {
+    expect(isDownloadable(makeVideo({ members_access: 'confirmed' }))).toBe(true);
   });
 });
 
@@ -187,5 +195,21 @@ describe('PublishedDate', () => {
   test('renders the formatted date when present', () => {
     render(<PublishedDate value="20240115" />);
     expect(screen.getByText('2024-01-15')).toBeInTheDocument();
+  });
+});
+
+describe('showsMembersAccess', () => {
+  test('shows the chip for a members-only video without a file', () => {
+    expect(showsMembersAccess(makeVideo({ members_access: 'unchecked' }))).toBe(true);
+  });
+
+  test('hides the chip once the video is downloaded', () => {
+    expect(showsMembersAccess(makeVideo({ members_access: 'confirmed', downloaded: true }))).toBe(false);
+  });
+});
+
+describe('toModalData members-only', () => {
+  test('opens a denied members-only video as members only', () => {
+    expect(toModalData(makeVideo({ members_access: 'denied' })).status).toBe('members_only');
   });
 });

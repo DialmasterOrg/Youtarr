@@ -13,6 +13,7 @@ const tabState = require('./tabState');
 const ratingMapper = require('../ratingMapper');
 const archiveModule = require('../archiveModule');
 const youtubeExistenceCheck = require('../youtubeExistenceCheck');
+const membersAccess = require('../membersAccess');
 
 const { EXISTENCE } = youtubeExistenceCheck;
 
@@ -94,6 +95,29 @@ class ChannelVideosService {
       videos.filter((video) => !video.added && !video.ignored).map((video) => video.youtube_id)
     );
     return videos.map((video) => ({ ...video, inArchive: archiveOnlyIds.has(video.youtube_id) }));
+  }
+
+  /**
+   * Set members_access on the members-only videos of a built response: whether
+   * the configured cookies can open them (see membersAccess). The cookie key
+   * is worked out once for the page, never per row. A failure leaves the
+   * field unset, which the client reads as blocked, as before this field.
+   * @param {Object} response - from buildChannelVideosResponse
+   * @returns {Promise<Object>} the same response
+   */
+  async applyMembersAccess(response) {
+    const membersOnly = response.videos.filter((video) => video.availability === 'subscriber_only');
+    if (membersOnly.length === 0) return response;
+    try {
+      const ids = membersOnly.map((video) => video.youtube_id);
+      const states = await membersAccess.getStates(ids, { knownMembersOnly: new Set(ids) });
+      response.videos = response.videos.map((video) => (states.has(video.youtube_id)
+        ? { ...video, members_access: states.get(video.youtube_id) }
+        : video));
+    } catch (err) {
+      logger.warn({ err }, 'Could not read members-only access for channel videos');
+    }
+    return response;
   }
 
   /**
@@ -278,7 +302,7 @@ class ChannelVideosService {
       const stats = await channelVideoQuery.getChannelVideoStats(channelId, downloadedFilter, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, ratingFilter, deletedFilter);
 
       return {
-        ...this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType),
+        ...(await this.applyMembersAccess(this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType))),
         freshFetchPerformed
       };
 
@@ -287,7 +311,7 @@ class ChannelVideosService {
       const offset = (page - 1) * pageSize;
       const cachedVideos = await channelVideoQuery.fetchNewestVideosFromDb(channelId, pageSize, offset, downloadedFilter, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, ratingFilter, deletedFilter);
       const stats = await channelVideoQuery.getChannelVideoStats(channelId, downloadedFilter, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, ratingFilter, deletedFilter);
-      const response = this.buildChannelVideosResponse(cachedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
+      const response = await this.applyMembersAccess(this.buildChannelVideosResponse(cachedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType));
       // Only surface a user-visible error when we have nothing to show.
       // Silent recovery when cached results exist; the filter-aware empty
       // state handles "fetch ok, zero matches" on its own.
@@ -410,7 +434,7 @@ class ChannelVideosService {
           success: true,
           videosFound: result.videos.length,
           elapsedSeconds: elapsedSeconds,
-          ...this.buildChannelVideosResponse(paginatedVideos, channel, 'yt_dlp_full', stats, false, mediaType)
+          ...(await this.applyMembersAccess(this.buildChannelVideosResponse(paginatedVideos, channel, 'yt_dlp_full', stats, false, mediaType)))
         };
 
       } catch (error) {

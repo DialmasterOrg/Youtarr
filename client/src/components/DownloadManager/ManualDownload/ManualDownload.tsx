@@ -117,12 +117,17 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
       const { data } = response;
 
       if (!data.isValidUrl) {
-        setErrorMessage('Invalid YouTube URL. Please check the URL and try again.');
+        // Rejected cookies on a members-only video: the URL itself is fine.
+        setErrorMessage(data.errorCode === 'COOKIES_REJECTED' && data.error
+          ? data.error
+          : 'Invalid YouTube URL. Please check the URL and try again.');
         return false;
       }
 
       if (data.isMembersOnly) {
-        setErrorMessage('This video is members-only and cannot be downloaded.');
+        setErrorMessage(data.membersAccess === 'denied'
+          ? 'This video is members-only, and the account in your cookies is not a member of this channel.'
+          : 'This video is members-only. Add cookies from an account that is a member of this channel in Settings to download it.');
         return false;
       }
 

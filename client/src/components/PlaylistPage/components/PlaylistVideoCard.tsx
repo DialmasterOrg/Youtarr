@@ -3,7 +3,8 @@ import { PlaylistSortOrder } from '../../../hooks/usePlaylistDetail';
 import { Button, Card, CardContent, Checkbox, Chip, Tooltip, Typography } from '../../ui';
 import { PlaylistVideo } from '../../../types/playlist';
 import { formatDurationClock } from '../../../utils';
-import { isSelectable, statusLabel, PlaylistVideoDates, toDownloadFileProps } from './playlistVideoHelpers';
+import { isSelectable, statusLabel, PlaylistVideoDates, toDownloadFileProps, showsMembersAccess } from './playlistVideoHelpers';
+import MembersAccessChip from '../../shared/MembersAccessChip';
 import DownloadFormatIndicator from '../../shared/DownloadFormatIndicator';
 import WatchedChip from '../../shared/WatchedChip';
 import { REMOVAL_TOOLTIP_CLASS } from '../../shared/RemovalDescription';
@@ -96,6 +97,7 @@ const PlaylistVideoCard: React.FC<PlaylistVideoCardProps> = ({
           ) : (
             <Chip label={status.label} color={status.color} size="small" style={compactStatusChipStyle} />
           )}
+          {showsMembersAccess(video) && <MembersAccessChip access={video.members_access} compact />}
           <WatchedChip watchedBy={video.watched_by || []} compact />
         </div>
         <div className="mt-2" onClick={(e) => e.stopPropagation()}>

@@ -5,6 +5,7 @@ import { PlaylistVideo } from '../../../types/playlist';
 import { VideoModalData } from '../../shared/VideoModal/types';
 import { removalFromRow, removedState } from '../../../utils/videoRemoval';
 import RemovalDescription from '../../shared/RemovalDescription';
+import { isMembersOnlyBlocked, isMembersOnlyVideo } from '../../../utils/videoStatus';
 
 export type PlaylistVideoStatusColor = 'success' | 'default' | 'warning' | 'error' | 'info';
 
@@ -16,9 +17,14 @@ export interface PlaylistVideoStatus {
 }
 
 // Ignored videos stay downloadable: explicitly selecting one is an intentional
-// override of the ignore.
+// override of the ignore. Members-only videos follow the channel page's rule.
 export function isDownloadable(v: PlaylistVideo): boolean {
-  return !v.activity && !v.downloaded && !v.youtube_removed;
+  return !v.activity && !v.downloaded && !v.youtube_removed && !isMembersOnlyBlocked(v);
+}
+
+// The members-only chip, for videos without a local file.
+export function showsMembersAccess(v: PlaylistVideo): boolean {
+  return !v.downloaded && isMembersOnlyVideo(v);
 }
 
 export function isDeletable(v: PlaylistVideo): boolean {
@@ -57,7 +63,9 @@ export function toModalData(v: PlaylistVideo): VideoModalData {
       ? removedState(v.removed_reason)
       : v.youtube_removed
         ? 'missing'
-        : 'never_downloaded';
+        : isMembersOnlyBlocked(v)
+          ? 'members_only'
+          : 'never_downloaded';
   return {
     removal: removalFromRow(v),
     youtubeId: v.youtube_id,
@@ -69,6 +77,7 @@ export function toModalData(v: PlaylistVideo): VideoModalData {
     addedAt: v.downloaded_at ?? null,
     mediaType: 'video',
     status,
+    membersAccess: v.members_access ?? null,
     isDownloaded: v.downloaded,
     ...toDownloadFileProps(v),
     isProtected: false,

@@ -11,6 +11,9 @@ paths:
   - "client/src/components/Configuration/hooks/useCookieTest.ts"
   - "client/src/components/Configuration/sections/components/ExternalCookieNotes.tsx"
   - "client/src/components/Configuration/sections/components/CookieFile*.tsx"
+  - "server/modules/membersAccess.js"
+  - "client/src/components/shared/MembersAccessChip.tsx"
+  - "client/src/components/shared/VideoModal/hooks/useMembersAccessCheck.ts"
 ---
 
 # Cookies
@@ -26,3 +29,11 @@ External and uploaded cookie files, how yt-dlp runs receive them, and the cookie
 - `cookieTest` (`POST /api/cookies/test`) runs one yt-dlp request to the subscriptions feed with `buildCommonArgs` against a private temp copy and never logs stderr, because yt-dlp echoes malformed cookie lines with their values. One test at a time (409), rate-limited.
 - In that feed, exit 0 with JSON means signed in (even zero subscriptions) and "Incomplete yt initial data" warnings mean signed out (EXPIRED_COOKIES); that meaning is specific to the feed, so it stays out of the shared subscription-import classifier.
 - `cookieDetails` summarizes the YouTube login cookies (names, counts, earliest expiry; never values) for `GET /api/cookies/status` and the upload and delete responses.
+
+## Members-only access (`membersAccess`)
+
+- Without cookies every download keeps `availability!=subscriber_only` in its match filter; with cookies members-only videos are attempted, and fresh denials are excluded by id (`id!~=`), except in manual jobs, which clear the requested ids' verdicts first.
+- A verdict (`video_members_access`) counts for 24 hours and only under the same `cookie_key` (SHA-256 of the cookie file, memoized by path, size and mtime), so replacing cookies retires every verdict without a write.
+- A "Join this channel" refusal records a denial only from a run that passed the cookies and printed no "cookies are no longer valid"/rotated warning: rejected cookies and anonymous retries get the same refusal as non-members.
+- Any successful yt-dlp read or download of a members-only video records `confirmed`; a cached `.info.json` proves nothing, so it reads the recorded state instead.
+- A video without `members_access` reads as blocked on the client (`isMembersOnlyBlocked`), matching servers and failed lookups from before access was tracked.

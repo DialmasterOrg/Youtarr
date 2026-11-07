@@ -6,6 +6,7 @@ const { MEDIA_TAB_TYPE_MAP } = require('./tabsUtils');
 const logger = require('../logger');
 const videoActivity = require('./download/videoActivity');
 const { findArchiveOnlyIds } = require('./archiveOnlyIds');
+const membersAccess = require('./membersAccess');
 
 const WATCH_URL_PREFIX = 'https://www.youtube.com/watch?v=';
 
@@ -25,12 +26,19 @@ class ChannelDownloadAllModule {
       attributes: ['youtube_id', 'duration', 'availability', 'live_status'],
     });
 
-    // Mirror the yt-dlp manual-download match filter
-    // (availability!=subscriber_only & !is_live & live_status!=is_upcoming)
-    // so the preview count matches what yt-dlp will accept.
+    // Mirror the yt-dlp match filter (members-only rule from
+    // membersAccess.buildDownloadFilter, !is_live, live_status!=is_upcoming)
+    // so the preview count matches what yt-dlp will accept: members-only
+    // videos count only when cookies are set and have not been denied them.
+    const membersOnlyIds = rows
+      .filter((row) => row.availability === 'subscriber_only')
+      .map((row) => row.youtube_id);
+    const membersStates = membersOnlyIds.length > 0
+      ? await membersAccess.getStates(membersOnlyIds, { knownMembersOnly: new Set(membersOnlyIds) })
+      : new Map();
     const candidates = rows.filter(
       (row) =>
-        row.availability !== 'subscriber_only' &&
+        !membersAccess.isBlockedState(membersStates.get(row.youtube_id)) &&
         row.live_status !== 'is_live' &&
         row.live_status !== 'is_upcoming'
     );

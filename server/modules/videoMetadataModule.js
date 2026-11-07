@@ -10,6 +10,7 @@ const channelVideoReanchor = require('./channelVideoReanchor');
 const { parseTierFromFormatNote, selectionTierForHeight } = require('./resolutionTier');
 const { isFileForVideo } = require('./filesystem/pathBuilder');
 const { slimInfoJson } = require('./infoJsonSlimmer');
+const membersAccess = require('./membersAccess');
 
 const NULL_METADATA = {
   description: null,
@@ -101,6 +102,8 @@ class VideoMetadataModule {
       const infoPath = path.join(infoDir, `${youtubeId}.info.json`);
 
       let rawData = null;
+      // Set when this call asked YouTube, so the answer is a fresh access check.
+      let fetchedMembersState;
 
       // Try reading cached .info.json from disk
       try {
@@ -115,6 +118,7 @@ class VideoMetadataModule {
             `https://www.youtube.com/watch?v=${youtubeId}`,
             YTDLP_FETCH_TIMEOUT_MS
           ));
+          fetchedMembersState = await membersAccess.recordFetchOutcome(youtubeId, { availability: rawData?.availability ?? null });
 
           // Cache the result for future requests
           try {
@@ -155,6 +159,7 @@ class VideoMetadataModule {
           // of treating the video as public until the next refetch.
           if (detectedMembersOnly) {
             fallbackMetadata.availability = 'subscriber_only';
+            fallbackMetadata.membersAccess = await membersAccess.recordFetchOutcome(youtubeId, { errorMessage: fetchErr.message });
           }
           return fallbackMetadata;
         }
@@ -213,10 +218,53 @@ class VideoMetadataModule {
         }
       }
 
-      return this._curateMetadata(youtubeId, rawData);
+      const curated = await this._curateMetadata(youtubeId, rawData);
+      curated.membersAccess = fetchedMembersState !== undefined
+        ? fetchedMembersState
+        : await this._lookupMembersAccess(youtubeId, rawData.availability);
+      return curated;
     } catch (err) {
       logger.error({ err, youtubeId }, 'Unexpected error in getVideoMetadata');
       return NULL_METADATA;
+    }
+  }
+
+  // A cached .info.json says nothing about whether today's cookies can open
+  // the video, so its state comes from the recorded checks.
+  async _lookupMembersAccess(youtubeId, availability) {
+    try {
+      const knownMembersOnly = availability === 'subscriber_only' ? new Set([youtubeId]) : new Set();
+      const states = await membersAccess.getStates([youtubeId], { knownMembersOnly });
+      return states.get(youtubeId) ?? null;
+    } catch (err) {
+      logger.warn({ err, youtubeId }, 'Could not read members-only access');
+      return null;
+    }
+  }
+
+  /**
+   * Asks YouTube whether the configured cookies can open a members-only video
+   * and records the answer. Skips the cached .info.json on purpose.
+   *
+   * @param {string} youtubeId - YouTube video ID
+   * @returns {Promise<{ membersAccess: string|null, checked: boolean }>}
+   *   checked is false when YouTube could not be asked (timeout, network, bot check)
+   */
+  async checkMembersAccess(youtubeId) {
+    try {
+      const rawData = await ytDlpRunner.fetchMetadata(
+        `https://www.youtube.com/watch?v=${youtubeId}`,
+        YTDLP_FETCH_TIMEOUT_MS
+      );
+      const state = await membersAccess.recordFetchOutcome(youtubeId, { availability: rawData?.availability ?? null });
+      return { membersAccess: state, checked: true };
+    } catch (err) {
+      if (!ytDlpRunner.isMembersOnlyError(err?.message)) {
+        logger.warn({ err, youtubeId }, 'Could not check members-only access');
+        return { membersAccess: await this._lookupMembersAccess(youtubeId, null), checked: false };
+      }
+      const state = await membersAccess.recordFetchOutcome(youtubeId, { errorMessage: err.message });
+      return { membersAccess: state, checked: true };
     }
   }
 

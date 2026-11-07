@@ -3,6 +3,7 @@
 // Required once, into a `mock`-prefixed const; see mockFactories.js for the rules.
 const mockFactories = require('./mockFactories');
 
+jest.mock('../../membersAccess');
 jest.mock('../../../logger');
 jest.mock('../../../models/channel', () => mockFactories.mockChannelModel());
 jest.mock('../../../models/channelvideo', () => mockFactories.mockChannelVideoModel());
@@ -68,6 +69,33 @@ describe('channelVideosService', () => {
     archiveModule.filterArchivedVideoIds.mockReturnValue(new Set());
 
     channelVideosService = require('../channelVideosService');
+  });
+
+  describe('applyMembersAccess', () => {
+    test('sets members_access on members-only videos only', async () => {
+      const membersAccess = require('../../membersAccess');
+      membersAccess.getStates.mockResolvedValueOnce(new Map([['members1234', 'confirmed']]));
+      const response = {
+        videos: [
+          { ...mockVideoData, youtube_id: 'members1234', availability: 'subscriber_only' },
+          { ...mockVideoData, youtube_id: 'public12345', availability: 'public' },
+        ],
+      };
+
+      const result = await channelVideosService.applyMembersAccess(response);
+
+      expect(result.videos.map((video) => video.members_access)).toEqual(['confirmed', undefined]);
+    });
+
+    test('leaves the videos unchanged when the state cannot be read', async () => {
+      const membersAccess = require('../../membersAccess');
+      membersAccess.getStates.mockRejectedValueOnce(new Error('db down'));
+      const videos = [{ ...mockVideoData, youtube_id: 'members1234', availability: 'subscriber_only' }];
+
+      const result = await channelVideosService.applyMembersAccess({ videos });
+
+      expect(result.videos).toBe(videos);
+    });
   });
 
   describe('buildChannelVideosResponse', () => {

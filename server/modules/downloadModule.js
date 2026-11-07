@@ -13,6 +13,7 @@ const ChannelVideo = require('../models/channelvideo');
 const logger = require('../logger');
 const playlistDownloadModule = require('./playlistDownloadModule');
 const storageGuard = require('./storageGuard');
+const membersAccess = require('./membersAccess');
 
 const DEFAULT_FILES_TO_DOWNLOAD = 5;
 // Statuses that end a grouped channel download before its remaining groups run.
@@ -386,7 +387,8 @@ class DownloadModule {
         const videoCount = overrideSettings.videoCount || configModule.config.channelFilesToDownload;
         const allowRedownload = !!overrideSettings.allowRedownload;
 
-        const args = YtdlpCommandBuilder.getBaseCommandArgs(resolution, allowRedownload);
+        const membersFilter = await membersAccess.buildDownloadFilter({ cookiesEnabled: Boolean(configModule.getCookiesPath()) });
+        const args = YtdlpCommandBuilder.getBaseCommandArgs(resolution, allowRedownload, null, null, null, false, { membersFilter });
         args.push('-a', tempChannelsFile);
         args.push('--playlist-end', String(videoCount));
 
@@ -732,7 +734,8 @@ class DownloadModule {
       // Pass audioFormat from filterConfig for MP3 downloads
       const audioFormat = group.filterConfig?.audioFormat || null;
       const skipVideoFolder = group.filterConfig?.skipVideoFolder || false;
-      const args = YtdlpCommandBuilder.getBaseCommandArgs(group.quality, allowRedownload, null, group.filterConfig, audioFormat, skipVideoFolder);
+      const membersFilter = await membersAccess.buildDownloadFilter({ cookiesEnabled: Boolean(configModule.getCookiesPath()) });
+      const args = YtdlpCommandBuilder.getBaseCommandArgs(group.quality, allowRedownload, null, group.filterConfig, audioFormat, skipVideoFolder, { membersFilter });
       args.push('-a', tempChannelsFile);
       args.push('--playlist-end', String(videoCount));
 
@@ -873,17 +876,27 @@ class DownloadModule {
             config: configModule.config,
           });
 
-        // For manual downloads, we don't apply duration filters but still exclude members-only
+        // For manual downloads, we don't apply duration filters; members-only videos follow membersAccess
         // Subfolder override is passed to post-processor via environment variable
         // Pass audioFormat for MP3 downloads
         const anonymousRetry = Boolean(this.getJobDataValue(jobData, 'anonymousRetry'));
         const cookiesEnabled = Boolean(configModule.getCookiesPath()) && !anonymousRetry;
+        // Videos the user picked are attempted even when a denial is on record,
+        // and the attempt replaces it. Playlist, Download All and retry jobs
+        // leave fresh denials out.
+        const userPicked = jobType.includes(MANUAL_DOWNLOAD_LABEL);
+        if (userPicked && cookiesEnabled) {
+          await membersAccess.clearVerdicts(acceptedIds).catch((err) => {
+            logger.warn({ err, jobId }, 'Could not clear members-only verdicts for a manual download');
+          });
+        }
+        const membersFilter = await membersAccess.buildDownloadFilter({ cookiesEnabled, skipDenied: !userPicked });
         const args = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload(
           resolution,
           allowRedownload,
           audioFormat,
           skipVideoFolder,
-          { cookiesEnabled }
+          { cookiesEnabled, membersFilter }
         );
 
         if (anonymousRetry) {

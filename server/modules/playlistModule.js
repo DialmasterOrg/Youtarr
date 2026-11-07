@@ -489,9 +489,9 @@ class PlaylistModule {
   // Default (webpage) extraction paginates fully on yt-dlp >= 2026.07.04.
   // skipWebpage (InnerTube-only) is the fallback used by _fetchPlaylistVideos
   // when the default path fails or under-delivers; it stops at ~200 entries
-  // for playlist views as of 2026-07. If cookies are ever added here, an
-  // authenticated jar makes yt-dlp reject skip=webpage unless skip=authcheck
-  // is also passed.
+  // for playlist views as of 2026-07. Members-only (UUM*) playlists are
+  // listed with cookies (membersPlaylistCookieArgs), and an authenticated jar
+  // makes yt-dlp reject skip=webpage unless skip=authcheck is also passed.
   _spawnFlatPlaylist(url, { playlistEnd, skipWebpage = false } = {}) {
     return new Promise((resolve, reject) => {
       const cookieArgs = membersPlaylistCookieArgs(url);

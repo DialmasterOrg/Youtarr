@@ -435,6 +435,23 @@ Sync is one-way (server -> Youtarr). Non-owner Plex users come from the server's
 - **Description**: Use cookies for YouTube authentication
 - **Note**: May be required in some cases to get around YouTube bot detection. Enable only when needed: logged-in sessions use different YouTube player clients, and YouTube has been restricting stream formats on those for some accounts. When cookies are enabled Youtarr adds the `mweb` and `web_safari` player clients to every video download and metadata fetch; free (non-Premium) accounts affected by the restriction top out at 1080p. See "Downloads Are Only 360p With Cookies Enabled" in [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
+### Members-Only Videos
+With cookies enabled, members-only videos are downloaded like any other video
+when the account in the cookies is a member of the channel. Without cookies they
+are skipped, as before.
+
+- Each download, URL check, or video page opened asks YouTube whether the
+  cookies can open the video and remembers the answer for 24 hours. Replacing or
+  editing the cookie file forgets every answer.
+- A video the account is not a member of is shown as **Members: no access** and
+  is left out of automatic channel and playlist downloads, retries, and
+  Download All for 24 hours. Open the video and choose **Check again** after
+  joining the channel, or add it manually: a manual download always asks again.
+- If YouTube rejects the cookies themselves (expired or rotated), nothing is
+  recorded about membership; refresh the cookies and try again.
+- Members-only playlists of a channel (`UUM...` playlist ids) are listed with
+  the cookies, so they can be followed like any other playlist.
+
 ### Custom Cookies Uploaded
 - **Config Key**: `customCookiesUploaded`
 - **Type**: `boolean`

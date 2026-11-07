@@ -17,6 +17,7 @@ const downloadCleanup = require('./downloadCleanup');
 const transient403RetryPlanner = require('./transient403RetryPlanner');
 const failureAdvisor = require('./failureAdvisor');
 const failedVideoEnricher = require('./failedVideoEnricher');
+const membersAccess = require('../membersAccess');
 const tempSpaceProbe = require('./tempSpaceProbe');
 const { containsHttp403 } = require('./ytdlpStderrSignals');
 const { isSpecificUrlDownloadJob } = require('./jobTypes');
@@ -225,6 +226,18 @@ async function finalizeDownloadJob({
     await failedVideoEnricher.enrichFailedVideos(failedVideosList);
 
     await downloadResultProcessor.reconcileArchive({ allowRedownload, failedVideosList, videoData, errorTracker });
+
+    // Best-effort: a failure here only means the next run checks again.
+    try {
+      await membersAccess.recordDownloadOutcome({
+        membersOnlyIds: errorTracker.membersOnlyVideoIds,
+        downloadedIds: videoData.map((video) => video.youtubeId),
+        usedCookies: cookiesEnabled && !anonymousRetry,
+        stderr: stderrBuffer,
+      });
+    } catch (err) {
+      logger.warn({ err, jobId }, 'Could not record members-only access from the download');
+    }
 
     const wasTerminated = Boolean(timeoutController.shutdownInProgress || timeoutController.shutdownReason || wasManuallyTerminated);
 

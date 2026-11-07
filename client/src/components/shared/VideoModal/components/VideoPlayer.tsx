@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Box, Typography, IconButton, Tooltip, Link } from '../../../ui';
+import { Box, Typography, IconButton, Tooltip, Link, Button } from '../../../ui';
 import {
   Play as PlayArrowIcon,
   CloudOff as CloudOffIcon,
@@ -15,11 +15,19 @@ import { isRemovedStatus } from '../../../../utils/videoStatus';
 import { VideoModalData } from '../types';
 import { YOUTUBE_URL_BASE } from '../constants';
 
+export interface MembersAccessCheckControl {
+  onCheck: () => void;
+  loading: boolean;
+  error: string | null;
+}
+
 interface VideoPlayerProps {
   video: VideoModalData;
   token: string | null;
   onDownloadClick: () => void;
   isMobile: boolean;
+  // Offered on a members-only video the configured cookies were denied.
+  membersAccessCheck?: MembersAccessCheckControl;
 }
 
 const DEFAULT_LANDSCAPE_ASPECT_RATIO = 16 / 9;
@@ -32,7 +40,7 @@ const MOBILE_OVERLAY_ICON_SIZE = 32;
 const MOBILE_DOWNLOAD_BUTTON_SIZE = '56px';
 const MOBILE_DOWNLOAD_ICON_SIZE = '32px';
 
-function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerProps) {
+function VideoPlayer({ video, token, onDownloadClick, isMobile, membersAccessCheck }: VideoPlayerProps) {
   const [playbackStarted, setPlaybackStarted] = useState(false);
   const [streamError, setStreamError] = useState(false);
   const [infoTooltipOpen, setInfoTooltipOpen] = useState(false);
@@ -283,8 +291,39 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
                     '0 0 4px rgba(255,255,255,0.95), 0 0 10px rgba(255,255,255,0.8), 0 0 16px rgba(255,255,255,0.55)',
                 }}
               >
-                Youtarr cannot download this video or fetch its metadata
+                {video.membersAccess === 'denied'
+                  ? 'The account in your cookies is not a member of this channel'
+                  : 'Add cookies from a member account in Settings to download this video'}
               </Typography>
+              {video.membersAccess === 'denied' && membersAccessCheck && (
+                <>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    onClick={membersAccessCheck.onCheck}
+                    disabled={membersAccessCheck.loading}
+                  >
+                    {membersAccessCheck.loading ? 'Checking…' : 'Check again'}
+                  </Button>
+                  {membersAccessCheck.error && (
+                    <Typography
+                      variant="body2"
+                      role="alert"
+                      sx={{
+                        color: '#0f172a',
+                        fontWeight: 500,
+                        textAlign: 'center',
+                        paddingLeft: 16,
+                        paddingRight: 16,
+                        textShadow:
+                          '0 0 4px rgba(255,255,255,0.95), 0 0 10px rgba(255,255,255,0.8), 0 0 16px rgba(255,255,255,0.55)',
+                      }}
+                    >
+                      {membersAccessCheck.error}
+                    </Typography>
+                  )}
+                </>
+              )}
             </>
           ) : (
             <IconButton
