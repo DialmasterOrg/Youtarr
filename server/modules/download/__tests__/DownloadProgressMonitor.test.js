@@ -348,6 +348,35 @@ describe('DownloadProgressMonitor', () => {
         expect(monitor.determineState('[download] Destination: file.f140.m4a')).toBe('downloading_audio');
       });
 
+      it('should identify a webm video stream', () => {
+        expect(monitor.determineState('[download] Destination: file.f315.webm')).toBe('downloading_video');
+      });
+
+      it('should identify an opus audio stream', () => {
+        expect(monitor.determineState('[download] Destination: file.f251.opus')).toBe('downloading_audio');
+      });
+
+      it('should identify a dash-suffixed audio format', () => {
+        expect(monitor.determineState('[download] Destination: file.f140-1.m4a')).toBe('downloading_audio');
+      });
+
+      it('should use the announced formats to tell webm video from webm audio', () => {
+        expect(monitor.determineState('[info] abc123: Downloading 1 format(s): 315+251')).toBeNull();
+        expect(monitor.requestedFormatIds).toEqual(['315', '251']);
+        expect(monitor.determineState('[download] Destination: file.f315.webm')).toBe('downloading_video');
+        expect(monitor.determineState('[download] Destination: file.f251.webm')).toBe('downloading_audio');
+      });
+
+      it('should show progress through a 4K webm download', () => {
+        monitor.processProgress('', '[info] Fi_OAQqil0s: Downloading 1 format(s): 315+140-1', {});
+        monitor.processProgress('', '[info] Writing video metadata as JSON to: /path/file.info.json', {});
+        expect(monitor.currentState).toBe('processing_metadata');
+        monitor.processProgress('', '[download] Destination: /path/file [Fi_OAQqil0s].f315.webm', {});
+        expect(monitor.currentState).toBe('downloading_video');
+        monitor.processProgress('', '[download] Destination: /path/file [Fi_OAQqil0s].f140-1.m4a', {});
+        expect(monitor.currentState).toBe('downloading_audio');
+      });
+
       it('should identify downloading_thumbnail state', () => {
         expect(monitor.determineState('[download] Destination: poster.jpg')).toBe('downloading_thumbnail');
         expect(monitor.determineState('[download] Destination: thumbnail.png')).toBe('downloading_thumbnail');
