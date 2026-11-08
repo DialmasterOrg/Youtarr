@@ -16,6 +16,7 @@ Youtarr ships four Compose files so each supported runtime can layer the right o
 | `docker-compose.dev.yml` | Development mode: mounts `./server/` and migrations into the container so backend changes load on a container restart without a rebuild, and uses a separate `youtarr-db-dev` database with its own named volume. Used by `./scripts/start-dev.sh`. See [DEVELOPMENT.md](DEVELOPMENT.md). |
 | `docker-compose.arm.yml` | Named-volume database override. The filename is historical: it was originally added for ARM systems, but it is also useful on Docker Desktop and NAS/virtualized filesystems. Layered on top of `docker-compose.yml` via `-f`. |
 | `docker-compose.external-db.yml` | Runs Youtarr against an external MariaDB/MySQL instance instead of the bundled database. Used by `./start-with-external-db.sh`. |
+| `docker-compose.gluetun.yml` | Adds Gluetun integration to allow Youtarr's traffic to route through a VPN provider of your choosing. Layered on top of `docker-compose.yml` or `docker-compose.external-db.yml` via `COMPOSE_FILE=`. See [GLUETUN_INTEGRATION.md](GLUETUN_INTEGRATION.md) for more info. |
 
 ## Container Details
 
@@ -777,6 +778,8 @@ The application container includes health checks:
 
 ### Plex Server Communication
 
+**Note:** Regardless on setup, if you are using Gluetun, `FIREWALL_OUTBOUND_SUBNETS` in your `.env` file must be set. See [GLUETUN_INTEGRATION.md](GLUETUN_INTEGRATION.md) for more info.
+
 #### Same Machine Setup
 When Youtarr and Plex run on the same machine:
 - Docker Desktop (Windows/macOS): `host.docker.internal` or host LAN IP (e.g., `192.168.x.x`)
@@ -872,6 +875,8 @@ If ports are already in use:
 The start/stop scripts automatically detect your Docker Compose version:
 - `docker compose` (v2) - Recommended
 - `docker-compose` (v1) - Legacy support
+
+**Note:** [docker-compose.gluetun.yml](docker-compose.gluetun.yml) requires Compose v2 (2.24 or newer) or it will not work.
 
 To check your version:
 ```bash

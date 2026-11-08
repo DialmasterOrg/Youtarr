@@ -3,16 +3,71 @@
 This document provides a comprehensive reference for all environment variables supported by Youtarr.
 
 ## Table of Contents
-- [Required Variables](#required-variables)
-- [Application Access](#application-access)
-- [Database Configuration](#database-configuration)
-- [Authentication](#authentication)
-- [YouTube Cookies](#youtube-cookies)
-- [User and Permissions](#user-and-permissions)
-- [Output Directory](#output-directory)
-- [Platform Deployment](#platform-deployment)
-- [Development and Debugging](#development-and-debugging)
-- [Docker Configuration](#docker-configuration)
+<details>
+  <summary>Click to expand</summary>
+
+- [Environment Variables Reference](#environment-variables-reference)
+  - [Table of Contents](#table-of-contents)
+  - [Required Variables](#required-variables)
+    - [YOUTUBE\_OUTPUT\_DIR](#youtube_output_dir)
+  - [Application Access](#application-access)
+    - [YOUTARR\_HOST\_PORT](#youtarr_host_port)
+  - [Database Configuration](#database-configuration)
+    - [Internal Database (Default)](#internal-database-default)
+    - [DB\_HOST](#db_host)
+    - [DB\_PORT](#db_port)
+    - [DB\_USER](#db_user)
+    - [DB\_PASSWORD](#db_password)
+    - [DB\_NAME](#db_name)
+    - [DB\_ROOT\_PASSWORD](#db_root_password)
+    - [External Database Setup](#external-database-setup)
+  - [Authentication](#authentication)
+    - [AUTH\_ENABLED](#auth_enabled)
+    - [EXTERNAL\_API\_ENABLED](#external_api_enabled)
+    - [EXTERNAL\_API\_WORK\_CONCURRENCY](#external_api_work_concurrency)
+    - [EXTERNAL\_API\_WORK\_QUEUE](#external_api_work_queue)
+    - [AUTH\_PRESET\_USERNAME](#auth_preset_username)
+    - [AUTH\_PRESET\_PASSWORD](#auth_preset_password)
+    - [TRUST\_PROXY](#trust_proxy)
+  - [YouTube Cookies](#youtube-cookies)
+    - [YOUTARR\_COOKIES\_FILE](#youtarr_cookies_file)
+  - [User and Permissions](#user-and-permissions)
+    - [YOUTARR\_UID](#youtarr_uid)
+    - [YOUTARR\_GID](#youtarr_gid)
+  - [Output Directory](#output-directory)
+    - [OUTPUT\_DIR\_HEALTHCHECK\_TIMEOUT](#output_dir_healthcheck_timeout)
+  - [Platform Deployment](#platform-deployment)
+    - [DATA\_PATH](#data_path)
+    - [PLEX\_URL](#plex_url)
+  - [Development and Debugging](#development-and-debugging)
+    - [LOG\_LEVEL](#log_level)
+    - [LOG\_FILE\_MAX\_SIZE](#log_file_max_size)
+    - [LOG\_FILE\_MAX\_COUNT](#log_file_max_count)
+    - [TZ](#tz)
+    - [YOUTARR\_IMAGE](#youtarr_image)
+  - [Docker Configuration](#docker-configuration)
+    - [Container Naming](#container-naming)
+    - [Network Configuration](#network-configuration)
+  - [Gluetun Integration](#gluetun-integration)
+    - [VPN\_SERVICE\_PROVIDER](#vpn_service_provider)
+    - [Wireguard](#wireguard)
+      - [WIREGUARD\_PRIVATE\_KEY](#wireguard_private_key)
+      - [WIREGUARD\_ADDRESSES](#wireguard_addresses)
+      - [WIREGUARD\_PRESHARED\_KEY](#wireguard_preshared_key)
+      - [WIREGUARD\_MTU](#wireguard_mtu)
+    - [FIREWALL\_OUTBOUND\_SUBNETS](#firewall_outbound_subnets)
+    - [GLUETUN\_CONTAINER\_NAME](#gluetun_container_name)
+  - [Best Practices](#best-practices)
+    - [Security](#security)
+    - [Performance](#performance)
+    - [Maintenance](#maintenance)
+  - [Environment Variable Priority](#environment-variable-priority)
+  - [Troubleshooting](#troubleshooting)
+    - [Permission Errors](#permission-errors)
+    - [Database Connection Issues](#database-connection-issues)
+    - [Authentication Problems](#authentication-problems)
+
+</details>
 
 ## Required Variables
 
@@ -334,7 +389,7 @@ These variables are used by docker-compose.yml but not directly by the applicati
 #### WIREGUARD_MTU
 
 **Required**: No
-**Default**: `1420`
+**Default**: Gluetun's default if unset.
 **Description**: Used for MTU tuning for better WireGuard speeds.
 **Note**: See https://github.com/qdm12/gluetun-wiki/blob/main/setup/options/wireguard.md for info.
 

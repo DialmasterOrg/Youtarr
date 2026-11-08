@@ -89,29 +89,24 @@ If you prefer to use standard `docker compose up` commands:
    - `LOG_LEVEL` - Set to `debug` for troubleshooting, `info` for normal/production use (default), `warn` for minimal logging
    - If using Gluetun, set `FIREWALL_OUTBOUND_SUBNETS` if Youtarr needs to reach Plex, Jellyfin, Emby, or an external DB on your LAN. Otherwise, that traffic goes into the VPN and will time out. If you use `host.docker.internal` for anything, add `172.17.0.0/16` (or your bridge subnet) here, or use the LAN IP instead.
 
-
    See: [ENVIRONMENT VARIABLES](ENVIRONMENT_VARIABLES.md) for more details
 
 4. **Start with Docker Compose**:
    ```bash
    docker compose up -d
    ```
-   If using Gluetun, start with the [docker-compose.gluetun.yml](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose.gluetun.yml) file.
+   If using Gluetun, start with the [docker-compose.gluetun.yml](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose.gluetun.yml) file and use the appropate `COMPOSE_FILE=` command in `.env.example` for your setup.
+
    **Note:** This requires Docker Compose v2. If you are using Docker Desktop, make sure to enable the "Use Docker Compose V2" option in the settings.
-   ```bash
-   docker compose -f docker-compose.yml -f docker-compose.gluetun.yml up -d
-   ```
 
    > **Docker Desktop/ARM/NAS users**: For a fresh install, use the named-volume database override to avoid MariaDB bind-mount issues on virtualized filesystems:
    > ```bash
    > docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
    > ```
    >
-   > If using Gluetun, use the [docker-compose.gluetun.yml](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose.gluetun.yml) file.
+   > If using Gluetun, use the named-volume `COMPOSE_FILE` line from `.env.example` instead of the `-f` command above, then `docker compose up -d`
+   >
    > **Note:** This requires Docker Compose v2. If you are using Docker Desktop, make sure to enable the "Use Docker Compose V2" option in the settings.
-   > ```bash
-   > docker compose -f docker-compose.yml -f docker-compose.gluetun.yml -f docker-compose.arm.yml up -d
-   > ```
    > If you already have data in `./database/`, use `./scripts/migrate-to-named-volume.sh` instead. See [Database Management](DATABASE.md#migrating-from-bind-mount-to-named-volume) and [Troubleshooting](TROUBLESHOOTING.md#docker-desktop--arm-incorrect-information-in-file-errors) for details.
 
 5. **Access the web interface**:
