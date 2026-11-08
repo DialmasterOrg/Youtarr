@@ -876,7 +876,7 @@ The start/stop scripts automatically detect your Docker Compose version:
 - `docker compose` (v2) - Recommended
 - `docker-compose` (v1) - Legacy support
 
-**Note:** [docker-compose.gluetun.yml](docker-compose.gluetun.yml) requires Compose v2 (2.24 or newer) or it will not work.
+**Note:** [docker-compose.gluetun.yml](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose.gluetun.yml) requires Compose v2 (2.24 or newer) or it will not work.
 
 To check your version:
 ```bash
