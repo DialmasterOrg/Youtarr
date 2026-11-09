@@ -345,7 +345,7 @@ async function finalizeDownloadJob({
         ? 'Bot detection encountered during the no-cookies fallback. The fallback also failed, so this video may be genuinely unavailable.'
         : cookiesEnabled
           ? 'Bot detection encountered even though cookies are configured - they are likely expired or rotated.'
-          : 'Bot detection encountered. Please set cookies in your Configuration.';
+          : 'Bot detection encountered. YouTube is temporarily refusing requests from this server; this usually clears on its own, so try again later.';
 
       // Same leftovers, and the same guard, as the non-zero exit branch below.
       if (stdioClosed) {
@@ -362,7 +362,7 @@ async function finalizeDownloadJob({
           ? 'The no-cookies fallback was also rejected by YouTube. This video may be genuinely unavailable.'
           : cookiesEnabled
             ? 'YouTube requires authentication and your uploaded cookies appear stale. Re-export fresh cookies from your browser and upload them in Settings -> Cookies.'
-            : 'YouTube requires authentication. Enable cookies in Configuration to resolve this issue.',
+            : 'YouTube asked this server to sign in (bot check). Without cookies this is usually temporary and the next scheduled download retries the failed videos. If it keeps happening, upload YouTube cookies in Settings -> Cookies.',
         error: anonymousRetry ? 'NO_COOKIES_FALLBACK_FAILED' : 'COOKIES_REQUIRED'
       });
       jobErrorCode = anonymousRetry ? 'NO_COOKIES_FALLBACK_FAILED' : 'COOKIES_REQUIRED';
