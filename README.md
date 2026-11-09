@@ -51,7 +51,7 @@ https://github.com/user-attachments/assets/a80548fc-bcf9-4ad0-889c-dbd5aac250ee
 - **Powered by yt-dlp**: Uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) under the hood for YouTube integration and downloads
 - **Content Ratings**: Add per-video and per-channel content ratings (normalized to common media-server values like `G`, `PG`, `PG-13`, `R`, `NC-17`, `TV-*`). Ratings can be set per-download, via channel defaults, or derived from yt-dlp metadata; they show up as badges and can be used for automated policies.
 - **Additional Tags**: Add per-channel tags that are in addition to tags found from the YouTube video
-- **Gluetun Integration**: Dedicated Docker Compose file with Gluetun integration
+- **VPN support**: Route Youtarr's traffic through a [Gluetun](https://github.com/qdm12/gluetun) VPN container with an optional Compose override
 
 ## How Youtarr compares
 

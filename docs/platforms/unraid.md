@@ -2,6 +2,8 @@
 
 Youtarr is available in the Unraid **Community Applications** store, using the actively maintained template from [@nwithan8](https://codeberg.org/nwithan8/unraid_templates).
 
+**VPN (Gluetun):** the [Gluetun guide](../GLUETUN_INTEGRATION.md) covers the Docker Compose setup only. On Unraid, routing Youtarr through a Gluetun container means attaching Youtarr to Gluetun's network (`--net=container:<gluetun container>`) and publishing the web port on Gluetun instead; this guide doesn't cover it.
+
 
 ## Deploying on Unraid
 

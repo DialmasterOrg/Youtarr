@@ -3,71 +3,17 @@
 This document provides a comprehensive reference for all environment variables supported by Youtarr.
 
 ## Table of Contents
-<details>
-  <summary>Click to expand</summary>
-
-- [Environment Variables Reference](#environment-variables-reference)
-  - [Table of Contents](#table-of-contents)
-  - [Required Variables](#required-variables)
-    - [YOUTUBE\_OUTPUT\_DIR](#youtube_output_dir)
-  - [Application Access](#application-access)
-    - [YOUTARR\_HOST\_PORT](#youtarr_host_port)
-  - [Database Configuration](#database-configuration)
-    - [Internal Database (Default)](#internal-database-default)
-    - [DB\_HOST](#db_host)
-    - [DB\_PORT](#db_port)
-    - [DB\_USER](#db_user)
-    - [DB\_PASSWORD](#db_password)
-    - [DB\_NAME](#db_name)
-    - [DB\_ROOT\_PASSWORD](#db_root_password)
-    - [External Database Setup](#external-database-setup)
-  - [Authentication](#authentication)
-    - [AUTH\_ENABLED](#auth_enabled)
-    - [EXTERNAL\_API\_ENABLED](#external_api_enabled)
-    - [EXTERNAL\_API\_WORK\_CONCURRENCY](#external_api_work_concurrency)
-    - [EXTERNAL\_API\_WORK\_QUEUE](#external_api_work_queue)
-    - [AUTH\_PRESET\_USERNAME](#auth_preset_username)
-    - [AUTH\_PRESET\_PASSWORD](#auth_preset_password)
-    - [TRUST\_PROXY](#trust_proxy)
-  - [YouTube Cookies](#youtube-cookies)
-    - [YOUTARR\_COOKIES\_FILE](#youtarr_cookies_file)
-  - [User and Permissions](#user-and-permissions)
-    - [YOUTARR\_UID](#youtarr_uid)
-    - [YOUTARR\_GID](#youtarr_gid)
-  - [Output Directory](#output-directory)
-    - [OUTPUT\_DIR\_HEALTHCHECK\_TIMEOUT](#output_dir_healthcheck_timeout)
-  - [Platform Deployment](#platform-deployment)
-    - [DATA\_PATH](#data_path)
-    - [PLEX\_URL](#plex_url)
-  - [Development and Debugging](#development-and-debugging)
-    - [LOG\_LEVEL](#log_level)
-    - [LOG\_FILE\_MAX\_SIZE](#log_file_max_size)
-    - [LOG\_FILE\_MAX\_COUNT](#log_file_max_count)
-    - [TZ](#tz)
-    - [YOUTARR\_IMAGE](#youtarr_image)
-  - [Docker Configuration](#docker-configuration)
-    - [Container Naming](#container-naming)
-    - [Network Configuration](#network-configuration)
-  - [Gluetun Integration](#gluetun-integration)
-    - [VPN\_SERVICE\_PROVIDER](#vpn_service_provider)
-    - [Wireguard](#wireguard)
-      - [WIREGUARD\_PRIVATE\_KEY](#wireguard_private_key)
-      - [WIREGUARD\_ADDRESSES](#wireguard_addresses)
-      - [WIREGUARD\_PRESHARED\_KEY](#wireguard_preshared_key)
-      - [WIREGUARD\_MTU](#wireguard_mtu)
-    - [FIREWALL\_OUTBOUND\_SUBNETS](#firewall_outbound_subnets)
-    - [GLUETUN\_CONTAINER\_NAME](#gluetun_container_name)
-  - [Best Practices](#best-practices)
-    - [Security](#security)
-    - [Performance](#performance)
-    - [Maintenance](#maintenance)
-  - [Environment Variable Priority](#environment-variable-priority)
-  - [Troubleshooting](#troubleshooting)
-    - [Permission Errors](#permission-errors)
-    - [Database Connection Issues](#database-connection-issues)
-    - [Authentication Problems](#authentication-problems)
-
-</details>
+- [Required Variables](#required-variables)
+- [Application Access](#application-access)
+- [Database Configuration](#database-configuration)
+- [Authentication](#authentication)
+- [YouTube Cookies](#youtube-cookies)
+- [User and Permissions](#user-and-permissions)
+- [Output Directory](#output-directory)
+- [Platform Deployment](#platform-deployment)
+- [Development and Debugging](#development-and-debugging)
+- [Docker Configuration](#docker-configuration)
+- [Gluetun Integration](#gluetun-integration)
 
 ## Required Variables
 
@@ -364,9 +310,11 @@ These variables are used by docker-compose.yml but not directly by the applicati
 
 ## Gluetun Integration
 
+Only `docker-compose.gluetun.yml`, the optional VPN override, reads these variables; see [GLUETUN_INTEGRATION.md](GLUETUN_INTEGRATION.md). They're passed straight through to the Gluetun container, so the [Gluetun wiki](https://github.com/qdm12/gluetun-wiki) has the full details.
+
 ### VPN_SERVICE_PROVIDER
-**Required**: Yes
-**Description**: Provider for Gluetun to use.
+**Required**: Yes, when the Gluetun override is in use
+**Description**: Your VPN provider's name as Gluetun spells it, for example `mullvad`, `protonvpn` or `custom`.
 **Note**: See https://github.com/qdm12/gluetun-wiki/tree/main/setup/providers for a list of supported providers and setup. May require modifying your Docker Compose file to add additional needed settings (based on provider).
 
 ### Wireguard
@@ -379,11 +327,11 @@ These variables are used by docker-compose.yml but not directly by the applicati
 #### WIREGUARD_ADDRESSES
 
 **Required**: Yes
-**Description**: The Wireguard address your provider gives you.
+**Description**: The WireGuard address your provider gives you, for example `10.64.222.21/32`.
 
 #### WIREGUARD_PRESHARED_KEY
 
-**Required**: No, depending on your provider.
+**Required**: Only if your provider gives you one
 **Description**: The preshared Wireguard key your provider gives you.
 
 #### WIREGUARD_MTU
@@ -395,9 +343,9 @@ These variables are used by docker-compose.yml but not directly by the applicati
 
 ### FIREWALL_OUTBOUND_SUBNETS
 
-**Required**: By default, no. If you are using media integrations, yes.
-**Description**: Allows Youtarr to reach other devices on your network (like Plex, Jellyfin, & Emby)
-**Format**: CIDR format
+**Required**: No, unless Youtarr needs to reach Plex, Jellyfin, Emby or an external database outside the VPN
+**Description**: Comma-separated subnets that Youtarr can reach directly instead of through the VPN (like Plex, Jellyfin, & Emby on your LAN). `host.docker.internal` is the Docker bridge gateway, so include `172.17.0.0/16` (or your bridge subnet) if you use it. They can't overlap the VPN tunnel's address range.
+**Format**: CIDR, comma-separated (e.g., `192.168.1.0/24,172.17.0.0/16`)
 **Note**: See https://github.com/qdm12/gluetun-wiki/blob/main/setup/options/firewall.md for more info.
 
 ### GLUETUN_CONTAINER_NAME

@@ -3,8 +3,8 @@
 # See https://github.com/DialmasterOrg/Youtarr/blob/main/docs/GLUETUN_INTEGRATION.md for more info
 #
 # IMPORTANT!
-# This Docker Compose file requires Compose v2 to function properly.
-# If you are using Docker Desktop, make sure to enable the "Use Docker Compose V2" option in the settings.
+# This file needs Docker Compose v2.24 or newer (check with `docker compose version`).
+# The old `docker-compose` v1 command can't read the !reset tags below.
 
 services:
   gluetun:

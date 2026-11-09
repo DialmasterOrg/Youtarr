@@ -15,6 +15,8 @@ Both should be on the host's real disks and included in your backups. On Unraid,
 
 The database is stored in a Docker volume named `youtarr-db-data`, so you don't need a folder for it.
 
+**VPN (Gluetun):** the [Gluetun guide](../GLUETUN_INTEGRATION.md) is written for the git-clone setup, where `docker-compose.gluetun.yml` is added through `COMPOSE_FILE`. A Portainer stack can't do that, so running Youtarr through Gluetun means adding the `gluetun` service to this stack yourself and moving Youtarr's port mapping and `network_mode` the way that file shows. This guide doesn't cover it.
+
 ## Create the stack
 
 1. In Portainer, open your environment and go to **Stacks** -> **Add stack**.
