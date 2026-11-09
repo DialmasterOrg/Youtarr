@@ -13,6 +13,7 @@ This document provides a comprehensive reference for all environment variables s
 - [Platform Deployment](#platform-deployment)
 - [Development and Debugging](#development-and-debugging)
 - [Docker Configuration](#docker-configuration)
+- [Gluetun Integration](#gluetun-integration)
 
 ## Required Variables
 
@@ -306,6 +307,53 @@ These variables are used by docker-compose.yml but not directly by the applicati
 - Network: `youtarr-network` (internal bridge)
 - Application port: 3087 (host) → 3011 (container)
 - Database port: 3321 inside the Docker network only
+
+## Gluetun Integration
+
+Only `docker-compose.gluetun.yml`, the optional VPN override, reads these variables; see [GLUETUN_INTEGRATION.md](GLUETUN_INTEGRATION.md). They're passed straight through to the Gluetun container, so the [Gluetun wiki](https://github.com/qdm12/gluetun-wiki) has the full details.
+
+### VPN_SERVICE_PROVIDER
+**Required**: Yes, when the Gluetun override is in use
+**Description**: Your VPN provider's name as Gluetun spells it, for example `mullvad`, `protonvpn` or `custom`.
+**Note**: See https://github.com/qdm12/gluetun-wiki/tree/main/setup/providers for a list of supported providers and setup. May require modifying your Docker Compose file to add additional needed settings (based on provider).
+
+### Wireguard
+
+#### WIREGUARD_PRIVATE_KEY
+
+**Required**: Yes
+**Description**: The Wireguard private key your provider gives you.
+
+#### WIREGUARD_ADDRESSES
+
+**Required**: Yes
+**Description**: The WireGuard address your provider gives you, for example `10.64.222.21/32`.
+
+#### WIREGUARD_PRESHARED_KEY
+
+**Required**: Only if your provider gives you one
+**Description**: The preshared Wireguard key your provider gives you.
+
+#### WIREGUARD_MTU
+
+**Required**: No
+**Default**: Gluetun's default if unset.
+**Description**: Used for MTU tuning for better WireGuard speeds.
+**Note**: See https://github.com/qdm12/gluetun-wiki/blob/main/setup/options/wireguard.md for info.
+
+### FIREWALL_OUTBOUND_SUBNETS
+
+**Required**: No, unless Youtarr needs to reach Plex, Jellyfin, Emby or an external database outside the VPN
+**Description**: Comma-separated subnets that Youtarr can reach directly instead of through the VPN (like Plex, Jellyfin, & Emby on your LAN). `host.docker.internal` is the Docker bridge gateway, so include `172.17.0.0/16` (or your bridge subnet) if you use it. They can't overlap the VPN tunnel's address range.
+**Format**: CIDR, comma-separated (e.g., `192.168.1.0/24,172.17.0.0/16`)
+**Note**: See https://github.com/qdm12/gluetun-wiki/blob/main/setup/options/firewall.md for more info.
+
+### GLUETUN_CONTAINER_NAME
+
+**Required**: No
+**Default**: `youtarr-gluetun`
+**Description**: Gluetun's container name.
+**Note**: Useful if running multiple Gluetun containers.
 
 ## Best Practices
 
