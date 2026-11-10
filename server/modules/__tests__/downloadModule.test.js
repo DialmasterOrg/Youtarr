@@ -1462,6 +1462,15 @@ describe('DownloadModule', () => {
       }, false, { includeJobId: true });
     });
 
+    it.each([
+      ['an External API request', { jobLabel: 'Manually Added Urls (external request)' }],
+      ['a retry of one', { jobLabel: 'Auto-retry: 1 video', externalRequest: true }],
+    ])('marks the retry of %s as an External API request', async (_name, sourceJobData) => {
+      await downloadModule.enqueueAutoRetryJob({ retryVideos: [retryVideo], autoRetryAttempt: 1, sourceJobData });
+
+      expect(doSpecificDownloadsSpy.mock.calls[0][0].body.externalRequest).toBe(true);
+    });
+
     it('splits mixed authenticated and anonymous retries into separate jobs', async () => {
       const anonymousVideo = {
         youtubeId: 'zzz999xxx11',
@@ -1796,6 +1805,17 @@ describe('DownloadModule', () => {
         '1080', false, null, false,
         { cookiesEnabled: true, membersFilter: 'availability!=subscriber_only' }
       );
+    });
+
+    it('keeps members-only videos out of an auto-retry of an External API request', async () => {
+      const membersAccess = require('../membersAccess');
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+
+      await downloadModule.doSpecificDownloads({
+        body: { urls: ['https://youtube.com/watch?v=abcdefghijk'], jobLabel: 'Auto-retry: 1 video', externalRequest: true },
+      });
+
+      expect(membersAccess.buildDownloadFilter).toHaveBeenCalledWith({ cookiesEnabled: false, skipDenied: false });
     });
 
     it('should handle request object with body', async () => {

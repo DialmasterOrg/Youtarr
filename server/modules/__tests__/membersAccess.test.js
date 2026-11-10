@@ -209,6 +209,25 @@ describe('buildDownloadFilter', () => {
     await expect(membersAccess.buildDownloadFilter({ cookiesEnabled: false })).resolves.toBe('availability!=subscriber_only');
   });
 
+  test.each([
+    ['expired login cookies', cookieFile(NOW_SECONDS - 3600)],
+    ['no login cookie', cookieFile(undefined, 'PREF')],
+  ])('keeps members-only videos out with %s, even when the user picked them', async (_name, contents) => {
+    useCookieFile(contents);
+
+    await expect(membersAccess.buildDownloadFilter({ cookiesEnabled: true })).resolves.toBe('availability!=subscriber_only');
+    await expect(membersAccess.buildDownloadFilter({ cookiesEnabled: true, skipDenied: false }))
+      .resolves.toBe('availability!=subscriber_only');
+    expect(VideoMembersAccess.findAll).not.toHaveBeenCalled();
+  });
+
+  test('keeps members-only videos out when the cookie file cannot be read', async () => {
+    useCookieFile();
+    fs.statSync.mockImplementation(() => { throw Object.assign(new Error('gone'), { code: 'ENOENT' }); });
+
+    await expect(membersAccess.buildDownloadFilter({ cookiesEnabled: true })).resolves.toBe('availability!=subscriber_only');
+  });
+
   test('adds no clause when the cookies have no fresh denials', async () => {
     useCookieFile();
 

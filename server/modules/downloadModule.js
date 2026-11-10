@@ -92,6 +92,11 @@ class DownloadModule {
     return undefined;
   }
 
+  // An External API request, or an auto-retry of one.
+  isExternalRequestJob(jobData, jobType) {
+    return jobType === EXTERNAL_REQUEST_JOB_LABEL || this.getJobDataValue(jobData, 'externalRequest') === true;
+  }
+
   /**
    * Set a property on both the job wrapper and nested data (if present)
    * @param {Object} jobData - job payload (direct invocation or queued job)
@@ -222,6 +227,9 @@ class DownloadModule {
     if (effectiveQuality) body.effectiveQuality = effectiveQuality;
     if (runId) body.runId = runId;
     if (this.getJobDataValue(sourceJobData, 'structurePerVideo')) body.structurePerVideo = true;
+    // The retry's label no longer names the External API, so the flag carries it.
+    const sourceLabel = this.getJobDataValue(sourceJobData, 'jobLabel');
+    if (this.isExternalRequestJob(sourceJobData, sourceLabel)) body.externalRequest = true;
 
     logger.info(
       { videoCount: retryVideos.length, autoRetryAttempt, channelId, runId },
@@ -883,7 +891,7 @@ class DownloadModule {
         const cookiesEnabled = Boolean(configModule.getCookiesPath()) && !anonymousRetry;
         // An External API request never uses the owner's membership, so its
         // members-only videos stay filtered out as in a run without cookies.
-        const externalRequest = jobType === EXTERNAL_REQUEST_JOB_LABEL;
+        const externalRequest = this.isExternalRequestJob(jobData, jobType);
         // Videos the user picked are attempted even when a denial is on record,
         // and the attempt replaces it. yt-dlp checks a match filter on a video
         // URL only after fetching it, so playlist and Download All jobs leave

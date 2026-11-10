@@ -172,19 +172,25 @@ class MembersAccess {
   }
 
   /**
-   * The members-only part of a download's yt-dlp match filter. Without cookies
-   * members-only videos are filtered out, as before. With cookies they are
-   * attempted, except those already denied, unless the user asked for them.
+   * The members-only part of a download's yt-dlp match filter. Without cookies,
+   * or with a cookie file that holds no live login, members-only videos are
+   * filtered out, as before. With live login cookies they are attempted,
+   * except those already denied, unless the user asked for them.
    * @param {Object} options
    * @param {boolean} options.cookiesEnabled - this run passes cookies to yt-dlp
    * @param {boolean} [options.skipDenied] - leave out fresh denials
    * @returns {Promise<string|null>} filter clause, or null for none
    */
   async buildDownloadFilter({ cookiesEnabled, skipDenied = true }) {
-    if (!cookiesEnabled) return `availability!=${MEMBERS_ONLY_AVAILABILITY}`;
+    const membersOnlyFilter = `availability!=${MEMBERS_ONLY_AVAILABILITY}`;
+    if (!cookiesEnabled) return membersOnlyFilter;
+    const context = this.getContext();
+    // A refusal without a live login is never recorded as a denial, so the
+    // denial list below would never grow and every run would retry them all.
+    if (!context.cookieKey || !context.loginCookiesLive) return membersOnlyFilter;
     if (!skipDenied) return null;
     try {
-      const deniedIds = (await this.getFreshDeniedIds(this.getContext())).filter(isVideoId);
+      const deniedIds = (await this.getFreshDeniedIds(context)).filter(isVideoId);
       if (deniedIds.length === 0) return null;
       // Only [A-Za-z0-9_-]{11} ids get here; nothing in them needs escaping.
       return `id!~='^(?:${deniedIds.join('|')})$'`;

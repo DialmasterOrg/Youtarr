@@ -26,7 +26,7 @@ interface VideoPlayerProps {
   token: string | null;
   onDownloadClick: () => void;
   isMobile: boolean;
-  // Offered on a members-only video the configured cookies were denied, or
+  // Offered on a blocked members-only video (denied, or no cookies), or on one
   // whose answer is out of date.
   membersAccessCheck?: MembersAccessCheckControl;
 }
@@ -327,7 +327,9 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile, membersAccessChe
                   ? 'The account in your cookies is not a member of this channel'
                   : 'Add cookies from a member account in Settings to download this video'}
               </Typography>
-              {video.membersAccess === 'denied' && membersAccessCheck && (
+              {/* Also offered without cookies: a video that went public is
+                  only noticed by checking it again. */}
+              {membersAccessCheck && (
                 <MembersAccessCheckButton
                   control={membersAccessCheck}
                   label="Check again"

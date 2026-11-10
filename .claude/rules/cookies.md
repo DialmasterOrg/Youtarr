@@ -33,7 +33,7 @@ External and uploaded cookie files, how yt-dlp runs receive them, and the cookie
 
 ## Members-only access (`membersAccess`)
 
-- Without cookies every download keeps `availability!=subscriber_only` in its match filter; with cookies channel runs exclude fresh denials by id (`id!~=`). yt-dlp applies a match filter to a video URL only after fetching it, so playlist jobs drop denials from their URL lists before queuing.
+- Without cookies, or without a live login cookie (`loginCookiesLive`, unreadable file included), every download keeps `availability!=subscriber_only`: such refusals never record denials. With live cookies channel runs exclude fresh denials by id (`id!~=`). yt-dlp applies a match filter to a video URL only after fetching it, so playlist jobs drop denials from their URL lists before queuing.
 - Manual jobs clear the requested ids' verdicts and attempt them; External API requests (`EXTERNAL_REQUEST_JOB_LABEL`) keep the no-cookies filter, since they must not use the owner's membership.
 - A verdict (`video_members_access`) counts for 24 hours and only under the same `cookie_key` (SHA-256 of the cookie file, memoized by path, size and mtime), so replacing cookies retires every verdict without a write.
 - A "Join this channel" refusal records a denial only if yt-dlp really got `--cookies` (`child.cookiesPassed`; preparation drops it for an unusable file), the file holds a live login cookie (`cookieDetails`), and no "cookies are no longer valid"/rotated warning was printed.

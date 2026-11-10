@@ -166,11 +166,11 @@ describe('VideoPlayer', () => {
     expect(screen.getByText(/Add cookies from a member account/)).toBeInTheDocument();
   });
 
-  test('offers a new check when the cookies were denied', async () => {
+  test.each(['denied', 'no_cookies'] as const)('offers a new check when access is %s', async (membersAccess) => {
     const user = userEvent.setup();
     const onCheck = jest.fn();
     renderPlayer(
-      { status: 'members_only', isDownloaded: false, filePath: null, membersAccess: 'denied' },
+      { status: 'members_only', isDownloaded: false, filePath: null, membersAccess },
       { membersAccessCheck: { onCheck, loading: false, error: null } }
     );
 

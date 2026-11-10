@@ -453,7 +453,10 @@ are skipped, as before.
 - Nothing is recorded about membership when the cookies could not really be
   used: the file has no signed-in YouTube session, its login cookies have
   expired, YouTube rejected them (rotated), or the file could not be read for
-  the run. Refresh the cookies and try again.
+  the run. Downloads then skip members-only videos as without cookies, manual
+  ones included. Refresh the cookies and try again.
+- A video that stops being members-only is noticed on its next check. Without
+  cookies, open it and choose **Check again**.
 - Downloads requested through the External API never use the cookies'
   membership: their members-only videos are skipped as without cookies.
 
