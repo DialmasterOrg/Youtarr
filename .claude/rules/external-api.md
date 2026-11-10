@@ -4,6 +4,9 @@ paths:
   - "server/routes/externalApi.js"
   - "server/routes/externalRequests.js"
   - "server/middleware/externalApiAuth.js"
+  - "client/src/components/ExternalRequests/**/*"
+  - "client/src/components/Configuration/sections/ApiKeysSection.tsx"
+  - "client/src/components/Configuration/sections/ApiKeysSection/**/*"
 ---
 
 # External API
@@ -20,4 +23,4 @@ The opt-in `/external-api/v1` surface for external tools: catalog reads and down
 - The executor rechecks authority, claims `approved` -> `processing`, queues downloads through `downloadModule.doSpecificDownloads` with the request id as the job id, provisions, enables and grants channels, and deletes videos through `videoDeletionModule`.
 - It holds requests with a message while downloads are paused or the video is busy, and recovers interrupted rows at startup.
 - `externalRequestTargets.js` validates grant, channel, video and policy targets; `externalRequestReconciliation.js` closes processing video requests whose job ended; `externalRequestPrimitives.js` shares validation and DTOs.
-- Key-before-request locks serialize decisions; `externalWorkLimiter.js` bounds expensive work. `routes/externalRequests.js` exposes admin management endpoints that reject every API key; their UI is a separate follow-up.
+- Key-before-request locks serialize decisions; `externalWorkLimiter.js` bounds expensive work. `routes/externalRequests.js` exposes admin management endpoints that reject every API key; their UI lives in `client/src/components/ExternalRequests/`.

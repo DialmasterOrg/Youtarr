@@ -427,8 +427,21 @@ may contain secrets.
 
 ## Configuration and administration
 
-This runtime includes the management APIs. The external-access editor and
-request-review UI are a separate follow-up in [PR #809](https://github.com/DialmasterOrg/Youtarr/pull/809).
+In **Settings → API Keys & Bookmarklet**, choose **Create external key**,
+set the required request permissions, rating/media policy, workload limits,
+and approved channels, then save the one-time secret. Existing keys can be
+edited, regenerated, or revoked from their cards. Regeneration preserves
+policy and grants while immediately invalidating the previous credential.
+
+The **Requests** page supports status, requester, and request-type filters,
+pagination, details, approval, and rejection with a reason. Channel approval
+lets you choose whether to grant the provisioned channel to the requesting key.
+A decision error keeps the confirmation retryable. Approved requests advance
+automatically through the background executor; temporarily held work stays
+approved with a message until it can proceed. Mobile layouts keep review
+actions on each request card.
+
+The same operations are available through the management APIs:
 
 1. Create an external key with session-authenticated `POST /api/keys` and save
    the returned raw secret; it is shown only once. Omitting `policy` creates a

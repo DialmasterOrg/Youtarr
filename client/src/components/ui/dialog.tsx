@@ -84,7 +84,21 @@ const Dialog: React.FC<DialogProps> = ({
   >
     <DialogCompatContext.Provider value>
       <DialogPortal>
-        <DialogOverlay onClick={() => onClose?.({}, 'backdropClick')} {...(backdropProps || {})} />
+        <DialogOverlay
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) {
+              onClose?.({}, 'backdropClick');
+            }
+          }}
+          onClick={(event) => {
+            // Pointer clicks are handled on pointerdown; detail === 0 also
+            // preserves keyboard-generated and legacy click-only events.
+            if (event.target === event.currentTarget && event.detail === 0) {
+              onClose?.({}, 'backdropClick');
+            }
+          }}
+          {...(backdropProps || {})}
+        />
         <DialogPrimitive.Content
           aria-describedby={contentProps['aria-describedby'] ?? undefined}
           className={cn(
