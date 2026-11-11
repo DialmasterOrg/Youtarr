@@ -8,6 +8,11 @@
 
 import type { RemovalReason } from '../utils/videoRemoval';
 
+// Whether the configured cookies can open a members-only video (server:
+// membersAccess). no_cookies and denied block downloading; unchecked videos
+// are attempted and the download records the answer.
+export type MembersAccessState = 'no_cookies' | 'unchecked' | 'confirmed' | 'denied';
+
 export interface ChannelVideo {
   activity?: 'queued' | 'downloading';
   id?: number;
@@ -31,6 +36,8 @@ export interface ChannelVideo {
   youtube_removed?: boolean;
   duration: number;
   availability?: string | null;
+  // Set on members-only videos: whether the configured cookies can open them.
+  members_access?: MembersAccessState | null;
   fileSize?: number | null;
   filePath?: string | null;
   audioFilePath?: string | null;

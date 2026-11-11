@@ -8,6 +8,8 @@ import {
   getStatusChipStyle,
   getMediaTypeInfo,
   isRemovedStatus,
+  isMembersOnlyBlocked,
+  getMembersAccessInfo,
   VideoStatus,
 } from '../videoStatus';
 import { ChannelVideo } from '../../types/ChannelVideo';
@@ -59,14 +61,29 @@ describe('videoStatus Utility', () => {
       expect(getVideoStatus(membersOnlyVideo)).toBe('members_only');
     });
 
-    test('returns "members_only" even if video was previously downloaded', () => {
+    test('returns "downloaded" for a downloaded members-only video', () => {
       const membersOnlyDownloadedVideo = {
         ...baseMockVideo,
         availability: 'subscriber_only',
         added: true,
         removed: false,
       };
-      expect(getVideoStatus(membersOnlyDownloadedVideo)).toBe('members_only');
+      expect(getVideoStatus(membersOnlyDownloadedVideo)).toBe('downloaded');
+    });
+
+    test('returns "never_downloaded" for a members-only video the cookies can open', () => {
+      const video = { ...baseMockVideo, availability: 'subscriber_only', members_access: 'confirmed' as const };
+      expect(getVideoStatus(video)).toBe('never_downloaded');
+    });
+
+    test('returns "never_downloaded" for a members-only video not checked yet', () => {
+      const video = { ...baseMockVideo, availability: 'subscriber_only', members_access: 'unchecked' as const };
+      expect(getVideoStatus(video)).toBe('never_downloaded');
+    });
+
+    test('returns "members_only" for a members-only video the cookies were denied', () => {
+      const video = { ...baseMockVideo, availability: 'subscriber_only', members_access: 'denied' as const };
+      expect(getVideoStatus(video)).toBe('members_only');
     });
 
     test('returns "never_downloaded" when video has not been added', () => {
@@ -148,14 +165,15 @@ describe('videoStatus Utility', () => {
       expect(getVideoStatus(membersOnlyNotDownloaded)).toBe('members_only');
     });
 
-    test('priority: members_only takes precedence over missing', () => {
+    test('priority: a removed file takes precedence over members_only', () => {
       const membersOnlyMissing = {
         ...baseMockVideo,
         availability: 'subscriber_only',
         added: true,
         removed: true,
+        removed_reason: 'not_found' as const,
       };
-      expect(getVideoStatus(membersOnlyMissing)).toBe('members_only');
+      expect(getVideoStatus(membersOnlyMissing)).toBe('missing');
     });
   });
 
@@ -451,6 +469,31 @@ describe('videoStatus Utility', () => {
     test('handles video with null availability', () => {
       const video = { ...baseMockVideo, availability: null };
       expect(getVideoStatus(video)).toBe('never_downloaded');
+    });
+  });
+
+  describe('isMembersOnlyBlocked', () => {
+    test('does not block a video that is not members-only', () => {
+      expect(isMembersOnlyBlocked({ availability: 'public' })).toBe(false);
+    });
+
+    test('blocks a members-only video without cookies', () => {
+      expect(isMembersOnlyBlocked({ availability: 'subscriber_only', members_access: 'no_cookies' })).toBe(true);
+    });
+
+    test('blocks a members-only video with no known state, as before access was tracked', () => {
+      expect(isMembersOnlyBlocked({ availability: 'subscriber_only' })).toBe(true);
+    });
+
+    test('treats a recorded state as members-only even without availability', () => {
+      expect(isMembersOnlyBlocked({ availability: null, members_access: 'denied' })).toBe(true);
+    });
+  });
+
+  describe('getMembersAccessInfo', () => {
+    test('labels each state differently', () => {
+      const labels = (['no_cookies', 'unchecked', 'confirmed', 'denied'] as const).map((state) => getMembersAccessInfo(state).label);
+      expect(new Set(labels).size).toBe(4);
     });
   });
 });

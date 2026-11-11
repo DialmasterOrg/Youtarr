@@ -7,6 +7,7 @@
 
 const mockFactories = require('../channel/__tests__/mockFactories');
 
+jest.mock('../membersAccess');
 jest.mock('fs');
 jest.mock('child_process');
 jest.mock('node-cron');

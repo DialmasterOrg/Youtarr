@@ -596,6 +596,16 @@ describe('YtdlpCommandBuilder', () => {
   });
 
   describe('buildMatchFilters', () => {
+    it('uses the members-only clause it is given', () => {
+      const result = YtdlpCommandBuilder.buildMatchFilters(null, 'id!~=\'^(?:aaaaaaaaaaa)$\'');
+      expect(result).toBe('id!~=\'^(?:aaaaaaaaaaa)$\' & !is_live & live_status!=is_upcoming');
+    });
+
+    it('drops the members-only clause when it is given none', () => {
+      const result = YtdlpCommandBuilder.buildMatchFilters(null, null);
+      expect(result).toBe('!is_live & live_status!=is_upcoming');
+    });
+
     it('should return base filters when no filter config provided', () => {
       const result = YtdlpCommandBuilder.buildMatchFilters();
       expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming');
@@ -753,6 +763,13 @@ describe('YtdlpCommandBuilder', () => {
   });
 
   describe('getBaseCommandArgs', () => {
+    it('passes the members-only clause from its options into the match filter', () => {
+      const result = YtdlpCommandBuilder.getBaseCommandArgs('1080', false, null, null, null, false, { membersFilter: null });
+
+      const filterIndex = result.indexOf('--match-filter');
+      expect(result[filterIndex + 1]).toBe('!is_live & live_status!=is_upcoming');
+    });
+
     it('should build basic command args with default values', () => {
       const result = YtdlpCommandBuilder.getBaseCommandArgs();
 
@@ -1046,6 +1063,13 @@ describe('YtdlpCommandBuilder', () => {
       // Check that duration filter is NOT included, but live video filtering is
       const filterIndex = result.indexOf('--match-filter');
       expect(result[filterIndex + 1]).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming');
+    });
+
+    it('uses the members-only clause from its options', () => {
+      const result = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload(null, false, null, false, { membersFilter: null });
+
+      const filterIndex = result.indexOf('--match-filter');
+      expect(result[filterIndex + 1]).toBe('!is_live & live_status!=is_upcoming');
     });
 
     it('should otherwise be identical to regular command args', () => {

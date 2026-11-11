@@ -1,3 +1,5 @@
+import type { MembersAccessState } from '../../../types/ChannelVideo';
+
 export interface VideoInfo {
   youtubeId: string;
   url: string;
@@ -9,6 +11,9 @@ export interface VideoInfo {
   availability?: string;
   isAlreadyDownloaded: boolean;
   isMembersOnly: boolean;
+  // Set for a members-only video the configured cookies can open (or have not
+  // been checked against), which stays in the list with a members chip.
+  membersAccess?: MembersAccessState | null;
   media_type?: string;
   isBulkImport?: boolean;
 }
@@ -27,6 +32,8 @@ export interface ValidationResponse {
   isValidUrl: boolean;
   isAlreadyDownloaded: boolean;
   isMembersOnly: boolean;
+  // Set for a members-only video: whether the configured cookies can open it.
+  membersAccess?: MembersAccessState | null;
   metadata?: {
     youtubeId: string;
     url: string;
@@ -39,4 +46,5 @@ export interface ValidationResponse {
     media_type?: string;
   };
   error?: string;
+  errorCode?: string;
 }

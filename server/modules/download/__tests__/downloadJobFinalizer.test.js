@@ -1,6 +1,7 @@
 /* eslint-env jest */
 
 jest.mock('../../../logger');
+jest.mock('../../membersAccess');
 
 jest.mock('../../jobModule', () => ({
   updateJob: jest.fn().mockResolvedValue(),
@@ -163,6 +164,49 @@ describe('downloadJobFinalizer', () => {
       expect(fields.status).toBe('Complete');
       expect(fields.output).toBe('0 videos.');
       expect('endDate' in fields).toBe(false);
+    });
+
+    it('records members-only refusals from a run that used the cookies', async () => {
+      const membersAccess = require('../../membersAccess');
+      const membersOnlyVideoIds = new Set(['members1234']);
+
+      await finalizeDownloadJob(makeContext({
+        cookiesEnabled: true,
+        errorTracker: makeErrorTracker({ membersOnlyVideoIds }),
+        router: makeRouter({ stderrBuffer: 'ERROR: Join this channel' }),
+      }));
+
+      expect(membersAccess.recordDownloadOutcome).toHaveBeenCalledWith({
+        membersOnlyIds: membersOnlyVideoIds,
+        downloadedIds: [],
+        usedCookies: true,
+        stderr: 'ERROR: Join this channel',
+      });
+    });
+
+    it('does not count an anonymous retry as a run with cookies', async () => {
+      const membersAccess = require('../../membersAccess');
+
+      await finalizeDownloadJob(makeContext({ cookiesEnabled: true, anonymousRetry: true }));
+
+      expect(membersAccess.recordDownloadOutcome).toHaveBeenCalledWith(expect.objectContaining({ usedCookies: false }));
+    });
+
+    it('does not count a run whose cookies were dropped before yt-dlp started', async () => {
+      const membersAccess = require('../../membersAccess');
+
+      await finalizeDownloadJob(makeContext({ cookiesEnabled: true, cookiesPassed: false }));
+
+      expect(membersAccess.recordDownloadOutcome).toHaveBeenCalledWith(expect.objectContaining({ usedCookies: false }));
+    });
+
+    it('still finishes the job when members-only access cannot be recorded', async () => {
+      const membersAccess = require('../../membersAccess');
+      membersAccess.recordDownloadOutcome.mockRejectedValueOnce(new Error('db down'));
+
+      await finalizeDownloadJob(makeContext());
+
+      expect(jobModule.updateJob.mock.calls[0][1].status).toBe('Complete');
     });
 
     it('excludes the run\'s archive skips from the downloaded videos', async () => {

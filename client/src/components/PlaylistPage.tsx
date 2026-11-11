@@ -21,6 +21,7 @@ import { useDownloadListingsRefresh } from '../hooks/useDownloadListingsRefresh'
 import { usePlaylistMutations } from '../hooks/usePlaylistMutations';
 import { useMediaServerStatus } from '../hooks/useMediaServerStatus';
 import { MediaServerType, PlaylistSubscribeSettings, PlaylistVideo } from '../types/playlist';
+import type { MembersAccessState } from '../types/ChannelVideo';
 import PlaylistHeader from './PlaylistPage/components/PlaylistHeader';
 import NoMediaServerWarning from './PlaylistPage/components/NoMediaServerWarning';
 import PlaylistVideoList from './PlaylistPage/components/PlaylistVideoList';
@@ -85,9 +86,24 @@ function PlaylistPage({ token }: PlaylistPageProps) {
   } = usePlaylistDetail({ token, playlistId, sortOrder, downloadState, watchedState });
 
   const { snapshot } = useVideoActivity();
+  // What the video modal learned about members-only access, until the next fetch.
+  const [availabilityOverrides, setAvailabilityOverrides] = useState<
+    Record<string, Pick<PlaylistVideo, 'availability' | 'members_access'>>
+  >({});
   const videos = useMemo(() => playlistVideos.map(video => ({
-    ...video, activity: snapshot.videos[video.youtube_id]?.state,
-  })), [playlistVideos, snapshot]);
+    ...video,
+    ...availabilityOverrides[video.youtube_id],
+    activity: snapshot.videos[video.youtube_id]?.state,
+  })), [playlistVideos, snapshot, availabilityOverrides]);
+  const handleAvailabilityDetected = useCallback(
+    (youtubeId: string, availability: string | null, membersAccess?: MembersAccessState | null) => {
+      setAvailabilityOverrides((prev) => ({
+        ...prev,
+        [youtubeId]: { availability, members_access: membersAccess ?? null },
+      }));
+    },
+    []
+  );
 
   useDownloadListingsRefresh(refetch);
 
@@ -470,9 +486,10 @@ function PlaylistPage({ token }: PlaylistPageProps) {
             </Box>
           </Box>
           <Typography variant="caption" color="text.secondary" className="block mb-2">
-            Private, members-only, and deleted videos can&apos;t be accessed, so
-            they are never loaded or downloaded; you may see fewer videos here
-            than YouTube reports for the playlist.
+            Private and deleted videos can&apos;t be accessed, so they are never
+            loaded or downloaded; you may see fewer videos here than YouTube
+            reports for the playlist. Members-only videos download only with
+            cookies from an account that is a member of the channel.
           </Typography>
           <PlaylistVideoList
             videos={videos}
@@ -595,6 +612,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
           token={token}
           allowIgnore={false}
           onVideoDeleted={handleVideoDeleted}
+          onAvailabilityDetected={handleAvailabilityDetected}
         />
       )}
 

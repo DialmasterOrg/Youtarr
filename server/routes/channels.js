@@ -913,6 +913,26 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *     responses:
    *       200:
    *         description: List of channel videos
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 videos:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       youtube_id:
+   *                         type: string
+   *                       availability:
+   *                         type: string
+   *                         nullable: true
+   *                         description: YouTube availability; `subscriber_only` marks a members-only video
+   *                       members_access:
+   *                         type: string
+   *                         enum: [no_cookies, unchecked, confirmed, denied]
+   *                         description: Present on members-only videos only. Whether the configured cookies can open the video; `no_cookies` and `denied` are not downloaded.
    *       400:
    *         description: Invalid maxRating
    *       404:

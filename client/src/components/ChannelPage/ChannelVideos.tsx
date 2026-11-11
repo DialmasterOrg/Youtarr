@@ -43,7 +43,7 @@ import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
 import { useDownloadListingsRefresh } from '../../hooks/useDownloadListingsRefresh';
 import VideoModal from '../shared/VideoModal';
 import { VideoModalData } from '../shared/VideoModal/types';
-import { ChannelVideo } from '../../types/ChannelVideo';
+import { ChannelVideo, MembersAccessState } from '../../types/ChannelVideo';
 import {
   INFINITE_SCROLL_FETCH_SIZE,
   VideoListContainer,
@@ -92,6 +92,7 @@ function channelVideoToModalData(
     mediaType: video.media_type || 'video',
     status,
     inArchive: video.inArchive,
+    membersAccess: video.members_access ?? null,
     isDownloaded: video.added && !video.removed,
     filePath: video.filePath || null,
     fileSize: video.fileSize || null,
@@ -161,7 +162,7 @@ function ChannelVideos({
   const [modalVideo, setModalVideo] = useState<ChannelVideo | null>(null);
   const [localIgnoreStatus, setLocalIgnoreStatus] = useState<Record<string, boolean>>({});
   const [localProtectedStatus, setLocalProtectedStatus] = useState<Record<string, boolean>>({});
-  const [localAvailabilityStatus, setLocalAvailabilityStatus] = useState<Record<string, string>>({});
+  const [localAvailabilityStatus, setLocalAvailabilityStatus] = useState<Record<string, { availability: string | null; members_access?: MembersAccessState | null }>>({});
   const [localPublishedAtStatus, setLocalPublishedAtStatus] = useState<Record<string, string>>({});
 
   const {
@@ -463,7 +464,7 @@ function ChannelVideos({
           ? { protected: localProtectedStatus[video.youtube_id] }
           : {}),
         ...(hasAvailabilityOverride
-          ? { availability: localAvailabilityStatus[video.youtube_id] }
+          ? localAvailabilityStatus[video.youtube_id]
           : {}),
         ...(hasPublishedAtOverride
           ? {
@@ -1390,8 +1391,8 @@ function ChannelVideos({
           }}
           onDownloadQueued={() => setModalVideo(null)}
           onRatingChanged={() => refetchVideos()}
-          onAvailabilityDetected={(youtubeId, availability) => {
-            setLocalAvailabilityStatus((prev) => ({ ...prev, [youtubeId]: availability }));
+          onAvailabilityDetected={(youtubeId, availability, membersAccess) => {
+            setLocalAvailabilityStatus((prev) => ({ ...prev, [youtubeId]: { availability, members_access: membersAccess } }));
           }}
           onPublishedDateDetected={(youtubeId, isoDate) => {
             setLocalPublishedAtStatus((prev) => ({ ...prev, [youtubeId]: isoDate }));

@@ -435,6 +435,41 @@ Sync is one-way (server -> Youtarr). Non-owner Plex users come from the server's
 - **Description**: Use cookies for YouTube authentication
 - **Note**: May be required in some cases to get around YouTube bot detection. Enable only when needed: logged-in sessions use different YouTube player clients, and YouTube has been restricting stream formats on those for some accounts. When cookies are enabled Youtarr adds the `mweb` and `web_safari` player clients to every video download and metadata fetch; free (non-Premium) accounts affected by the restriction top out at 1080p. See "Downloads Are Only 360p With Cookies Enabled" in [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
+### Members-Only Videos
+With cookies enabled, members-only videos are downloaded like any other video
+when the account in the cookies is a member of the channel. Without cookies they
+are skipped, as before.
+
+Using cookies from your main YouTube account, usually the one with the
+membership, is at your own risk: YouTube can restrict or ban accounts used for
+automated downloads. See the yt-dlp warning in
+[Exporting YouTube cookies](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies).
+
+- Each download, URL check, or first look at a video asks YouTube whether the
+  cookies can open the video and remembers the answer for 24 hours. Replacing or
+  editing the cookie file forgets every answer. A video Youtarr has already
+  saved details for is not asked again on its own: once its answer is older
+  than 24 hours it shows as **Members: not checked** until the next download or
+  until you open it and choose **Check access**.
+- A video the account is not a member of is shown as **Members: no access** and
+  is left out of automatic channel and playlist downloads and Download All for
+  24 hours. Open the video and choose **Check again** after joining the
+  channel, or add it manually: a manual download always asks again.
+- Nothing is recorded about membership when the cookies could not really be
+  used: the file has no signed-in YouTube session, its login cookies have
+  expired, YouTube rejected them (rotated), or the file could not be read for
+  the run. Downloads then skip members-only videos as without cookies, manual
+  ones included. Refresh the cookies and try again.
+- When YouTube rejects cookies whose login cookies have not expired yet, the
+  download or check that saw it still tries the video. After that, Youtarr
+  remembers the rejection for those cookies and skips members-only videos until
+  the cookie file changes, 24 hours pass, or a members-only video opens with
+  them. A restart forgets the rejection, so the next run tries once more.
+- A video that stops being members-only is noticed on its next check. Without
+  cookies, open it and choose **Check again**.
+- Downloads requested through the External API never use the cookies'
+  membership: their members-only videos are skipped as without cookies.
+
 ### Custom Cookies Uploaded
 - **Config Key**: `customCookiesUploaded`
 - **Type**: `boolean`

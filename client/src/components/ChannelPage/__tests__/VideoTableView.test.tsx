@@ -1145,4 +1145,22 @@ describe('VideoTableView Component', () => {
       expect(screen.queryByText('Watched')).not.toBeInTheDocument();
     });
   });
+  describe('Members-only access', () => {
+    test('shows the access chip and a row checkbox for a video the cookies can open', () => {
+      const video = { ...mockVideo, availability: 'subscriber_only', members_access: 'confirmed' as const };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[video]} />);
+
+      expect(screen.getByText('Members: access')).toBeInTheDocument();
+      expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+    });
+
+    test('shows the access chip and no row checkbox for a video the cookies were denied', () => {
+      const video = { ...mockVideo, availability: 'subscriber_only', members_access: 'denied' as const };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[video]} />);
+
+      expect(screen.getByText('Members: no access')).toBeInTheDocument();
+      // Only the header checkbox
+      expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+    });
+  });
 });

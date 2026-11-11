@@ -15,7 +15,8 @@ import {
 import { PlaylistVideo } from '../../../types/playlist';
 import { formatDurationClock } from '../../../utils';
 import { Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon } from '../../../lib/icons';
-import { isSelectable, statusLabel, PlaylistVideoDates, toDownloadFileProps } from './playlistVideoHelpers';
+import { isSelectable, statusLabel, PlaylistVideoDates, toDownloadFileProps, showsMembersAccess } from './playlistVideoHelpers';
+import MembersAccessChip from '../../shared/MembersAccessChip';
 import DownloadFormatIndicator from '../../shared/DownloadFormatIndicator';
 import WatchedChip from '../../shared/WatchedChip';
 import { REMOVAL_TOOLTIP_CLASS } from '../../shared/RemovalDescription';
@@ -178,6 +179,7 @@ const PlaylistVideoTable: React.FC<PlaylistVideoTableProps> = ({
                   ) : (
                     <Chip label={status.label} color={status.color} size="small" />
                   )}
+                  {showsMembersAccess(v) && <MembersAccessChip access={v.members_access} />}
                   <WatchedChip watchedBy={v.watched_by || []} />
                 </div>
               </TableCell>

@@ -1,3 +1,4 @@
+jest.mock('../membersAccess');
 jest.mock('../../models/channelvideo', () => ({ findAll: jest.fn() }));
 jest.mock('../../models', () => ({
   Video: { findAll: jest.fn() },
@@ -78,6 +79,19 @@ describe('getDownloadableVideos', () => {
     const result = await channelDownloadAllModule.getDownloadableVideos(CHANNEL_ID, 'videos');
 
     expect(result.map((v) => v.youtube_id)).toEqual(['ok1', 'ok2']);
+  });
+
+  it('includes members-only videos the configured cookies can open', async () => {
+    const membersAccess = require('../membersAccess');
+    membersAccess.getStates.mockResolvedValueOnce(new Map([['members', 'confirmed'], ['denied', 'denied']]));
+    ChannelVideo.findAll.mockResolvedValue([
+      cv('members', { availability: 'subscriber_only' }),
+      cv('denied', { availability: 'subscriber_only' }),
+    ]);
+
+    const result = await channelDownloadAllModule.getDownloadableVideos(CHANNEL_ID, 'videos');
+
+    expect(result.map((v) => v.youtube_id)).toEqual(['members']);
   });
 
   it('excludes every previously downloaded video, including deleted ones', async () => {

@@ -1,5 +1,6 @@
 import { VideoStatus } from '../../../utils/videoStatus';
 import type { RemovalInfo } from '../../../utils/videoRemoval';
+import type { MembersAccessState } from '../../../types/ChannelVideo';
 
 export interface VideoModalData {
   youtubeId: string;
@@ -16,6 +17,8 @@ export interface VideoModalData {
   inArchive?: boolean;
   // Why the file is gone, for a 'deleted' or 'missing' status (see utils/videoRemoval).
   removal?: RemovalInfo | null;
+  // Set on members-only videos by pages that know it (see utils/videoStatus).
+  membersAccess?: MembersAccessState | null;
   isDownloaded: boolean;
   filePath: string | null;
   fileSize: number | null;
@@ -41,7 +44,8 @@ export interface VideoModalProps {
   onIgnoreChanged?: (youtubeId: string, isIgnored: boolean) => void;
   onDownloadQueued?: (youtubeId: string) => void;
   onRatingChanged?: (youtubeId: string, rating: string | null) => void;
-  onAvailabilityDetected?: (youtubeId: string, availability: string) => void;
+  // availability null: a check found the video is not members-only after all.
+  onAvailabilityDetected?: (youtubeId: string, availability: string | null, membersAccess?: MembersAccessState | null) => void;
   onPublishedDateDetected?: (youtubeId: string, isoDate: string) => void;
   allowIgnore?: boolean;
 }
@@ -63,6 +67,8 @@ export interface VideoExtendedMetadata {
   isLive: boolean | null;
   wasLive: boolean | null;
   availability: string | null;
+  // Members-only videos only: whether the configured cookies can open it.
+  membersAccess?: MembersAccessState | null;
   channelFollowerCount: number | null;
   ageLimit: number | null;
   webpageUrl: string | null;

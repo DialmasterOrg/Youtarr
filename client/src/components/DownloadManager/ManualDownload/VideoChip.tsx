@@ -3,6 +3,7 @@ import { Chip, Tooltip, Box, Grow, Popover, Typography, IconButton } from '../..
 import { Close as CloseIcon, Lock, Link as LinkIcon, Loader2 } from '../../../lib/icons';
 import { History as HistoryIcon } from 'lucide-react';
 import { VideoInfo } from './types';
+import MembersAccessChip from '../../shared/MembersAccessChip';
 
 interface VideoChipProps {
   video: VideoInfo;
@@ -217,6 +218,9 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete, isEnriching = fa
             </span>
           )}
           {video.isMembersOnly && <Lock size={16} data-testid="LockIcon" />}
+          {!video.isMembersOnly && video.membersAccess && (
+            <MembersAccessChip access={video.membersAccess} compact />
+          )}
         </div>
         {formattedPublishDate && (
           <span
