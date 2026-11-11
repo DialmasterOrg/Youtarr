@@ -440,6 +440,11 @@ With cookies enabled, members-only videos are downloaded like any other video
 when the account in the cookies is a member of the channel. Without cookies they
 are skipped, as before.
 
+Using cookies from your main YouTube account, usually the one with the
+membership, is at your own risk: YouTube can restrict or ban accounts used for
+automated downloads. See the yt-dlp warning in
+[Exporting YouTube cookies](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies).
+
 - Each download, URL check, or first look at a video asks YouTube whether the
   cookies can open the video and remembers the answer for 24 hours. Replacing or
   editing the cookie file forgets every answer. A video Youtarr has already
@@ -455,6 +460,11 @@ are skipped, as before.
   expired, YouTube rejected them (rotated), or the file could not be read for
   the run. Downloads then skip members-only videos as without cookies, manual
   ones included. Refresh the cookies and try again.
+- When YouTube rejects cookies whose login cookies have not expired yet, the
+  download or check that saw it still tries the video. After that, Youtarr
+  remembers the rejection for those cookies and skips members-only videos until
+  the cookie file changes, 24 hours pass, or a members-only video opens with
+  them. A restart forgets the rejection, so the next run tries once more.
 - A video that stops being members-only is noticed on its next check. Without
   cookies, open it and choose **Check again**.
 - Downloads requested through the External API never use the cookies'

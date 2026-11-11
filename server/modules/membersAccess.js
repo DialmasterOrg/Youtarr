@@ -35,6 +35,22 @@ function hasLiveLoginCookies(login, nowMs) {
 class MembersAccess {
   constructor() {
     this.keyCache = null;
+    // The last cookie key YouTube rejected, and when. Kept in memory: a restart
+    // costs one more attempt, which records the rejection again.
+    this.rejectedCookies = null;
+  }
+
+  // YouTube rejected these cookies, so their refusals are never recorded as
+  // denials and every run would retry the same members-only videos.
+  markCookiesRejected(context) {
+    if (!context.cookieKey) return;
+    this.rejectedCookies = { cookieKey: context.cookieKey, at: Date.now() };
+  }
+
+  isCookiesRejectedFor(context, nowMs = Date.now()) {
+    const rejected = this.rejectedCookies;
+    return Boolean(rejected && context.cookieKey && rejected.cookieKey === context.cookieKey
+      && nowMs - rejected.at < ACCESS_TTL_MS);
   }
 
   /**
@@ -174,7 +190,8 @@ class MembersAccess {
   /**
    * The members-only part of a download's yt-dlp match filter. Without cookies,
    * or with a cookie file that holds no live login, members-only videos are
-   * filtered out, as before. With live login cookies they are attempted,
+   * filtered out, as before; also while YouTube's rejection of the cookies
+   * stands. With live login cookies they are attempted,
    * except those already denied, unless the user asked for them.
    * @param {Object} options
    * @param {boolean} options.cookiesEnabled - this run passes cookies to yt-dlp
@@ -188,6 +205,9 @@ class MembersAccess {
     // A refusal without a live login is never recorded as a denial, so the
     // denial list below would never grow and every run would retry them all.
     if (!context.cookieKey || !context.loginCookiesLive) return membersOnlyFilter;
+    // Same for cookies YouTube rejected, until they are replaced, the rejection
+    // ages out, or a members-only read with them succeeds.
+    if (this.isCookiesRejectedFor(context)) return membersOnlyFilter;
     if (!skipDenied) return null;
     try {
       const deniedIds = (await this.getFreshDeniedIds(context)).filter(isVideoId);
@@ -211,6 +231,10 @@ class MembersAccess {
   async recordVerdict(youtubeIds, access, context) {
     const ids = uniqueIds(youtubeIds);
     if (ids.length === 0 || !context.cookieKey) return;
+    // A members-only video opened with these cookies proves YouTube takes them.
+    if (access === ACCESS.CONFIRMED && this.rejectedCookies?.cookieKey === context.cookieKey) {
+      this.rejectedCookies = null;
+    }
     const checkedAt = new Date();
     await VideoMembersAccess.bulkCreate(
       ids.map((youtubeId) => ({ youtube_id: youtubeId, access, cookie_key: context.cookieKey, checked_at: checkedAt })),
@@ -252,6 +276,7 @@ class MembersAccess {
   async recordFetchOutcome(youtubeId, { availability = null, errorMessage = null, usedCookies = false } = {}) {
     if (!isVideoId(youtubeId)) return null;
     const context = this.getContext();
+    if (usedCookies && errorMessage && isCookiesRejected(errorMessage)) this.markCookiesRejected(context);
     const { state, verdict } = this.judgeFetch(context, { availability, errorMessage, usedCookies });
     try {
       if (state === null) {
@@ -297,8 +322,9 @@ class MembersAccess {
 
   /**
    * Records what a download run learned. Denials count only for a run that
-   * passed the configured cookies and did not have them rejected; downloads of
-   * members-only videos confirm access.
+   * passed the configured cookies and did not have them rejected; a rejection
+   * is remembered for the cookie key; downloads of members-only videos confirm
+   * access.
    * @param {Object} outcome
    * @param {Iterable<string>} outcome.membersOnlyIds - videos yt-dlp refused as members-only
    * @param {string[]} outcome.downloadedIds - videos that downloaded
@@ -308,9 +334,11 @@ class MembersAccess {
   async recordDownloadOutcome({ membersOnlyIds, downloadedIds, usedCookies, stderr = '' }) {
     const refused = uniqueIds([...(membersOnlyIds || [])]);
     const downloaded = uniqueIds(downloadedIds);
-    if (refused.length === 0 && downloaded.length === 0) return;
+    const rejected = usedCookies && isCookiesRejected(stderr);
+    if (refused.length === 0 && downloaded.length === 0 && !rejected) return;
 
     const context = this.getContext();
+    if (rejected) this.markCookiesRejected(context);
     const canJudge = usedCookies && context.cookiesConfigured && Boolean(context.cookieKey);
 
     if (refused.length > 0) {

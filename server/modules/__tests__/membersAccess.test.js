@@ -256,6 +256,68 @@ describe('buildDownloadFilter', () => {
     await expect(membersAccess.buildDownloadFilter({ cookiesEnabled: true, skipDenied: false })).resolves.toBeNull();
   });
 
+  const REJECTED_STDERR = 'WARNING: [youtube] The provided YouTube account cookies are no longer valid.';
+
+  test('keeps members-only videos out after a run had the cookies rejected', async () => {
+    useCookieFile();
+
+    await membersAccess.recordDownloadOutcome({ membersOnlyIds: new Set(), downloadedIds: [], usedCookies: true, stderr: REJECTED_STDERR });
+
+    await expect(membersAccess.buildDownloadFilter({ cookiesEnabled: true })).resolves.toBe('availability!=subscriber_only');
+    await expect(membersAccess.buildDownloadFilter({ cookiesEnabled: true, skipDenied: false }))
+      .resolves.toBe('availability!=subscriber_only');
+  });
+
+  test('keeps members-only videos out after a check had the cookies rejected', async () => {
+    useCookieFile();
+
+    await membersAccess.recordFetchOutcome('aaaaaaaaaaa', { errorMessage: `${REJECTED_STDERR}\nERROR: Join this channel`, usedCookies: true });
+
+    await expect(membersAccess.buildDownloadFilter({ cookiesEnabled: true })).resolves.toBe('availability!=subscriber_only');
+  });
+
+  test('ignores a rejection seen by a run without the cookies', async () => {
+    useCookieFile();
+
+    await membersAccess.recordDownloadOutcome({ membersOnlyIds: new Set(), downloadedIds: [], usedCookies: false, stderr: REJECTED_STDERR });
+
+    await expect(membersAccess.buildDownloadFilter({ cookiesEnabled: true })).resolves.toBeNull();
+  });
+
+  test('attempts members-only videos again once the cookie file changes', async () => {
+    useCookieFile();
+    await membersAccess.recordDownloadOutcome({ membersOnlyIds: new Set(), downloadedIds: [], usedCookies: true, stderr: REJECTED_STDERR });
+
+    useCookieFile(cookieFile(NOW_SECONDS + 60 * 24 * 3600), { size: 12, mtimeMs: 2000 });
+
+    await expect(membersAccess.buildDownloadFilter({ cookiesEnabled: true })).resolves.toBeNull();
+  });
+
+  test('attempts members-only videos again once the rejection is older than 24 hours', async () => {
+    useCookieFile();
+    const nowSpy = jest.spyOn(Date, 'now');
+    try {
+      const start = Date.now();
+      nowSpy.mockReturnValue(start);
+      await membersAccess.recordDownloadOutcome({ membersOnlyIds: new Set(), downloadedIds: [], usedCookies: true, stderr: REJECTED_STDERR });
+
+      nowSpy.mockReturnValue(start + membersAccess.ACCESS_TTL_MS);
+
+      await expect(membersAccess.buildDownloadFilter({ cookiesEnabled: true })).resolves.toBeNull();
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  test('attempts members-only videos again once one opens with the cookies', async () => {
+    useCookieFile();
+    await membersAccess.recordDownloadOutcome({ membersOnlyIds: new Set(), downloadedIds: [], usedCookies: true, stderr: REJECTED_STDERR });
+
+    await membersAccess.recordFetchOutcome('aaaaaaaaaaa', { availability: 'subscriber_only' });
+
+    await expect(membersAccess.buildDownloadFilter({ cookiesEnabled: true })).resolves.toBeNull();
+  });
+
   test('attempts every video when the denials cannot be read', async () => {
     useCookieFile();
     VideoMembersAccess.findAll.mockRejectedValue(new Error('db down'));
