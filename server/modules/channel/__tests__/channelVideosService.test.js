@@ -24,6 +24,10 @@ jest.mock('../../youtubeExistenceCheck', () => ({
 // yt-dlp --dump-json output: one JSON document per line.
 const toEntryLines = (entries) => entries.map((entry) => `${JSON.stringify(entry)}\n`).join('');
 
+// Lets work the service started without awaiting (background refresh,
+// existence checks) run to completion.
+const flushPromises = () => new Promise(setImmediate);
+
 describe('channelVideosService', () => {
   let channelVideosService;
   let Channel;
@@ -324,6 +328,7 @@ describe('channelVideosService', () => {
 
       test('records the check time when YouTube still has the video', async () => {
         await getUncheckedVideo();
+        await flushPromises();
 
         expect(ChannelVideo.update).toHaveBeenCalledWith(
           { youtube_removed_checked_at: expect.any(Date) },
@@ -334,22 +339,54 @@ describe('channelVideosService', () => {
       test('marks the video removed when YouTube reports it gone', async () => {
         youtubeExistenceCheck.check.mockResolvedValueOnce('removed');
 
-        const result = await getUncheckedVideo();
+        await getUncheckedVideo();
+        await flushPromises();
 
         expect(ChannelVideo.update).toHaveBeenCalledWith(
           { youtube_removed: true, youtube_removed_checked_at: expect.any(Date) },
           { where: { youtube_id: 'video1', channel_id: 'UC123' } }
         );
-        expect(result.videos[0].youtube_removed).toBe(true);
       });
 
       test('leaves the video unchecked when YouTube does not answer', async () => {
         youtubeExistenceCheck.check.mockResolvedValueOnce('unknown');
 
         const result = await getUncheckedVideo();
+        await flushPromises();
 
         expect(ChannelVideo.update).not.toHaveBeenCalled();
         expect(result.videos[0].youtube_removed_checked_at).toBeUndefined();
+      });
+
+      test('answers before the checks finish', async () => {
+        let answer;
+        youtubeExistenceCheck.check.mockReturnValueOnce(new Promise((resolve) => { answer = resolve; }));
+
+        const result = await getUncheckedVideo();
+
+        expect(result.videos).toHaveLength(1);
+        expect(ChannelVideo.update).not.toHaveBeenCalled();
+
+        answer('removed');
+        await flushPromises();
+
+        expect(ChannelVideo.update).toHaveBeenCalledWith(
+          { youtube_removed: true, youtube_removed_checked_at: expect.any(Date) },
+          { where: { youtube_id: 'video1', channel_id: 'UC123' } }
+        );
+      });
+
+      test('logs a failed check run without rejecting', async () => {
+        ChannelVideo.update.mockRejectedValueOnce(new Error('db down'));
+
+        const result = await getUncheckedVideo();
+        await flushPromises();
+
+        expect(result.videos).toHaveLength(1);
+        expect(logger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({ err: expect.any(Error), channelId: 'UC123' }),
+          'Video existence checks failed'
+        );
       });
     });
 
@@ -437,7 +474,8 @@ describe('channelVideosService', () => {
 
     test('should handle errors and return cached data', async () => {
       const Video = require('../../../models/video');
-      const mockChannel = { ...mockChannelData, auto_download_enabled_tabs: 'video' };
+      // Never listed: the request waits for the listing, so its failure is the request's.
+      const mockChannel = { ...mockChannelData, lastFetchedByTab: null, auto_download_enabled_tabs: 'video' };
       const mockVideos = [
         { youtube_id: 'video1', toJSON() { return this; } }
       ];
@@ -484,39 +522,206 @@ describe('channelVideosService', () => {
     });
 
     // freshFetchPerformed is the contract the frontend onFirstLoad latch
-    // depends on. It must flip true only when fetchAndSaveVideosViaYtDlp
-    // resolves; the cache and cached-fallback paths must NOT set it true.
-    // freshFetchPerformed videos are flagged as recently-checked so the
-    // post-fetch removal-validation loop short-circuits and we don't hit
-    // the unmocked ChannelVideo.update path.
-    const freshlyChecked = () => ({
+    // depends on. It must flip true only when the request waited for a
+    // listing that resolved; the cache, background-refresh and
+    // cached-fallback paths must NOT set it true.
+    // These videos are flagged as recently-checked so the removal-validation
+    // loop short-circuits and we don't hit the unmocked ChannelVideo.update path.
+    const freshlyChecked = (extra = {}) => ({
       youtube_id: 'video1',
       youtube_removed: false,
       youtube_removed_checked_at: new Date(),
-      toJSON() { return this; }
+      toJSON() { return this; },
+      ...extra,
     });
 
-    test('returns freshFetchPerformed=true when yt-dlp auto-refresh resolves', async () => {
+    const MINUTE_MS = 60 * 1000;
+    const HOUR_MS = 60 * MINUTE_MS;
+    const listedAgo = (ms) => JSON.stringify({ video: new Date(Date.now() - ms).toISOString() });
+
+    // Stores a channel and its tab rows, and returns the spy on the yt-dlp listing.
+    const setupTab = ({ lastFetchedByTab, rows = [freshlyChecked()], channel = {} }) => {
       const Video = require('../../../models/video');
-      const mockChannel = {
+      Channel.findOne.mockResolvedValue({
         ...mockChannelData,
-        // Stale lastFetched forces shouldRefreshChannelVideos to return true.
-        lastFetchedByTab: JSON.stringify({ video: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString() }),
-        auto_download_enabled_tabs: 'video'
-      };
-
-      Channel.findOne.mockResolvedValue(mockChannel);
-      ChannelVideo.findAll.mockResolvedValue([freshlyChecked()]);
-      ChannelVideo.count.mockResolvedValue(1);
+        lastFetchedByTab,
+        auto_download_enabled_tabs: 'video',
+        ...channel,
+      });
+      ChannelVideo.findAll.mockResolvedValue(rows);
+      ChannelVideo.count.mockResolvedValue(rows.length);
       Video.findAll = jest.fn().mockResolvedValue([]);
-
       const channelVideoFetcher = require('../channelVideoFetcher');
-      jest.spyOn(channelVideoFetcher, 'fetchAndSaveVideosViaYtDlp').mockResolvedValue();
+      return jest.spyOn(channelVideoFetcher, 'fetchAndSaveVideosViaYtDlp');
+    };
+    const neverSettles = () => new Promise(() => {});
+
+    test('returns freshFetchPerformed=true when the request waited for a listing', async () => {
+      const listing = setupTab({ lastFetchedByTab: null });
+      listing.mockResolvedValue({ newVideos: 0 });
 
       const result = await channelVideosService.getChannelVideos('UC123');
 
-      expect(channelVideoFetcher.fetchAndSaveVideosViaYtDlp).toHaveBeenCalled();
+      expect(listing).toHaveBeenCalled();
       expect(result.freshFetchPerformed).toBe(true);
+    });
+
+    test('waits for the listing when the tab has never been listed', async () => {
+      const listing = setupTab({ lastFetchedByTab: JSON.stringify({ short: new Date().toISOString() }) });
+      listing.mockResolvedValue({ newVideos: 3 });
+
+      const result = await channelVideosService.getChannelVideos('UC123');
+
+      expect(listing).toHaveBeenCalledTimes(1);
+      expect(result.refreshing).toBe(false);
+    });
+
+    test('waits for the listing when the tab has no rows', async () => {
+      const listing = setupTab({ lastFetchedByTab: listedAgo(5 * MINUTE_MS), rows: [] });
+      listing.mockResolvedValue({ newVideos: 0 });
+
+      const result = await channelVideosService.getChannelVideos('UC123');
+
+      expect(listing).toHaveBeenCalledTimes(1);
+      expect(result.freshFetchPerformed).toBe(true);
+    });
+
+    test('answers from the database without waiting when the tab has rows and is stale', async () => {
+      const listing = setupTab({ lastFetchedByTab: listedAgo(6 * HOUR_MS) });
+      listing.mockReturnValue(neverSettles());
+
+      const result = await channelVideosService.getChannelVideos('UC123');
+
+      expect(result.videos).toHaveLength(1);
+      expect(result.refreshing).toBe(true);
+      expect(result.freshFetchPerformed).toBe(false);
+    });
+
+    test('reports no refresh for a tab listed within the hour', async () => {
+      const listing = setupTab({ lastFetchedByTab: listedAgo(5 * MINUTE_MS) });
+
+      const result = await channelVideosService.getChannelVideos('UC123');
+
+      expect(listing).not.toHaveBeenCalled();
+      expect(result.refreshing).toBe(false);
+    });
+
+    test('reports refreshing without starting a second refresh when one is in flight', async () => {
+      const listing = setupTab({ lastFetchedByTab: listedAgo(6 * HOUR_MS) });
+      const fetchRegistry = require('../fetchRegistry');
+      fetchRegistry.set('UC123:videos', { startTime: new Date().toISOString(), type: 'feedCheck', tabType: 'videos' });
+
+      const result = await channelVideosService.getChannelVideos('UC123');
+
+      expect(result.refreshing).toBe(true);
+      expect(listing).not.toHaveBeenCalled();
+    });
+
+    // A Load More is the user's own fetch: the client already follows it and
+    // reloads the list when it ends, which a "refreshing" answer would stop.
+    test('does not report a Load More in flight as a background refresh', async () => {
+      const listing = setupTab({ lastFetchedByTab: listedAgo(6 * HOUR_MS) });
+      const fetchRegistry = require('../fetchRegistry');
+      fetchRegistry.set('UC123:videos', { startTime: new Date().toISOString(), type: 'fetchAll', tabType: 'videos' });
+
+      const result = await channelVideosService.getChannelVideos('UC123');
+
+      expect(result.refreshing).toBe(false);
+      expect(listing).not.toHaveBeenCalled();
+    });
+
+    test('does not report a Load More in flight as refreshing for a never-listed tab', async () => {
+      const listing = setupTab({ lastFetchedByTab: null });
+      const fetchRegistry = require('../fetchRegistry');
+      fetchRegistry.set('UC123:videos', { startTime: new Date().toISOString(), type: 'fetchAll', tabType: 'videos' });
+
+      const result = await channelVideosService.getChannelVideos('UC123');
+
+      expect(result.refreshing).toBe(false);
+      expect(listing).not.toHaveBeenCalled();
+    });
+
+    // The hourly feed check, or another request's first listing, is already
+    // listing the tab: the client follows that listing to its end.
+    test('reports a background listing in flight as refreshing for a never-listed tab', async () => {
+      const listing = setupTab({ lastFetchedByTab: null, rows: [] });
+      const fetchRegistry = require('../fetchRegistry');
+      fetchRegistry.set('UC123:videos', { startTime: new Date().toISOString(), type: 'feedCheck', tabType: 'videos' });
+
+      const result = await channelVideosService.getChannelVideos('UC123');
+
+      expect(result.refreshing).toBe(true);
+      expect(result.freshFetchPerformed).toBe(false);
+      expect(listing).not.toHaveBeenCalled();
+    });
+
+    test('a failed background refresh is logged and does not reject', async () => {
+      const listing = setupTab({ lastFetchedByTab: listedAgo(6 * HOUR_MS) });
+      listing.mockRejectedValue(new Error('yt-dlp failed'));
+      const fetchRegistry = require('../fetchRegistry');
+
+      const result = await channelVideosService.getChannelVideos('UC123');
+      await flushPromises();
+
+      expect(result.videos).toHaveLength(1);
+      expect(result.fetchError).toBeUndefined();
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ err: expect.any(Error), channelId: 'UC123', tabType: 'videos' }),
+        'Background channel listing refresh failed'
+      );
+      expect(fetchRegistry.has('UC123:videos')).toBe(false);
+    });
+
+    test('does not start another background refresh right after a failed one', async () => {
+      const listing = setupTab({ lastFetchedByTab: listedAgo(6 * HOUR_MS) });
+      listing.mockRejectedValue(new Error('yt-dlp failed'));
+      await channelVideosService.getChannelVideos('UC123');
+      await flushPromises();
+
+      const result = await channelVideosService.getChannelVideos('UC123');
+
+      expect(result.refreshing).toBe(false);
+      expect(listing).toHaveBeenCalledTimes(1);
+    });
+
+    test('skips the refresh when the feed was checked recently', async () => {
+      const listing = setupTab({
+        lastFetchedByTab: listedAgo(2 * HOUR_MS),
+        channel: { feed_checked_at: new Date(Date.now() - 5 * MINUTE_MS) },
+      });
+
+      const result = await channelVideosService.getChannelVideos('UC123');
+
+      expect(listing).not.toHaveBeenCalled();
+      expect(result.refreshing).toBe(false);
+    });
+
+    test('treats a page with a live row as stale after an hour', async () => {
+      const listing = setupTab({
+        lastFetchedByTab: listedAgo(2 * HOUR_MS),
+        rows: [freshlyChecked({ live_status: 'is_live' })],
+        channel: { feed_checked_at: new Date(Date.now() - 5 * MINUTE_MS) },
+      });
+      listing.mockReturnValue(neverSettles());
+
+      const result = await channelVideosService.getChannelVideos('UC123');
+
+      expect(result.refreshing).toBe(true);
+    });
+
+    test('never lists a tab the channel does not have', async () => {
+      const listing = setupTab({
+        lastFetchedByTab: null,
+        rows: [],
+        channel: { available_tabs: 'videos' },
+      });
+
+      const result = await channelVideosService.getChannelVideos(
+        'UC123', 1, 50, 'off', '', 'date', 'desc', 'shorts'
+      );
+
+      expect(listing).not.toHaveBeenCalled();
+      expect(result.refreshing).toBe(false);
     });
 
     test('returns freshFetchPerformed=false when cache is fresh enough to skip yt-dlp', async () => {
@@ -533,7 +738,7 @@ describe('channelVideosService', () => {
       Video.findAll = jest.fn().mockResolvedValue([]);
 
       const channelVideoFetcher = require('../channelVideoFetcher');
-      const ytdlpSpy = jest.spyOn(channelVideoFetcher, 'fetchAndSaveVideosViaYtDlp').mockResolvedValue();
+      const ytdlpSpy = jest.spyOn(channelVideoFetcher, 'fetchAndSaveVideosViaYtDlp').mockResolvedValue({ newVideos: 0 });
 
       const result = await channelVideosService.getChannelVideos('UC123');
 
@@ -545,7 +750,8 @@ describe('channelVideosService', () => {
       const Video = require('../../../models/video');
       const mockChannel = {
         ...mockChannelData,
-        lastFetchedByTab: JSON.stringify({ video: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString() }),
+        // Never listed: the request waits for the listing and falls back to the cache.
+        lastFetchedByTab: null,
         auto_download_enabled_tabs: 'video'
       };
 

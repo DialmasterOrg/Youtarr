@@ -153,6 +153,8 @@ module.exports = function createConfigRoutes({
    *                   properties:
    *                     externalApiEnabled:
    *                       type: boolean
+   *                 channelFeedCheckFrequency:
+   *                   type: string
    *                 channelVideoCountsFrequency:
    *                   type: string
    *                 logLevel:
@@ -236,6 +238,8 @@ module.exports = function createConfigRoutes({
    *               videoRescanFrequency:
    *                 type: string
    *               ytdlpUpdateFrequency:
+   *                 type: string
+   *               channelFeedCheckFrequency:
    *                 type: string
    *               channelVideoCountsFrequency:
    *                 type: string

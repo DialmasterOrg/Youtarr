@@ -30,6 +30,7 @@ export const CONFIG_FIELDS = {
   sessionCleanupFrequency: { default: '0 3 * * *', trackChanges: true },
   videoRescanFrequency: { default: '30 3 * * *', trackChanges: true },
   ytdlpUpdateFrequency: { default: '0 4 * * *', trackChanges: true },
+  channelFeedCheckFrequency: { default: '30 * * * *', trackChanges: true },
   channelVideoCountsFrequency: { default: '45 4 * * *', trackChanges: true },
   channelFilesToDownload: { default: 5, trackChanges: true },
 
@@ -220,6 +221,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   sessionCleanupFrequency: CONFIG_FIELDS.sessionCleanupFrequency.default,
   videoRescanFrequency: CONFIG_FIELDS.videoRescanFrequency.default,
   ytdlpUpdateFrequency: CONFIG_FIELDS.ytdlpUpdateFrequency.default,
+  channelFeedCheckFrequency: CONFIG_FIELDS.channelFeedCheckFrequency.default,
   channelVideoCountsFrequency: CONFIG_FIELDS.channelVideoCountsFrequency.default,
   channelFilesToDownload: CONFIG_FIELDS.channelFilesToDownload.default,
   preferredResolution: CONFIG_FIELDS.preferredResolution.default,
