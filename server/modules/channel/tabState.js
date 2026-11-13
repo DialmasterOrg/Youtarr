@@ -4,8 +4,8 @@ const logger = require('../../logger');
 const REAL_LISTING_FRESH_MS = 60 * 60 * 1000;
 // A feed check that found nothing unlisted stands in for a real listing for this long.
 const FEED_CHECK_FRESH_MS = 90 * 60 * 1000;
-// Feeds cannot show members-only uploads, title changes or ended live
-// streams, so a real listing is forced once the last one is this old.
+// Feeds cannot show title changes or ended live streams, so a real listing
+// is forced once the last one is this old.
 const REAL_LISTING_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 const REFRESH_NEED = Object.freeze({

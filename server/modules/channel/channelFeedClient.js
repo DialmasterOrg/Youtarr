@@ -12,6 +12,9 @@ const HTTP_OK = 200;
 const USER_AGENT = 'Mozilla/5.0 (compatible; feed-reader)';
 
 const CHANNEL_ID_PREFIX_LENGTH = 2;
+// The auto playlist of a channel's members-only uploads: this prefix plus
+// the channel id without its UC.
+const MEMBERS_PLAYLIST_PREFIX = 'UUMO';
 const VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
 const FEED_CHANNEL_ID_PATTERN = /<yt:channelId>([^<]*)<\/yt:channelId>/;
 const ENTRY_VIDEO_ID_PATTERN = /<yt:videoId>([^<]*)<\/yt:videoId>/;
@@ -33,10 +36,11 @@ const REASON = Object.freeze({
 });
 
 /**
- * Reads a channel's YouTube RSS feed (its 15 newest public uploads of every
- * kind) to learn which video ids exist. The feed is only ever a hint: any
- * answer other than a valid feed for the requested channel is "no
- * information" (`ok: false`), never an empty channel.
+ * Reads a channel's YouTube RSS feeds (its 15 newest public uploads of every
+ * kind, and its 15 newest members-only uploads) to learn which video ids
+ * exist. A feed is only ever a hint: any answer other than a valid feed for
+ * the requested channel is "no information" (`ok: false`), never an empty
+ * channel.
  */
 class ChannelFeedClient {
   /**
@@ -89,10 +93,34 @@ class ChannelFeedClient {
     if (!this.supportsChannel(channelId)) {
       return { ok: false, reason: REASON.INVALID_CHANNEL_ID };
     }
+    return this.readFeed(`channel_id=${channelId}`, channelId);
+  }
 
+  /**
+   * Fetch and parse the feed of a channel's members-only uploads (its 15
+   * newest). YouTube answers 404 for a channel that has none, with the same
+   * page it serves for any missing feed.
+   * @param {string} channelId - A `UC...` channel id
+   * @returns {Promise<{ok: true, entries: Array<{youtubeId: string, isShort: boolean}>}|{ok: false, reason: string, status?: number}>}
+   *   Never rejects.
+   */
+  async fetchMembersFeed(channelId) {
+    if (!this.supportsChannel(channelId)) {
+      return { ok: false, reason: REASON.INVALID_CHANNEL_ID };
+    }
+    const playlistId = `${MEMBERS_PLAYLIST_PREFIX}${channelId.slice(CHANNEL_ID_PREFIX_LENGTH)}`;
+    return this.readFeed(`playlist_id=${playlistId}`, channelId);
+  }
+
+  /**
+   * @param {string} query - Feed query string, built from a validated channel id
+   * @param {string} channelId - The channel the feed must belong to
+   * @returns {Promise<{ok: true, entries: Array<{youtubeId: string, isShort: boolean}>}|{ok: false, reason: string, status?: number}>}
+   */
+  async readFeed(query, channelId) {
     let response;
     try {
-      response = await this.requestFeed(channelId);
+      response = await this.requestFeed(query);
     } catch (err) {
       return { ok: false, reason: REASON.NETWORK };
     }
@@ -106,10 +134,10 @@ class ChannelFeedClient {
   }
 
   /**
-   * @param {string} channelId - A validated channel id
+   * @param {string} query - Feed query string, built from a validated channel id
    * @returns {Promise<{status: number, body: string}|{reason: string}>}
    */
-  requestFeed(channelId) {
+  requestFeed(query) {
     const ipFamilySetting = configModule.getConfig().ytdlpIpFamily || DEFAULT_IP_FAMILY_SETTING;
     const family = IP_FAMILY_BY_SETTING[ipFamilySetting];
 
@@ -118,7 +146,7 @@ class ChannelFeedClient {
       const req = https.request(
         {
           host: FEED_HOST,
-          path: `${FEED_PATH}?channel_id=${channelId}`,
+          path: `${FEED_PATH}?${query}`,
           method: 'GET',
           headers: { 'User-Agent': USER_AGENT },
           // c-ares, off libuv's threadpool: an offline lookup must not hold

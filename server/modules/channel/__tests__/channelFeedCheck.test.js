@@ -13,6 +13,8 @@ jest.mock('../../youtubeExistenceCheck', () => ({ lookup: jest.fn() }));
 jest.mock('../../ytDlpRunner', () => ({ run: jest.fn() }));
 jest.mock('../../download/ytdlpCommandBuilder', () => ({ buildMetadataFetchArgs: jest.fn() }));
 
+const { Op } = require('sequelize');
+
 const REFRESH_GAP_MS = 3000;
 const BOT_CHECK = Object.assign(new Error('Sign in to confirm you are not a bot'), { code: 'COOKIES_REQUIRED' });
 // The shape channelYtdlpExecutor rejects with: a generic message, yt-dlp's words in stderr.
@@ -31,6 +33,7 @@ describe('channelFeedCheck', () => {
   let Channel;
   let ChannelVideo;
   let feeds;
+  let membersFeeds;
   let knownIds;
 
   const makeChannel = (index, extra = {}) => ({
@@ -47,6 +50,8 @@ describe('channelFeedCheck', () => {
   const short = (youtubeId) => ({ youtubeId, isShort: true });
   const okFeed = (...entries) => ({ ok: true, entries });
   const deadFeed = { ok: false, reason: 'http-error', status: 404 };
+  // What YouTube answers for a channel with no members-only videos.
+  const noMembersFeed = { ok: false, reason: 'http-error', status: 404 };
 
   // Stores the subscribed channels and, per channel id, the feed YouTube answers with.
   const subscribe = (channels, feedByChannelId = {}) => {
@@ -82,6 +87,10 @@ describe('channelFeedCheck', () => {
     channelFeedClient = require('../channelFeedClient');
     jest.spyOn(channelFeedClient, 'fetchChannelFeed')
       .mockImplementation(async (channelId) => feeds[channelId] || okFeed());
+    membersFeeds = {};
+    jest.spyOn(channelFeedClient, 'fetchMembersFeed')
+      .mockImplementation(async (channelId) => membersFeeds[channelId] || noMembersFeed);
+    ChannelVideo.count.mockResolvedValue(0);
 
     channelVideoFetcher = require('../channelVideoFetcher');
     jest.spyOn(channelVideoFetcher, 'refreshTabTracked')
@@ -401,6 +410,218 @@ describe('channelFeedCheck', () => {
       expect(channelFeedClient.fetchChannelFeed).toHaveBeenCalledTimes(27);
       expect(record.status).toBe('success');
       expect(record.message).toBe('Checked 20 channels. No new videos. 7 feeds unavailable.');
+    });
+  });
+
+  describe('the members-only feed', () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const timedOut = { ok: false, reason: 'timeout' };
+    const daysAgo = (days) => new Date(Date.now() - days * DAY_MS).toISOString();
+    // The channel's listing holds one members-only video, published that long ago.
+    const withMembersVideoListed = (publishedAt) => {
+      ChannelVideo.count.mockImplementation(async ({ where }) => {
+        const since = where.publishedAt[Op.gte];
+        return where.availability === 'subscriber_only' && publishedAt >= since ? 1 : 0;
+      });
+    };
+
+    test('is read for a channel whose feed answered', async () => {
+      subscribe([makeChannel(1)]);
+
+      await runCheck();
+
+      expect(channelFeedClient.fetchMembersFeed).toHaveBeenCalledWith(channelIdFor(1));
+    });
+
+    test('is not read for a channel whose feed failed', async () => {
+      subscribe([makeChannel(1), makeChannel(2)], { [channelIdFor(1)]: deadFeed });
+
+      await runCheck();
+
+      const asked = channelFeedClient.fetchMembersFeed.mock.calls.map(([channelId]) => channelId);
+      expect(asked).toEqual([channelIdFor(2)]);
+    });
+
+    test('lists videos and streams for an unlisted members-only video', async () => {
+      subscribe([makeChannel(1)]);
+      membersFeeds[channelIdFor(1)] = okFeed(video('MMMMMMMMMM1'));
+
+      await runCheck();
+
+      expect(refreshedTabs()).toEqual(['videos', 'streams']);
+    });
+
+    test('lists no tab when its videos are already listed', async () => {
+      knownIds = new Set(['MMMMMMMMMM1']);
+      subscribe([makeChannel(1)]);
+      membersFeeds[channelIdFor(1)] = okFeed(video('MMMMMMMMMM1'));
+
+      await runCheck();
+
+      expect(channelVideoFetcher.refreshTabTracked).not.toHaveBeenCalled();
+      expect(stampedChannelIds()).toEqual([channelIdFor(1)]);
+    });
+
+    test('stamps a channel that has no members-only videos', async () => {
+      subscribe([makeChannel(1)]);
+
+      const record = await runCheck();
+
+      expect(stampedChannelIds()).toEqual([channelIdFor(1)]);
+      expect(record.message).toBe('Checked 1 channel. No new videos.');
+    });
+
+    test('is not asked for again within a day of a 404', async () => {
+      subscribe([makeChannel(1)]);
+      await runCheck();
+      jest.advanceTimersByTime(DAY_MS - 60 * 1000);
+
+      await runCheck();
+
+      expect(channelFeedClient.fetchMembersFeed).toHaveBeenCalledTimes(1);
+    });
+
+    test('is asked for again a day after a 404', async () => {
+      subscribe([makeChannel(1)]);
+      await runCheck();
+      jest.advanceTimersByTime(DAY_MS + 1);
+
+      await runCheck();
+
+      expect(channelFeedClient.fetchMembersFeed).toHaveBeenCalledTimes(2);
+    });
+
+    test('is asked for every run once it has answered', async () => {
+      knownIds = new Set(['MMMMMMMMMM1']);
+      subscribe([makeChannel(1)]);
+      membersFeeds[channelIdFor(1)] = okFeed(video('MMMMMMMMMM1'));
+      await runCheck();
+
+      await runCheck();
+
+      expect(channelFeedClient.fetchMembersFeed).toHaveBeenCalledTimes(2);
+    });
+
+    // A 404 is also what a feed outage looks like, and a channel that posted
+    // a members-only video this month has not run out of them.
+    describe('a 404 for a channel with a recent members-only video', () => {
+      beforeEach(() => {
+        withMembersVideoListed(daysAgo(3));
+        subscribe([makeChannel(1)]);
+      });
+
+      test('does not stamp the channel', async () => {
+        await runCheck();
+
+        expect(stampedChannelIds()).toEqual([]);
+      });
+
+      test('is asked about again on the next run', async () => {
+        await runCheck();
+
+        await runCheck();
+
+        expect(channelFeedClient.fetchMembersFeed).toHaveBeenCalledTimes(2);
+      });
+
+      test('counts as a feed that was unavailable', async () => {
+        const record = await runCheck();
+
+        expect(record.message).toBe('Checked 1 channel. No new videos. 1 members-only feed unavailable.');
+      });
+    });
+
+    describe('a 404 for a channel whose last members-only video is over a month old', () => {
+      beforeEach(() => {
+        withMembersVideoListed(daysAgo(45));
+        subscribe([makeChannel(1)]);
+      });
+
+      test('stamps the channel', async () => {
+        await runCheck();
+
+        expect(stampedChannelIds()).toEqual([channelIdFor(1)]);
+      });
+
+      test('is not asked about again within a day', async () => {
+        await runCheck();
+
+        await runCheck();
+
+        expect(channelFeedClient.fetchMembersFeed).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('when it fails', () => {
+      beforeEach(() => {
+        subscribe([makeChannel(1)]);
+        membersFeeds[channelIdFor(1)] = timedOut;
+      });
+
+      test('the channel is not stamped', async () => {
+        await runCheck();
+
+        expect(stampedChannelIds()).toEqual([]);
+      });
+
+      test('a public upload is still listed', async () => {
+        feeds[channelIdFor(1)] = okFeed(video('AAAAAAAAAA1'));
+
+        await runCheck();
+
+        expect(refreshedTabs()).toEqual(['videos', 'streams']);
+      });
+
+      test('the channel is not stamped after its public upload was listed', async () => {
+        feeds[channelIdFor(1)] = okFeed(video('AAAAAAAAAA1'));
+
+        await runCheck();
+
+        expect(stampedChannelIds()).toEqual([]);
+      });
+
+      test('it is asked for again on the next run', async () => {
+        await runCheck();
+
+        await runCheck();
+
+        expect(channelFeedClient.fetchMembersFeed).toHaveBeenCalledTimes(2);
+      });
+
+      test('the run says so', async () => {
+        const record = await runCheck();
+
+        expect(record).toEqual(expect.objectContaining({
+          status: 'success',
+          message: 'Checked 1 channel. No new videos. 1 members-only feed unavailable.',
+          details: expect.objectContaining({ membersFeedsUnavailable: 1 }),
+        }));
+      });
+    });
+
+    test('failures do not count toward the feed outage breaker', async () => {
+      const channels = Array.from({ length: 20 }, (_, index) => makeChannel(index));
+      subscribe(channels);
+      channels.forEach((channel) => { membersFeeds[channel.channel_id] = timedOut; });
+
+      const record = await runCheck();
+
+      expect(channelFeedClient.fetchChannelFeed).toHaveBeenCalledTimes(20);
+      expect(record.status).toBe('success');
+    });
+
+    test('keeps an id the listing never returned through a run where the feed failed', async () => {
+      subscribe([makeChannel(1)]);
+      membersFeeds[channelIdFor(1)] = okFeed(video('MMMMMMMMMM1'));
+      await runCheck();
+      membersFeeds[channelIdFor(1)] = timedOut;
+      await runCheck();
+      membersFeeds[channelIdFor(1)] = okFeed(video('MMMMMMMMMM1'));
+      channelVideoFetcher.refreshTabTracked.mockClear();
+
+      await runCheck();
+
+      expect(channelVideoFetcher.refreshTabTracked).not.toHaveBeenCalled();
     });
   });
 

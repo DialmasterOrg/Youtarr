@@ -310,4 +310,59 @@ describe('channelFeedClient', () => {
       expect(requests[0].options).not.toHaveProperty('family');
     });
   });
+
+  describe('fetchMembersFeed', () => {
+    test('asks YouTube for the channel\'s members-only uploads feed', async () => {
+      const requests = mockFeedRequest({ chunks: [feed({ feedChannelId: CHANNEL_ID })] });
+
+      await channelFeedClient.fetchMembersFeed(CHANNEL_ID);
+
+      expect(requests[0].options).toEqual(expect.objectContaining({
+        host: 'www.youtube.com',
+        path: '/feeds/videos.xml?playlist_id=UUMOaaaaaaaaaaaaaaaaaaaaaa',
+        method: 'GET',
+      }));
+    });
+
+    test('returns the entries of a feed that names the channel with its UC prefix', async () => {
+      mockFeedRequest({ chunks: [feed({ feedChannelId: CHANNEL_ID, entries: TWO_ENTRIES })] });
+
+      await expect(channelFeedClient.fetchMembersFeed(CHANNEL_ID)).resolves.toEqual({
+        ok: true,
+        entries: [
+          { youtubeId: 'AAAAAAAAAA1', isShort: false },
+          { youtubeId: 'AAAAAAAAAA2', isShort: true },
+        ],
+      });
+    });
+
+    test('reports a 404 as http-error with its status', async () => {
+      mockFeedRequest({ status: 404, chunks: ['<html>Error 404</html>'] });
+
+      await expect(channelFeedClient.fetchMembersFeed(CHANNEL_ID)).resolves.toEqual({
+        ok: false,
+        reason: 'http-error',
+        status: 404,
+      });
+    });
+
+    test('makes no request for an id that is not a channel id', async () => {
+      mockFeedRequest();
+
+      await expect(channelFeedClient.fetchMembersFeed(`${CHANNEL_ID}&x=1`)).resolves.toEqual({
+        ok: false,
+        reason: 'invalid-channel-id',
+      });
+      expect(https.request).not.toHaveBeenCalled();
+    });
+
+    test('reports a 200 that is another channel\'s feed', async () => {
+      mockFeedRequest({ chunks: [feed({ feedChannelId: 'UCbbbbbbbbbbbbbbbbbbbbbb' })] });
+
+      await expect(channelFeedClient.fetchMembersFeed(CHANNEL_ID)).resolves.toEqual({
+        ok: false,
+        reason: 'wrong-channel',
+      });
+    });
+  });
 });

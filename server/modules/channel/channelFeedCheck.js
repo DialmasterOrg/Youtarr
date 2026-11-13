@@ -1,3 +1,4 @@
+const { Op } = require('sequelize');
 const logger = require('../../logger');
 const Channel = require('../../models/channel');
 const ChannelVideo = require('../../models/channelvideo');
@@ -18,6 +19,15 @@ const REFRESH_GAP_MS = 3 * 1000;
 // an upgrade); the rest sort first next time, since their check is oldest.
 const MAX_TAB_REFRESHES_PER_RUN = 60;
 const FEED_CHECK_TYPE = 'feedCheck';
+// How long a channel with no members-only videos is left alone before its
+// members-only feed is asked for again.
+const NO_MEMBERS_FEED_TTL_MS = 24 * 60 * 60 * 1000;
+// A channel whose listing has a members-only video this recent is still
+// posting them, so a 404 from its members-only feed is not believed.
+const RECENT_MEMBERS_VIDEO_MS = 30 * 24 * 60 * 60 * 1000;
+const HTTP_NOT_FOUND = 404;
+// yt-dlp's availability value for a members-only video.
+const MEMBERS_ONLY_AVAILABILITY = 'subscriber_only';
 // Listing order when a channel needs more than one tab.
 const TAB_ORDER = [TAB_TYPES.VIDEOS, TAB_TYPES.SHORTS, TAB_TYPES.LIVE];
 
@@ -51,10 +61,11 @@ function feedCheckedTime(channel) {
 
 /**
  * The scheduled check that keeps subscribed channels' video listings current.
- * It reads each channel's RSS feed only to notice video ids the listing does
- * not have yet; the rows themselves always come from the yt-dlp tab listing.
- * A feed that fails, or is not this channel's feed, is no information: the
- * channel is left exactly as it was.
+ * It reads each channel's RSS feeds (public uploads, then members-only
+ * uploads) only to notice video ids the listing does not have yet; the rows
+ * themselves always come from the yt-dlp tab listing. A feed that fails, or
+ * is not this channel's feed, is no information: the channel is left exactly
+ * as it was.
  */
 class ChannelFeedCheck {
   constructor() {
@@ -62,6 +73,9 @@ class ChannelFeedCheck {
     // Per channel, feed ids a tab listing did not return (an upload yt-dlp's
     // tab does not show). Remembered so they do not start a listing every run.
     this.unresolvedIds = new Map();
+    // Per channel, when to ask for its members-only feed again after
+    // YouTube said it has none.
+    this.noMembersFeedUntil = new Map();
   }
 
   isRunning() {
@@ -95,26 +109,36 @@ class ChannelFeedCheck {
       return { ...FEEDS_UNAVAILABLE_RECORD, details: { channelsChecked: 0, feedsUnavailable } };
     }
 
+    const membersFeedsUnavailable = readable.filter(({ members }) => !members.known).length;
+
     const plans = [];
-    for (const { channel, feed } of readable) {
-      const unlisted = await this._unlistedEntries(channel, feed.entries);
+    for (const { channel, feed, members } of readable) {
+      const unlisted = await this._unlistedEntries(
+        channel, [...feed.entries, ...members.entries], { complete: members.known }
+      );
       const tabs = this._tabsFor(channel, unlisted);
-      if (tabs.length === 0) {
+      if (tabs.length > 0) {
+        plans.push({
+          channel,
+          tabs,
+          unlistedIds: unlisted.map((entry) => entry.youtubeId),
+          membersKnown: members.known,
+        });
+      } else if (members.known) {
         await this._stamp(channel);
-      } else {
-        plans.push({ channel, tabs, unlistedIds: unlisted.map((entry) => entry.youtubeId) });
       }
     }
 
     const outcome = await this._refresh(plans);
-    return this._describe({ channelsChecked: readable.length, feedsUnavailable, ...outcome });
+    return this._describe({ channelsChecked: readable.length, feedsUnavailable, membersFeedsUnavailable, ...outcome });
   }
 
   /**
    * Read the channels' feeds, a few at a time, stopping early when YouTube
-   * stops answering.
+   * stops answering. Only the public feed counts toward that: a channel's
+   * members-only feed is asked for after its public feed answered.
    * @param {Array<Object>} channels
-   * @returns {Promise<{results: Array<{channel: Object, feed: Object}>, breakerTripped: boolean}>}
+   * @returns {Promise<{results: Array<{channel: Object, feed: Object, members: ?{entries: Array, known: boolean}}>, breakerTripped: boolean}>}
    */
   async _readFeeds(channels) {
     const results = [];
@@ -126,7 +150,8 @@ class ChannelFeedCheck {
       while (!breakerTripped && nextIndex < channels.length) {
         const channel = channels[nextIndex++];
         const feed = await channelFeedClient.fetchChannelFeed(channel.channel_id);
-        results.push({ channel, feed });
+        const members = feed.ok ? await this._readMembersFeed(channel.channel_id) : null;
+        results.push({ channel, feed, members });
         if (feed.ok) {
           consecutiveFailures = 0;
         } else {
@@ -141,17 +166,65 @@ class ChannelFeedCheck {
   }
 
   /**
+   * The channel's members-only uploads, as far as its feed can tell.
+   * `known` is false when the feed gave no information.
+   * @param {string} channelId
+   * @returns {Promise<{entries: Array<{youtubeId: string, isShort: boolean}>, known: boolean}>}
+   */
+  async _readMembersFeed(channelId) {
+    if (this._hasNoMembersFeed(channelId)) return { entries: [], known: true };
+
+    const feed = await channelFeedClient.fetchMembersFeed(channelId);
+    if (feed.ok) return { entries: feed.entries, known: true };
+    if (feed.status !== HTTP_NOT_FOUND) return { entries: [], known: false };
+
+    // YouTube answers 404 for a channel with no members-only videos, and
+    // with the same page during a feed outage. A channel that listed one
+    // recently has not run out of them, so there the 404 says nothing.
+    if (await this._hasRecentMembersVideo(channelId)) return { entries: [], known: false };
+
+    this.noMembersFeedUntil.set(channelId, Date.now() + NO_MEMBERS_FEED_TTL_MS);
+    return { entries: [], known: true };
+  }
+
+  async _hasRecentMembersVideo(channelId) {
+    const since = new Date(Date.now() - RECENT_MEMBERS_VIDEO_MS).toISOString();
+    const recent = await ChannelVideo.count({
+      where: {
+        channel_id: channelId,
+        availability: MEMBERS_ONLY_AVAILABILITY,
+        // Stored as ISO strings, which sort as dates.
+        publishedAt: { [Op.gte]: since },
+      },
+    });
+    return recent > 0;
+  }
+
+  _hasNoMembersFeed(channelId) {
+    const until = this.noMembersFeedUntil.get(channelId);
+    if (until === undefined) return false;
+    if (Date.now() < until) return true;
+    this.noMembersFeedUntil.delete(channelId);
+    return false;
+  }
+
+  /**
    * Feed entries the channel's listing has no row for, leaving out ids an
    * earlier listing already failed to return.
    * @param {Object} channel
    * @param {Array<{youtubeId: string, isShort: boolean}>} entries
+   * @param {Object} options
+   * @param {boolean} options.complete - Whether every feed of the channel answered this run
    * @returns {Promise<Array<{youtubeId: string, isShort: boolean}>>}
    */
-  async _unlistedEntries(channel, entries) {
+  async _unlistedEntries(channel, entries, { complete }) {
     const missing = await this._idsWithoutRows(channel.channel_id, entries.map((entry) => entry.youtubeId));
     const unresolved = this.unresolvedIds.get(channel.channel_id) || new Set();
-    // Ids that left the feed are forgotten, so the memory stays feed-sized.
-    const stillUnresolved = new Set([...unresolved].filter((id) => missing.has(id)));
+    // Ids that left the feeds are forgotten, so the memory stays feed-sized.
+    // A feed that gave no answer this run has not dropped any.
+    const stillUnresolved = complete
+      ? new Set([...unresolved].filter((id) => missing.has(id)))
+      : unresolved;
     if (stillUnresolved.size > 0) {
       this.unresolvedIds.set(channel.channel_id, stillUnresolved);
     } else {
@@ -198,7 +271,7 @@ class ChannelFeedCheck {
   /**
    * List the planned tabs, one at a time and spaced apart, channels whose
    * check is oldest first.
-   * @param {Array<{channel: Object, tabs: string[], unlistedIds: string[]}>} plans
+   * @param {Array<{channel: Object, tabs: string[], unlistedIds: string[], membersKnown: boolean}>} plans
    * @returns {Promise<{channelsWithNewVideos: number, tabsRefreshed: number, tabsFailed: number, tabsDeferred: number, throttled: boolean}>}
    */
   async _refresh(plans) {
@@ -207,7 +280,7 @@ class ChannelFeedCheck {
     let tabsAttempted = 0;
 
     for (let index = 0; index < ordered.length; index++) {
-      const { channel, tabs, unlistedIds } = ordered[index];
+      const { channel, tabs, unlistedIds, membersKnown } = ordered[index];
       if (tabsAttempted + tabs.length > MAX_TAB_REFRESHES_PER_RUN) {
         outcome.tabsDeferred = ordered.slice(index).reduce((sum, plan) => sum + plan.tabs.length, 0);
         break;
@@ -241,7 +314,7 @@ class ChannelFeedCheck {
       outcome.channelsWithNewVideos += 1;
       if (everyTabListed) {
         await this._rememberUnresolved(channel.channel_id, unlistedIds);
-        await this._stamp(channel);
+        if (membersKnown) await this._stamp(channel);
       }
     }
     return outcome;
@@ -259,8 +332,14 @@ class ChannelFeedCheck {
     await Channel.update({ feed_checked_at: new Date() }, { where: { channel_id: channel.channel_id } });
   }
 
-  _describe({ channelsChecked, feedsUnavailable, channelsWithNewVideos, tabsRefreshed, tabsFailed, tabsDeferred, throttled }) {
-    const details = { channelsChecked, feedsUnavailable, channelsWithNewVideos, tabsRefreshed, tabsFailed, tabsDeferred };
+  _describe({
+    channelsChecked, feedsUnavailable, membersFeedsUnavailable,
+    channelsWithNewVideos, tabsRefreshed, tabsFailed, tabsDeferred, throttled,
+  }) {
+    const details = {
+      channelsChecked, feedsUnavailable, membersFeedsUnavailable,
+      channelsWithNewVideos, tabsRefreshed, tabsFailed, tabsDeferred,
+    };
     const checked = `Checked ${counted(channelsChecked, 'channel')}.`;
 
     if (throttled) {
@@ -278,6 +357,9 @@ class ChannelFeedCheck {
       : `${channelsWithNewVideos.toLocaleString()} had new videos (${counted(tabsRefreshed, 'tab')} refreshed).`);
     if (tabsFailed > 0) parts.push(`${counted(tabsFailed, 'tab listing')} failed.`);
     if (feedsUnavailable > 0) parts.push(`${counted(feedsUnavailable, 'feed')} unavailable.`);
+    if (membersFeedsUnavailable > 0) {
+      parts.push(`${counted(membersFeedsUnavailable, 'members-only feed')} unavailable.`);
+    }
     if (tabsDeferred > 0) parts.push(`${counted(tabsDeferred, 'tab')} deferred to the next run.`);
 
     const partlyFailed = tabsFailed > 0;
