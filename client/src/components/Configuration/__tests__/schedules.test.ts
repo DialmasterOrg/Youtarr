@@ -177,3 +177,26 @@ describe('frequentRunWarning', () => {
     expect(others.every((field) => typeof field.frequentRunWarning === 'string' && field.frequentRunWarning.length > 0)).toBe(true);
   });
 });
+
+describe('feed check schedule', () => {
+  const keys = SCHEDULE_FIELDS.map((field) => field.key);
+  const feedCheck = SCHEDULE_FIELDS.find((field) => field.key === 'channelFeedCheckFrequency');
+
+  test('is listed as "Check channels for new videos"', () => {
+    expect(feedCheck?.label).toBe('Check channels for new videos');
+  });
+
+  test('sits with the maintenance schedules, right before the video counts', () => {
+    expect(feedCheck?.group).toBe('maintenance');
+    expect(keys.indexOf('channelFeedCheckFrequency')).toBe(keys.indexOf('channelVideoCountsFrequency') - 1);
+  });
+
+  test('has no feature switch, so it is never shown as idle', () => {
+    expect(feedCheck?.enabledKey).toBeNull();
+    expect(feedCheck?.disabledText).toBeNull();
+  });
+
+  test('needs no confirmation before Run now', () => {
+    expect(feedCheck?.runNowConfirm).toBeNull();
+  });
+});

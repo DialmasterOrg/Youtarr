@@ -6,20 +6,36 @@ export interface FetchProgress {
   stage: 'listing' | 'saving';
 }
 
+// What a background refresh of the tab found. The server keeps it for two
+// minutes after the refresh ends; Load More and Download all leave none.
+export interface FetchResult {
+  type: string;
+  newVideos: number;
+  failed: boolean;
+  finishedAt: string;
+}
+
+export interface FetchCompletion {
+  lastResult: FetchResult | null;
+}
+
 interface FetchStatus {
   isFetching: boolean;
   startTime?: string;
   type?: string;
   tabType?: string;
   progress?: FetchProgress;
+  lastResult?: FetchResult;
 }
 
 interface UseChannelFetchStatusResult {
   isFetching: boolean;
+  fetchType: string | null;
   startTime: string | null;
   progress: FetchProgress | null;
-  onFetchComplete: (callback: () => void) => void;
+  onFetchComplete: (callback: (completion: FetchCompletion) => void) => void;
   startPolling: () => void;
+  trackRefresh: () => void;
 }
 
 const POLL_INTERVAL_MS = 3000;
@@ -34,7 +50,7 @@ export function useChannelFetchStatus(
   const statusKey = channelId && tabType ? `${channelId}:${tabType}` : null;
   const [status, setStatus] = useState<{ key: string; data: FetchStatus } | null>(null);
   const [shouldPoll, setShouldPoll] = useState<boolean>(false);
-  const onCompleteCallbackRef = useRef<(() => void) | null>(null);
+  const onCompleteCallbackRef = useRef<((completion: FetchCompletion) => void) | null>(null);
   const previousIsFetchingRef = useRef<boolean>(false);
   // Bumped on every channel/tab/token change: a response from an earlier
   // generation describes a view that is no longer showing and is dropped.
@@ -66,7 +82,7 @@ export function useChannelFetchStatus(
           // Fetch just completed - stop polling and trigger callback
           setShouldPoll(false);
           if (onCompleteCallbackRef.current) {
-            onCompleteCallbackRef.current();
+            onCompleteCallbackRef.current({ lastResult: data.lastResult ?? null });
           }
         }
 
@@ -121,7 +137,7 @@ export function useChannelFetchStatus(
 
   const current = status && status.key === statusKey ? status.data : null;
 
-  const onFetchComplete = useCallback((callback: () => void) => {
+  const onFetchComplete = useCallback((callback: (completion: FetchCompletion) => void) => {
     onCompleteCallbackRef.current = callback;
   }, []);
 
@@ -130,11 +146,25 @@ export function useChannelFetchStatus(
     setShouldPoll(true);
   }, []);
 
+  // Follow a refresh the server said it started. It is known to be running,
+  // so the first answer that says "not fetching" is its completion, and the
+  // check goes out now: such a refresh usually ends before the first poll.
+  // A check already in flight was sent before the refresh began; the new
+  // generation drops its answer so it is not mistaken for the completion.
+  const trackRefresh = useCallback(() => {
+    generationRef.current++;
+    previousIsFetchingRef.current = true;
+    setShouldPoll(true);
+    void checkFetchStatus();
+  }, [checkFetchStatus]);
+
   return {
     isFetching: current?.isFetching ?? false,
+    fetchType: current?.isFetching ? current.type ?? null : null,
     startTime: current?.startTime || null,
     progress: current?.progress || null,
     onFetchComplete,
     startPolling,
+    trackRefresh,
   };
 }

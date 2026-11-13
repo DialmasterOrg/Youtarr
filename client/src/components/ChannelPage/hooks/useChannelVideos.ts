@@ -35,6 +35,14 @@ interface UseChannelVideosResult {
   error: Error | null;
   autoDownloadsEnabled: boolean;
   availableTabs: string[];
+  // Set while the server is listing this tab from YouTube in the background
+  // and the videos returned are the stored ones. Every response that reports
+  // a refresh gives a new value, so a second refresh of the same view shows
+  // as a change.
+  refreshSeq: number | null;
+  // The channel and tab the videos on hand were loaded for. After a tab
+  // switch it still names the previous tab until the new tab's response.
+  loadedView: string | null;
   refetch: () => Promise<void>;
 }
 
@@ -69,6 +77,11 @@ export function useChannelVideos({
   const [error, setError] = useState<Error | null>(null);
   const [autoDownloadsEnabled, setAutoDownloadsEnabled] = useState<boolean>(false);
   const [availableTabs, setAvailableTabs] = useState<string[]>([]);
+  // The channel and tab the server said it is refreshing, so the signal never
+  // carries over to another tab before that tab's own response arrives, and
+  // the request that reported it.
+  const [refresh, setRefresh] = useState<{ view: string; seq: number } | null>(null);
+  const [loadedView, setLoadedView] = useState<string | null>(null);
   const resetKeyRef = useRef<string | undefined>(resetKey);
   // Fire onFirstLoad once per channelId. Subsequent fetches (sort, page,
   // tab change) should not retrigger it.
@@ -180,9 +193,11 @@ export function useChannelVideos({
         setVideos([]);
       }
       setTotalCount(data.totalCount || 0);
+      setLoadedView(`${channelId}:${tabType}`);
       setOldestVideoDate(data.oldestVideoDate || null);
       setAutoDownloadsEnabled(data.autoDownloadsEnabled || false);
       setAvailableTabs(data.availableTabs || []);
+      setRefresh(data.refreshing === true ? { view: `${channelId}:${tabType}`, seq: requestId } : null);
       // Server sets fetchError when the upstream YouTube fetch failed and
       // no cached fallback was available. Surface it as an error so the UI
       // distinguishes "fetch failed" from "filter matched nothing".
@@ -201,6 +216,7 @@ export function useChannelVideos({
       }
       console.error('Error fetching channel videos:', err);
       setError(err instanceof Error ? err : new Error('Unknown error'));
+      setRefresh(null);
     } finally {
       if (requestId === latestRequestId.current) {
         setLoading(false);
@@ -220,6 +236,8 @@ export function useChannelVideos({
     error,
     autoDownloadsEnabled,
     availableTabs,
+    refreshSeq: refresh !== null && refresh.view === `${channelId}:${tabType}` ? refresh.seq : null,
+    loadedView,
     refetch: fetchVideos,
   };
 }

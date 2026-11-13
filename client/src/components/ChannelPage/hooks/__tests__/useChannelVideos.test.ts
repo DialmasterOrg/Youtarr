@@ -1165,4 +1165,149 @@ describe('useChannelVideos', () => {
     });
   });
 
+  describe('Background Refresh Signal', () => {
+    const respondWith = (body: object) =>
+      mockFetch.mockResolvedValueOnce({ ok: true, json: jest.fn().mockResolvedValueOnce(body) });
+
+    test('reports no refresh before any response', () => {
+      mockFetch.mockImplementation(() => new Promise(() => {}));
+
+      const { result } = renderHook(() => useChannelVideos(defaultParams));
+
+      expect(result.current.refreshSeq).toBeNull();
+    });
+
+    test('reports a refresh from the response', async () => {
+      respondWith({ ...mockResponse, refreshing: true });
+
+      const { result } = renderHook(() => useChannelVideos(defaultParams));
+
+      await waitFor(() => {
+        expect(result.current.refreshSeq).not.toBeNull();
+      });
+    });
+
+    test('reports a later refresh of the same view as a new one', async () => {
+      respondWith({ ...mockResponse, refreshing: true });
+      respondWith({ ...mockResponse, refreshing: true });
+
+      const { result, rerender } = renderHook(
+        ({ page }: { page: number }) => useChannelVideos({ ...defaultParams, page }),
+        { initialProps: { page: 1 } }
+      );
+      await waitFor(() => {
+        expect(result.current.refreshSeq).not.toBeNull();
+      });
+      const firstSeq = result.current.refreshSeq;
+
+      rerender({ page: 2 });
+
+      await waitFor(() => {
+        expect(result.current.refreshSeq).not.toBe(firstSeq);
+      });
+      expect(result.current.refreshSeq).not.toBeNull();
+    });
+
+    test('clears the refresh when the next response has none', async () => {
+      respondWith({ ...mockResponse, refreshing: true });
+      respondWith(mockResponse);
+
+      const { result, rerender } = renderHook(
+        ({ page }: { page: number }) => useChannelVideos({ ...defaultParams, page }),
+        { initialProps: { page: 1 } }
+      );
+      await waitFor(() => {
+        expect(result.current.refreshSeq).not.toBeNull();
+      });
+
+      rerender({ page: 2 });
+
+      await waitFor(() => {
+        expect(result.current.refreshSeq).toBeNull();
+      });
+    });
+
+    test('does not report a refresh of one tab because the previous tab had one', async () => {
+      respondWith({ ...mockResponse, refreshing: true });
+      mockFetch.mockImplementationOnce(() => new Promise(() => {}));
+
+      const { result, rerender } = renderHook(
+        ({ tabType }: { tabType: string }) => useChannelVideos({ ...defaultParams, tabType }),
+        { initialProps: { tabType: 'videos' } }
+      );
+      await waitFor(() => {
+        expect(result.current.refreshSeq).not.toBeNull();
+      });
+
+      rerender({ tabType: 'shorts' });
+
+      expect(result.current.refreshSeq).toBeNull();
+    });
+
+    test('clears the refresh when the next request fails', async () => {
+      respondWith({ ...mockResponse, refreshing: true });
+      mockFetch.mockRejectedValueOnce(new Error('network error'));
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const { result, rerender } = renderHook(
+        ({ page }: { page: number }) => useChannelVideos({ ...defaultParams, page }),
+        { initialProps: { page: 1 } }
+      );
+      await waitFor(() => {
+        expect(result.current.refreshSeq).not.toBeNull();
+      });
+
+      rerender({ page: 2 });
+
+      await waitFor(() => {
+        expect(result.current.refreshSeq).toBeNull();
+      });
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('Loaded View', () => {
+    const respondWith = (body: object) =>
+      mockFetch.mockResolvedValueOnce({ ok: true, json: jest.fn().mockResolvedValueOnce(body) });
+
+    test('names no view before any response', () => {
+      mockFetch.mockImplementation(() => new Promise(() => {}));
+
+      const { result } = renderHook(() => useChannelVideos(defaultParams));
+
+      expect(result.current.loadedView).toBeNull();
+    });
+
+    test('names the channel and tab the videos were loaded for', async () => {
+      respondWith(mockResponse);
+
+      const { result } = renderHook(() => useChannelVideos(defaultParams));
+
+      await waitFor(() => {
+        expect(result.current.loadedView).toBe(`${mockChannelId}:videos`);
+      });
+    });
+
+    test('keeps naming the previous tab until the new tab answers', async () => {
+      respondWith(mockResponse);
+      let answerShorts: (value: unknown) => void = () => {};
+      mockFetch.mockReturnValueOnce(new Promise((resolve) => { answerShorts = resolve; }));
+      const { result, rerender } = renderHook(
+        ({ tabType }: { tabType: string }) => useChannelVideos({ ...defaultParams, tabType }),
+        { initialProps: { tabType: 'videos' } }
+      );
+      await waitFor(() => {
+        expect(result.current.loadedView).toBe(`${mockChannelId}:videos`);
+      });
+
+      rerender({ tabType: 'shorts' });
+      expect(result.current.loadedView).toBe(`${mockChannelId}:videos`);
+      answerShorts({ ok: true, json: jest.fn().mockResolvedValueOnce(mockResponse) });
+
+      await waitFor(() => {
+        expect(result.current.loadedView).toBe(`${mockChannelId}:shorts`);
+      });
+    });
+  });
+
 });

@@ -933,6 +933,12 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *                         type: string
    *                         enum: [no_cookies, unchecked, confirmed, denied]
    *                         description: Present on members-only videos only. Whether the configured cookies can open the video; `no_cookies` and `denied` are not downloaded.
+   *                 freshFetchPerformed:
+   *                   type: boolean
+   *                   description: True when this request waited for a YouTube listing of the tab (a tab with no stored videos, or never listed) and it succeeded.
+   *                 refreshing:
+   *                   type: boolean
+   *                   description: True when a YouTube listing of the tab is running that this request did not wait for. The videos returned are the stored ones; follow the listing through the fetch-status endpoint, whose `lastResult` says how many videos it added.
    *       400:
    *         description: Invalid maxRating
    *       404:
@@ -1101,6 +1107,22 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *                     stage:
    *                       type: string
    *                       enum: [listing, saving]
+   *                 lastResult:
+   *                   type: object
+   *                   description: Outcome of the tab's last background refresh, present on a tab-specific check for two minutes after it ended. Load More fetches leave none.
+   *                   properties:
+   *                     type:
+   *                       type: string
+   *                       enum: [autoRefresh, feedCheck]
+   *                       description: What started the refresh, a channel page request or the scheduled feed check
+   *                     newVideos:
+   *                       type: integer
+   *                       description: Videos the refresh added to the tab's listing
+   *                     failed:
+   *                       type: boolean
+   *                     finishedAt:
+   *                       type: string
+   *                       format: date-time
    */
   router.get('/api/channels/:channelId/fetch-status', verifyToken, async (req, res) => {
     const { channelId } = req.params;

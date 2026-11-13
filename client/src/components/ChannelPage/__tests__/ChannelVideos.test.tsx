@@ -256,6 +256,12 @@ jest.mock('../hooks/useRefreshChannelVideos', () => ({
   useRefreshChannelVideos: jest.fn(),
 }));
 
+// beforeEach installs the real hook; the background refresh tests swap in a stub they control.
+jest.mock('../hooks/useChannelFetchStatus', () => ({
+  ...jest.requireActual('../hooks/useChannelFetchStatus'),
+  useChannelFetchStatus: jest.fn(),
+}));
+
 jest.mock('../hooks/useChannelTabStats', () => ({
   useChannelTabStats: jest.fn(() => ({ data: null, loading: false, error: null, refetch: jest.fn() })),
 }));
@@ -277,6 +283,9 @@ const mockFetch = jest.fn();
 global.fetch = mockFetch as any;
 
 const { useChannelVideos } = require('../hooks/useChannelVideos');
+const { useChannelFetchStatus } = require('../hooks/useChannelFetchStatus');
+const actualUseChannelFetchStatus =
+  jest.requireActual('../hooks/useChannelFetchStatus').useChannelFetchStatus;
 const { useRefreshChannelVideos } = require('../hooks/useRefreshChannelVideos');
 const { useVideoDeletion } = require('../../shared/useVideoDeletion');
 const { useConfig } = require('../../../hooks/useConfig');
@@ -351,6 +360,8 @@ describe('ChannelVideos Component', () => {
       loading: false,
       refetch: mockRefetchVideos,
     });
+
+    useChannelFetchStatus.mockImplementation(actualUseChannelFetchStatus);
 
     useRefreshChannelVideos.mockReturnValue({
       refreshVideos: mockRefreshVideos,
@@ -512,6 +523,27 @@ describe('ChannelVideos Component', () => {
         loading: false,
         refetch: mockRefetchVideos,
       });
+      rerender(<ChannelVideos token={mockToken} />);
+
+      await waitFor(() => expect(mockRefetchTabStats).toHaveBeenCalledTimes(1));
+    });
+
+    test('refreshes download stats when another tab loads the same number of videos', async () => {
+      const listed = (loadedView: string) => ({
+        videos: mockVideos,
+        totalCount: 50,
+        oldestVideoDate: '2023-01-01',
+        autoDownloadsEnabled: false,
+        loading: false,
+        loadedView,
+        refetch: mockRefetchVideos,
+      });
+      useChannelVideos.mockReturnValue(listed('UC123456:videos'));
+      const { rerender } = renderChannelVideos();
+      expect(await screen.findByTestId('channel-videos-header')).toBeInTheDocument();
+      mockRefetchTabStats.mockClear();
+
+      useChannelVideos.mockReturnValue(listed('UC123456:shorts'));
       rerender(<ChannelVideos token={mockToken} />);
 
       await waitFor(() => expect(mockRefetchTabStats).toHaveBeenCalledTimes(1));
@@ -2082,6 +2114,269 @@ describe('ChannelVideos Component', () => {
       expect(screen.getByRole('tab', { name: /Videos/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /Live/i })).toBeInTheDocument();
+    });
+  });
+
+  describe('Background refresh', () => {
+    type Completion = { lastResult: { type: string; newVideos: number; failed: boolean; finishedAt: string } | null };
+
+    const mockTrackRefresh = jest.fn();
+    let completeFetch: (completion: Completion) => void;
+    const found = (newVideos: number, failed = false): Completion => ({
+      lastResult: { type: 'autoRefresh', newVideos, failed, finishedAt: '2026-11-13T12:00:00.000Z' },
+    });
+
+    const stubFetchStatus = (overrides: Record<string, unknown> = {}) => {
+      useChannelFetchStatus.mockImplementation(() => ({
+        isFetching: false,
+        fetchType: null,
+        startTime: null,
+        progress: null,
+        onFetchComplete: (callback: (completion: Completion) => void) => {
+          completeFetch = callback;
+        },
+        startPolling: jest.fn(),
+        trackRefresh: mockTrackRefresh,
+        ...overrides,
+      }));
+    };
+
+    // Only the Videos tab reports a background refresh, so a tab switch leaves it behind.
+    // What the videos hook hands back; a test replaces it to stand for a reload.
+    let listedVideos: ChannelVideo[] = mockVideos;
+    let listedTotal = mockVideos.length;
+
+    const stubVideos = (refreshingTab: string | null = 'videos') => {
+      useChannelVideos.mockImplementation(({ tabType }: { tabType: string | null }) => ({
+        videos: listedVideos,
+        totalCount: listedTotal,
+        oldestVideoDate: null,
+        error: null,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refreshSeq: refreshingTab !== null && tabType === refreshingTab ? 1 : null,
+        refetch: mockRefetchVideos,
+      }));
+    };
+
+    const renderTracked = async (props = {}) => {
+      renderChannelVideos(props);
+      await waitFor(() => expect(mockTrackRefresh).toHaveBeenCalledTimes(1));
+    };
+
+    beforeEach(() => {
+      // An earlier test clears the shared route param and leaves it cleared.
+      mockParams.channel_id = 'UC123456';
+      listedVideos = mockVideos;
+      listedTotal = mockVideos.length;
+      stubFetchStatus();
+      stubVideos();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({ availableTabs: ['videos', 'shorts'] }),
+      });
+    });
+
+    test('shows the checking status while a background refresh runs', async () => {
+      await renderTracked();
+
+      expect(screen.getByRole('status')).toHaveTextContent('Checking for new videos');
+    });
+
+    test('shows the new videos bar when the refresh found videos', async () => {
+      await renderTracked();
+
+      act(() => completeFetch(found(2)));
+
+      expect(screen.getByText('2 new videos')).toBeInTheDocument();
+      expect(screen.queryByText('Checking for new videos')).not.toBeInTheDocument();
+    });
+
+    test('shows no bar when the refresh found nothing', async () => {
+      await renderTracked();
+
+      act(() => completeFetch(found(0)));
+
+      expect(screen.queryByRole('button', { name: 'Show' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Checking for new videos')).not.toBeInTheDocument();
+    });
+
+    test('does not refetch the list when a background refresh ends', async () => {
+      await renderTracked();
+      mockRefetchVideos.mockClear();
+
+      act(() => completeFetch(found(2)));
+
+      expect(mockRefetchVideos).not.toHaveBeenCalled();
+    });
+
+    test('does not refetch when a tracked refresh ends without a result', async () => {
+      await renderTracked();
+      mockRefetchVideos.mockClear();
+
+      act(() => completeFetch({ lastResult: null }));
+
+      expect(mockRefetchVideos).not.toHaveBeenCalled();
+      expect(screen.queryByText('Checking for new videos')).not.toBeInTheDocument();
+    });
+
+    test('Show reloads the first page and removes the bar', async () => {
+      await renderTracked();
+      act(() => completeFetch(found(2)));
+      mockRefetchVideos.mockClear();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Show' }));
+
+      expect(mockRefetchVideos).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText('2 new videos')).not.toBeInTheDocument();
+    });
+
+    test('Show returns to the first page from a later one', async () => {
+      listedTotal = 48; // three pages at the default size of 16
+      await renderTracked();
+      await userEvent.click(screen.getAllByRole('button', { name: 'go to page 2' })[0]);
+      act(() => completeFetch(found(2)));
+      mockRefetchVideos.mockClear();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Show' }));
+
+      expect(useChannelVideos).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 }));
+      expect(mockRefetchVideos).not.toHaveBeenCalled();
+    });
+
+    test('dismissing the bar removes it and leaves the list alone', async () => {
+      await renderTracked();
+      act(() => completeFetch(found(2)));
+      mockRefetchVideos.mockClear();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+      expect(screen.queryByText('2 new videos')).not.toBeInTheDocument();
+      expect(mockRefetchVideos).not.toHaveBeenCalled();
+    });
+
+    describe('scrolling on Show', () => {
+      const scrollIntoView = jest.fn();
+      const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+      const listTopAt = (top: number) => {
+        jest.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
+          top, bottom: top, left: 0, right: 0, x: 0, y: top, width: 0, height: 0, toJSON: () => ({}),
+        });
+      };
+
+      beforeEach(() => {
+        scrollIntoView.mockClear();
+        HTMLElement.prototype.scrollIntoView = scrollIntoView;
+      });
+
+      afterEach(() => {
+        HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+        jest.restoreAllMocks();
+      });
+
+      test('leaves the page where it is when the top of the list is on screen', async () => {
+        await renderTracked();
+        act(() => completeFetch(found(2)));
+        listTopAt(240);
+
+        await userEvent.click(screen.getByRole('button', { name: 'Show' }));
+
+        expect(scrollIntoView).not.toHaveBeenCalled();
+      });
+
+      test('brings the top of the list back when it has scrolled out of view', async () => {
+        await renderTracked();
+        act(() => completeFetch(found(2)));
+        listTopAt(-3200);
+
+        await userEvent.click(screen.getByRole('button', { name: 'Show' }));
+
+        expect(scrollIntoView).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    test('still refetches when a Load More fetch ends', async () => {
+      stubVideos(null);
+      renderChannelVideos();
+      await screen.findByRole('tab', { name: /Videos/i });
+      mockRefetchVideos.mockClear();
+
+      act(() => completeFetch({ lastResult: null }));
+
+      expect(mockRefetchVideos).toHaveBeenCalledTimes(1);
+    });
+
+    test('drops the bar when the first page reloads for another reason', async () => {
+      // A download broadcast, a delete or a rating change reloads the list:
+      // the new rows are then on screen, so the offer has nothing left to show.
+      let reloadList: () => void = () => {};
+      const Harness = () => {
+        const [reloads, setReloads] = useState(0);
+        reloadList = () => {
+          listedVideos = [...mockVideos];
+          setReloads((count) => count + 1);
+        };
+        return <ChannelVideos token={mockToken} channelName={`Channel ${reloads}`} />;
+      };
+      renderWithProviders(<Harness />, { websocketValue: createMockWebSocketContext() });
+      await waitFor(() => expect(mockTrackRefresh).toHaveBeenCalledTimes(1));
+      act(() => completeFetch(found(2)));
+
+      act(() => reloadList());
+
+      expect(screen.queryByText('2 new videos')).not.toBeInTheDocument();
+    });
+
+    test('drops the bar on a tab switch', async () => {
+      await renderTracked();
+      act(() => completeFetch(found(2)));
+
+      await userEvent.click(await screen.findByRole('tab', { name: /Shorts/i }));
+
+      expect(screen.queryByText('2 new videos')).not.toBeInTheDocument();
+    });
+
+    test('drops the checking status on a tab switch', async () => {
+      await renderTracked();
+
+      await userEvent.click(await screen.findByRole('tab', { name: /Shorts/i }));
+
+      expect(screen.queryByText('Checking for new videos')).not.toBeInTheDocument();
+    });
+
+    test('tells the parent when a background refresh succeeds', async () => {
+      const onVideosLoaded = jest.fn();
+      await renderTracked({ onVideosLoaded });
+
+      act(() => completeFetch(found(0)));
+
+      expect(onVideosLoaded).toHaveBeenCalledWith('UC123456');
+    });
+
+    test('does not tell the parent when the refresh failed', async () => {
+      const onVideosLoaded = jest.fn();
+      await renderTracked({ onVideosLoaded });
+
+      act(() => completeFetch(found(0, true)));
+
+      expect(onVideosLoaded).not.toHaveBeenCalled();
+    });
+
+    test('keeps the Load More label during a background refresh', async () => {
+      stubFetchStatus({ isFetching: true, fetchType: 'autoRefresh' });
+      await renderTracked();
+
+      const loadMore = screen.getByTestId('channel-refresh-button');
+      expect(loadMore).toHaveTextContent('Load More');
+      expect(loadMore).toBeDisabled();
+    });
+
+    test('says Loading on the Load More button while a Load More fetch runs', async () => {
+      stubFetchStatus({ isFetching: true, fetchType: 'fetchAll' });
+      stubVideos(null);
+      renderChannelVideos();
+
+      expect(await screen.findByTestId('channel-refresh-button')).toHaveTextContent('Loading...');
     });
   });
 

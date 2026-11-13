@@ -19,11 +19,12 @@ class ChannelVideoWriter {
    * @param {Array<Object>} videos - Video objects in yt-dlp response order
    *   (newest first)
    * @param {string} channelId - Channel ID these videos belong to
-   * @returns {Promise<void>}
+   * @returns {Promise<{created: number}>} How many rows did not exist before
    */
   async insertVideosIntoDb(videos, channelId, mediaType = 'video') {
     const nowMs = Date.now();
     const provisionalIso = new Date(nowMs).toISOString();
+    let createdCount = 0;
 
     // Phase 1: ensure every row exists and upsert its non-date fields, and
     // classify each row's ordering source + candidate date. The date VALUE is
@@ -47,7 +48,9 @@ class ChannelVideoWriter {
         },
       });
 
-      if (!created) {
+      if (created) {
+        createdCount += 1;
+      } else {
         const updates = {
           title: video.title,
           thumbnail: video.thumbnail,
@@ -96,7 +99,7 @@ class ChannelVideoWriter {
       });
     }
 
-    if (entries.length === 0) return;
+    if (entries.length === 0) return { created: createdCount };
 
     // Phase 2: compute a strictly-descending date for every row in fetch order
     // (newest first) and persist only the rows whose date or source changed.
@@ -120,6 +123,8 @@ class ChannelVideoWriter {
         await ChannelVideo.update(fields, { where: { id: entry.id } });
       }
     }
+
+    return { created: createdCount };
   }
 }
 

@@ -64,6 +64,7 @@ function initialize(deps = {}) {
   const ytdlpModule = require('./ytdlpModule');
   const configModule = require('./configModule');
   const tabVideoCounts = require('./channel/tabVideoCounts');
+  const channelFeedCheck = require('./channel/channelFeedCheck');
   const { refreshYtDlpVersionCache } = deps;
 
   logger.info('Initializing scheduled cron jobs');
@@ -241,6 +242,19 @@ function initialize(deps = {}) {
     }
   };
 
+  // ============================================================================
+  // CHANNEL FEED CHECK (RSS feeds reveal new uploads; yt-dlp lists changed tabs)
+  // ============================================================================
+  jobs.channelFeedCheckFrequency = async () => {
+    logger.info('Checking channel feeds for new videos');
+    try {
+      return await channelFeedCheck.run();
+    } catch (error) {
+      logger.error({ err: error }, 'Channel feed check failed');
+      return failedRun(error);
+    }
+  };
+
   // Hooks the scheduler uses to report runs started elsewhere and to decide
   // whether a manual run may start now.
   const TASK_OPTIONS = {
@@ -250,6 +264,10 @@ function initialize(deps = {}) {
       getRunBlocker: async () => (configModule.isElfhostedPlatform()
         ? { reason: 'managed', message: 'yt-dlp updates are managed by the hosting platform.' }
         : null),
+    },
+    channelFeedCheckFrequency: {
+      isRunning: () => channelFeedCheck.isRunning(),
+      manualCooldownMs: MANUAL_RUN_COOLDOWN_MS,
     },
     channelVideoCountsFrequency: {
       isRunning: () => tabVideoCounts.isBulkRunning(),

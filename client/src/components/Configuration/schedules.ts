@@ -79,6 +79,18 @@ export const SCHEDULE_FIELDS = [
     runNowConfirm: null,
   },
   {
+    key: 'channelFeedCheckFrequency',
+    group: 'maintenance',
+    label: 'Check channels for new videos',
+    description: 'Read each subscribed channel\'s YouTube feed and update its video list when there are new uploads, so channel pages open without waiting.',
+    settingsPath: 'maintenance',
+    settingsLabel: 'Maintenance',
+    enabledKey: null,
+    disabledText: null,
+    frequentRunWarning: 'YouTube refreshes these feeds about every 15 minutes, so running this more than once an hour adds requests for little benefit.',
+    runNowConfirm: null,
+  },
+  {
     key: 'channelVideoCountsFrequency',
     group: 'maintenance',
     label: 'Refresh channel video counts',

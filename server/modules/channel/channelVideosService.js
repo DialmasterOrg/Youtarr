@@ -16,6 +16,14 @@ const youtubeExistenceCheck = require('../youtubeExistenceCheck');
 const membersAccess = require('../membersAccess');
 
 const { EXISTENCE } = youtubeExistenceCheck;
+const { REFRESH_NEED } = tabState;
+
+// Registry type of a listing started by a channel page request.
+const AUTO_REFRESH_TYPE = 'autoRefresh';
+// Registry type of a Load More, the full listing the user starts.
+const FETCH_ALL_TYPE = 'fetchAll';
+// A page holding one of these may be out of date as soon as the stream ends or starts.
+const LIVE_ROW_STATUSES = new Set(['is_live', 'is_upcoming']);
 
 // Maximum number of videos to load when user clicks "Load More"
 // Limit set here because some channels have tens or hundreds of thousands of videos...
@@ -189,39 +197,35 @@ class ChannelVideosService {
       }
     }
 
-    // Tracks whether yt-dlp actually ran AND resolved in this request.
+    // Tracks whether this request waited for a yt-dlp listing that resolved.
     // Frontends key the "channel state may have changed" signal off this flag,
-    // so it must NOT flip true on cache-only or yt-dlp-failed-with-cache paths.
+    // so it must NOT flip true on cache-only, background-refresh or
+    // yt-dlp-failed-with-cache paths.
     let freshFetchPerformed = false;
+    // True while a listing of this tab is running that this request did not
+    // wait for; the client follows it through the fetch-status endpoint.
+    let refreshing = false;
 
     try {
       // First check if we need to refresh recent videos from YouTube
       const allVideos = await channelVideoQuery.fetchNewestVideosFromDb(channelId, 1, 0, 'off', '', 'date', 'desc', false, mediaType);
       const mostRecentVideoDate = allVideos.length > 0 ? allVideos[0].publishedAt : null;
+      const rowCount = allVideos.length;
 
-      if (shouldFetchFromYoutube && channelVideoFetcher.shouldRefreshChannelVideos(channel, allVideos.length, mediaType)) {
-        // Use composite key to allow concurrent fetches for different tabs
-        const fetchKey = `${channelId}:${tabType}`;
-
-        // Check if there's already an active fetch for this channel/tab
-        if (fetchRegistry.has(fetchKey)) {
+      // Only a tab with nothing useful to show (no rows, or never listed)
+      // makes the request wait for yt-dlp.
+      const mustWait = shouldFetchFromYoutube &&
+        tabState.getRefreshNeed(channel, mediaType, { rowCount }) === REFRESH_NEED.BLOCKING;
+      if (mustWait) {
+        const refresh = await channelVideoFetcher.refreshTabTracked(channel, channelId, tabType, {
+          type: AUTO_REFRESH_TYPE,
+          mostRecentVideoDate,
+        });
+        if (refresh.skipped) {
           logger.info({ channelId, tabType }, 'Skipping auto-refresh - fetch already in progress for this tab');
+          refreshing = this.isBackgroundRefreshInFlight(`${channelId}:${tabType}`);
         } else {
-          // Register this fetch operation
-          fetchRegistry.set(fetchKey, {
-            startTime: new Date().toISOString(),
-            type: 'autoRefresh',
-            tabType: tabType
-          });
-
-          try {
-            // Fetch videos for the specified tab type
-            await channelVideoFetcher.fetchAndSaveVideosViaYtDlp(channel, channelId, tabType, mostRecentVideoDate);
-            freshFetchPerformed = true;
-          } finally {
-            // Clear the active fetch record
-            fetchRegistry.delete(fetchKey);
-          }
+          freshFetchPerformed = true;
         }
       }
 
@@ -229,82 +233,25 @@ class ChannelVideosService {
       const offset = (page - 1) * pageSize;
       const paginatedVideos = await channelVideoQuery.fetchNewestVideosFromDb(channelId, pageSize, offset, downloadedFilter, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, ratingFilter, deletedFilter);
 
-      // Check if videos still exist on YouTube and mark as removed if they don't
-      const updates = [];
-      const timestampUpdates = [];
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-      // Check all videos concurrently for better performance
-      // Only check videos that haven't been checked in the last 24 hours
-      const checkPromises = paginatedVideos.map(async (video) => {
-        const youtubeId = video.youtube_id || video.youtubeId;
-        const lastChecked = video.youtube_removed_checked_at ? new Date(video.youtube_removed_checked_at) : null;
-
-        // Skip if already marked as removed or checked within last 24 hours
-        if (video.youtube_removed || (lastChecked && lastChecked > twentyFourHoursAgo)) {
-          return null;
-        }
-
-        if (youtubeId) {
-          const existence = await youtubeExistenceCheck.check(youtubeId);
-          if (existence === EXISTENCE.UNKNOWN) {
-            return null;
-          }
-          const now = new Date();
-
-          if (existence === EXISTENCE.REMOVED) {
-            logger.info({ youtubeId, channelId }, 'Video no longer exists on YouTube, marking as removed');
-            video.youtube_removed = true;
-            video.youtube_removed_checked_at = now;
-            return { youtube_id: youtubeId, channel_id: channelId, removed: true, checked_at: now };
-          } else {
-            // Video exists, just update the timestamp
-            video.youtube_removed_checked_at = now;
-            return { youtube_id: youtubeId, channel_id: channelId, removed: false, checked_at: now };
-          }
-        }
-        return null;
-      });
-
-      const checkResults = await Promise.all(checkPromises);
-      const validResults = checkResults.filter(result => result !== null);
-
-      // Separate updates for removed videos and timestamp updates
-      for (const result of validResults) {
-        if (result.removed) {
-          updates.push(result);
-        } else {
-          timestampUpdates.push(result);
-        }
-      }
-
-      // Bulk update channelvideos table for removed videos
-      if (updates.length > 0) {
-        for (const update of updates) {
-          await ChannelVideo.update(
-            { youtube_removed: true, youtube_removed_checked_at: update.checked_at },
-            { where: { youtube_id: update.youtube_id, channel_id: update.channel_id } }
-          );
-        }
-      }
-
-      // Bulk update channelvideos table for timestamp-only updates
-      if (timestampUpdates.length > 0) {
-        for (const update of timestampUpdates) {
-          await ChannelVideo.update(
-            { youtube_removed_checked_at: update.checked_at },
-            { where: { youtube_id: update.youtube_id, channel_id: update.channel_id } }
-          );
+      if (shouldFetchFromYoutube && !mustWait) {
+        const hasLiveRows = paginatedVideos.some((video) => LIVE_ROW_STATUSES.has(video.live_status));
+        if (tabState.getRefreshNeed(channel, mediaType, { rowCount, hasLiveRows }) === REFRESH_NEED.BACKGROUND) {
+          refreshing = this.startBackgroundRefresh(channel, channelId, tabType, mostRecentVideoDate);
         }
       }
 
       // Get stats for the response
       const stats = await channelVideoQuery.getChannelVideoStats(channelId, downloadedFilter, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, ratingFilter, deletedFilter);
 
-      return {
-        ...(await this.applyMembersAccess(this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType))),
-        freshFetchPerformed
-      };
+      const response = await this.applyMembersAccess(this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType));
+
+      // After the response is built: the answer never waits on YouTube, and
+      // a removal found here shows on the next load.
+      this.checkPageExistence(paginatedVideos, channelId).catch((err) => {
+        logger.warn({ err, channelId }, 'Video existence checks failed');
+      });
+
+      return { ...response, freshFetchPerformed, refreshing };
 
     } catch (error) {
       logger.error({ err: error, channelId }, 'Error fetching channel videos');
@@ -319,6 +266,117 @@ class ChannelVideosService {
         response.fetchError = true;
       }
       return response;
+    }
+  }
+
+  /**
+   * Whether the fetch in flight for a tab is a background refresh. A Load More
+   * (`fetchAll`) is the user's own fetch: the client already follows it and
+   * reloads the list when it ends, which a "refreshing" answer would stop.
+   * @param {string} fetchKey - Registry key (channelId:tabType)
+   * @returns {boolean}
+   */
+  isBackgroundRefreshInFlight(fetchKey) {
+    const inFlight = fetchRegistry.get(fetchKey);
+    return Boolean(inFlight) && inFlight.type !== FETCH_ALL_TYPE;
+  }
+
+  /**
+   * List a stale tab without making the caller wait for it.
+   * @param {Object} channel - Channel database record
+   * @param {string} channelId - Channel ID
+   * @param {string} tabType - Tab to list
+   * @param {string|null} mostRecentVideoDate - Newest stored video date for the tab
+   * @returns {boolean} Whether a listing of the tab is running now
+   */
+  startBackgroundRefresh(channel, channelId, tabType, mostRecentVideoDate) {
+    const fetchKey = `${channelId}:${tabType}`;
+    if (fetchRegistry.has(fetchKey)) {
+      return this.isBackgroundRefreshInFlight(fetchKey);
+    }
+
+    // A refresh that just failed is not retried until its result expires;
+    // otherwise every page or scroll request during an outage starts yt-dlp.
+    const lastResult = fetchRegistry.getLastResult(fetchKey);
+    if (lastResult && lastResult.failed) {
+      return false;
+    }
+
+    channelVideoFetcher
+      .refreshTabTracked(channel, channelId, tabType, { type: AUTO_REFRESH_TYPE, mostRecentVideoDate })
+      .catch((err) => {
+        logger.warn({ err, channelId, tabType }, 'Background channel listing refresh failed');
+      });
+    return true;
+  }
+
+  /**
+   * Ask YouTube whether a page's videos still exist and record the answers.
+   * Videos already marked removed, or checked within 24 hours, are skipped;
+   * an unanswered check leaves the video's checked-at time alone.
+   * @param {Array<Object>} videos - The page of channel videos being served
+   * @param {string} channelId - Channel ID
+   * @returns {Promise<void>}
+   */
+  async checkPageExistence(videos, channelId) {
+    const updates = [];
+    const timestampUpdates = [];
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    // Check all videos concurrently for better performance
+    // Only check videos that haven't been checked in the last 24 hours
+    const checkPromises = videos.map(async (video) => {
+      const youtubeId = video.youtube_id || video.youtubeId;
+      const lastChecked = video.youtube_removed_checked_at ? new Date(video.youtube_removed_checked_at) : null;
+
+      // Skip if already marked as removed or checked within last 24 hours
+      if (video.youtube_removed || (lastChecked && lastChecked > twentyFourHoursAgo)) {
+        return null;
+      }
+
+      if (youtubeId) {
+        const existence = await youtubeExistenceCheck.check(youtubeId);
+        if (existence === EXISTENCE.UNKNOWN) {
+          return null;
+        }
+        const now = new Date();
+
+        if (existence === EXISTENCE.REMOVED) {
+          logger.info({ youtubeId, channelId }, 'Video no longer exists on YouTube, marking as removed');
+          return { youtube_id: youtubeId, channel_id: channelId, removed: true, checked_at: now };
+        }
+        // Video exists, just update the timestamp
+        return { youtube_id: youtubeId, channel_id: channelId, removed: false, checked_at: now };
+      }
+      return null;
+    });
+
+    const checkResults = await Promise.all(checkPromises);
+    const validResults = checkResults.filter(result => result !== null);
+
+    // Separate updates for removed videos and timestamp updates
+    for (const result of validResults) {
+      if (result.removed) {
+        updates.push(result);
+      } else {
+        timestampUpdates.push(result);
+      }
+    }
+
+    // Bulk update channelvideos table for removed videos
+    for (const update of updates) {
+      await ChannelVideo.update(
+        { youtube_removed: true, youtube_removed_checked_at: update.checked_at },
+        { where: { youtube_id: update.youtube_id, channel_id: update.channel_id } }
+      );
+    }
+
+    // Bulk update channelvideos table for timestamp-only updates
+    for (const update of timestampUpdates) {
+      await ChannelVideo.update(
+        { youtube_removed_checked_at: update.checked_at },
+        { where: { youtube_id: update.youtube_id, channel_id: update.channel_id } }
+      );
     }
   }
 
@@ -345,7 +403,7 @@ class ChannelVideosService {
     // Register this fetch operation
     fetchRegistry.set(fetchKey, {
       startTime: new Date().toISOString(),
-      type: 'fetchAll',
+      type: FETCH_ALL_TYPE,
       tabType: tabType,
       progress: { itemsFetched: 0, stage: 'listing' }
     });
