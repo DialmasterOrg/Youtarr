@@ -1,5 +1,53 @@
 # Changelog
 
+## [v1.92.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.92.0) - 2026-11-14
+
+### Features
+
+* add about page and one-time support prompt ([84ce7d1](https://github.com/DialmasterOrg/Youtarr/commit/84ce7d1bce2c91ccb867a8213b847fc5bdba4354))
+* add new language options for Vietnamese, Turkish, Thai, and Indonesian subtitles ([6465a02](https://github.com/DialmasterOrg/Youtarr/commit/6465a024c6ef2134ea0591e6128cda4bdd6c9e4e))
+* add Polish to subtitle language options ([21f3449](https://github.com/DialmasterOrg/Youtarr/commit/21f3449843df42ef8db1e0afe20c820be6a417f0))
+* check members-only feeds for new videos ([bf0491e](https://github.com/DialmasterOrg/Youtarr/commit/bf0491e1be3e7c185b14a53e756a6d6f030f52fc)), closes [#1019](https://github.com/DialmasterOrg/Youtarr/issues/1019)
+* download members-only videos when cookies have access ([eaeb35b](https://github.com/DialmasterOrg/Youtarr/commit/eaeb35b1bc9ea60afad010d91d6a7f7a36f3f6e7)), closes [#857](https://github.com/DialmasterOrg/Youtarr/issues/857)
+* open channel pages without waiting ([4bd44bb](https://github.com/DialmasterOrg/Youtarr/commit/4bd44bb72a0586dad6e09baaf415b3482e178097)), closes [#1019](https://github.com/DialmasterOrg/Youtarr/issues/1019)
+* search channels from the add field ([fea2875](https://github.com/DialmasterOrg/Youtarr/commit/fea2875a39505e5c6066aa8a1478e524da22bf12)), closes [#933](https://github.com/DialmasterOrg/Youtarr/issues/933)
+* use cookies when listing members-only playlists ([1fa7848](https://github.com/DialmasterOrg/Youtarr/commit/1fa7848eea74cb04344f70c11595e6a0236f7728))
+
+
+### Bug Fixes
+
+* **progress:** show download progress for webm video streams ([0258959](https://github.com/DialmasterOrg/Youtarr/commit/0258959e6307365b5ab7744fb2a6349354445a40))
+* address review on members-only access ([02ff63b](https://github.com/DialmasterOrg/Youtarr/commit/02ff63bfa5ea8ac235c06151629164c803201883))
+* bot-check advice and titles for failed videos ([c59e0e0](https://github.com/DialmasterOrg/Youtarr/commit/c59e0e0bcf2d2fd80da3f05842d643651d97b788))
+* keep members-only filter without live login cookies ([7a1763a](https://github.com/DialmasterOrg/Youtarr/commit/7a1763ad4db16278c1c9309373c07e03dc8e92a3))
+* only use announced formats to classify webm streams ([fc85d3e](https://github.com/DialmasterOrg/Youtarr/commit/fc85d3e6b3e259e7395a56cfbaa47d265bf48cd6))
+* parse video id after an unclosed bracket ([07514f4](https://github.com/DialmasterOrg/Youtarr/commit/07514f4cbfbf57c8927ccd01583f4150ed664490)), closes [#1021](https://github.com/DialmasterOrg/Youtarr/issues/1021)
+* remember rejected cookies for members-only downloads ([b5f96a0](https://github.com/DialmasterOrg/Youtarr/commit/b5f96a0b2621e04ceb323deca12f8cb046b40c6f))
+* stop channel list blocking other requests ([93992b2](https://github.com/DialmasterOrg/Youtarr/commit/93992b278338c21d2b9e9101a2f8686f1a81aa31))
+* stop Sequelize warnings on channel listings ([5ab99c6](https://github.com/DialmasterOrg/Youtarr/commit/5ab99c6db8608ec3efec31e7d428bfe64a052429))
+* stop treating feed outages as a problem ([2c08906](https://github.com/DialmasterOrg/Youtarr/commit/2c0890656cb75042d25e8f8a6c8731e671c031de)), closes [#1019](https://github.com/DialmasterOrg/Youtarr/issues/1019)
+
+
+### Continuous Integration
+
+* bump the github-actions group across 1 directory with 3 updates ([eb946c8](https://github.com/DialmasterOrg/Youtarr/commit/eb946c859a22d160849a267e7c484ca68ac4a803))
+
+
+### Documentation
+
+* add Gluetun integration ([3dd223f](https://github.com/DialmasterOrg/Youtarr/commit/3dd223fe9d56033793ed4a541f6f46da5670e79f))
+* clarify Gluetun setup and its gotchas ([4597eef](https://github.com/DialmasterOrg/Youtarr/commit/4597eef3b8da4ecbb2e8b2e31f2c5e7ea41d86b8)), closes [#1010](https://github.com/DialmasterOrg/Youtarr/issues/1010)
+* clarify instructions regarding Nfo file handling in CoreSettingsSection ([c3e9f0c](https://github.com/DialmasterOrg/Youtarr/commit/c3e9f0c1abbf9ff732a7bf546a5419c9e0fee40a))
+* enhance Gluetun integration documentation and add environment variables reference ([e69e1f7](https://github.com/DialmasterOrg/Youtarr/commit/e69e1f72e6c50e4d66d22622c6724b99fd68a9db))
+* Revise development prerequisites in DEVELOPMENT.md ([c80824b](https://github.com/DialmasterOrg/Youtarr/commit/c80824b7b00aac398b6e00835320f2f8bd7188e6))
+* update CHANGELOG for v1.91.0 [skip ci] ([e3282b4](https://github.com/DialmasterOrg/Youtarr/commit/e3282b493367965a53a4394b640fa53177183290))
+* Update development prerequisites in CONTRIBUTING.md and DEVELOPMENT.md ([1f9ac4f](https://github.com/DialmasterOrg/Youtarr/commit/1f9ac4fdc350eb8ca4b9cbbfb34c87e670ed5e0b))
+* update Gluetun integration documentation and configuration ([2049aa0](https://github.com/DialmasterOrg/Youtarr/commit/2049aa07c0a838df927532f1e43ed12ac33cbfdd))
+* update Gluetun integration documentation and environment variables reference ([42854a8](https://github.com/DialmasterOrg/Youtarr/commit/42854a85acbbd39430875e5581d4ca3f39eee4f9))
+* update Gluetun integration note with direct link to configuration file ([5734a89](https://github.com/DialmasterOrg/Youtarr/commit/5734a89d73d99684e9fd6b2a28de48b604f17576))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.91.0...v1.92.0
+
 ## [v1.91.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.91.0) - 2026-11-06
 
 ### Features
