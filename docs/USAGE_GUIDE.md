@@ -57,11 +57,13 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
    - Click "Channels & Playlists" in the navigation menu
 
 2. **Add a channel**
-   - Paste the channel URL or @handle into the **Add a new channel** field, then click the **Channel** button (or press Enter)
+   - Paste the channel URL or @handle into the **Search or add a channel** field, then click the **Channel** button (or press Enter)
      - Examples:
        - `@MrBeast`
        - `https://youtube.com/@MrBeast`
        - `https://www.youtube.com/channel/UCX6OQ3DkcsbYNE6H8uQQuVA`
+   - The same field searches the channels you already have: type part of a name and the list below narrows as you type. Enter adds only a URL or an @handle; a plain word such as `MrBeast` is treated as a search until you click **Channel**.
+   - When a name matches none of your channels, click **Find on YouTube** to search YouTube for it.
    - Youtarr looks the channel up on YouTube (this can take a few seconds), then opens the **Add channel** dialog with the usual defaults filled in:
      - **Auto Downloads**: a toggle for each tab the channel has (**New Videos**, **New Shorts**, **New Live/Streams**)
      - **Video Quality**, **Download Type** (Video Only, Video + MP3, or MP3 Only), and **Subfolder**

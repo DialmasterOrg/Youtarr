@@ -71,13 +71,57 @@ describe('SubscriptionAddBar', () => {
       expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });
 
-    test('submits a channel on Enter', async () => {
+    test('labels the input as both search and add', () => {
+      renderWithProviders(<SubscriptionAddBar {...baseProps} mode="channels" />);
+      expect(screen.getByLabelText('Search or add a channel')).toBeInTheDocument();
+    });
+
+    test('turns off browser spellcheck, since channel names are not dictionary words', () => {
+      renderWithProviders(<SubscriptionAddBar {...baseProps} mode="channels" />);
+      expect(screen.getByLabelText('Search or add a channel')).toHaveAttribute('spellcheck', 'false');
+    });
+
+    test('submits an @handle on Enter', async () => {
       const user = userEvent.setup();
       const onAddChannel = jest.fn();
-      renderWithProviders(<SubscriptionAddBar {...baseProps} mode="channels" url="x" onAddChannel={onAddChannel} />);
+      renderWithProviders(<SubscriptionAddBar {...baseProps} mode="channels" url="@x" onAddChannel={onAddChannel} />);
 
-      await user.type(screen.getByPlaceholderText('Paste a channel URL or @handle'), '{Enter}');
+      await user.type(screen.getByLabelText('Search or add a channel'), '{Enter}');
       expect(onAddChannel).toHaveBeenCalledTimes(1);
+    });
+
+    test('submits a channel URL on Enter', async () => {
+      const user = userEvent.setup();
+      const onAddChannel = jest.fn();
+      renderWithProviders(
+        <SubscriptionAddBar {...baseProps} mode="channels" url="https://youtube.com/@x" onAddChannel={onAddChannel} />
+      );
+
+      await user.type(screen.getByLabelText('Search or add a channel'), '{Enter}');
+      expect(onAddChannel).toHaveBeenCalledTimes(1);
+    });
+
+    test('does not submit a bare word on Enter, since it may be a search', async () => {
+      const user = userEvent.setup();
+      const onAddChannel = jest.fn();
+      renderWithProviders(<SubscriptionAddBar {...baseProps} mode="channels" url="linus" onAddChannel={onAddChannel} />);
+
+      await user.type(screen.getByLabelText('Search or add a channel'), '{Enter}');
+      expect(onAddChannel).not.toHaveBeenCalled();
+    });
+
+    test('adds a bare word as a handle when the Channel button is clicked', async () => {
+      const user = userEvent.setup();
+      const onAddChannel = jest.fn();
+      renderWithProviders(<SubscriptionAddBar {...baseProps} mode="channels" url="linus" onAddChannel={onAddChannel} />);
+
+      await user.click(screen.getByRole('button', { name: /^channel$/i }));
+      expect(onAddChannel).toHaveBeenCalledTimes(1);
+    });
+
+    test('disables the Channel button for text that cannot be a channel', () => {
+      renderWithProviders(<SubscriptionAddBar {...baseProps} mode="channels" url="linus tech" />);
+      expect(screen.getByRole('button', { name: /^channel$/i })).toBeDisabled();
     });
   });
 
@@ -119,6 +163,35 @@ describe('SubscriptionAddBar', () => {
 
       await user.type(screen.getByPlaceholderText('Paste a playlist URL'), '{Enter}');
       expect(onAddPlaylist).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('clear button', () => {
+    test('empties the input when clicked', async () => {
+      const user = userEvent.setup();
+      const onUrlChange = jest.fn();
+      renderWithProviders(<SubscriptionAddBar {...baseProps} mode="channels" url="linus" onUrlChange={onUrlChange} />);
+
+      await user.click(screen.getByRole('button', { name: 'Clear' }));
+      expect(onUrlChange).toHaveBeenCalledWith('');
+    });
+
+    test('returns focus to the input so typing can continue', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<SubscriptionAddBar {...baseProps} mode="channels" url="linus" />);
+
+      await user.click(screen.getByRole('button', { name: 'Clear' }));
+      expect(screen.getByLabelText('Search or add a channel')).toHaveFocus();
+    });
+
+    test('is hidden while the input is empty', () => {
+      renderWithProviders(<SubscriptionAddBar {...baseProps} mode="channels" url="" />);
+      expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument();
+    });
+
+    test('is hidden while a channel lookup runs', () => {
+      renderWithProviders(<SubscriptionAddBar {...baseProps} mode="channels" url="@x" isAddingChannel />);
+      expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument();
     });
   });
 

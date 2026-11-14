@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Button, CircularProgress, Grid, TextField, Typography } from '../../ui';
-import { Add as AddIcon, Upload as UploadIcon } from '../../../lib/icons';
+import { Add as AddIcon, Clear as ClearIcon, Upload as UploadIcon } from '../../../lib/icons';
+import { isExplicitChannelReference, normalizeChannelUrl } from '../../../utils/channelHelpers';
 import { SubscriptionsFilterValue } from './SubscriptionsFilter';
 
 interface SubscriptionAddBarProps {
@@ -14,7 +15,7 @@ interface SubscriptionAddBarProps {
 }
 
 const MODE_COPY: Record<SubscriptionsFilterValue, { label: string; placeholder: string }> = {
-  channels: { label: 'Add a new channel', placeholder: 'Paste a channel URL or @handle' },
+  channels: { label: 'Search or add a channel', placeholder: 'Paste a channel URL or @handle' },
   playlists: { label: 'Add a new playlist', placeholder: 'Paste a playlist URL' },
 };
 
@@ -29,21 +30,33 @@ const SubscriptionAddBar: React.FC<SubscriptionAddBarProps> = ({
 }) => {
   const isChannels = mode === 'channels';
   const isEmpty = !url.trim();
+  const isLookingUp = isChannels && isAddingChannel;
+  const canAddChannel = !isAddingChannel && normalizeChannelUrl(url) !== null;
   const { label, placeholder } = MODE_COPY[mode];
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const clear = () => {
+    onUrlChange('');
+    inputRef.current?.focus();
+  };
 
   const submit = () => {
     if (isEmpty) return;
-    if (isChannels) {
-      if (!isAddingChannel) onAddChannel();
-    } else {
+    if (!isChannels) {
       onAddPlaylist();
+      return;
     }
+    // The channel input also searches the list, so Enter adds only what is
+    // plainly a channel; a bare word needs the Channel button.
+    if (canAddChannel && isExplicitChannelReference(url)) onAddChannel();
   };
 
   return (
     <Grid container spacing={2} alignItems="center" className="mb-2 md:mb-4">
       <Grid item xs={12} md={8}>
         <TextField
+          ref={inputRef}
+          spellCheck={false}
           fullWidth
           size="small"
           label={label}
@@ -56,7 +69,19 @@ const SubscriptionAddBar: React.FC<SubscriptionAddBarProps> = ({
               submit();
             }
           }}
-          disabled={isChannels && isAddingChannel}
+          disabled={isLookingUp}
+          InputProps={{
+            endAdornment: !isEmpty && !isLookingUp ? (
+              <button
+                type="button"
+                aria-label="Clear"
+                onClick={clear}
+                className="inline-flex cursor-pointer items-center border-0 bg-transparent p-0.5 text-muted-foreground hover:text-foreground"
+              >
+                <ClearIcon size={16} />
+              </button>
+            ) : undefined,
+          }}
         />
       </Grid>
       <Grid item xs={12} md={4}>
@@ -69,7 +94,7 @@ const SubscriptionAddBar: React.FC<SubscriptionAddBarProps> = ({
                   variant="contained"
                   startIcon={isAddingChannel ? <CircularProgress size={16} color="inherit" /> : <AddIcon />}
                   onClick={onAddChannel}
-                  disabled={isAddingChannel || isEmpty}
+                  disabled={!canAddChannel}
                 >
                   {isAddingChannel ? 'Looking up...' : 'Channel'}
                 </Button>
