@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { NavHeader } from '../NavHeader';
 import { ThemeEngineProvider } from '../../../contexts/ThemeEngineContext';
 import { TooltipProvider } from '../../ui/tooltip';
@@ -50,23 +50,37 @@ const BASE_PROPS: NavHeaderProps = {
   isCollapsed: false,
 };
 
+function CurrentPath() {
+  const location = useLocation();
+  return <div data-testid="current-path">{location.pathname}</div>;
+}
+
 function renderHeader(overrides: Partial<NavHeaderProps> = {}) {
   return render(
     <MemoryRouter initialEntries={['/channels']}>
       <ThemeEngineProvider>
         <TooltipProvider>
           <NavHeader {...BASE_PROPS} {...overrides} />
+          <CurrentPath />
         </TooltipProvider>
       </ThemeEngineProvider>
     </MemoryRouter>
   );
 }
 
-function setMatchMedia({ isLandscape = false }: { isLandscape?: boolean } = {}) {
+function setMatchMedia({
+  isLandscape = false,
+  isWideDesktop = true,
+}: { isLandscape?: boolean; isWideDesktop?: boolean } = {}) {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: (query: string) => ({
-      matches: query === '(orientation: landscape)' ? isLandscape : false,
+      matches:
+        query === '(orientation: landscape)'
+          ? isLandscape
+          : query === '(min-width: 1000px)'
+            ? isWideDesktop
+            : false,
       media: query,
       onchange: null,
       addListener: () => {},
@@ -187,6 +201,52 @@ describe('NavHeader shared update indicator', () => {
     renderHeader();
 
     expect(screen.getByTestId('scheduled-task-indicator')).toBeInTheDocument();
+  });
+
+  it.each(['playful', 'linear', 'flat'] as const)(
+    'shows the support heart in the %s desktop header',
+    (themeId) => {
+      localStorage.setItem('uiThemeMode', themeId);
+
+      renderHeader({ layoutPolicy: resolveThemeLayoutPolicy(getThemeById(themeId), 'desktop') });
+
+      expect(screen.getByRole('button', { name: /about and support youtarr/i })).toBeInTheDocument();
+    }
+  );
+
+  it('opens the About page from the support heart', async () => {
+    const user = userEvent.setup();
+    renderHeader();
+
+    await user.click(screen.getByRole('button', { name: /about and support youtarr/i }));
+
+    expect(screen.getByTestId('current-path')).toHaveTextContent('/settings/about');
+  });
+
+  it.each(['playful', 'linear', 'flat'] as const)(
+    'leaves the support heart out of the %s desktop header below 1000px wide',
+    (themeId) => {
+      setMatchMedia({ isWideDesktop: false });
+      localStorage.setItem('uiThemeMode', themeId);
+
+      renderHeader({ layoutPolicy: resolveThemeLayoutPolicy(getThemeById(themeId), 'desktop') });
+
+      expect(screen.queryByRole('button', { name: /about and support youtarr/i })).not.toBeInTheDocument();
+    }
+  );
+
+  it('leaves the support heart out of the mobile header', () => {
+    localStorage.setItem('uiThemeMode', 'playful');
+
+    renderHeader({ layoutPolicy: resolveThemeLayoutPolicy(getThemeById('playful'), 'mobile') });
+
+    expect(screen.queryByRole('button', { name: /about and support youtarr/i })).not.toBeInTheDocument();
+  });
+
+  it('leaves the support heart out when signed out', () => {
+    renderHeader({ token: null });
+
+    expect(screen.queryByRole('button', { name: /about and support youtarr/i })).not.toBeInTheDocument();
   });
 
   it('renders the download activity indicator in the playful mobile header', () => {

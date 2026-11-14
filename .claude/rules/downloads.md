@@ -77,7 +77,7 @@ yt-dlp runs, the job queue, the download archive, storage limits, and the activi
 - Handed-off failures are tagged `autoRetryQueued` so run summaries report the post-retry outcome instead of the first failure.
 - `failureAdvisor` (pure) maps known failure signatures (temp space, 403 with or without cookies, bot check) to plain-language diagnoses; the finalizer stamps `diagnosisKey` on failed videos and emits a deduped `diagnoses` list.
 - That list flows into job data, run summaries, the Download History UI and the notification "Likely cause" lines.
-- `failedVideoEnricher` backfills title and channel onto failed-video records from videos, channelvideos + channels, and playlistvideos, once, right after result partitioning; the client falls back to a linked YouTube ID.
+- `failedVideoEnricher` backfills title and channel onto failed-video records from videos, channelvideos + channels, and playlistvideos, once, right after result partitioning; ids still untitled (brand-new uploads) go to `videoOembedEnricher`, capped at 20 per job; the client falls back to a linked YouTube ID.
 
 ## Run tracker (sweep summaries)
 

@@ -14,7 +14,8 @@ import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml, formatAddedDate } from '../../utils/formatters';
 import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
 import { getPublishedDateDisplay } from './publishedDateDisplay';
-import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle, isRemovedStatus } from '../../utils/videoStatus';
+import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle, isRemovedStatus, isMembersOnlyVideo } from '../../utils/videoStatus';
+import MembersAccessChip from '../shared/MembersAccessChip';
 import RemovalDescription, { REMOVAL_TOOLTIP_CLASS } from '../shared/RemovalDescription';
 import StillLiveDot from './StillLiveDot';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
@@ -361,6 +362,10 @@ function VideoListItem({
                   ...SHARED_STATUS_CHIP_SMALL_STYLE,
                 }}
               />
+            )}
+            {/* The status chip already reads Members Only when no cookies are set. */}
+            {!video.added && isMembersOnlyVideo(video) && video.members_access && video.members_access !== 'no_cookies' && (
+              <MembersAccessChip access={video.members_access} />
             )}
             <RatingBadge
               rating={video.normalized_rating}

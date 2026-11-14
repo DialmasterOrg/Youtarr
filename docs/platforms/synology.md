@@ -26,6 +26,8 @@ This guide provides a manual configuration approach that works reliably on Synol
 
 > **Installation Overview**: This guide walks you through installing Youtarr on Synology. The most critical step for Synology users is **Step 4.5** where you must configure the database volume before first start. Unlike standard installations, Synology requires either named volumes or the LinuxServer MariaDB image to avoid permission issues.
 
+**VPN (Gluetun):** this guide uses the repository's compose files with `COMPOSE_FILE`, so the [Gluetun guide](../GLUETUN_INTEGRATION.md) applies here too. If your `.env` already has a `COMPOSE_FILE` line (Step 4.5 adds one), add `:docker-compose.gluetun.yml` to the end of it instead of adding a second line, then start with `docker compose up -d`.
+
 ### Step 1: Enable SSH and Configure Docker Access
 
 1. **Enable SSH** (if not already enabled):

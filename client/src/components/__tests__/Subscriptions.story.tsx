@@ -78,7 +78,6 @@ export const Default: Story = {
     },
   },  play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const body = within(canvasElement.ownerDocument.body);
     await expect(await canvas.findByText('Channels & Playlists', {}, { timeout: 3000 })).toBeInTheDocument();
     await expect(await canvas.findByText(/alpha channel/i, {}, { timeout: 3000 })).toBeInTheDocument();
     await expect(await canvas.findByText(/beta channel/i, {}, { timeout: 3000 })).toBeInTheDocument();
@@ -93,14 +92,11 @@ export const Default: Story = {
       await expect(gridToggle).toHaveAttribute('aria-pressed', 'true');
     }
 
-    // Test filter functionality
-    const filterButton = canvas.queryByRole('button', { name: /filter by channel name/i });
-    if (filterButton) {
-      await userEvent.click(filterButton);
-      const filterInput = await body.findByLabelText(/filter channels/i);
-      await userEvent.type(filterInput, 'Beta');
-      await expect(filterInput).toHaveValue('Beta');
-    }
+    // Test search functionality
+    const searchInput = canvas.getByLabelText(/search or add a channel/i);
+    await userEvent.type(searchInput, 'Beta');
+    await expect(searchInput).toHaveValue('Beta');
+    await userEvent.clear(searchInput);
 
     // Test sort functionality
     const sortButton = canvas.queryByRole('button', { name: /sort alphabetically/i });

@@ -205,4 +205,67 @@ describe('tabState', () => {
       expect(result).toEqual(['videos']);
     });
   });
+
+  describe('getRefreshNeed', () => {
+    const NOW = new Date('2026-11-13T12:00:00.000Z').getTime();
+    const MINUTE = 60 * 1000;
+    const HOUR = 60 * MINUTE;
+    const ago = (ms) => new Date(NOW - ms).toISOString();
+    const channelListed = (listedAgoMs, extra = {}) => ({
+      channel_id: 'UC123456',
+      lastFetchedByTab: JSON.stringify({ video: ago(listedAgoMs) }),
+      ...extra,
+    });
+    const need = (channel, options) => tabState.getRefreshNeed(channel, 'video', { now: NOW, ...options });
+
+    test('needs nothing without a channel', () => {
+      expect(need(null, { rowCount: 10 })).toBe('none');
+    });
+
+    test('blocks for a tab with no rows', () => {
+      expect(need(channelListed(5 * MINUTE), { rowCount: 0 })).toBe('blocking');
+    });
+
+    test('blocks for a tab that has rows but was never listed', () => {
+      const channel = { channel_id: 'UC123456', lastFetchedByTab: JSON.stringify({ short: ago(5 * MINUTE) }) };
+      expect(need(channel, { rowCount: 10 })).toBe('blocking');
+    });
+
+    test('refreshes a terminated channel in the background however fresh it is', () => {
+      const channel = channelListed(5 * MINUTE, { terminated_at: new Date(NOW - HOUR) });
+      expect(need(channel, { rowCount: 10 })).toBe('background');
+    });
+
+    test('forces a real listing after 24 hours despite a recent feed check', () => {
+      const channel = channelListed(25 * HOUR, { feed_checked_at: ago(5 * MINUTE) });
+      expect(need(channel, { rowCount: 10 })).toBe('background');
+    });
+
+    test('needs nothing within an hour of a real listing', () => {
+      expect(need(channelListed(30 * MINUTE, { feed_checked_at: null }), { rowCount: 10 })).toBe('none');
+    });
+
+    test('refreshes after an hour when the feed was never checked', () => {
+      expect(need(channelListed(2 * HOUR, { feed_checked_at: null }), { rowCount: 10 })).toBe('background');
+    });
+
+    test('needs nothing when the feed was checked within 90 minutes', () => {
+      const channel = channelListed(2 * HOUR, { feed_checked_at: ago(89 * MINUTE) });
+      expect(need(channel, { rowCount: 10 })).toBe('none');
+    });
+
+    test('refreshes when the feed check is older than 90 minutes', () => {
+      const channel = channelListed(2 * HOUR, { feed_checked_at: ago(91 * MINUTE) });
+      expect(need(channel, { rowCount: 10 })).toBe('background');
+    });
+
+    test('refreshes a page with live rows after an hour despite a recent feed check', () => {
+      const channel = channelListed(2 * HOUR, { feed_checked_at: ago(5 * MINUTE) });
+      expect(need(channel, { rowCount: 10, hasLiveRows: true })).toBe('background');
+    });
+
+    test('leaves a page with live rows alone within an hour of a real listing', () => {
+      expect(need(channelListed(30 * MINUTE), { rowCount: 10, hasLiveRows: true })).toBe('none');
+    });
+  });
 });

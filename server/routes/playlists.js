@@ -6,7 +6,7 @@ const { createSubscribeSettingsValidator } = require('./playlistSubscribeSetting
 // Saved settings the Add Playlist dialog shows when a removed playlist is restored.
 const RESTORE_PREVIEW_SETTING_KEYS = ['auto_download', 'default_sub_folder', 'video_quality', 'audio_format'];
 
-function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard }) {
+function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard, membersAccess = null }) {
   const router = express.Router();
   const { Playlist, PlaylistVideo, Video } = models;
   const downloadDeps = { PlaylistVideo, Video, playlistModule, downloadModule, storageGuard };
@@ -450,7 +450,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    * /api/playlists/{playlistId}/videos:
    *   get:
    *     summary: List playlist videos with download and watch overlay
-   *     description: Each row overlays download state, file details, and watched_by (media server types with a played watch-status row for the video).
+   *     description: Each row overlays download state, file details, watched_by (media server types with a played watch-status row for the video), and members_access for members-only videos (no_cookies, unchecked, confirmed or denied; null otherwise).
    *     tags: [Playlists]
    *     parameters:
    *       - in: path
@@ -553,6 +553,18 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
         [...downloadedById.values()].map((v) => v.id)
       );
 
+      // Members-only state for any video Youtarr knows is members-only, from
+      // the channel listing or a recorded check, so videos of untracked
+      // channels are covered too. Unknown on failure, like before this field.
+      let membersStates = new Map();
+      if (membersAccess && youtubeIds.length > 0) {
+        try {
+          membersStates = await membersAccess.getStates(youtubeIds);
+        } catch (err) {
+          req.log.warn({ err }, 'Could not read members-only access for playlist videos');
+        }
+      }
+
       const videos = rows.map((row) => {
         const dl = downloadedById.get(row.youtube_id);
         const youtubeId = row.youtube_id;
@@ -598,6 +610,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
           audio_file_size: dl?.audioFileSize != null ? Number(dl.audioFileSize) : null,
           video_resolution: dl?.video_resolution ?? null,
           watched_by: dl ? watchedByVideoId.get(dl.id) || [] : [],
+          members_access: membersStates.get(youtubeId) ?? null,
         };
       });
 

@@ -107,6 +107,14 @@ describe('VideoChip', () => {
       expect(screen.getByTestId('LockIcon')).toBeInTheDocument();
     });
 
+    test('shows the members chip for a members-only video the cookies can open', () => {
+      const video = { ...baseVideo, membersAccess: 'confirmed' as const };
+      render(<VideoChip video={video} onDelete={mockOnDelete} />);
+
+      expect(screen.getByText('Members: access')).toBeInTheDocument();
+      expect(screen.queryByTestId('LockIcon')).not.toBeInTheDocument();
+    });
+
     test('shows no status icon for regular videos', () => {
       render(<VideoChip video={baseVideo} onDelete={mockOnDelete} />);
 

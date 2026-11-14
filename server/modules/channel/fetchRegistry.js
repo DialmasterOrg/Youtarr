@@ -3,9 +3,49 @@
  * All channel sub-modules share this one instance so concurrency
  * guards work across module boundaries.
  */
+// How long a finished refresh's result stays readable, so a client that
+// checks after the refresh ended still learns what it found.
+const LAST_RESULT_TTL_MS = 2 * 60 * 1000;
+
 class FetchRegistry {
   constructor() {
     this.activeFetches = new Map();
+    this.lastResults = new Map();
+  }
+
+  /**
+   * End an in-flight operation and keep its result for LAST_RESULT_TTL_MS.
+   * @param {string} key - Registry key (channelId:tabType)
+   * @param {Object} result
+   * @param {string} result.type - Operation type ('autoRefresh', 'feedCheck')
+   * @param {number} result.newVideos - Rows the refresh added
+   * @param {boolean} result.failed - Whether the refresh failed
+   */
+  finish(key, { type, newVideos, failed }) {
+    this.activeFetches.delete(key);
+    this.pruneLastResults();
+    this.lastResults.set(key, {
+      result: { type, newVideos, failed, finishedAt: new Date().toISOString() },
+      expiresAt: Date.now() + LAST_RESULT_TTL_MS,
+    });
+  }
+
+  /**
+   * The result of the last finished refresh for a key, while it is still kept.
+   * @param {string} key - Registry key (channelId:tabType)
+   * @returns {Object|null}
+   */
+  getLastResult(key) {
+    this.pruneLastResults();
+    const entry = this.lastResults.get(key);
+    return entry ? entry.result : null;
+  }
+
+  pruneLastResults() {
+    const now = Date.now();
+    for (const [key, entry] of this.lastResults.entries()) {
+      if (entry.expiresAt <= now) this.lastResults.delete(key);
+    }
   }
 
   has(key) {
@@ -18,6 +58,9 @@ class FetchRegistry {
 
   set(key, value) {
     this.activeFetches.set(key, value);
+    // A new fetch of the tab makes the previous refresh's result stale: left
+    // in place, it would be read as the outcome of this fetch when it ends.
+    this.lastResults.delete(key);
   }
 
   delete(key) {
@@ -55,6 +98,10 @@ class FetchRegistry {
           tabType: tabType,
           ...(activeOperation.progress ? { progress: activeOperation.progress } : {})
         };
+      }
+      const lastResult = this.getLastResult(key);
+      if (lastResult) {
+        return { isFetching: false, lastResult };
       }
     } else {
       // Check for any tab on this channel (legacy behavior)

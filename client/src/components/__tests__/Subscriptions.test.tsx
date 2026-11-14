@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import useMediaQuery from '../../hooks/useMediaQuery';
@@ -1136,129 +1136,170 @@ describe('Subscriptions Component', () => {
     });
   });
 
-  describe('Filtering', () => {
-    test('displays filter button', () => {
-      renderSubscriptions();
-      expect(screen.getByRole('button', { name: /filter by channel name/i })).toBeInTheDocument();
-    });
+  describe('Searching', () => {
+    const searchInput = () => screen.getByLabelText('Search or add a channel');
+    const searchTermsRequested = () =>
+      useChannelList.mock.calls.map(([params]: [{ searchTerm: string }]) => params.searchTerm);
 
-    test('opens filter popover when filter button clicked', async () => {
+    test('searches the channel list with the text typed in the add bar', async () => {
       const user = userEvent.setup();
       renderSubscriptions();
 
-      await user.click(screen.getByRole('button', { name: /filter by channel name/i }));
+      await user.type(searchInput(), 'test');
 
       await waitFor(() => {
-        expect(screen.getByLabelText('Filter channels')).toBeInTheDocument();
-      });
-    });
-
-    test('closes filter popover when filter button is clicked again', async () => {
-      const user = userEvent.setup();
-      renderSubscriptions();
-
-      const filterButton = screen.getByRole('button', { name: /filter by channel name/i });
-      await user.click(filterButton);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Filter channels')).toBeInTheDocument();
-      });
-
-      await user.click(filterButton);
-
-      await waitFor(() => {
-        expect(screen.queryByLabelText('Filter channels')).not.toBeInTheDocument();
-      });
-    });
-
-    test('applies filter when text entered', async () => {
-      const user = userEvent.setup();
-      renderSubscriptions();
-
-      await user.click(screen.getByRole('button', { name: /filter by channel name/i }));
-
-      const filterInput = await screen.findByLabelText('Filter channels');
-      await user.type(filterInput, 'test');
-
-      await waitFor(() => {
-        expect(useChannelList).toHaveBeenCalledWith(
+        expect(useChannelList).toHaveBeenLastCalledWith(
           expect.objectContaining({ searchTerm: 'test' })
         );
       });
     });
 
-    test('clears filter when clear button clicked', async () => {
+    describe('timing', () => {
+      beforeEach(() => {
+        jest.useFakeTimers();
+      });
+
+      afterEach(() => {
+        jest.runOnlyPendingTimers();
+        jest.useRealTimers();
+      });
+
+      test('waits for a pause in typing before searching', async () => {
+        const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+        renderSubscriptions();
+
+        await user.type(searchInput(), 'test');
+        expect(searchTermsRequested()).toEqual(expect.not.arrayContaining(['t', 'te', 'tes', 'test']));
+
+        act(() => {
+          jest.advanceTimersByTime(300);
+        });
+        expect(useChannelList).toHaveBeenLastCalledWith(
+          expect.objectContaining({ searchTerm: 'test' })
+        );
+      });
+
+      test('does not search the channel list with a playlist URL', async () => {
+        const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+        renderSubscriptions();
+
+        await user.click(screen.getByText('Playlists (0)'));
+        await user.type(screen.getByLabelText('Add a new playlist'), 'https://www.youtube.com/playlist?list=PLabc');
+        act(() => {
+          jest.advanceTimersByTime(1000);
+        });
+
+        expect(searchTermsRequested().every((term: string) => term === '')).toBe(true);
+      });
+
+      test('holds the search while a channel lookup runs', () => {
+        mockLocationState = { addChannelUrl: 'https://www.youtube.com/channel/UCabc' };
+        mockLookupChannel.mockReturnValue(new Promise(() => {}));
+        useChannelMutations.mockReturnValue({
+          ...useChannelMutations(),
+          isAddingChannel: true,
+        });
+
+        renderSubscriptions();
+        act(() => {
+          jest.advanceTimersByTime(1000);
+        });
+
+        expect(searchInput()).toHaveValue('https://www.youtube.com/channel/UCabc');
+        expect(searchTermsRequested().every((term: string) => term === '')).toBe(true);
+      });
+    });
+
+    test('shows the full list again as soon as the input is cleared', async () => {
       const user = userEvent.setup();
       renderSubscriptions();
 
-      await user.click(screen.getByRole('button', { name: /filter by channel name/i }));
-
-      const filterInput = await screen.findByLabelText('Filter channels');
-      await user.type(filterInput, 'test');
-
+      await user.type(searchInput(), 'test');
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /clear filter/i })).toBeInTheDocument();
+        expect(useChannelList).toHaveBeenLastCalledWith(
+          expect.objectContaining({ searchTerm: 'test' })
+        );
       });
 
-      await user.click(screen.getByRole('button', { name: /clear filter/i }));
+      await user.click(screen.getByRole('button', { name: 'Clear' }));
 
       await waitFor(() => {
-        expect(useChannelList).toHaveBeenCalledWith(
+        expect(useChannelList).toHaveBeenLastCalledWith(
           expect.objectContaining({ searchTerm: '' })
         );
       });
     });
 
-    test('highlights filter button when filter is active', async () => {
+    test('resets page to 1 when a search is applied', async () => {
       const user = userEvent.setup();
       renderSubscriptions();
 
-      const filterButton = screen.getByRole('button', { name: /filter by channel name/i });
-
-      await user.click(filterButton);
-      const filterInput = await screen.findByLabelText('Filter channels');
-      await user.type(filterInput, 'test');
-
-      // Close the popover by clicking outside
-      await user.click(document.body);
-
-      // The filter button should now have primary color
-      await waitFor(() => {
-        expect(filterButton).toHaveClass('icon-btn-primary');
-      });
-    });
-
-    test('resets page to 1 when filter applied', async () => {
-      const user = userEvent.setup();
-      renderSubscriptions();
-
-      await user.click(screen.getByRole('button', { name: /filter by channel name/i }));
-      const filterInput = await screen.findByLabelText('Filter channels');
-      await user.type(filterInput, 'test');
+      await user.type(searchInput(), 'test');
 
       await waitFor(() => {
-        expect(useChannelList).toHaveBeenCalledWith(
-          expect.objectContaining({ page: 1 })
+        expect(useChannelList).toHaveBeenLastCalledWith(
+          expect.objectContaining({ searchTerm: 'test', page: 1 })
         );
       });
     });
 
-    test('opens the mobile filter sheet from the toolbar button', async () => {
+    test('labels the count as matching while a search is active', async () => {
       const user = userEvent.setup();
-      (useMediaQuery as jest.Mock).mockReturnValue(true);
-
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 2,
+        totalPages: 1,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
       renderSubscriptions();
 
-      await user.click(screen.getByRole('button', { name: /filters/i }));
+      await user.type(searchInput(), 'test');
 
-      const dialog = await screen.findByRole('dialog');
-      expect(dialog).toHaveAttribute('aria-labelledby', 'channel-filter-sheet-title');
-      expect(within(dialog).getByLabelText('Filter channels')).toBeInTheDocument();
+      expect(await screen.findByText('Total matching channels: 2')).toBeInTheDocument();
+    });
 
-      await user.click(screen.getByRole('button', { name: /done/i }));
+    test('offers no separate filter button on desktop', () => {
+      renderSubscriptions();
+      expect(screen.queryByRole('button', { name: /filter by channel name/i })).not.toBeInTheDocument();
+    });
 
-      await waitFor(() => {
-        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    test('offers no separate filter button on mobile', () => {
+      (useMediaQuery as jest.Mock).mockReturnValue(true);
+      renderSubscriptions();
+      expect(screen.queryByRole('button', { name: /^filters/i })).not.toBeInTheDocument();
+    });
+
+    describe('with no matching channel', () => {
+      test('offers to find a typed name on YouTube', async () => {
+        const user = userEvent.setup();
+        renderSubscriptions();
+
+        await user.type(searchInput(), 'linus tech');
+
+        expect(await screen.findByText('No channels match "linus tech".')).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Find on YouTube' }));
+        expect(mockNavigate).toHaveBeenCalledWith('/subscriptions/find?q=linus%20tech');
+      });
+
+      test('points to the Channel button for a typed @handle', async () => {
+        const user = userEvent.setup();
+        renderSubscriptions();
+
+        await user.type(searchInput(), '@newchannel');
+
+        expect(await screen.findByText('No channels match "@newchannel".')).toBeInTheDocument();
+        expect(screen.getByText('Use the Channel button above to add it.')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Find on YouTube' })).not.toBeInTheDocument();
+      });
+
+      test('keeps the plain message when nothing is being searched', () => {
+        renderSubscriptions();
+
+        expect(screen.getByText('No channels found. Try adjusting your filter.')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Find on YouTube' })).not.toBeInTheDocument();
       });
     });
   });
@@ -1668,16 +1709,7 @@ describe('Subscriptions Component', () => {
       renderSubscriptions();
 
       // Apply text filter
-      await user.click(screen.getByRole('button', { name: /filter by channel name/i }));
-      const filterInput = await screen.findByLabelText('Filter channels');
-      await user.type(filterInput, 'test');
-
-      // Close the filter popover by clicking elsewhere
-      await user.keyboard('{Escape}');
-
-      await waitFor(() => {
-        expect(screen.queryByLabelText('Filter channels')).not.toBeInTheDocument();
-      });
+      await user.type(screen.getByLabelText('Search or add a channel'), 'test');
 
       // Apply folder filter
       await user.click(screen.getByRole('button', { name: /filter or group by folder/i }));

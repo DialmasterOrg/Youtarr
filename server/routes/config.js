@@ -153,6 +153,8 @@ module.exports = function createConfigRoutes({
    *                   properties:
    *                     externalApiEnabled:
    *                       type: boolean
+   *                 channelFeedCheckFrequency:
+   *                   type: string
    *                 channelVideoCountsFrequency:
    *                   type: string
    *                 logLevel:
@@ -236,6 +238,8 @@ module.exports = function createConfigRoutes({
    *               videoRescanFrequency:
    *                 type: string
    *               ytdlpUpdateFrequency:
+   *                 type: string
+   *               channelFeedCheckFrequency:
    *                 type: string
    *               channelVideoCountsFrequency:
    *                 type: string
@@ -428,6 +432,8 @@ module.exports = function createConfigRoutes({
     updateData.ytdlpLastUpdated = currentConfig.ytdlpLastUpdated;
     updateData.ytdlpLastResult = currentConfig.ytdlpLastResult;
     updateData.rescanLastRun = currentConfig.rescanLastRun ?? null;
+    // Server-owned: a save from a tab loaded before the prompt was shown must not clear it.
+    updateData.supportPromptShownAt = currentConfig.supportPromptShownAt ?? null;
 
     configModule.updateConfig(updateData);
 

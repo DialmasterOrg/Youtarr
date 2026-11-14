@@ -318,6 +318,148 @@ describe('channelThumbnails', () => {
     });
   });
 
+  describe('backfillChannelImagesInBackground', () => {
+    const RECHECK_MS = 15 * 60 * 1000;
+    const START = 1_700_000_000_000;
+    const channelOne = { channel_id: 'UC1', uploader: 'Channel One' };
+    const channelTwo = { channel_id: 'UC2', uploader: 'Channel Two' };
+    const posterCopy = (channel) => [
+      `/path/to/images/channelthumb-${channel.channel_id}.jpg`,
+      `/path/to/videos/${channel.uploader}/poster.jpg`,
+    ];
+    const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+    let fsExtra;
+    let originalPathExists;
+    let existingPaths;
+    let copySyncWithFallback;
+    let configModule;
+    let nowSpy;
+
+    beforeEach(() => {
+      fsExtra = require('fs-extra');
+      originalPathExists = fsExtra.pathExists;
+      // The copy is mocked, so a missing poster stays missing and every check
+      // of a channel shows up as one more copy.
+      existingPaths = new Set([
+        '/path/to/videos',
+        '/path/to/videos/Channel One',
+        '/path/to/videos/Channel Two',
+        '/path/to/images/channelthumb-UC1.jpg',
+        '/path/to/images/channelthumb-UC2.jpg',
+        '/path/to/images/channelbanner-UC1.jpg',
+      ]);
+      fsExtra.pathExists = jest.fn(async (p) => existingPaths.has(p));
+      copySyncWithFallback = require('../../filesystem').copySyncWithFallback;
+      configModule = require('../../configModule');
+      nowSpy = jest.spyOn(Date, 'now').mockReturnValue(START);
+    });
+
+    afterEach(() => {
+      fsExtra.pathExists = originalPathExists;
+      nowSpy.mockRestore();
+    });
+
+    test('returns without waiting for the disk', () => {
+      fsExtra.pathExists = jest.fn(() => new Promise(() => {}));
+
+      expect(channelThumbnails.backfillChannelImagesInBackground([channelOne])).toBeUndefined();
+      expect(fsExtra.pathExists).toHaveBeenCalled();
+    });
+
+    test('copies a missing poster into the channel folder', async () => {
+      channelThumbnails.backfillChannelImagesInBackground([channelOne]);
+      await settle();
+
+      expect(copySyncWithFallback.mock.calls).toEqual([posterCopy(channelOne)]);
+    });
+
+    test('does not check a channel again on the next list load', async () => {
+      channelThumbnails.backfillChannelImagesInBackground([channelOne]);
+      await settle();
+      channelThumbnails.backfillChannelImagesInBackground([channelOne]);
+      await settle();
+
+      expect(copySyncWithFallback).toHaveBeenCalledTimes(1);
+    });
+
+    test('does not repeat a check that is still running', async () => {
+      channelThumbnails.backfillChannelImagesInBackground([channelOne]);
+      channelThumbnails.backfillChannelImagesInBackground([channelOne]);
+      await settle();
+
+      expect(copySyncWithFallback).toHaveBeenCalledTimes(1);
+    });
+
+    test('checks a channel that was not on an earlier list load', async () => {
+      channelThumbnails.backfillChannelImagesInBackground([channelOne]);
+      await settle();
+      channelThumbnails.backfillChannelImagesInBackground([channelOne, channelTwo]);
+      await settle();
+
+      expect(copySyncWithFallback.mock.calls).toEqual([
+        posterCopy(channelOne),
+        posterCopy(channelTwo),
+      ]);
+    });
+
+    test('checks a channel again once the recheck window has passed', async () => {
+      channelThumbnails.backfillChannelImagesInBackground([channelOne]);
+      await settle();
+      nowSpy.mockReturnValue(START + RECHECK_MS);
+      channelThumbnails.backfillChannelImagesInBackground([channelOne]);
+      await settle();
+
+      expect(copySyncWithFallback).toHaveBeenCalledTimes(2);
+    });
+
+    test('still skips a channel just before the recheck window ends', async () => {
+      channelThumbnails.backfillChannelImagesInBackground([channelOne]);
+      await settle();
+      nowSpy.mockReturnValue(START + RECHECK_MS - 1);
+      channelThumbnails.backfillChannelImagesInBackground([channelOne]);
+      await settle();
+
+      expect(copySyncWithFallback).toHaveBeenCalledTimes(1);
+    });
+
+    test('writes newly enabled posters on the next list load', async () => {
+      configModule.getConfig.mockReturnValue({ writeChannelPosters: false, writeBackdropImages: true });
+      existingPaths.add('/path/to/videos/Channel One/backdrop.jpg');
+      channelThumbnails.backfillChannelImagesInBackground([channelOne]);
+      await settle();
+      expect(copySyncWithFallback).not.toHaveBeenCalled();
+
+      configModule.getConfig.mockReturnValue({ writeChannelPosters: true, writeBackdropImages: true });
+      channelThumbnails.backfillChannelImagesInBackground([channelOne]);
+      await settle();
+
+      expect(copySyncWithFallback.mock.calls).toEqual([posterCopy(channelOne)]);
+    });
+
+    test('writes newly enabled backdrops on the next list load', async () => {
+      existingPaths.add('/path/to/videos/Channel One/poster.jpg');
+      channelThumbnails.backfillChannelImagesInBackground([channelOne]);
+      await settle();
+      expect(copySyncWithFallback).not.toHaveBeenCalled();
+
+      configModule.getConfig.mockReturnValue({ writeChannelPosters: true, writeBackdropImages: true });
+      channelThumbnails.backfillChannelImagesInBackground([channelOne]);
+      await settle();
+
+      expect(copySyncWithFallback.mock.calls).toEqual([
+        ['/path/to/images/channelbanner-UC1.jpg', '/path/to/videos/Channel One/backdrop.jpg'],
+      ]);
+    });
+
+    test('ignores channels without a channel id', async () => {
+      channelThumbnails.backfillChannelImagesInBackground([{ channel_id: null, uploader: 'Channel One' }]);
+      await settle();
+
+      expect(fsExtra.pathExists).not.toHaveBeenCalled();
+    });
+  });
+
   describe('downloadImageToFile', () => {
     let fsExtra;
     let mockWriteStream;

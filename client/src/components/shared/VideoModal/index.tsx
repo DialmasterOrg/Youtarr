@@ -19,6 +19,7 @@ import VideoTechnical from './components/VideoTechnical';
 import VideoWatchStatusSection from './components/VideoWatchStatusSection';
 import { useVideoMetadata } from './hooks/useVideoMetadata';
 import { useWatchStatus } from './hooks/useWatchStatus';
+import { useMembersAccessCheck } from './hooks/useMembersAccessCheck';
 import { useVideoModalActions } from './hooks/useVideoModalActions';
 import { VideoModalProps } from './types';
 import DeleteVideosDialog from '../DeleteVideosDialog';
@@ -27,7 +28,7 @@ import AddChannelDialog from '../AddChannelDialog';
 import DownloadSettingsDialog from '../../DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { useConfig } from '../../../hooks/useConfig';
 import { uploadDateToIso } from '../../../utils/formatters';
-import { isRemovedStatus } from '../../../utils/videoStatus';
+import { isRemovedStatus, isMembersOnlyBlocked } from '../../../utils/videoStatus';
 
 const SNACKBAR_AUTO_HIDE_MS = 4000;
 
@@ -78,8 +79,10 @@ function VideoModal({
     onClose,
   });
 
-  // Skip metadata fetch for members-only videos that we haven't downloaded -
-  // yt-dlp cannot access them and the error just spams the server logs. For
+  // Skip metadata fetch for members-only videos that we haven't downloaded and
+  // the cookies cannot open (none configured, or a recent denial) - yt-dlp
+  // cannot access them and the error just spams the server logs. The modal's
+  // "Check again" asks YouTube on purpose instead. For
   // already-downloaded members-only videos, the backend still serves cached
   // .info.json so we let the fetch proceed.
   const skipMetadataFetch = localVideo.status === 'members_only' && !localVideo.isDownloaded;
@@ -142,34 +145,74 @@ function VideoModal({
     return () => { controller.abort(); };
   }, [open, video.channelId, token]);
 
-  // Promote localVideo to members_only display when the metadata fetch detects
-  // a members-only video. The backend stamps the channelvideos row in the same
-  // request, so a second open would catch it via getVideoStatus, but on the
-  // first open the prop's status is stale (still 'never_downloaded' or similar).
-  // Deriving here keeps VideoPlayer/VideoActions in sync without round-tripping.
-  const displayVideo = useMemo(() => {
-    if (localVideo.status === 'queued' || localVideo.status === 'downloading') return localVideo;
-    if (metadata?.availability === 'subscriber_only' && localVideo.status !== 'members_only') {
-      return { ...localVideo, status: 'members_only' as const };
-    }
-    return localVideo;
-  }, [localVideo, metadata?.availability]);
+  // Members-only access, newest answer first: an explicit check from this
+  // modal, then the metadata fetch (which is itself a check when it asked
+  // YouTube), then what the opening page knew.
+  const accessCheck = useMembersAccessCheck(open ? video.youtubeId : '', token);
+  const membersAccess = accessCheck.data !== undefined
+    ? accessCheck.data
+    : metadata?.membersAccess !== undefined
+      ? metadata.membersAccess
+      : localVideo.membersAccess;
+  // A check that answers null found the video readable without membership:
+  // it is no longer members-only, whatever the page or metadata said.
+  const checkedNotMembersOnly = accessCheck.data === null;
+  const isMembersOnly = !checkedNotMembersOnly && (
+    localVideo.status === 'members_only'
+    || metadata?.availability === 'subscriber_only'
+    || Boolean(membersAccess)
+  );
 
-  // Notify the parent the first time we promote a video to members_only, so
-  // list pages that read availability (e.g. ChannelVideos via getVideoStatus)
-  // can update without a manual refresh. Keyed on youtubeId so we fire once
-  // per video and re-arm when the modal switches to a different one.
+  // Derive the members-only display here so VideoPlayer/VideoActions follow the
+  // latest answer without a round trip: on the first open the prop's status is
+  // stale (the backend stamps the channelvideos row during the fetch). Only a
+  // video without a local file changes; a file says more than YouTube's rules.
+  const displayVideo = useMemo(() => {
+    if (checkedNotMembersOnly) {
+      return localVideo.status === 'members_only'
+        ? { ...localVideo, membersAccess: null, status: 'never_downloaded' as const }
+        : { ...localVideo, membersAccess: null };
+    }
+    if (!isMembersOnly) return localVideo;
+    if (localVideo.status !== 'never_downloaded' && localVideo.status !== 'members_only') return localVideo;
+    const blocked = isMembersOnlyBlocked({ availability: 'subscriber_only', members_access: membersAccess });
+    return { ...localVideo, membersAccess, status: blocked ? 'members_only' as const : 'never_downloaded' as const };
+  }, [localVideo, isMembersOnly, membersAccess, checkedNotMembersOnly]);
+
+  // Tell the parent what the metadata fetch learned about members-only access,
+  // so list pages that read availability (e.g. ChannelVideos via
+  // getVideoStatus) update without a manual refresh. Keyed on youtubeId so it
+  // fires once per video and re-arms when the modal switches videos. A page
+  // that already shows the video blocked learns nothing new from a blocked answer.
   const promotedForRef = useRef<string | null>(null);
   useEffect(() => {
+    const alreadyKnown = localVideo.status === 'members_only'
+      && isMembersOnlyBlocked({ availability: 'subscriber_only', members_access: metadata?.membersAccess });
     if (
       metadata?.availability === 'subscriber_only' &&
-      localVideo.status !== 'members_only' &&
+      !alreadyKnown &&
       promotedForRef.current !== video.youtubeId
     ) {
       promotedForRef.current = video.youtubeId;
-      onAvailabilityDetected?.(video.youtubeId, 'subscriber_only');
+      onAvailabilityDetected?.(video.youtubeId, 'subscriber_only', metadata.membersAccess);
     }
-  }, [metadata?.availability, localVideo.status, video.youtubeId, onAvailabilityDetected]);
+  }, [metadata?.availability, metadata?.membersAccess, localVideo.status, video.youtubeId, onAvailabilityDetected]);
+
+  // An explicit check's answer reaches the list the same way, once per answer:
+  // parents pass a new callback on every render, and updating the parent
+  // re-renders it, so without the ref this would loop.
+  const checkNotifiedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (accessCheck.data === undefined) return;
+    const key = `${video.youtubeId}:${accessCheck.data}`;
+    if (checkNotifiedRef.current === key) return;
+    checkNotifiedRef.current = key;
+    if (accessCheck.data === null) {
+      onAvailabilityDetected?.(video.youtubeId, null, null);
+    } else {
+      onAvailabilityDetected?.(video.youtubeId, 'subscriber_only', accessCheck.data);
+    }
+  }, [accessCheck.data, video.youtubeId, onAvailabilityDetected]);
 
   // Notify the parent the first time the metadata fetch yields an authoritative
   // upload date (from the .info.json), so list pages can replace an estimated or
@@ -268,6 +311,11 @@ function VideoModal({
               token={token}
               onDownloadClick={() => setDownloadDialogOpen(true)}
               isMobile={isMobile}
+              membersAccessCheck={{
+                onCheck: () => { void accessCheck.check(); },
+                loading: accessCheck.loading,
+                error: accessCheck.error,
+              }}
             />
             <VideoActions
               video={displayVideo}

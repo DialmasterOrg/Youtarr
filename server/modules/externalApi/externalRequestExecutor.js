@@ -1,9 +1,8 @@
 const { Op } = require('sequelize');
-const { MANUAL_DOWNLOAD_LABEL, AUTO_RETRY_LABEL_PREFIX } = require('../download/jobTypes');
+const { EXTERNAL_REQUEST_JOB_LABEL, AUTO_RETRY_LABEL_PREFIX } = require('../download/jobTypes');
 const { requireCurrentAutoApproval } = require('./externalRequestPrimitives');
 const { createExternalRequestReconciliation } = require('./externalRequestReconciliation');
 
-const EXTERNAL_REQUEST_JOB_LABEL = `${MANUAL_DOWNLOAD_LABEL} (external request)`;
 // The sweep is the fallback that retries held requests, recovers work a
 // restart interrupted, and closes downloads whose job-ended event was missed.
 const SWEEP_INTERVAL_MS = 60 * 1000;

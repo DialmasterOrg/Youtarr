@@ -11,6 +11,7 @@ describe('CronJobs', () => {
   let mockConfigModule;
   let mockConfigStore;
   let mockTabVideoCounts;
+  let mockChannelFeedCheck;
 
   beforeEach(() => {
     jest.resetModules();
@@ -88,6 +89,12 @@ describe('CronJobs', () => {
     };
     jest.doMock('../channel/tabVideoCounts', () => mockTabVideoCounts);
 
+    mockChannelFeedCheck = {
+      run: jest.fn(),
+      isRunning: jest.fn(() => false)
+    };
+    jest.doMock('../channel/channelFeedCheck', () => mockChannelFeedCheck);
+
     // Mock configModule with a tiny in-memory store so the auto-update job can read/write
     mockConfigStore = { autoUpdateYtdlp: true };
     mockConfigModule = {
@@ -111,10 +118,11 @@ describe('CronJobs', () => {
   });
 
   describe('initialize', () => {
-    test('should register all five cron jobs', () => {
+    test('should register all six cron jobs', () => {
       cronJobs.initialize();
 
-      expect(mockSchedule.schedule).toHaveBeenCalledTimes(5);
+      expect(mockSchedule.schedule).toHaveBeenCalledTimes(6);
+      expect(mockSchedule.schedule).toHaveBeenCalledWith('30 * * * *', expect.any(Function), expect.objectContaining({ scheduled: false }));
       expect(mockSchedule.schedule).toHaveBeenCalledWith('45 4 * * *', expect.any(Function), expect.objectContaining({ scheduled: false }));
       expect(mockSchedule.schedule).toHaveBeenCalledWith('0 2 * * *', expect.any(Function), expect.objectContaining({ scheduled: false }));
       expect(mockSchedule.schedule).toHaveBeenCalledWith('0 3 * * *', expect.any(Function), expect.objectContaining({ scheduled: false }));
@@ -137,11 +145,11 @@ describe('CronJobs', () => {
     const listener = mockConfigModule.onConfigChange.mock.calls[0][0];
     mockConfigStore.otherSetting = true;
     listener();
-    expect(mockSchedule.schedule).toHaveBeenCalledTimes(5);
+    expect(mockSchedule.schedule).toHaveBeenCalledTimes(6);
     const original = mockSchedule.schedule.mock.results[0].value;
     mockConfigStore.autoRemovalFrequency = '0 18 * * *';
     listener();
-    expect(mockSchedule.schedule).toHaveBeenCalledTimes(6);
+    expect(mockSchedule.schedule).toHaveBeenCalledTimes(7);
     expect(original.stop).toHaveBeenCalledTimes(1);
     expect(mockSchedule.schedule).toHaveBeenLastCalledWith(
       '0 18 * * *', expect.any(Function), expect.objectContaining({ name: 'youtarr:autoRemovalFrequency' })
@@ -152,7 +160,7 @@ describe('CronJobs', () => {
     mockConfigStore.autoUpdateYtdlp = false;
     mockConfigStore.autoRemovalEnabled = false;
     cronJobs.initialize();
-    expect(mockSchedule.schedule).toHaveBeenCalledTimes(4);
+    expect(mockSchedule.schedule).toHaveBeenCalledTimes(5);
     expect(mockSchedule.schedule).toHaveBeenCalledWith(
       '0 2 * * *', expect.any(Function), expect.any(Object)
     );
@@ -939,6 +947,55 @@ describe('CronJobs', () => {
       const blocker = await scheduledTaskManager.getRunBlocker('channelVideoCountsFrequency');
 
       expect(blocker).toEqual(expect.objectContaining({ reason: 'youtube-throttled', availableAt }));
+    });
+  });
+
+  describe('channel feed check', () => {
+    const feedCheckCallback = () => mockSchedule.schedule.mock.calls
+      .find((call) => call[2].name === 'youtarr:channelFeedCheckFrequency')[1];
+
+    beforeEach(() => {
+      cronJobs.initialize();
+    });
+
+    test('registers the feed check at its default time', () => {
+      expect(mockSchedule.schedule).toHaveBeenCalledWith(
+        '30 * * * *', expect.any(Function), expect.objectContaining({ name: 'youtarr:channelFeedCheckFrequency' })
+      );
+    });
+
+    test('records the feed check summary', async () => {
+      const summary = { status: 'success', outcome: 'completed', message: 'Checked 3 channels. No new videos.' };
+      mockChannelFeedCheck.run.mockResolvedValue(summary);
+
+      await expect(feedCheckCallback()()).resolves.toEqual(expect.objectContaining(summary));
+    });
+
+    test('records an error run when the check throws', async () => {
+      mockChannelFeedCheck.run.mockRejectedValue(new Error('db down'));
+
+      await expect(feedCheckCallback()()).resolves.toEqual(expect.objectContaining({ status: 'error', outcome: 'error', message: 'db down' }));
+    });
+
+    test('a manual run enters cooldown until the next one is allowed', async () => {
+      const scheduledTaskManager = require('../scheduledTaskManager');
+      mockChannelFeedCheck.run.mockResolvedValue({ status: 'success', outcome: 'completed', message: 'ok' });
+
+      const first = await scheduledTaskManager.runNow('channelFeedCheckFrequency', { trigger: 'manual' });
+      await first.completion;
+
+      const blocker = await scheduledTaskManager.getRunBlocker('channelFeedCheckFrequency');
+
+      expect(blocker).toEqual(expect.objectContaining({ reason: 'cooldown' }));
+    });
+
+    test('reports the task as running while a check is in progress', () => {
+      const scheduledTaskManager = require('../scheduledTaskManager');
+      mockChannelFeedCheck.isRunning.mockReturnValue(true);
+
+      const status = scheduledTaskManager.getStatus().find((task) => task.id === 'channelFeedCheckFrequency');
+
+      expect(status.running).toBe(true);
     });
   });
 

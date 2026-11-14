@@ -8,7 +8,8 @@ export const PLAYLIST_DOWNLOADED_NOTE =
   'list to download them again.';
 
 export const PLAYLIST_TOTAL_NOTE =
-  "The total leaves out private and members-only entries, which can't be accessed or downloaded. " +
+  "The total leaves out private entries and any entries YouTube lists without a title, which can't be " +
+  "accessed. Members-only videos download only with cookies from a member of the channel. " +
   'Ignored videos count toward the total, and the percentage compares downloaded videos with it.';
 
 export const PLAYLIST_LIMIT_NOTE =

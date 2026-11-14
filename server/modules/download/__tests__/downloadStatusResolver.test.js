@@ -551,7 +551,7 @@ describe('downloadStatusResolver', () => {
       });
       expect(result.finalState).toBe('failed');
       expect(result.finalErrorCode).toBe('COOKIES_REQUIRED');
-      expect(result.finalText).toBe('Download failed: Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.');
+      expect(result.finalText).toBe('Download failed: Bot detection encountered. YouTube is temporarily refusing requests from this server; this usually clears on its own, so try again later. If it keeps happening, upload YouTube cookies in Settings -> Cookies.');
     });
 
     it('uses no-cookies fallback messaging for bot detection during an anonymous retry', () => {

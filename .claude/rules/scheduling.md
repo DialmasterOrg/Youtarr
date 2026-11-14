@@ -25,7 +25,7 @@ The cron schedules, the scheduled task manager, the run history, and the Schedul
 
 ## Expressions (`scheduleConfig`)
 
-- The registry holds the eight configurable schedules (config key, label, default). `getScheduleError` checks syntax via node-cron plus a 15-minute minimum interval, computed structurally with node-cron's own step semantics.
+- The registry holds the nine configurable schedules (config key, label, default). `getScheduleError` checks syntax via node-cron plus a 15-minute minimum interval, computed structurally with node-cron's own step semantics.
 - The across-midnight case asks the matcher whether two firing days are consecutive, so a Sundays-only `5,55 0,23` schedule is not rejected.
 - `normalizeToMinimumInterval` (applied by `configModule` at startup) drops runs closer than 15 minutes apart, never adds, and keeps the hour and calendar fields (`0,5 2 * * 0` becomes `0 2 * * 0`).
 - That normalization exists so pre-floor hand edits keep running instead of blocking every Settings save, since the client saves the full config.
@@ -40,7 +40,7 @@ The cron schedules, the scheduled task manager, the run history, and the Schedul
 - `scheduledTaskManager.updateTask({ id, expression, enabled, run, isRunning, getRunBlocker, manualCooldownMs, manualRunRequiresEnabled })` replaces a timer only when the expression changes, keeps the previous timer on an invalid edit, and skips an occurrence while the previous run is active.
 - Every run is recorded through the recorder injected by `setRunRecorder` (wired in server.js once the DB is ready). `run` is always called as `run({ trigger, ...args })`.
 - `runNow(id, { trigger, args, enforceEnabled, enforceCooldown })` is the single entry point for manual runs: Scheduling's Run now via `routes/runNowResponse.js`, the Maintenance rescan, Watch Status Sync Now, the yt-dlp update button, and Download New.
-- `runNow` returns `{ started, completion }` or a blocker, checked in order: running (the manager's flag or the task's `isRunning` probe) -> the task's `getRunBlocker` -> turned off -> the manual-run cooldown (`MANUAL_RUN_COOLDOWN_MS`, channel video counts only).
+- `runNow` returns `{ started, completion }` or a blocker, checked in order: running (the manager's flag or the task's `isRunning` probe) -> the task's `getRunBlocker` -> turned off -> the manual-run cooldown (`MANUAL_RUN_COOLDOWN_MS`; channel video counts and the channel feed check).
 - `manualRunRequiresEnabled: false` (channel downloads) means the feature switch only stops the timer, not a manual run; channel downloads are refused only while a sweep is running.
 - A task whose work outlives it may resolve with `finalRecord` (a promise of the run record): the lock is released as usual and only the history row waits (`finishWhenSettled`), so a stuck `finalRecord` never holds a task running.
 - A rejected `finalRecord` closes the row as an error; a row still open at shutdown becomes interrupted.

@@ -94,6 +94,8 @@ Accepted URLs are watch, Shorts, live, and embed links on `youtube.com`, `m.yout
 
 Any other body fields are ignored. Folder layout (flat or one folder per video) is not selectable per request: it follows the channel's setting, or the global default for untracked channels.
 
+**Note:** A download requested with a legacy API key is handled like a manual download, so when cookies are enabled it can download members-only videos the cookies' account is a member of. Anyone holding a key can use that membership; keep keys to people you trust with it. See [Members-Only Videos](CONFIG.md#members-only-videos).
+
 **Success Response (200):**
 ```json
 {

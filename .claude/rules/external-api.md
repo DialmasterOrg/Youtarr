@@ -21,3 +21,4 @@ The opt-in `/external-api/v1` surface for external tools: catalog reads and down
 - It holds requests with a message while downloads are paused or the video is busy, and recovers interrupted rows at startup.
 - `externalRequestTargets.js` validates grant, channel, video and policy targets; `externalRequestReconciliation.js` closes processing video requests whose job ended; `externalRequestPrimitives.js` shares validation and DTOs.
 - Key-before-request locks serialize decisions; `externalWorkLimiter.js` bounds expensive work. `routes/externalRequests.js` exposes admin management endpoints that reject every API key; their UI is a separate follow-up.
+- External API jobs never use the cookies' membership: `doSpecificDownloads` keeps the members-only filter for the `(external request)` label or an `externalRequest: true` job flag, which `enqueueAutoRetryJob` copies onto its retries because their `Auto-retry:` label drops the source.

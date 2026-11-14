@@ -32,6 +32,14 @@ jest.mock('../DownloadPauseBanner', () => ({
   },
 }));
 
+jest.mock('../SupportPromptDialog', () => ({
+  __esModule: true,
+  default: function MockSupportPromptDialog({ token }: { token: string | null }) {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'support-prompt-dialog', 'data-token': token ?? '' });
+  },
+}));
+
 jest.mock('../NavSidebar', () => ({
   NavSidebar: ({ collapsed, isTopNav }: { collapsed: boolean; isTopNav: boolean }) => (
     <div data-testid="nav-sidebar">
@@ -111,6 +119,12 @@ describe('AppShell', () => {
     renderShell('playful');
 
     expect(within(getContentFrame()).getByTestId('download-pause-banner')).toBeInTheDocument();
+  });
+
+  it('mounts the one-time support prompt with the session token', () => {
+    renderShell('playful');
+
+    expect(screen.getByTestId('support-prompt-dialog')).toHaveAttribute('data-token', 'test-token');
   });
 
   it('uses top-nav layout width rules for flat theme', async () => {

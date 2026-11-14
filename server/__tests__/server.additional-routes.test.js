@@ -288,6 +288,7 @@ const createServerModule = ({
           isBusyError: jest.fn(() => false)
         }));
         // ChannelVideo mock - use provided mock or default
+        jest.doMock('../modules/membersAccess');
         jest.doMock('../models/channelvideo', () => channelVideoMock || {
           update: jest.fn().mockResolvedValue([1]),
           findOne: jest.fn().mockResolvedValue({

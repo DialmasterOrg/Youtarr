@@ -6,6 +6,7 @@ jest.mock('../download/tempPathManager', () => ({
   getTempBasePath: jest.fn(() => '/tmp/youtarr-downloads'),
 }));
 
+jest.mock('../membersAccess');
 jest.mock('../../models/channelvideo', () => ({
   update: jest.fn().mockResolvedValue([1]),
 }));
@@ -147,6 +148,7 @@ describe('VideoValidationModule', () => {
         isValidUrl: true,
         isAlreadyDownloaded: false,
         isMembersOnly: false,
+        membersAccess: null,
         metadata: {
           youtubeId: 'dQw4w9WgXcQ',
           url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
@@ -171,9 +173,17 @@ describe('VideoValidationModule', () => {
       };
       const isDuplicate = false;
 
-      const result = videoValidationModule.toValidationResponse(videoId, metadata, isDuplicate);
+      const result = videoValidationModule.toValidationResponse(videoId, metadata, isDuplicate, 'no_cookies');
 
       expect(result.isMembersOnly).toBe(true);
+    });
+
+    it('lets a members-only video through when the cookies can open it', () => {
+      const metadata = { title: 'Members Only Video', availability: 'subscriber_only' };
+
+      const result = videoValidationModule.toValidationResponse('test123', metadata, false, 'confirmed');
+
+      expect(result.isMembersOnly).toBe(false);
     });
 
     it('should mark duplicates correctly', () => {
@@ -421,6 +431,42 @@ describe('VideoValidationModule', () => {
         { availability: 'subscriber_only' },
         { where: { youtube_id: 'OOUclRI0Ae4' } },
       );
+    });
+
+    it('reports a denial when the configured cookies are not a member', async () => {
+      const membersAccess = require('../membersAccess');
+      membersAccess.recordFetchOutcome.mockResolvedValueOnce('denied');
+      ytDlpRunner.fetchMetadata.mockRejectedValue(
+        new Error('ERROR: [youtube] OOUclRI0Ae4: Join this channel to get access to members-only content')
+      );
+
+      const result = await videoValidationModule.validateVideo('https://www.youtube.com/watch?v=OOUclRI0Ae4');
+
+      expect(result).toMatchObject({ isValidUrl: true, isMembersOnly: true, membersAccess: 'denied' });
+    });
+
+    it('tells membersAccess whether the refused fetch got the cookies', async () => {
+      const membersAccess = require('../membersAccess');
+      ytDlpRunner.fetchMetadata.mockRejectedValue(Object.assign(
+        new Error('ERROR: [youtube] OOUclRI0Ae4: Join this channel to get access to members-only content'),
+        { usedCookies: true }
+      ));
+
+      await videoValidationModule.validateVideo('https://www.youtube.com/watch?v=OOUclRI0Ae4');
+
+      expect(membersAccess.recordFetchOutcome).toHaveBeenCalledWith('OOUclRI0Ae4', expect.objectContaining({ usedCookies: true }));
+    });
+
+    it('reports rejected cookies instead of a membership verdict', async () => {
+      const membersAccess = require('../membersAccess');
+      membersAccess.recordFetchOutcome.mockResolvedValueOnce('unchecked');
+      ytDlpRunner.fetchMetadata.mockRejectedValue(
+        new Error('WARNING: cookies are no longer valid\nERROR: [youtube] OOUclRI0Ae4: Join this channel to get access to members-only content')
+      );
+
+      const result = await videoValidationModule.validateVideo('https://www.youtube.com/watch?v=OOUclRI0Ae4');
+
+      expect(result).toMatchObject({ isValidUrl: false, errorCode: 'COOKIES_REJECTED' });
     });
   });
 

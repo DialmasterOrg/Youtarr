@@ -407,7 +407,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                       <Typography variant="body2">
                         • Add your download library as Content Type: <strong>Movies</strong>
                         <br />
-                        • Under Metadata Readers/Savers, select <strong>Nfo</strong> to read the .nfo files
+                        • Do not enable Nfo saver; .nfo files are read automatically.
                         <br />
                         • Uncheck all metadata downloaders since we provide metadata via .nfo files
                       </Typography>

@@ -176,6 +176,7 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
   jest.doMock('../modules/notificationModule', () => ({
     sendTestNotification: jest.fn().mockResolvedValue({ success: true })
   }));
+  jest.doMock('../modules/membersAccess');
   jest.doMock('../models/channelvideo', () => ({
     update: jest.fn().mockResolvedValue([1])
   }));

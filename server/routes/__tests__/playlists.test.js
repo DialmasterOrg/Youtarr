@@ -1373,6 +1373,33 @@ describe('GET /api/playlists/:playlistId/videos watched_by', () => {
     expect(payload.videos[1].watched_by).toEqual([]);
   });
 
+  test('sets members_access from the recorded members-only state', async () => {
+    const deps = buildDeps();
+    deps.membersAccess = { getStates: jest.fn().mockResolvedValue(new Map([['members1', 'denied']])) };
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue(playlistRows(['members1', 'public2']));
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const res = createResponse();
+
+    await handler({ params: { playlistId: 'PLtest123' }, query: {}, log: loggerMock }, res);
+
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.videos.map((v) => v.members_access)).toEqual(['denied', null]);
+  });
+
+  test('keeps listing videos when members-only state cannot be read', async () => {
+    const deps = buildDeps();
+    deps.membersAccess = { getStates: jest.fn().mockRejectedValue(new Error('db down')) };
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue(playlistRows(['members1']));
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const res = createResponse();
+
+    await handler({ params: { playlistId: 'PLtest123' }, query: {}, log: { ...loggerMock, warn: jest.fn() } }, res);
+
+    expect(res.json.mock.calls[0][0].videos[0].members_access).toBeNull();
+  });
+
   test('keeps watched_by for a previously-downloaded video whose file is gone', async () => {
     const deps = buildDeps();
     deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue(playlistRows(['gone1']));

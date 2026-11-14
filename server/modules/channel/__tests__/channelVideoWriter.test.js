@@ -78,6 +78,61 @@ describe('channelVideoWriter', () => {
       });
     });
 
+    test('passes only ChannelVideo columns as findOrCreate defaults', async () => {
+      const parsedEntry = {
+        ...mockVideoData,
+        media_type: 'video',
+        live_status: 'was_live',
+        content_rating: { mpaaRating: 'mpaaR' },
+        age_limit: 18,
+        normalized_rating: 'R',
+        rating_source: 'Channel Default',
+      };
+      echoCreates();
+
+      await channelVideoWriter.insertVideosIntoDb([parsedEntry], 'UC123', 'short');
+
+      expect(ChannelVideo.findOrCreate.mock.calls[0][0].defaults).toEqual({
+        youtube_id: 'video123',
+        channel_id: 'UC123',
+        title: 'Test Video',
+        thumbnail: 'https://i.ytimg.com/vi/video123/mqdefault.jpg',
+        duration: 600,
+        availability: 'public',
+        live_status: 'was_live',
+        media_type: 'short',
+        publishedAt: '2024-01-01T00:00:00Z',
+        published_at_source: 'approximate',
+      });
+    });
+
+    test('reports how many rows it created', async () => {
+      const existing = {
+        id: 1,
+        publishedAt: '2024-01-01T00:00:00.000Z',
+        published_at_source: 'approximate',
+        update: jest.fn(),
+      };
+      echoCreates({ video2: existing });
+
+      const result = await channelVideoWriter.insertVideosIntoDb(
+        [
+          { ...mockVideoData, youtube_id: 'video1' },
+          { ...mockVideoData, youtube_id: 'video2' },
+          { ...mockVideoData, youtube_id: 'video3' },
+        ],
+        'UC123'
+      );
+
+      expect(result).toEqual({ created: 2 });
+    });
+
+    test('reports no created rows for an empty list', async () => {
+      const result = await channelVideoWriter.insertVideosIntoDb([], 'UC123');
+
+      expect(result).toEqual({ created: 0 });
+    });
+
     test('phase 1 upserts non-date fields without the date; phase 2 writes the date', async () => {
       const mockVideo = {
         id: 7,

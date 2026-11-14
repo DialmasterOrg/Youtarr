@@ -85,6 +85,7 @@ describe('VideoMetadataModule', () => {
     jest.doMock('../ytDlpRunner', () => mockYtDlpRunner);
     jest.doMock('../youtubeApi', () => mockYoutubeApi);
     jest.doMock('../channelVideoReanchor', () => mockChannelVideoReanchor);
+    jest.doMock('../membersAccess');
 
     videoMetadataModule = require('../videoMetadataModule');
   });
@@ -514,6 +515,54 @@ describe('VideoMetadataModule', () => {
         expect.objectContaining({ youtubeId: 'cachefail1' }),
         'Failed to cache .info.json'
       );
+    });
+  });
+
+  describe('members-only access', () => {
+    let membersAccess;
+
+    beforeEach(() => {
+      membersAccess = require('../membersAccess');
+      mockFs.mkdir.mockResolvedValue(undefined);
+      mockFs.writeFile.mockResolvedValue(undefined);
+      mockFs.readdir.mockResolvedValue([]);
+      mockVideo.findOne.mockResolvedValue(null);
+    });
+
+    test('a fresh fetch reports the access it just checked', async () => {
+      mockFs.access.mockRejectedValue(new Error('ENOENT'));
+      mockYtDlpRunner.fetchMetadata.mockResolvedValue({ availability: 'subscriber_only' });
+      membersAccess.recordFetchOutcome.mockResolvedValue('confirmed');
+
+      const result = await videoMetadataModule.getVideoMetadata('abcdefghijk');
+
+      expect(result.membersAccess).toBe('confirmed');
+    });
+
+    test('a cached file reports the recorded access', async () => {
+      mockFs.access.mockResolvedValue(undefined);
+      mockFs.readFile.mockResolvedValue(JSON.stringify({ availability: 'subscriber_only' }));
+      membersAccess.getStates.mockResolvedValue(new Map([['abcdefghijk', 'denied']]));
+
+      const result = await videoMetadataModule.getVideoMetadata('abcdefghijk');
+
+      expect(result.membersAccess).toBe('denied');
+    });
+
+    test('checkMembersAccess records what YouTube answered', async () => {
+      mockYtDlpRunner.fetchMetadata.mockRejectedValue(new Error('ERROR: Join this channel to get access to members-only content'));
+      membersAccess.recordFetchOutcome.mockResolvedValue('denied');
+
+      await expect(videoMetadataModule.checkMembersAccess('abcdefghijk'))
+        .resolves.toEqual({ membersAccess: 'denied', checked: true });
+    });
+
+    test('checkMembersAccess records nothing when YouTube could not be asked', async () => {
+      mockYtDlpRunner.fetchMetadata.mockRejectedValue(new Error('Failed to fetch video metadata: Request timed out'));
+
+      const result = await videoMetadataModule.checkMembersAccess('abcdefghijk');
+
+      expect(result.checked).toBe(false);
     });
   });
 

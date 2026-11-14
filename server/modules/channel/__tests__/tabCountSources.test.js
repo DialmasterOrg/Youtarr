@@ -346,4 +346,42 @@ describe('tabCountSources', () => {
       expect(result.stopReason).toBeNull();
     });
   });
+
+  describe('isThrottleFailure', () => {
+    test('is true for a bot check', () => {
+      expect(tabCountSources.isThrottleFailure(BOT_CHECK)).toBe(true);
+    });
+
+    test('is true for a rate limit', () => {
+      expect(tabCountSources.isThrottleFailure(RATE_LIMITED)).toBe(true);
+    });
+
+    // channelYtdlpExecutor rejects with a generic message and keeps yt-dlp's
+    // own words in `stderr`.
+    test('is true for a rate limit reported only in stderr', () => {
+      const err = Object.assign(new Error('Network error: Unable to connect to YouTube'), {
+        code: 'NETWORK_ERROR',
+        stderr: 'ERROR: [youtube:tab] UCx: Unable to download webpage: HTTP Error 429: Too Many Requests',
+      });
+
+      expect(tabCountSources.isThrottleFailure(err)).toBe(true);
+    });
+
+    test('is false for another failure that carries stderr', () => {
+      const err = Object.assign(new Error('yt-dlp exited with code 1'), {
+        code: 'YT_DLP_ERROR',
+        stderr: 'ERROR: unable to open for writing',
+      });
+
+      expect(tabCountSources.isThrottleFailure(err)).toBe(false);
+    });
+
+    test('is false for an unavailable channel', () => {
+      expect(tabCountSources.isThrottleFailure(new Error('This account has been terminated'))).toBe(false);
+    });
+
+    test('is false for an unexplained error', () => {
+      expect(tabCountSources.isThrottleFailure(new Error('boom'))).toBe(false);
+    });
+  });
 });

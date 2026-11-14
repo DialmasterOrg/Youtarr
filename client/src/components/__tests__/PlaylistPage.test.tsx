@@ -134,10 +134,13 @@ jest.mock('../../hooks/useMediaQuery', () => ({
   useMediaQuery: () => true, // mobile: cards + a directly-clickable selection action
 }));
 
+// Replaces the listed videos for one test.
+const mockVideosOverride: { current: PlaylistVideo[] | null } = { current: null };
+
 jest.mock('../../hooks/usePlaylistDetail', () => ({
   usePlaylistDetail: () => ({
     playlist: mockPlaylist,
-    videos: [mockVideo, mockMissingVideo, mockDownloadedVideo, mockExcludedVideo],
+    videos: mockVideosOverride.current ?? [mockVideo, mockMissingVideo, mockDownloadedVideo, mockExcludedVideo],
     notDownloadedCount: 1,
     loading: false,
     loadingMore: false,
@@ -207,18 +210,32 @@ jest.mock('../shared/VideoModal', () => ({
   default: ({
     video,
     onVideoDeleted,
+    onAvailabilityDetected,
   }: {
     video: { youtubeId: string };
     onVideoDeleted?: (ytId: string) => void;
+    onAvailabilityDetected?: (ytId: string, availability: string | null, membersAccess?: string | null) => void;
   }) => {
     const React = require('react');
     return React.createElement(
-      'button',
-      {
-        'data-testid': 'mock-modal-delete-video',
-        onClick: () => onVideoDeleted?.(video.youtubeId),
-      },
-      'delete video'
+      React.Fragment,
+      null,
+      React.createElement(
+        'button',
+        {
+          'data-testid': 'mock-modal-delete-video',
+          onClick: () => onVideoDeleted?.(video.youtubeId),
+        },
+        'delete video'
+      ),
+      React.createElement(
+        'button',
+        {
+          'data-testid': 'mock-modal-access-confirmed',
+          onClick: () => onAvailabilityDetected?.(video.youtubeId, 'subscriber_only', 'confirmed'),
+        },
+        'access confirmed'
+      )
     );
   },
 }));
@@ -316,6 +333,23 @@ describe('PlaylistPage selected-download selection lifecycle', () => {
     expect(screen.getByRole('radio', { name: 'Only download future additions' })).toBeChecked();
     expect(mockToggleAutoDownload).not.toHaveBeenCalled();
     expect(mockTriggerDownload).not.toHaveBeenCalled();
+  });
+
+  test('updates the row when the modal finds the cookies can open a members-only video', async () => {
+    const user = userEvent.setup();
+    mockVideosOverride.current = [{ ...mockVideo, members_access: 'denied' }];
+
+    try {
+      renderWithProviders(<PlaylistPage token="t" />);
+      expect(screen.queryByRole('checkbox', { name: 'Select Vid A' })).not.toBeInTheDocument();
+
+      await user.click(screen.getByText('Vid A'));
+      await user.click(await screen.findByTestId('mock-modal-access-confirmed'));
+
+      expect(await screen.findByRole('checkbox', { name: 'Select Vid A' })).toBeInTheDocument();
+    } finally {
+      mockVideosOverride.current = null;
+    }
   });
 
   test('marks the row deleted in place and refreshes meta when the modal reports a deletion', async () => {
@@ -522,7 +556,10 @@ describe('PlaylistPage video list notices', () => {
     renderWithProviders(<PlaylistPage token="t" />);
 
     expect(
-      screen.getByText(/private, members-only, and deleted videos/i)
+      screen.getByText(/private and deleted videos/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/members-only videos download only with cookies/i)
     ).toBeInTheDocument();
     expect(
       screen.getByText(/fewer videos here than YouTube reports/i)
