@@ -247,6 +247,12 @@ describe('DownloadProgressMonitor', () => {
       expect(result.title).toBe('Title');
     });
 
+    it('should keep a title that ends in an unclosed bracket', () => {
+      const line = '[download] Destination: /path/to/Channel - Song [ O [v0_Z2bXFwpQ].f137.mp4';
+      const result = monitor.extractVideoInfo(line);
+      expect(result.title).toBe('Song [ O');
+    });
+
     it('should return lastVideoInfo for non-destination lines', () => {
       monitor.lastVideoInfo = { channel: 'OldChannel', title: 'OldTitle', displayTitle: 'OldTitle' };
       const result = monitor.extractVideoInfo('Some other line');
