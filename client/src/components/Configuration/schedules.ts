@@ -82,7 +82,7 @@ export const SCHEDULE_FIELDS = [
     key: 'channelFeedCheckFrequency',
     group: 'maintenance',
     label: 'Check channels for new videos',
-    description: 'Read each subscribed channel\'s YouTube feed and update its video list when there are new uploads, so channel pages open without waiting.',
+    description: 'Read each subscribed channel\'s YouTube feed and update its video list when there are new uploads, so channel pages open without waiting. YouTube\'s feeds are often unavailable for a while; a run is then skipped and nothing is lost, because channel pages still check for new videos when you open them.',
     settingsPath: 'maintenance',
     settingsLabel: 'Maintenance',
     enabledKey: null,

@@ -36,11 +36,6 @@ const NO_CHANNELS_RECORD = Object.freeze({
   outcome: 'skipped',
   message: 'No subscribed channels to check.',
 });
-const FEEDS_UNAVAILABLE_RECORD = Object.freeze({
-  status: 'skipped',
-  outcome: 'skipped',
-  message: 'YouTube feeds unavailable; nothing was changed.',
-});
 
 function shuffled(items) {
   const result = [...items];
@@ -57,6 +52,21 @@ function counted(count, noun) {
 
 function feedCheckedTime(channel) {
   return channel.feed_checked_at ? new Date(channel.feed_checked_at).getTime() : 0;
+}
+
+/**
+ * How many channel feeds failed, by HTTP status or, without one, by reason.
+ * @param {Array<{feed: Object}>} results
+ * @returns {Object<string, number>}
+ */
+function tallyFeedFailures(results) {
+  const tally = {};
+  for (const { feed } of results) {
+    if (feed.ok) continue;
+    const cause = feed.status ? String(feed.status) : feed.reason;
+    tally[cause] = (tally[cause] || 0) + 1;
+  }
+  return tally;
 }
 
 /**
@@ -88,7 +98,11 @@ class ChannelFeedCheck {
   async run() {
     this.running = true;
     try {
-      return await this._run();
+      const record = await this._run();
+      // Every outcome at the same level: YouTube's feeds are down often
+      // enough that a skipped run is an ordinary result, not a warning.
+      logger.info({ outcome: record.outcome, result: record.message, ...record.details }, 'Channel feed check finished');
+      return record;
     } finally {
       this.running = false;
     }
@@ -104,9 +118,15 @@ class ChannelFeedCheck {
     const { results, breakerTripped } = await this._readFeeds(shuffled(channels));
     const readable = results.filter(({ feed }) => feed.ok);
     const feedsUnavailable = results.length - readable.length;
+    const feedFailures = tallyFeedFailures(results);
     if (breakerTripped || readable.length === 0) {
-      logger.warn({ feedsAsked: results.length, feedsUnavailable }, 'YouTube channel feeds unavailable, skipping the feed check');
-      return { ...FEEDS_UNAVAILABLE_RECORD, details: { channelsChecked: 0, feedsUnavailable } };
+      return {
+        status: 'skipped',
+        outcome: 'skipped',
+        message: `YouTube's feeds are not answering (${feedsUnavailable.toLocaleString()} of ${results.length.toLocaleString()} failed). `
+          + 'Nothing was changed; channel pages still check for new videos when opened.',
+        details: { channelsChecked: 0, feedsAsked: results.length, feedsUnavailable, feedFailures },
+      };
     }
 
     const membersFeedsUnavailable = readable.filter(({ members }) => !members.known).length;
@@ -130,7 +150,9 @@ class ChannelFeedCheck {
     }
 
     const outcome = await this._refresh(plans);
-    return this._describe({ channelsChecked: readable.length, feedsUnavailable, membersFeedsUnavailable, ...outcome });
+    return this._describe({
+      channelsChecked: readable.length, feedsUnavailable, feedFailures, membersFeedsUnavailable, ...outcome,
+    });
   }
 
   /**
@@ -333,13 +355,14 @@ class ChannelFeedCheck {
   }
 
   _describe({
-    channelsChecked, feedsUnavailable, membersFeedsUnavailable,
+    channelsChecked, feedsUnavailable, feedFailures, membersFeedsUnavailable,
     channelsWithNewVideos, tabsRefreshed, tabsFailed, tabsDeferred, throttled,
   }) {
     const details = {
       channelsChecked, feedsUnavailable, membersFeedsUnavailable,
       channelsWithNewVideos, tabsRefreshed, tabsFailed, tabsDeferred,
     };
+    if (feedsUnavailable > 0) details.feedFailures = feedFailures;
     const checked = `Checked ${counted(channelsChecked, 'channel')}.`;
 
     if (throttled) {

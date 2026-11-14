@@ -32,6 +32,7 @@ describe('channelFeedCheck', () => {
   let channelVideoFetcher;
   let Channel;
   let ChannelVideo;
+  let logger;
   let feeds;
   let membersFeeds;
   let knownIds;
@@ -75,6 +76,7 @@ describe('channelFeedCheck', () => {
     jest.clearAllMocks();
     jest.useFakeTimers();
 
+    logger = require('../../../logger');
     Channel = require('../../../models/channel');
     Channel.update.mockResolvedValue([1]);
     ChannelVideo = require('../../../models/channelvideo');
@@ -163,6 +165,15 @@ describe('channelFeedCheck', () => {
         outcome: 'completed',
         message: 'Checked 1 channel. No new videos.',
       }));
+    });
+
+    test('logs the result of the run', async () => {
+      await runCheck();
+
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: 'completed', result: 'Checked 1 channel. No new videos.', channelsChecked: 1 }),
+        'Channel feed check finished'
+      );
     });
   });
 
@@ -352,10 +363,74 @@ describe('channelFeedCheck', () => {
       expect(record).toEqual(expect.objectContaining({
         status: 'skipped',
         outcome: 'skipped',
-        message: 'YouTube feeds unavailable; nothing was changed.',
+        message: expect.stringMatching(/^YouTube's feeds are not answering \(\d+ of \d+ failed\)\./),
       }));
       expect(Channel.update).not.toHaveBeenCalled();
       expect(channelVideoFetcher.refreshTabTracked).not.toHaveBeenCalled();
+    });
+
+    test('says a skipped run lost nothing', async () => {
+      subscribe([makeChannel(1)], { [channelIdFor(1)]: deadFeed });
+
+      const record = await runCheck();
+
+      expect(record.message).toBe(
+        'YouTube\'s feeds are not answering (1 of 1 failed). '
+        + 'Nothing was changed; channel pages still check for new videos when opened.'
+      );
+    });
+
+    test('records why the feeds failed when the run is skipped', async () => {
+      subscribe([makeChannel(1), makeChannel(2)], {
+        [channelIdFor(1)]: deadFeed,
+        [channelIdFor(2)]: { ok: false, reason: 'timeout' },
+      });
+
+      const record = await runCheck();
+
+      expect(record.details).toEqual(expect.objectContaining({
+        feedsAsked: 2,
+        feedsUnavailable: 2,
+        feedFailures: { 404: 1, timeout: 1 },
+      }));
+    });
+
+    test('records why a feed failed when the run went ahead', async () => {
+      subscribe([makeChannel(1), makeChannel(2)], {
+        [channelIdFor(1)]: { ok: false, reason: 'http-error', status: 500 },
+      });
+
+      const record = await runCheck();
+
+      expect(record.details.feedFailures).toEqual({ 500: 1 });
+    });
+
+    test('records no failure tally when every feed answered', async () => {
+      subscribe([makeChannel(1)]);
+
+      const record = await runCheck();
+
+      expect(record.details).not.toHaveProperty('feedFailures');
+    });
+
+    // Feed outages are routine, so one is reported like any other result.
+    test('logs a skipped run as information, with why the feeds failed', async () => {
+      subscribe([makeChannel(1)], { [channelIdFor(1)]: deadFeed });
+
+      await runCheck();
+
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: 'skipped', feedsUnavailable: 1, feedFailures: { 404: 1 } }),
+        'Channel feed check finished'
+      );
+    });
+
+    test('logs no warning for a skipped run', async () => {
+      subscribe([makeChannel(1)], { [channelIdFor(1)]: deadFeed });
+
+      await runCheck();
+
+      expect(logger.warn).not.toHaveBeenCalled();
     });
 
     test('stops asking after eight failures in a row', async () => {
