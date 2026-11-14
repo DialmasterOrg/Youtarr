@@ -31,9 +31,11 @@ import DownloadAllVideosDialog from './DownloadAllVideosDialog';
 import { useChannelVideos } from './hooks/useChannelVideos';
 import { useRefreshChannelVideos } from './hooks/useRefreshChannelVideos';
 import { useChannelFetchStatus } from './hooks/useChannelFetchStatus';
+import { useNewVideosNotice } from './hooks/useNewVideosNotice';
 import { useChannelTabStats } from './hooks/useChannelTabStats';
 import TabDownloadProgress from './components/TabDownloadProgress';
 import LoadMoreProgress from './components/LoadMoreProgress';
+import NewVideosNotice from './components/NewVideosNotice';
 import TabDownloadSummary from './components/TabDownloadSummary';
 import ChannelVideosInfo from './components/ChannelVideosInfo';
 import { ChannelTabType } from '../../types/Channel';
@@ -43,7 +45,7 @@ import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
 import { useDownloadListingsRefresh } from '../../hooks/useDownloadListingsRefresh';
 import VideoModal from '../shared/VideoModal';
 import { VideoModalData } from '../shared/VideoModal/types';
-import { ChannelVideo } from '../../types/ChannelVideo';
+import { ChannelVideo, MembersAccessState } from '../../types/ChannelVideo';
 import {
   INFINITE_SCROLL_FETCH_SIZE,
   VideoListContainer,
@@ -92,6 +94,7 @@ function channelVideoToModalData(
     mediaType: video.media_type || 'video',
     status,
     inArchive: video.inArchive,
+    membersAccess: video.members_access ?? null,
     isDownloaded: video.added && !video.removed,
     filePath: video.filePath || null,
     fileSize: video.fileSize || null,
@@ -161,7 +164,7 @@ function ChannelVideos({
   const [modalVideo, setModalVideo] = useState<ChannelVideo | null>(null);
   const [localIgnoreStatus, setLocalIgnoreStatus] = useState<Record<string, boolean>>({});
   const [localProtectedStatus, setLocalProtectedStatus] = useState<Record<string, boolean>>({});
-  const [localAvailabilityStatus, setLocalAvailabilityStatus] = useState<Record<string, string>>({});
+  const [localAvailabilityStatus, setLocalAvailabilityStatus] = useState<Record<string, { availability: string | null; members_access?: MembersAccessState | null }>>({});
   const [localPublishedAtStatus, setLocalPublishedAtStatus] = useState<Record<string, string>>({});
 
   const {
@@ -325,6 +328,8 @@ function ChannelVideos({
     error: fetchError,
     availableTabs: availableTabsFromVideos,
     loading: videosLoading,
+    refreshSeq,
+    loadedView,
     refetch: refetchVideos,
   } = useChannelVideos({
     channelId,
@@ -358,13 +363,16 @@ function ChannelVideos({
 
   // A change in the listing size (an automatic or background fetch, Load More,
   // tabs detected for an imported channel) changes the loaded and ignored
-  // counts, and can make a first count possible.
-  const previousTotalCount = useRef(totalCount);
+  // counts, and can make a first count possible. The tab is part of the
+  // comparison because a newly listed tab can hold as many videos as the
+  // tab it was opened from.
+  const listingKey = `${loadedView}:${totalCount}`;
+  const previousListingKey = useRef(listingKey);
   useEffect(() => {
-    if (previousTotalCount.current === totalCount) return;
-    previousTotalCount.current = totalCount;
+    if (previousListingKey.current === listingKey) return;
+    previousListingKey.current = listingKey;
     void refetchTabStats();
-  }, [totalCount, refetchTabStats]);
+  }, [listingKey, refetchTabStats]);
 
   useEffect(() => {
     if (availableTabsFromVideos && availableTabsFromVideos.length > 0) {
@@ -429,18 +437,31 @@ function ChannelVideos({
 
   const {
     isFetching: backgroundFetching,
+    fetchType,
     progress: fetchProgress,
     onFetchComplete,
     startPolling,
+    trackRefresh,
   } = useChannelFetchStatus(channelId, selectedTab, token);
 
+  // Any fetch of the tab blocks Load More and Download All; only a Load More
+  // fetch shows as loading, since a background refresh takes a second or two.
   const fetchingAllVideos = localFetchingAllVideos || backgroundFetching;
+  const showLoadMoreProgress = localFetchingAllVideos || (backgroundFetching && fetchType === 'fetchAll');
 
-  useEffect(() => {
-    onFetchComplete(() => {
-      refetchVideos();
-    });
-  }, [onFetchComplete, refetchVideos]);
+  const newVideosNotice = useNewVideosNotice({
+    channelId,
+    selectedTab,
+    refreshSeq,
+    resetKey,
+    videos,
+    page,
+    setPage,
+    refetchVideos,
+    trackRefresh,
+    onFetchComplete,
+    onVideosLoaded,
+  });
 
   const navigate = useNavigate();
 
@@ -463,7 +484,7 @@ function ChannelVideos({
           ? { protected: localProtectedStatus[video.youtube_id] }
           : {}),
         ...(hasAvailabilityOverride
-          ? { availability: localAvailabilityStatus[video.youtube_id] }
+          ? localAvailabilityStatus[video.youtube_id]
           : {}),
         ...(hasPublishedAtOverride
           ? {
@@ -1154,11 +1175,18 @@ function ChannelVideos({
             className={intentStyles.base}
             data-testid="channel-refresh-button"
           >
-            {fetchingAllVideos ? 'Loading...' : 'Load More'}
+            {showLoadMoreProgress ? 'Loading...' : 'Load More'}
           </Button>
         </div>
       </div>
-      {fetchingAllVideos && <LoadMoreProgress progress={fetchProgress} total={selectedTabStats?.total} />}
+      {showLoadMoreProgress && <LoadMoreProgress progress={fetchProgress} total={selectedTabStats?.total} />}
+      <NewVideosNotice
+        checking={newVideosNotice.checking}
+        newCount={newVideosNotice.newCount}
+        onShow={newVideosNotice.show}
+        onDismiss={newVideosNotice.dismiss}
+        raised={Boolean(isMobile && activeSelection?.hasSelection)}
+      />
     </div>
   );
 
@@ -1299,6 +1327,8 @@ function ChannelVideos({
 
   return (
     <>
+      {/* Scroll target for the top of the list; the margin keeps it clear of the fixed app header. */}
+      <div ref={newVideosNotice.listTopRef} style={{ scrollMarginTop: 'var(--app-shell-overlay-top-offset, 0px)' }} />
       <Card
         elevation={3}
         style={{ marginBottom: 16, borderRadius: 'var(--radius-ui)', overflow: 'hidden' }}
@@ -1390,8 +1420,8 @@ function ChannelVideos({
           }}
           onDownloadQueued={() => setModalVideo(null)}
           onRatingChanged={() => refetchVideos()}
-          onAvailabilityDetected={(youtubeId, availability) => {
-            setLocalAvailabilityStatus((prev) => ({ ...prev, [youtubeId]: availability }));
+          onAvailabilityDetected={(youtubeId, availability, membersAccess) => {
+            setLocalAvailabilityStatus((prev) => ({ ...prev, [youtubeId]: { availability, members_access: membersAccess } }));
           }}
           onPublishedDateDetected={(youtubeId, isoDate) => {
             setLocalPublishedAtStatus((prev) => ({ ...prev, [youtubeId]: isoDate }));

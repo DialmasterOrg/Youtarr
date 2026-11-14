@@ -8,7 +8,7 @@ Youtarr uses Docker Compose with two containers:
 
 ### Compose Files
 
-Youtarr ships four Compose files so each supported runtime can layer the right overrides:
+Youtarr ships five Compose files so each supported runtime can layer the right overrides:
 
 | File | Purpose |
 |------|---------|
@@ -16,6 +16,7 @@ Youtarr ships four Compose files so each supported runtime can layer the right o
 | `docker-compose.dev.yml` | Development mode: mounts `./server/` and migrations into the container so backend changes load on a container restart without a rebuild, and uses a separate `youtarr-db-dev` database with its own named volume. Used by `./scripts/start-dev.sh`. See [DEVELOPMENT.md](DEVELOPMENT.md). |
 | `docker-compose.arm.yml` | Named-volume database override. The filename is historical: it was originally added for ARM systems, but it is also useful on Docker Desktop and NAS/virtualized filesystems. Layered on top of `docker-compose.yml` via `-f`. |
 | `docker-compose.external-db.yml` | Runs Youtarr against an external MariaDB/MySQL instance instead of the bundled database. Used by `./start-with-external-db.sh`. |
+| `docker-compose.gluetun.yml` | Adds Gluetun integration to allow Youtarr's traffic to route through a VPN provider of your choosing. Layered on top of `docker-compose.yml` or `docker-compose.external-db.yml` via `COMPOSE_FILE=`. See [GLUETUN_INTEGRATION.md](GLUETUN_INTEGRATION.md) for more info. |
 
 ## Container Details
 
@@ -115,6 +116,12 @@ COMPOSE_FILE=docker-compose.yml:docker-compose.arm.yml
 ```
 
 If you also use `docker-compose.override.yml`, list it before `docker-compose.arm.yml` instead, as shown in [Keeping docker-compose.override.yml](#keeping-docker-composeoverrideyml). Otherwise Compose stops loading it once `COMPOSE_FILE` is set.
+
+The optional [Gluetun override](GLUETUN_INTEGRATION.md) goes on the same line, before `docker-compose.arm.yml`:
+```env
+COMPOSE_FILE=docker-compose.yml:docker-compose.override.yml:docker-compose.gluetun.yml:docker-compose.arm.yml
+```
+Never add a second `COMPOSE_FILE` line; Compose only reads the last one.
 
 Prefer this over editing `docker-compose.yml`: the compose file is tracked in git, so local edits conflict with `git pull` on updates. If you do edit it, change only the `youtarr-db` service's volume line to `- youtarr-db-data:/var/lib/mysql`. The file already declares `youtarr-db-data` in its top-level `volumes:` block; adding a second `volumes:` key makes Compose fail with `mapping key "volumes" already defined`.
 
@@ -777,6 +784,8 @@ The application container includes health checks:
 
 ### Plex Server Communication
 
+**Note:** If Youtarr runs through Gluetun, it can only reach Plex when Plex's address is in `FIREWALL_OUTBOUND_SUBNETS`. For `host.docker.internal` that means the Docker bridge subnet (`172.17.0.0/16` by default). Enter Plex by IP address rather than a LAN hostname, because Gluetun blocks DNS answers that point at private IPs. See [GLUETUN_INTEGRATION.md](GLUETUN_INTEGRATION.md).
+
 #### Same Machine Setup
 When Youtarr and Plex run on the same machine:
 - Docker Desktop (Windows/macOS): `host.docker.internal` or host LAN IP (e.g., `192.168.x.x`)
@@ -872,6 +881,8 @@ If ports are already in use:
 The start/stop scripts automatically detect your Docker Compose version:
 - `docker compose` (v2) - Recommended
 - `docker-compose` (v1) - Legacy support
+
+**Note:** [docker-compose.gluetun.yml](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose.gluetun.yml) needs Docker Compose v2.24 or newer. The old `docker-compose` v1 command can't read it.
 
 To check your version:
 ```bash

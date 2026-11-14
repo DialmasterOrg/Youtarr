@@ -30,6 +30,7 @@ export const CONFIG_FIELDS = {
   sessionCleanupFrequency: { default: '0 3 * * *', trackChanges: true },
   videoRescanFrequency: { default: '30 3 * * *', trackChanges: true },
   ytdlpUpdateFrequency: { default: '0 4 * * *', trackChanges: true },
+  channelFeedCheckFrequency: { default: '30 * * * *', trackChanges: true },
   channelVideoCountsFrequency: { default: '45 4 * * *', trackChanges: true },
   channelFilesToDownload: { default: 5, trackChanges: true },
 
@@ -197,6 +198,8 @@ export const CONFIG_FIELDS = {
   // System/internal fields (not tracked for changes)
   youtubeOutputDirectory: { default: '', trackChanges: false },
   uuid: { default: '', trackChanges: false },
+  // Server-owned: when the one-time support prompt was shown
+  supportPromptShownAt: { default: null as string | null, trackChanges: false },
   envAuthApplied: { default: false, trackChanges: false },
 };
 
@@ -220,6 +223,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   sessionCleanupFrequency: CONFIG_FIELDS.sessionCleanupFrequency.default,
   videoRescanFrequency: CONFIG_FIELDS.videoRescanFrequency.default,
   ytdlpUpdateFrequency: CONFIG_FIELDS.ytdlpUpdateFrequency.default,
+  channelFeedCheckFrequency: CONFIG_FIELDS.channelFeedCheckFrequency.default,
   channelVideoCountsFrequency: CONFIG_FIELDS.channelVideoCountsFrequency.default,
   channelFilesToDownload: CONFIG_FIELDS.channelFilesToDownload.default,
   preferredResolution: CONFIG_FIELDS.preferredResolution.default,
@@ -307,6 +311,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   ytdlpCustomArgs: CONFIG_FIELDS.ytdlpCustomArgs.default,
   youtubeOutputDirectory: CONFIG_FIELDS.youtubeOutputDirectory.default,
   uuid: CONFIG_FIELDS.uuid.default,
+  supportPromptShownAt: CONFIG_FIELDS.supportPromptShownAt.default,
   envAuthApplied: CONFIG_FIELDS.envAuthApplied.default,
 };
 

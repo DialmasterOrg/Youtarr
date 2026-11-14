@@ -224,6 +224,63 @@ describe('GET /api/videos/:youtubeId/metadata', () => {
   });
 });
 
+describe('POST /api/videos/:youtubeId/members-access/check', () => {
+  const loggerMock = { info: jest.fn(), error: jest.fn() };
+
+  const createResponse = () => {
+    const res = {};
+    res.status = jest.fn(() => res);
+    res.json = jest.fn(() => res);
+    return res;
+  };
+
+  const getHandler = (videoMetadataModule) => {
+    const router = createVideoDetailRoutes({
+      verifyToken: (req, res, next) => next(),
+      videoMetadataModule,
+    });
+    const app = express();
+    app.use(router);
+    return findRouteHandler(app, 'post', '/api/videos/:youtubeId/members-access/check');
+  };
+
+  test('returns the access state after checking', async () => {
+    const videoMetadataModule = { checkMembersAccess: jest.fn().mockResolvedValue({ membersAccess: 'confirmed', checked: true }) };
+    const res = createResponse();
+
+    await getHandler(videoMetadataModule)({ params: { youtubeId: 'dQw4w9WgXcQ' }, log: loggerMock }, res);
+
+    expect(res.json).toHaveBeenCalledWith({ membersAccess: 'confirmed' });
+  });
+
+  test('returns 503 when YouTube could not be asked', async () => {
+    const videoMetadataModule = { checkMembersAccess: jest.fn().mockResolvedValue({ membersAccess: 'denied', checked: false }) };
+    const res = createResponse();
+
+    await getHandler(videoMetadataModule)({ params: { youtubeId: 'dQw4w9WgXcQ' }, log: loggerMock }, res);
+
+    expect(res.status).toHaveBeenCalledWith(503);
+  });
+
+  test('rejects an invalid YouTube id', async () => {
+    const videoMetadataModule = { checkMembersAccess: jest.fn() };
+    const res = createResponse();
+
+    await getHandler(videoMetadataModule)({ params: { youtubeId: 'bad id!' }, log: loggerMock }, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  test('returns 500 when the check throws', async () => {
+    const videoMetadataModule = { checkMembersAccess: jest.fn().mockRejectedValue(new Error('boom')) };
+    const res = createResponse();
+
+    await getHandler(videoMetadataModule)({ params: { youtubeId: 'dQw4w9WgXcQ' }, log: loggerMock }, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+  });
+});
+
 describe('GET /api/videos/:youtubeId/stream', () => {
   const loggerMock = {
     info: jest.fn(),

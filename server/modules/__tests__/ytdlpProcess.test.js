@@ -74,6 +74,15 @@ describe('yt-dlp process snapshots', () => {
     expect(childProcess.spawn).toHaveBeenCalledWith('yt-dlp', ['--dump-json'], undefined);
   });
 
+  test('reports that the cookies were dropped', () => {
+    fs.unlinkSync(sourcePath);
+    expect(spawnYtDlp(['--cookies', sourcePath, '--dump-json']).cookiesPassed).toBe(false);
+  });
+
+  test('reports that the cookies reached yt-dlp', () => {
+    expect(spawnYtDlp(['--cookies', sourcePath, '--dump-json']).cookiesPassed).toBe(true);
+  });
+
   test('launches without cookies when no private directory can be created', () => {
     fs.mkdtempSync.mockImplementation(() => { throw new Error('disk full'); });
     spawnYtDlp(['--cookies', sourcePath, '--dump-json']);

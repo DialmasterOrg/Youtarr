@@ -13,7 +13,28 @@ const {
 } = require('../filesystem');
 const channelYtdlpExecutor = require('./channelYtdlpExecutor');
 
+// How long the channel list skips a channel whose folder images it has checked.
+const LIST_BACKFILL_RECHECK_MS = 15 * 60 * 1000;
+
 class ChannelThumbnails {
+  constructor() {
+    // channel_id -> when the channel list last checked its folder images
+    this.listBackfillCheckedAt = new Map();
+    this.listBackfillSettingsKey = null;
+  }
+
+  /**
+   * Which channel folder images the current settings ask for.
+   * @returns {{ shouldWritePosters: boolean, shouldWriteBackdrops: boolean }}
+   */
+  getFolderImageSettings() {
+    const config = configModule.getConfig() || {};
+    return {
+      shouldWritePosters: config.writeChannelPosters !== false,
+      shouldWriteBackdrops: config.writeBackdropImages === true,
+    };
+  }
+
   /**
    * Resize channel thumbnail image
    * @param {string} channelId - Channel ID
@@ -232,9 +253,7 @@ class ChannelThumbnails {
    */
   async backfillChannelImages(channels) {
     try {
-      const config = configModule.getConfig() || {};
-      const shouldWritePosters = config.writeChannelPosters !== false;
-      const shouldWriteBackdrops = config.writeBackdropImages === true;
+      const { shouldWritePosters, shouldWriteBackdrops } = this.getFolderImageSettings();
 
       if (!shouldWritePosters && !shouldWriteBackdrops) {
         return;
@@ -243,7 +262,9 @@ class ChannelThumbnails {
       const outputDir = configModule.directoryPath;
       const imageDir = configModule.getImagePath();
 
-      if (!outputDir || !fs.existsSync(outputDir)) {
+      // Async checks only: on a slow mount the synchronous ones held the
+      // event loop, and every other request, for milliseconds per channel.
+      if (!outputDir || !(await fs.pathExists(outputDir))) {
         return;
       }
 
@@ -263,17 +284,17 @@ class ChannelThumbnails {
           logger.warn({ err: pathErr, channelId: channel.channel_id }, 'Skipping channel with unresolvable folder path during image backfill');
           continue;
         }
-        if (!fs.existsSync(channelFolderPath)) continue;
+        if (!(await fs.pathExists(channelFolderPath))) continue;
 
         if (shouldWritePosters) {
-          this.copyChannelImageIfMissing(
+          await this.copyChannelImageIfMissing(
             path.join(imageDir, `channelthumb-${channel.channel_id}.jpg`),
             path.join(channelFolderPath, 'poster.jpg'),
             channelFolderName
           );
         }
         if (shouldWriteBackdrops) {
-          this.copyChannelImageIfMissing(
+          await this.copyChannelImageIfMissing(
             path.join(imageDir, `channelbanner-${channel.channel_id}.jpg`),
             path.join(channelFolderPath, 'backdrop.jpg'),
             channelFolderName
@@ -286,14 +307,47 @@ class ChannelThumbnails {
   }
 
   /**
+   * Backfill for the channel list, which must not wait on the disk: returns at
+   * once and checks only channels not checked in the last
+   * LIST_BACKFILL_RECHECK_MS. A change to the poster or backdrop setting
+   * forgets every check, so newly enabled images appear on the next list load.
+   * @param {Array} channels - Array of channel database records
+   */
+  backfillChannelImagesInBackground(channels) {
+    const { shouldWritePosters, shouldWriteBackdrops } = this.getFolderImageSettings();
+    const settingsKey = `${shouldWritePosters}:${shouldWriteBackdrops}`;
+    if (settingsKey !== this.listBackfillSettingsKey) {
+      this.listBackfillCheckedAt.clear();
+      this.listBackfillSettingsKey = settingsKey;
+    }
+
+    const now = Date.now();
+    const due = channels.filter((channel) => {
+      if (!channel.channel_id) return false;
+      const checkedAt = this.listBackfillCheckedAt.get(channel.channel_id);
+      return checkedAt === undefined || now - checkedAt >= LIST_BACKFILL_RECHECK_MS;
+    });
+    if (due.length === 0) return;
+
+    // Stamped before the check runs, so overlapping list loads do not repeat it.
+    for (const channel of due) {
+      this.listBackfillCheckedAt.set(channel.channel_id, now);
+    }
+    this.backfillChannelImages(due).catch((err) => {
+      logger.error({ err }, 'Error during background channel image backfill');
+    });
+  }
+
+  /**
    * Copy a cached channel image to a target path if the source exists and the
    * target doesn't.
    * @param {string} sourcePath - Cached image path in the image directory
    * @param {string} targetPath - Destination path inside the channel folder
    * @param {string} channelFolderName - For error logging context
+   * @returns {Promise<void>}
    */
-  copyChannelImageIfMissing(sourcePath, targetPath, channelFolderName) {
-    if (!fs.existsSync(sourcePath) || fs.existsSync(targetPath)) {
+  async copyChannelImageIfMissing(sourcePath, targetPath, channelFolderName) {
+    if (!(await fs.pathExists(sourcePath)) || (await fs.pathExists(targetPath))) {
       return;
     }
     try {

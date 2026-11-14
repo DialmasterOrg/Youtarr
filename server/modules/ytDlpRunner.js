@@ -142,7 +142,9 @@ class YtDlpRunner {
           reject(timeoutError);
         } else {
           const errorMessage = stderr || `yt-dlp process exited with code ${code}`;
-          reject(new Error(errorMessage));
+          const error = new Error(errorMessage);
+          error.usedCookies = ytDlpProcess.cookiesPassed === true;
+          reject(error);
         }
       });
 
@@ -192,7 +194,9 @@ class YtDlpRunner {
       if (error.message.includes('timed out')) {
         throw new Error('Failed to fetch video metadata: Request timed out');
       }
-      throw new Error(`Failed to fetch video metadata: ${error.message}`);
+      const wrapped = new Error(`Failed to fetch video metadata: ${error.message}`);
+      wrapped.usedCookies = error.usedCookies === true;
+      throw wrapped;
     }
   }
 }

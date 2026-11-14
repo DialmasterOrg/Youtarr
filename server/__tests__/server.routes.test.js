@@ -409,6 +409,7 @@ const createServerModule = ({
           shouldReapplyChannel: jest.fn(() => false),
         };
         jest.doMock('../modules/ytdlpModule', () => ytdlpModuleMock);
+        jest.doMock('../modules/membersAccess');
         jest.doMock('../models/channelvideo', () => ({
           update: jest.fn().mockResolvedValue([1])
         }));

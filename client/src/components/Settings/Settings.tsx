@@ -47,6 +47,7 @@ import { FILENAME_PRESETS } from '../../utils/filenameTemplate/presets';
 import { validatePrefix } from '../../utils/filenameTemplate/validate';
 import { SETTINGS_PAGES, SettingsIndex } from './SettingsIndex';
 import { MaintenanceSection } from './MaintenanceSection';
+import { AboutSection } from './AboutSection';
 import { SchedulingSection } from '../Configuration/sections/SchedulingSection';
 import { LoggingSection } from '../Configuration/sections/LoggingSection';
 
@@ -532,6 +533,8 @@ export function Settings({ token }: SettingsProps) {
               />
             }
           />
+
+          <Route path="about" element={<AboutSection />} />
 
           <Route path="*" element={<Navigate to="/settings" replace />} />
         </Routes>

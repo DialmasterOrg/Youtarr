@@ -18,6 +18,7 @@ const ScheduledTaskRun = require('./scheduledtaskrun');
 const ApiKeyChannelGrant = require('./apikeychannelgrant');
 const ExternalRequest = require('./externalrequest');
 const ExternalApiUsageBucket = require('./externalapiusagebucket');
+const VideoMembersAccess = require('./videomembersaccess');
 
 Job.hasMany(JobVideo, { foreignKey: 'job_id', as: 'jobVideos' });
 Job.hasMany(JobVideoDownload, { foreignKey: 'job_id', as: 'jobVideoDownloads' });
@@ -71,4 +72,5 @@ module.exports = {
   ApiKeyChannelGrant,
   ExternalRequest,
   ExternalApiUsageBucket,
+  VideoMembersAccess,
 };

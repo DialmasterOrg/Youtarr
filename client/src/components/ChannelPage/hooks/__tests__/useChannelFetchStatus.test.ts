@@ -944,4 +944,193 @@ describe('useChannelFetchStatus', () => {
       expect(onComplete).not.toHaveBeenCalled();
     });
   });
+
+  describe('Background Refresh Tracking', () => {
+    const POLL_INTERVAL_MS = 3000;
+    const idle = { isFetching: false };
+    const finished = {
+      type: 'autoRefresh',
+      newVideos: 2,
+      failed: false,
+      finishedAt: '2026-11-13T12:00:00.000Z',
+    };
+    const respondWith = (body: object) =>
+      mockFetch.mockResolvedValueOnce({ ok: true, json: jest.fn().mockResolvedValueOnce(body) });
+    const renderIdleHook = async () => {
+      respondWith(idle);
+      const onComplete = jest.fn();
+      const view = renderHook(() => useChannelFetchStatus(mockChannelId, mockTabType, mockToken));
+      view.result.current.onFetchComplete(onComplete);
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+      });
+      // Let the mount check settle so it is not mistaken for a later one.
+      await act(async () => {
+        await Promise.resolve();
+      });
+      return { ...view, onComplete };
+    };
+
+    test('trackRefresh reports completion when the refresh already ended', async () => {
+      const { result, onComplete } = await renderIdleHook();
+      respondWith({ isFetching: false, lastResult: finished });
+
+      act(() => {
+        result.current.trackRefresh();
+      });
+
+      await waitFor(() => {
+        expect(onComplete).toHaveBeenCalledTimes(1);
+      });
+      expect(onComplete).toHaveBeenCalledWith({ lastResult: finished });
+    });
+
+    test('trackRefresh checks at once instead of waiting for the poll interval', async () => {
+      const { result } = await renderIdleHook();
+      respondWith({ isFetching: true, type: 'autoRefresh' });
+
+      act(() => {
+        result.current.trackRefresh();
+      });
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+      });
+    });
+
+    describe('on the poll interval', () => {
+      beforeEach(() => {
+        jest.useFakeTimers();
+      });
+
+      afterEach(() => {
+        jest.runOnlyPendingTimers();
+        jest.useRealTimers();
+      });
+
+      test('keeps polling a tracked refresh and reports it when it ends', async () => {
+        respondWith(idle);
+        const onComplete = jest.fn();
+        const { result } = renderHook(() => useChannelFetchStatus(mockChannelId, mockTabType, mockToken));
+        result.current.onFetchComplete(onComplete);
+        await act(async () => {
+          await Promise.resolve();
+        });
+        respondWith({ isFetching: true, type: 'autoRefresh' });
+        respondWith({ isFetching: false, lastResult: finished });
+
+        await act(async () => {
+          result.current.trackRefresh();
+          await Promise.resolve();
+        });
+        expect(onComplete).not.toHaveBeenCalled();
+
+        await act(async () => {
+          jest.advanceTimersByTime(POLL_INTERVAL_MS);
+          await Promise.resolve();
+        });
+
+        expect(onComplete).toHaveBeenCalledWith({ lastResult: finished });
+      });
+
+      test('stops polling once a tracked refresh has ended', async () => {
+        respondWith(idle);
+        const { result } = renderHook(() => useChannelFetchStatus(mockChannelId, mockTabType, mockToken));
+        await act(async () => {
+          await Promise.resolve();
+        });
+        respondWith({ isFetching: false, lastResult: finished });
+        await act(async () => {
+          result.current.trackRefresh();
+          await Promise.resolve();
+        });
+        const callsAfterCompletion = mockFetch.mock.calls.length;
+
+        await act(async () => {
+          jest.advanceTimersByTime(POLL_INTERVAL_MS * 4);
+          await Promise.resolve();
+        });
+
+        expect(mockFetch).toHaveBeenCalledTimes(callsAfterCompletion);
+      });
+
+      test('a Load More completion carries no result', async () => {
+        respondWith({ isFetching: true, type: 'fetchAll' });
+        respondWith(idle);
+        const onComplete = jest.fn();
+        const { result } = renderHook(() => useChannelFetchStatus(mockChannelId, mockTabType, mockToken));
+        result.current.onFetchComplete(onComplete);
+        await act(async () => {
+          await Promise.resolve();
+        });
+
+        await act(async () => {
+          jest.advanceTimersByTime(POLL_INTERVAL_MS);
+          await Promise.resolve();
+        });
+
+        expect(onComplete).toHaveBeenCalledWith({ lastResult: null });
+      });
+
+      test('startPolling does not report completion on an idle first poll', async () => {
+        respondWith(idle);
+        respondWith(idle);
+        const onComplete = jest.fn();
+        const { result } = renderHook(() => useChannelFetchStatus(mockChannelId, mockTabType, mockToken));
+        result.current.onFetchComplete(onComplete);
+        await act(async () => {
+          await Promise.resolve();
+        });
+
+        await act(async () => {
+          result.current.startPolling();
+        });
+        await act(async () => {
+          jest.advanceTimersByTime(POLL_INTERVAL_MS);
+          await Promise.resolve();
+        });
+
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+        expect(onComplete).not.toHaveBeenCalled();
+      });
+    });
+
+    test('trackRefresh ignores a status check that was already in flight', async () => {
+      let answerMountCheck: (value: unknown) => void = () => {};
+      mockFetch.mockReturnValueOnce(new Promise((resolve) => { answerMountCheck = resolve; }));
+      respondWith({ isFetching: false, lastResult: finished });
+      const onComplete = jest.fn();
+      const { result } = renderHook(() => useChannelFetchStatus(mockChannelId, mockTabType, mockToken));
+      result.current.onFetchComplete(onComplete);
+
+      act(() => {
+        result.current.trackRefresh();
+      });
+      await waitFor(() => {
+        expect(onComplete).toHaveBeenCalledTimes(1);
+      });
+      await act(async () => {
+        answerMountCheck({ ok: true, json: jest.fn().mockResolvedValueOnce(idle) });
+      });
+
+      expect(onComplete).toHaveBeenCalledTimes(1);
+      expect(onComplete).toHaveBeenCalledWith({ lastResult: finished });
+    });
+
+    test('exposes the type of the fetch in flight', async () => {
+      respondWith({ isFetching: true, type: 'fetchAll' });
+
+      const { result } = renderHook(() => useChannelFetchStatus(mockChannelId, mockTabType, mockToken));
+
+      await waitFor(() => {
+        expect(result.current.fetchType).toBe('fetchAll');
+      });
+    });
+
+    test('reports no fetch type while idle', async () => {
+      const { result } = await renderIdleHook();
+
+      expect(result.current.fetchType).toBeNull();
+    });
+  });
 });

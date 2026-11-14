@@ -384,6 +384,7 @@ class DownloadExecutor {
             onTempChannelsFileCleaned: () => { this.tempChannelsFile = null; },
             enqueueAutoRetry: this.enqueueAutoRetry,
             cookiesEnabled,
+            cookiesPassed: proc.cookiesPassed === true,
             anonymousRetry,
             stdioClosed,
           });

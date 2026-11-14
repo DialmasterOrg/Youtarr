@@ -59,4 +59,76 @@ describe('fetchRegistry', () => {
     fetchRegistry.delete('UC123:videos');
     expect(fetchRegistry.isFetchInProgress('UC123')).toEqual({ isFetching: false });
   });
+
+  describe('finished results', () => {
+    const KEY = 'UC123:videos';
+    const TWO_MINUTES_MS = 2 * 60 * 1000;
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    test('finish clears the in-flight record and keeps the result', () => {
+      fetchRegistry.set(KEY, { startTime: 'x', type: 'autoRefresh' });
+      fetchRegistry.finish(KEY, { type: 'autoRefresh', newVideos: 2, failed: false });
+
+      expect(fetchRegistry.has(KEY)).toBe(false);
+      expect(fetchRegistry.getLastResult(KEY)).toEqual({
+        type: 'autoRefresh',
+        newVideos: 2,
+        failed: false,
+        finishedAt: expect.any(String),
+      });
+    });
+
+    test('isFetchInProgress reports the last result for the tab', () => {
+      fetchRegistry.set(KEY, { startTime: 'x', type: 'autoRefresh' });
+      fetchRegistry.finish(KEY, { type: 'autoRefresh', newVideos: 2, failed: false });
+
+      expect(fetchRegistry.isFetchInProgress('UC123', 'videos')).toEqual({
+        isFetching: false,
+        lastResult: expect.objectContaining({ newVideos: 2 }),
+      });
+    });
+
+    test('drops the result after two minutes', () => {
+      jest.useFakeTimers();
+      fetchRegistry.finish(KEY, { type: 'autoRefresh', newVideos: 2, failed: false });
+
+      jest.advanceTimersByTime(TWO_MINUTES_MS + 1);
+
+      expect(fetchRegistry.getLastResult(KEY)).toBeNull();
+      expect(fetchRegistry.isFetchInProgress('UC123', 'videos')).toEqual({ isFetching: false });
+    });
+
+    test('keeps the result until two minutes have passed', () => {
+      jest.useFakeTimers();
+      fetchRegistry.finish(KEY, { type: 'autoRefresh', newVideos: 2, failed: false });
+
+      jest.advanceTimersByTime(TWO_MINUTES_MS - 1000);
+
+      expect(fetchRegistry.getLastResult(KEY)).toEqual(expect.objectContaining({ newVideos: 2 }));
+    });
+
+    test('delete leaves no result', () => {
+      fetchRegistry.set(KEY, { startTime: 'x', type: 'fetchAll' });
+      fetchRegistry.delete(KEY);
+
+      expect(fetchRegistry.getLastResult(KEY)).toBeNull();
+    });
+
+    test('starting another fetch of the tab forgets the previous result', () => {
+      fetchRegistry.finish(KEY, { type: 'autoRefresh', newVideos: 50, failed: false });
+      fetchRegistry.set(KEY, { startTime: 'x', type: 'fetchAll' });
+      fetchRegistry.delete(KEY);
+
+      expect(fetchRegistry.isFetchInProgress('UC123', 'videos')).toEqual({ isFetching: false });
+    });
+
+    test('a result for one tab is not reported for another', () => {
+      fetchRegistry.finish(KEY, { type: 'autoRefresh', newVideos: 2, failed: false });
+
+      expect(fetchRegistry.isFetchInProgress('UC123', 'shorts')).toEqual({ isFetching: false });
+    });
+  });
 });

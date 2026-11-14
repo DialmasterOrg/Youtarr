@@ -8,6 +8,9 @@ const tabDownloadStats = require('./tabDownloadStats');
 const m3uGenerator = require('../m3uGenerator');
 
 const SUB_FOLDER_DEFAULT_KEY = '__default__';
+// The largest page size the client offers (ALLOWED_PAGE_SIZES in
+// client/src/components/shared/VideoList/pageSizes.ts).
+const MAX_CHANNEL_PAGE_SIZE = 128;
 
 /**
  * Drop a sub_folder that matches the channel's current one. Its presence alone
@@ -143,7 +146,7 @@ class ChannelCatalog {
     const parsedPageSize = parseInt(pageSize, 10);
     const safePage = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
     const safePageSize = Number.isFinite(parsedPageSize)
-      ? Math.min(Math.max(parsedPageSize, 1), 100)
+      ? Math.min(Math.max(parsedPageSize, 1), MAX_CHANNEL_PAGE_SIZE)
       : 50;
     const offset = (safePage - 1) * safePageSize;
 
@@ -192,7 +195,7 @@ class ChannelCatalog {
         raw: true,
       });
 
-      channelThumbnails.backfillChannelImages(rows);
+      channelThumbnails.backfillChannelImagesInBackground(rows);
 
       // Stats are decoration: a failed query must not empty the channel list.
       const statsByChannel = await tabDownloadStats.getForChannels(rows).catch((err) => {

@@ -20,6 +20,9 @@ function spawnYtDlp(args, options) {
   const prepared = prepareCookies(args);
   try {
     const child = spawn('yt-dlp', prepared.args, options);
+    // Cookie preparation drops --cookies when the file cannot be used, so
+    // callers read this rather than assume the configured cookies reached yt-dlp.
+    child.cookiesPassed = prepared.args.includes('--cookies');
     if (prepared.cleanup) {
       // 'close' also follows a failed spawn. An 'error' alone can mean a failed
       // kill while yt-dlp is still running, so do not remove its file then.

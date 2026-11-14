@@ -41,16 +41,21 @@ describe('SubtitleLanguageSelector Component', () => {
 
       expect(screen.getByRole('option', { name: 'English (Original/Uploaded)' })).toBeInTheDocument();
       expect(screen.getByRole('option', { name: 'Spanish' })).toBeInTheDocument();
-      expect(screen.getByRole('option', { name: 'French' })).toBeInTheDocument();
-      expect(screen.getByRole('option', { name: 'German' })).toBeInTheDocument();
-      expect(screen.getByRole('option', { name: 'Japanese' })).toBeInTheDocument();
-      expect(screen.getByRole('option', { name: 'Portuguese' })).toBeInTheDocument();
-      expect(screen.getByRole('option', { name: 'Italian' })).toBeInTheDocument();
-      expect(screen.getByRole('option', { name: 'Russian' })).toBeInTheDocument();
       expect(screen.getByRole('option', { name: 'Korean' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Hindi' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Japanese' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Russian' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Portuguese' })).toBeInTheDocument();
       expect(screen.getByRole('option', { name: 'Chinese' })).toBeInTheDocument();
       expect(screen.getByRole('option', { name: 'Arabic' })).toBeInTheDocument();
-      expect(screen.getByRole('option', { name: 'Hindi' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'German' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Vietnamese' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'French' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Italian' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Turkish' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Thai' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Indonesian' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Polish' })).toBeInTheDocument();
     });
 
     test('renders with disabled state correctly', () => {
@@ -296,7 +301,7 @@ describe('SubtitleLanguageSelector Component', () => {
     });
 
     test('handles very long comma-separated list', () => {
-      const allLanguages = 'en,en-orig,es,fr,de,ja,pt,it,ru,ko,zh,ar,hi';
+      const allLanguages = 'en,en-orig,es,ko,hi,ja,ru,pt,zh,ar,de,vi,fr,it,tr,th,id,pl';
       renderWithProviders(<SubtitleLanguageSelector {...defaultProps} value={allLanguages} />);
 
       expect(screen.getByText('English')).toBeInTheDocument();
@@ -439,16 +444,21 @@ describe('SubtitleLanguageSelector Component', () => {
         { code: 'en', label: 'English' },
         { code: 'en-orig', label: 'English (Original/Uploaded)' },
         { code: 'es', label: 'Spanish' },
-        { code: 'fr', label: 'French' },
-        { code: 'de', label: 'German' },
-        { code: 'ja', label: 'Japanese' },
-        { code: 'pt', label: 'Portuguese' },
-        { code: 'it', label: 'Italian' },
-        { code: 'ru', label: 'Russian' },
         { code: 'ko', label: 'Korean' },
+        { code: 'hi', label: 'Hindi' },
+        { code: 'ja', label: 'Japanese' },
+        { code: 'ru', label: 'Russian' },
+        { code: 'pt', label: 'Portuguese' },
         { code: 'zh', label: 'Chinese' },
         { code: 'ar', label: 'Arabic' },
-        { code: 'hi', label: 'Hindi' },
+        { code: 'de', label: 'German' },
+        { code: 'vi', label: 'Vietnamese' },
+        { code: 'fr', label: 'French' },
+        { code: 'it', label: 'Italian' },
+        { code: 'tr', label: 'Turkish' },
+        { code: 'th', label: 'Thai' },
+        { code: 'id', label: 'Indonesian' },
+        { code: 'pl', label: 'Polish' },
       ];
 
       for (const mapping of expectedMappings) {
@@ -457,23 +467,28 @@ describe('SubtitleLanguageSelector Component', () => {
     });
 
     test('displays correct chips for all supported languages', () => {
-      const allCodes = 'en,en-orig,es,fr,de,ja,pt,it,ru,ko,zh,ar,hi';
+      const allCodes = 'en,en-orig,es,ko,hi,ja,ru,pt,zh,ar,de,vi,fr,it,tr,th,id,pl';
       renderWithProviders(<SubtitleLanguageSelector {...defaultProps} value={allCodes} />);
 
       const expectedLabels = [
         'English',
         'English (Original/Uploaded)',
         'Spanish',
-        'French',
-        'German',
-        'Japanese',
-        'Portuguese',
-        'Italian',
-        'Russian',
         'Korean',
+        'Hindi',
+        'Japanese',
+        'Russian',
+        'Portuguese',
         'Chinese',
         'Arabic',
-        'Hindi',
+        'German',
+        'Vietnamese',
+        'French',
+        'Italian',
+        'Turkish',
+        'Thai',
+        'Indonesian',
+        'Polish',
       ];
 
       for (const label of expectedLabels) {

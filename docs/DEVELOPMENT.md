@@ -44,7 +44,7 @@ If you set `YOUTARR_IMAGE` in `.env`, remove or comment that line first, otherwi
 
 For development, you'll need:
 
-1. **Node.js 20.19+ and npm 11.10+** (needed for the build script that compiles the client and installs dependencies before Docker runs)
+1. **Node.js 20.19+ and npm 11.10+** (needed for the build script that compiles the client and installs dependencies before Docker runs). Distro packages are often too old: `apt` on Ubuntu 24.04 and 26.04 installs npm 9.2, and 24.04 also has Node 18. If yours are older, install a current Node with [nvm](https://github.com/nvm-sh/nvm) or from [nodejs.org](https://nodejs.org), then follow the npm upgrade steps below.
 2. **Docker** and Docker Compose (v2 or v1)
 3. **Git** for version control
 4. A code editor (VS Code recommended)

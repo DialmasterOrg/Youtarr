@@ -22,10 +22,11 @@ test('explains that deleted downloads are not counted', async () => {
   expect(await screen.findByText(/later deleted aren't counted/)).toBeInTheDocument();
 });
 
-test('explains that private and members-only entries are left out of the total', async () => {
+test('explains which entries are left out of the total and when members-only videos download', async () => {
   await openInfo();
 
-  expect(await screen.findByText(/private and members-only/)).toBeInTheDocument();
+  expect(await screen.findByText(/leaves out private entries/)).toBeInTheDocument();
+  expect(screen.getByText(/download only with cookies from a member/)).toBeInTheDocument();
 });
 
 test('explains the 5,000 video tracking limit', async () => {

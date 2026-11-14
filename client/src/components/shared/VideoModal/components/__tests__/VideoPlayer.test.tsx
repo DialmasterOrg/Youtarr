@@ -51,7 +51,7 @@ const downloadedVideo: VideoModalData = {
 
 function renderPlayer(
   videoOverride?: Partial<VideoModalData>,
-  propsOverride?: { token?: string | null; isMobile?: boolean }
+  propsOverride?: { token?: string | null; isMobile?: boolean; membersAccessCheck?: { onCheck: () => void; loading: boolean; error: string | null } }
 ) {
   const video = videoOverride
     ? { ...downloadedVideo, ...videoOverride }
@@ -158,6 +158,57 @@ describe('VideoPlayer', () => {
     expect(screen.getByTestId('LockIcon')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /download video/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Play video' })).not.toBeInTheDocument();
+  });
+
+  test('asks for member cookies when none are configured', () => {
+    renderPlayer({ status: 'members_only', isDownloaded: false, filePath: null, membersAccess: 'no_cookies' });
+
+    expect(screen.getByText(/Add cookies from a member account/)).toBeInTheDocument();
+  });
+
+  test.each(['denied', 'no_cookies'] as const)('offers a new check when access is %s', async (membersAccess) => {
+    const user = userEvent.setup();
+    const onCheck = jest.fn();
+    renderPlayer(
+      { status: 'members_only', isDownloaded: false, filePath: null, membersAccess },
+      { membersAccessCheck: { onCheck, loading: false, error: null } }
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Check again' }));
+
+    expect(onCheck).toHaveBeenCalledTimes(1);
+  });
+
+  test('offers a check for a members-only video whose answer is out of date', async () => {
+    const user = userEvent.setup();
+    const onCheck = jest.fn();
+    renderPlayer(
+      { status: 'never_downloaded', isDownloaded: false, filePath: null, membersAccess: 'unchecked' },
+      { membersAccessCheck: { onCheck, loading: false, error: null } }
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Check access' }));
+
+    expect(onCheck).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Download video' })).toBeInTheDocument();
+  });
+
+  test('offers no check for a video the cookies can open', () => {
+    renderPlayer(
+      { status: 'never_downloaded', isDownloaded: false, filePath: null, membersAccess: 'confirmed' },
+      { membersAccessCheck: { onCheck: jest.fn(), loading: false, error: null } }
+    );
+
+    expect(screen.queryByRole('button', { name: 'Check access' })).not.toBeInTheDocument();
+  });
+
+  test('shows why a check failed', () => {
+    renderPlayer(
+      { status: 'members_only', isDownloaded: false, filePath: null, membersAccess: 'denied' },
+      { membersAccessCheck: { onCheck: jest.fn(), loading: false, error: 'Too many checks. Wait a minute and try again.' } }
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Too many checks');
   });
 
   test('clicking play enters playback mode with correct stream URL', async () => {

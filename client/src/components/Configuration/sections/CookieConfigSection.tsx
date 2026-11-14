@@ -110,7 +110,21 @@ export const CookieConfigSection: React.FC<CookieConfigSectionProps> = ({
       <div className="space-y-4">
         <Typography variant="body2" className="text-muted-foreground">
           Cookies let yt-dlp act as a signed-in YouTube account, which can get past
-          "Sign in to confirm you're not a bot" checks.
+          "Sign in to confirm you're not a bot" checks. They also unlock members-only
+          videos of channels that account is a member of: those download like any other,
+          and Youtarr remembers for 24 hours when the account is not a member, so
+          automatic downloads skip those videos until then. Using cookies from your main
+          account is at your own risk: YouTube can restrict or ban accounts used for
+          automated downloads (see the{' '}
+          <a
+            href="https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline"
+          >
+            yt-dlp warning
+          </a>
+          ).
           {!config.cookiesEnabled && !externalCookies && ' Turn on Enable Cookies to add a cookie file.'}{' '}
           <a
             href="https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies"
