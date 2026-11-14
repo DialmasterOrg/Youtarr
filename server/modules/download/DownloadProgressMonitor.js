@@ -260,7 +260,7 @@ class DownloadProgressMonitor {
       return result;
     };
 
-    const stripIdSuffix = (name) => name.replace(/\s+\[[^\]]+\]$/, '');
+    const stripIdSuffix = (name) => name.replace(/\s+\[[^[\]]+\]$/, '');
 
     const baseNameWithId = stripExtension(filename);
     const baseName = stripIdSuffix(baseNameWithId).trim();
