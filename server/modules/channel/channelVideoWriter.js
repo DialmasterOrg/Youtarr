@@ -39,8 +39,15 @@ class ChannelVideoWriter {
           youtube_id: video.youtube_id,
           channel_id: channelId
         },
+        // Columns are named one by one: a parsed entry also carries rating
+        // fields this table has no column for, and Sequelize warns on each.
         defaults: {
-          ...video,
+          youtube_id: video.youtube_id,
+          title: video.title,
+          thumbnail: video.thumbnail,
+          duration: video.duration,
+          availability: video.availability,
+          live_status: video.live_status,
           publishedAt: video.publishedAt || provisionalIso,
           published_at_source: video.publishedAt ? PUBLISHED_AT_SOURCE.APPROXIMATE : PUBLISHED_AT_SOURCE.ESTIMATED,
           channel_id: channelId,
