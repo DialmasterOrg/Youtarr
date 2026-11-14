@@ -43,6 +43,14 @@ export const normalizeChannelUrl = (input: string): string | null => {
   }
 };
 
+// True for input that names a channel outright (a URL or an @handle). A bare
+// word also normalizes to a handle, but it may just as well be a search.
+export const isExplicitChannelReference = (input: string): boolean => {
+  const trimmed = input.trim();
+  const looksExplicit = trimmed.startsWith('@') || trimmed.includes('/') || trimmed.includes('.');
+  return looksExplicit && normalizeChannelUrl(trimmed) !== null;
+};
+
 export const channelMatchesFilter = (channelName: string, channelUrl: string, filterValue: string): boolean => {
   if (!filterValue) {
     return true;

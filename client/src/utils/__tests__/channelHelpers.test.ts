@@ -1,5 +1,6 @@
 import {
   normalizeChannelUrl,
+  isExplicitChannelReference,
   channelMatchesFilter,
   normalizeSubFolderKey,
   formatSubFolderLabel,
@@ -130,6 +131,36 @@ describe('channelHelpers Utility', () => {
       test('handles URL with query parameters', () => {
         expect(normalizeChannelUrl('https://www.youtube.com/@testuser?feature=share')).toBe('https://www.youtube.com/@testuser');
       });
+    });
+  });
+
+  describe('isExplicitChannelReference', () => {
+    test('accepts an @handle', () => {
+      expect(isExplicitChannelReference('@testuser')).toBe(true);
+    });
+
+    test('accepts a channel URL', () => {
+      expect(isExplicitChannelReference('https://www.youtube.com/channel/UCxxxxxx')).toBe(true);
+    });
+
+    test('accepts a channel URL without a protocol', () => {
+      expect(isExplicitChannelReference('youtube.com/@testuser')).toBe(true);
+    });
+
+    test('rejects a bare word, which could be a search', () => {
+      expect(isExplicitChannelReference('testuser')).toBe(false);
+    });
+
+    test('rejects text with spaces', () => {
+      expect(isExplicitChannelReference('test user')).toBe(false);
+    });
+
+    test('rejects a URL that is not a YouTube channel', () => {
+      expect(isExplicitChannelReference('https://example.com/@testuser')).toBe(false);
+    });
+
+    test('rejects empty input', () => {
+      expect(isExplicitChannelReference('   ')).toBe(false);
     });
   });
 

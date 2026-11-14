@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { Channel } from '../../../types/Channel';
 import { normalizeSubFolderKey } from '../../../utils/channelHelpers';
@@ -35,8 +35,14 @@ export const useChannelList = ({
   const [loading, setLoading] = useState(!!token);
   const [error, setError] = useState<string | null>(null);
   const [subFolders, setSubFolders] = useState<string[]>([]);
+  // Only the newest request may update state: search-as-you-type sends
+  // overlapping requests, and an older one can answer last.
+  const latestRequestRef = useRef(0);
 
   const fetchChannels = useCallback(async () => {
+    const requestId = ++latestRequestRef.current;
+    const isLatest = () => latestRequestRef.current === requestId;
+
     if (!token) {
       setChannels([]);
       setTotal(0);
@@ -62,6 +68,8 @@ export const useChannelList = ({
         },
       });
 
+      if (!isLatest()) return;
+
       const payload = response.data;
       const incomingChannels = payload.channels || [];
       setChannels((prev) => {
@@ -86,10 +94,13 @@ export const useChannelList = ({
         (payload.subFolders || []).map((value) => normalizeSubFolderKey(value)).filter(Boolean)
       );
     } catch (err: any) {
+      if (!isLatest()) return;
       const message = err?.response?.data?.error || 'Failed to load channels';
       setError(message);
     } finally {
-      setLoading(false);
+      if (isLatest()) {
+        setLoading(false);
+      }
     }
   }, [token, page, pageSize, searchTerm, sortOrder, subFolder, append]);
 

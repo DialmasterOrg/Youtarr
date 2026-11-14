@@ -53,6 +53,8 @@ Channel subscriptions, listings, title filters, per-tab download counts, channel
 - `videoMetadataModule.getCachedVideoMetadata` reads the cached `.info.json` only; `getVideoMetadata` fetches with yt-dlp and caches the result (slimmed; see `.claude/rules/videos.md`).
 - `channelThumbnails.backfillChannelImages` uses async disk checks only: synchronous ones on a slow mount blocked the event loop, and every other request, about 5 ms per channel on each channel list load.
 - The channel list calls `backfillChannelImagesInBackground`, never awaited, which skips channels checked in the last 15 minutes; a poster or backdrop setting change forgets every check, so newly enabled images appear on the next load.
+- The Channels page's add input is also the list search (`/getchannels?search=`, debounced). Enter adds only `isExplicitChannelReference` input, because a bare word may be a search; the search is held while a lookup runs so the list does not empty behind it.
+- `useChannelList` applies only its newest request's response, because search-as-you-type overlaps requests. An unmatched name goes to Find Channels as `?q=`, run once on open: a YouTube search costs 100 quota units or seconds of yt-dlp, so never as-you-type.
 
 ## Per-tab download counts (issue #865)
 
