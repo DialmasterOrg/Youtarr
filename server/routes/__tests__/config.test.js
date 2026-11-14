@@ -256,6 +256,20 @@ describe('POST /updateconfig', () => {
     expect(configModule.updateConfig).toHaveBeenCalled();
   });
 
+  test('keeps the stored supportPromptShownAt when a stale client saves null', async () => {
+    const { app, configModule } = makeApp();
+    configModule._config.supportPromptShownAt = '2026-11-14T10:00:00.000Z';
+
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ ytdlpCustomArgs: '', supportPromptShownAt: null });
+
+    expect(res.status).toBe(200);
+    expect(configModule.updateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ supportPromptShownAt: '2026-11-14T10:00:00.000Z' })
+    );
+  });
+
   test('preserves managed rescanLastRun when saving settings', async () => {
     const { app, configModule } = makeApp();
     const rescanLastRun = {

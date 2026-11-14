@@ -198,6 +198,8 @@ export const CONFIG_FIELDS = {
   // System/internal fields (not tracked for changes)
   youtubeOutputDirectory: { default: '', trackChanges: false },
   uuid: { default: '', trackChanges: false },
+  // Server-owned: when the one-time support prompt was shown
+  supportPromptShownAt: { default: null as string | null, trackChanges: false },
   envAuthApplied: { default: false, trackChanges: false },
 };
 
@@ -309,6 +311,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   ytdlpCustomArgs: CONFIG_FIELDS.ytdlpCustomArgs.default,
   youtubeOutputDirectory: CONFIG_FIELDS.youtubeOutputDirectory.default,
   uuid: CONFIG_FIELDS.uuid.default,
+  supportPromptShownAt: CONFIG_FIELDS.supportPromptShownAt.default,
   envAuthApplied: CONFIG_FIELDS.envAuthApplied.default,
 };
 

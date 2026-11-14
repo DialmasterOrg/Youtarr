@@ -432,6 +432,8 @@ module.exports = function createConfigRoutes({
     updateData.ytdlpLastUpdated = currentConfig.ytdlpLastUpdated;
     updateData.ytdlpLastResult = currentConfig.ytdlpLastResult;
     updateData.rescanLastRun = currentConfig.rescanLastRun ?? null;
+    // Server-owned: a save from a tab loaded before the prompt was shown must not clear it.
+    updateData.supportPromptShownAt = currentConfig.supportPromptShownAt ?? null;
 
     configModule.updateConfig(updateData);
 
