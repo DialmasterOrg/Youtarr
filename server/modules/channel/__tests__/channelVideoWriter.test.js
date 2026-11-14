@@ -78,6 +78,34 @@ describe('channelVideoWriter', () => {
       });
     });
 
+    test('passes only ChannelVideo columns as findOrCreate defaults', async () => {
+      const parsedEntry = {
+        ...mockVideoData,
+        media_type: 'video',
+        live_status: 'was_live',
+        content_rating: { mpaaRating: 'mpaaR' },
+        age_limit: 18,
+        normalized_rating: 'R',
+        rating_source: 'Channel Default',
+      };
+      echoCreates();
+
+      await channelVideoWriter.insertVideosIntoDb([parsedEntry], 'UC123', 'short');
+
+      expect(ChannelVideo.findOrCreate.mock.calls[0][0].defaults).toEqual({
+        youtube_id: 'video123',
+        channel_id: 'UC123',
+        title: 'Test Video',
+        thumbnail: 'https://i.ytimg.com/vi/video123/mqdefault.jpg',
+        duration: 600,
+        availability: 'public',
+        live_status: 'was_live',
+        media_type: 'short',
+        publishedAt: '2024-01-01T00:00:00Z',
+        published_at_source: 'approximate',
+      });
+    });
+
     test('reports how many rows it created', async () => {
       const existing = {
         id: 1,
