@@ -4,11 +4,17 @@ import { useNavigate } from 'react-router-dom';
 import {
   LogOut as LogoutIcon,
   Download as DownloadIcon,
+  Heart as HeartIcon,
 } from '../../lib/icons';
+import { ABOUT_PAGE_PATH } from '../shared/SupportLinkButtons';
 import { ThemeLayoutPolicy } from '../../themes';
 import { StorageHeaderWidget } from './StorageHeaderWidget';
 import { DownloadActivityIndicator } from './DownloadActivityIndicator';
 import { ScheduledTaskIndicator } from './ScheduledTaskIndicator';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
+
+// Below this width the header is too crowded for the support heart.
+const SUPPORT_HEART_MIN_WIDTH_QUERY = '(min-width: 1000px)';
 
 interface NavHeaderActionsProps {
   layoutPolicy: ThemeLayoutPolicy;
@@ -40,6 +46,7 @@ export const NavHeaderActions: React.FC<NavHeaderActionsProps> = ({
   showTopNavItems,
 }) => {
   const navigate = useNavigate();
+  const hasRoomForSupportHeart = useMediaQuery(SUPPORT_HEART_MIN_WIDTH_QUERY);
 
   const hasAppUpdate = token && !isPlatformManaged && updateAvailable && Boolean(updateTooltip);
   const hasYtDlpUpdate = token && ytDlpUpdateAvailable && Boolean(ytDlpUpdateTooltip);
@@ -155,6 +162,18 @@ export const NavHeaderActions: React.FC<NavHeaderActionsProps> = ({
       )}
 
       {token && layoutPolicy.showStorageHeaderWidget && <StorageHeaderWidget token={token} />}
+
+      {token && !isMobile && hasRoomForSupportHeart && (
+        <Tooltip title="About and support Youtarr" placement="bottom" arrow>
+          <IconButton
+            aria-label="About and support Youtarr"
+            onClick={() => navigate(ABOUT_PAGE_PATH)}
+            color="error"
+          >
+            <HeartIcon fill="currentColor" />
+          </IconButton>
+        </Tooltip>
+      )}
 
       {token && !isPlatformManaged && onLogout && (
         <IconButton aria-label="logout" onClick={onLogout} style={{ color: 'var(--foreground)' }}>

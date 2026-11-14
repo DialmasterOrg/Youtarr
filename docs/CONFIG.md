@@ -1106,6 +1106,12 @@ These fields are managed automatically by the application:
 **Description**: Unique installation identifier, used as the Plex client identifier
 **Note**: Sent to Plex as `X-Plex-Client-Identifier` and as the `clientID` in the Plex OAuth URL. Editing it by hand changes the device identity Plex sees, so leave it alone.
 
+### supportPromptShownAt
+**Type**: `string | null` (ISO 8601 timestamp)
+**Default**: `null`
+**Description**: When the one-time "support Youtarr" prompt was shown. Youtarr shows that prompt a single time, after at least 200 downloaded videos and 14 days of use, and never on Elfhosted. Once this is set the prompt never appears again. The donation links stay available under Settings > About.
+**Note**: Set it back to `null` to let the prompt appear again.
+
 ## Configuration Examples
 
 See config/config.example.json
