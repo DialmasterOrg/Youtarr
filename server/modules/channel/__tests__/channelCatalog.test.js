@@ -245,6 +245,34 @@ describe('channelCatalog', () => {
       expect(result.channels[0].tab_download_stats).toEqual(stats);
     });
 
+    test('returns the largest page size the client offers', async () => {
+      const result = await channelCatalog.getChannelsPaginated({ pageSize: 128 });
+
+      expect(Channel.findAndCountAll).toHaveBeenCalledWith(expect.objectContaining({ limit: 128 }));
+      expect(result.pageSize).toBe(128);
+    });
+
+    test('caps a larger page size at 128', async () => {
+      const result = await channelCatalog.getChannelsPaginated({ pageSize: 500 });
+
+      expect(Channel.findAndCountAll).toHaveBeenCalledWith(expect.objectContaining({ limit: 128 }));
+      expect(result.pageSize).toBe(128);
+    });
+
+    test('lists channels without waiting for the folder image check', async () => {
+      const fsExtra = require('fs-extra');
+      const originalPathExists = fsExtra.pathExists;
+      fsExtra.pathExists = jest.fn(() => new Promise(() => {}));
+      Channel.findAndCountAll.mockResolvedValueOnce({ rows: [{ channel_id: 'UC1', uploader: 'Channel 1', url: 'u' }], count: 1 });
+
+      const result = await channelCatalog.getChannelsPaginated();
+      const diskChecks = fsExtra.pathExists.mock.calls.length;
+      fsExtra.pathExists = originalPathExists;
+
+      expect(diskChecks).toBeGreaterThan(0);
+      expect(result.channels).toHaveLength(1);
+    });
+
     test('still lists channels when the stats query fails', async () => {
       Channel.findAndCountAll.mockResolvedValueOnce({ rows: [{ channel_id: 'UC1', url: 'u', available_tabs: 'videos' }], count: 1 });
       tabDownloadStats.getForChannels.mockRejectedValueOnce(new Error('db down'));

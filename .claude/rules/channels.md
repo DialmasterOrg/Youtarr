@@ -51,6 +51,8 @@ Channel subscriptions, listings, title filters, per-tab download counts, channel
 - `youtubeExistenceCheck` answers `exists`/`removed`/`unknown`; on `unknown` leave `youtube_removed_checked_at` alone, because it is an outage, not a verdict, and the check must run again later (`.claude/rules/server-runtime.md`).
 - `subscriptionImport/` (`importJobRunner`, `takeoutParser`, `cookiesFetcher`, `thumbnailEnricher`, `concurrencyLimiter`, `errorClassifier`) treats the uploaded Takeout CSV and cookies as untrusted: validated, size-limited, parsed defensively.
 - `videoMetadataModule.getCachedVideoMetadata` reads the cached `.info.json` only; `getVideoMetadata` fetches with yt-dlp and caches the result (slimmed; see `.claude/rules/videos.md`).
+- `channelThumbnails.backfillChannelImages` uses async disk checks only: synchronous ones on a slow mount blocked the event loop, and every other request, about 5 ms per channel on each channel list load.
+- The channel list calls `backfillChannelImagesInBackground`, never awaited, which skips channels checked in the last 15 minutes; a poster or backdrop setting change forgets every check, so newly enabled images appear on the next load.
 
 ## Per-tab download counts (issue #865)
 
