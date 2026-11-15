@@ -1,6 +1,6 @@
 /* eslint-env jest */
 const { Op } = require('sequelize');
-const { createGrabService } = require('../grabService');
+const { createGrabService, grabState } = require('../grabService');
 
 const NOW = new Date('2025-06-10T12:00:00.000Z');
 const GRAB_ID = '9b89e5bc-8c90-4e72-b245-270fed2eacc2';
@@ -206,6 +206,48 @@ describe('grabService', () => {
       const { service, ArrBridgeGrab } = setup({ historyRow: row });
       await service.removeFromHistory('../../etc');
       expect(ArrBridgeGrab.findOne).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listRecent', () => {
+    test('reads grabs of every status, newest first', async () => {
+      const { service, ArrBridgeGrab } = setup();
+      const rows = [{ id: 'b' }, { id: 'a' }];
+      ArrBridgeGrab.findAll.mockResolvedValue(rows);
+
+      expect(await service.listRecent()).toBe(rows);
+      expect(ArrBridgeGrab.findAll).toHaveBeenCalledWith({
+        order: [['created_at', 'DESC'], ['id', 'DESC']],
+        limit: 50,
+      });
+    });
+
+    test.each([
+      [undefined, 50], ['abc', 50], [0, 50], [-3, 50], ['25', 25], [100, 100], [500, 100],
+    ])('a limit of %p reads %p rows', async (limit, expected) => {
+      const { service, ArrBridgeGrab } = setup();
+      ArrBridgeGrab.findAll.mockResolvedValue([]);
+
+      await service.listRecent(limit);
+
+      expect(ArrBridgeGrab.findAll.mock.calls[0][0].limit).toBe(expected);
+    });
+  });
+
+  describe('grabState', () => {
+    const DONE = new Date('2025-06-10T11:00:00.000Z');
+
+    test.each([
+      ['waiting', { status: 'pending' }],
+      ['downloading', { status: 'queued' }],
+      ['ready', { status: 'completed', completed_at: DONE }],
+      ['failed', { status: 'failed', completed_at: DONE, fail_message: 'Video unavailable' }],
+      // Sonarr deletes a failed history item within a minute.
+      ['failed', { status: 'removed', completed_at: DONE, fail_message: 'Video unavailable' }],
+      ['handed-off', { status: 'removed', completed_at: DONE, fail_message: null }],
+      ['cancelled', { status: 'removed', completed_at: null, fail_message: null }],
+    ])('is %s for %p', (state, row) => {
+      expect(grabState(row)).toBe(state);
     });
   });
 

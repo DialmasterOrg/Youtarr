@@ -174,6 +174,79 @@ describe('arrBridgeService', () => {
     expect(response.body).toContain('Beyblade.S01E29.1080p.WEB-DL-BEYBLADEOfficial');
   });
 
+  test('exposes the settings the Settings page works with, sharing the bridge key', () => {
+    const { service, configModule } = setup({ arrBridgeEnabled: true });
+    service.start();
+
+    expect(service.settings.getOrCreateKey()).toBe(configModule.config.arrBridgeApiKey);
+    expect(service.settings.getStatus().stagingRoot).toBe('/data/.arr-staging');
+    expect(configModule.updateConfig).toHaveBeenCalledTimes(1);
+  });
+
+  describe('listRecentGrabs', () => {
+    const CREATED = new Date('2025-06-10T10:00:00.000Z');
+    const COMPLETED = new Date('2025-06-10T10:05:00.000Z');
+    const REMOVED = new Date('2025-06-10T10:07:00.000Z');
+    const grabRow = {
+      id: '9b89e5bc-8c90-4e72-b245-270fed2eacc2',
+      youtube_id: 'g7VYYfoNaf0',
+      kind: 'tv',
+      category: 'tv',
+      release_title: 'Beyblade.S01E29.1080p.WEB-DL-BEYBLADEOfficial',
+      status: 'removed',
+      job_id: 'job-1',
+      staged_path: '/data/.arr-staging/tv/x/x.mp4',
+      fail_message: null,
+      created_at: CREATED,
+      completed_at: COMPLETED,
+      removed_at: REMOVED,
+    };
+
+    function withRows(grabs, videos) {
+      const ArrBridgeGrab = { findAll: jest.fn().mockResolvedValue(grabs) };
+      const Video = { findAll: jest.fn().mockResolvedValue(videos) };
+      const { service } = setup({ arrBridgeEnabled: true }, { models: { ArrBridgeGrab, Video, ChannelVideo: {}, Job: {} } });
+      return { service, ArrBridgeGrab, Video };
+    }
+
+    test('describes each grab with its state and the title of the video Youtarr holds', async () => {
+      const { service, ArrBridgeGrab } = withRows([grabRow], [
+        { youtubeId: 'g7VYYfoNaf0', youTubeVideoName: 'BEYBLADE EN Episode 29', youTubeChannelName: 'BEYBLADE Official' },
+      ]);
+
+      expect(await service.listRecentGrabs('20')).toEqual([{
+        id: grabRow.id,
+        releaseTitle: grabRow.release_title,
+        youtubeId: 'g7VYYfoNaf0',
+        videoTitle: 'BEYBLADE EN Episode 29',
+        channelName: 'BEYBLADE Official',
+        kind: 'tv',
+        category: 'tv',
+        state: 'handed-off',
+        failMessage: null,
+        createdAt: CREATED,
+        completedAt: COMPLETED,
+        removedAt: REMOVED,
+      }]);
+      expect(ArrBridgeGrab.findAll.mock.calls[0][0].limit).toBe(20);
+    });
+
+    test('leaves the titles empty for a video Youtarr does not hold', async () => {
+      const { service } = withRows([{ ...grabRow, status: 'failed', fail_message: 'Video unavailable' }], []);
+
+      const [grab] = await service.listRecentGrabs();
+
+      expect(grab).toMatchObject({ videoTitle: null, channelName: null, state: 'failed', failMessage: 'Video unavailable' });
+    });
+
+    test('asks for no titles when nothing was grabbed', async () => {
+      const { service, Video } = withRows([], []);
+
+      expect(await service.listRecentGrabs()).toEqual([]);
+      expect(Video.findAll).not.toHaveBeenCalled();
+    });
+  });
+
   describe('createUploadDateLookup', () => {
     function lookup({ videos = [], channelVideos = [] }) {
       const Video = { findAll: jest.fn().mockResolvedValue(videos) };

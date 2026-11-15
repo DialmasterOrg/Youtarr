@@ -6,7 +6,7 @@ const rootMarkdownFiles = ['README.md', 'CONTRIBUTING.md', 'SECURITY.md', 'CHANG
 
 const sectionFor = (source) => {
   if (/^(INSTALLATION|DOCKER|GLUETUN|platforms\/)/.test(source)) return 'Getting Started';
-  if (/^(USAGE_GUIDE|MEDIA_|YOUTARR_(VS_|DOWNLOADS_)|media-servers\/)/.test(source)) return 'Using Youtarr';
+  if (/^(USAGE_GUIDE|SONARR_RADARR|MEDIA_|YOUTARR_(VS_|DOWNLOADS_)|media-servers\/)/.test(source)) return 'Using Youtarr';
   if (/^(CONFIG|ENVIRONMENT|AUTHENTICATION|DATABASE|BACKUP_RESTORE|TROUBLESHOOTING)/.test(source)) return 'Operations';
   if (/^(DEVELOPMENT|API_INTEGRATION|development\/)/.test(source)) return 'Developers';
   return 'Project';

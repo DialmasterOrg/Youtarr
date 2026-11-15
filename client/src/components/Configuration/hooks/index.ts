@@ -10,3 +10,6 @@ export { useYouTubeApiKey } from './useYouTubeApiKey';
 export { useYtdlpArgsValidation } from './useYtdlpArgsValidation';
 export { useWatchStatusSync } from './useWatchStatusSync';
 export { useDownloadsFeedToken } from './useDownloadsFeedToken';
+export { useArrBridgeKey } from './useArrBridgeKey';
+export { useArrBridgeConnections } from './useArrBridgeConnections';
+export { useArrBridgeGrabs } from './useArrBridgeGrabs';

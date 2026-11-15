@@ -15,6 +15,11 @@ const PLAYLIST_SWEEP_LABEL = 'Playlist Downloads';
 const API_KEY_PATTERN = /\(via API: (.+)\)/;
 const ARR_BRIDGE_SUFFIX = '(Sonarr/Radarr grab)';
 
+/** Whether a job is a download grabbed by Sonarr or Radarr through the bridge. */
+export function isArrBridgeJob(jobType: string | null | undefined): boolean {
+  return Boolean(jobType) && jobType!.includes(MANUAL_DOWNLOAD_LABEL) && jobType!.endsWith(ARR_BRIDGE_SUFFIX);
+}
+
 export function jobTypeLabel(jobType: string | null | undefined): string {
   if (!jobType) {
     return '';

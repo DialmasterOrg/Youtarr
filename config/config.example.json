@@ -62,6 +62,23 @@
   "downloadsFeedItemLimit": 50,
   "downloadsFeedMediaTypes": ["video", "short", "livestream"],
   "downloadsFeedLinkTemplate": "",
+  "arrBridgeEnabled": false,
+  "arrBridgeCategories": [
+    { "name": "tv", "subfolder": null },
+    { "name": "movies", "subfolder": null }
+  ],
+  "arrBridgeLooseMatching": false,
+  "arrBridgeExcludeTerms": [
+    "trailer", "teaser", "clip", "clips", "reaction", "review", "recap", "behind the scenes",
+    "interview", "promo", "preview", "sneak peek", "explained", "breakdown", "bloopers",
+    "featurette", "making of", "soundtrack", "theme song", "highlights", "best of",
+    "compilation", "deleted scene", "deleted scenes", "summary", "analysis", "commentary",
+    "podcast", "parody", "abridged"
+  ],
+  "arrBridgeMinTvMinutes": 10,
+  "arrBridgeMinMovieMinutes": 60,
+  "arrBridgeStagingPath": "",
+  "arrBridgeStagingRetentionDays": 7,
   "autoRemovalEnabled": false,
   "autoRemovalFreeSpaceThreshold": null,
   "autoRemovalVideoAgeThreshold": null,

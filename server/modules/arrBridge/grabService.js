@@ -11,15 +11,35 @@ const ACTIVE_STATUSES = ['pending', 'queued', 'completed'];
 const MAX_QUEUE_ROWS = 200;
 const DEFAULT_HISTORY_LIMIT = 60;
 const MAX_HISTORY_LIMIT = 200;
+const DEFAULT_RECENT_LIMIT = 50;
+const MAX_RECENT_LIMIT = 100;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const isGrabId = (id) => typeof id === 'string' && UUID_PATTERN.test(id);
 
-function clampHistoryLimit(limit) {
+function clampLimit(limit, fallback, max) {
   const parsed = Number.parseInt(limit, 10);
-  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_HISTORY_LIMIT;
-  return Math.min(parsed, MAX_HISTORY_LIMIT);
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+  return Math.min(parsed, max);
+}
+
+const clampHistoryLimit = (limit) => clampLimit(limit, DEFAULT_HISTORY_LIMIT, MAX_HISTORY_LIMIT);
+
+/**
+ * What a grab row means to the user. The app removes a history item after
+ * it imported the file and also when the user removed it there, with the
+ * same call, so a removed grab that completed is "handed off", not "imported".
+ * A failed one is removed within a minute and keeps its failure message.
+ * @param {Object} row - An arr_bridge_grabs row
+ * @returns {'waiting'|'downloading'|'ready'|'failed'|'handed-off'|'cancelled'}
+ */
+function grabState(row) {
+  if (row.status === 'pending') return 'waiting';
+  if (row.status === 'queued') return 'downloading';
+  if (row.status === 'completed') return 'ready';
+  if (row.status === 'failed' || row.fail_message) return 'failed';
+  return row.completed_at ? 'handed-off' : 'cancelled';
 }
 
 /**
@@ -97,6 +117,17 @@ function createGrabService({
     });
   }
 
+  /**
+   * For the Settings page's status list: every status, removed grabs too.
+   * @param {unknown} [limit]
+   */
+  function listRecent(limit) {
+    return ArrBridgeGrab.findAll({
+      order: [['created_at', 'DESC'], ['id', 'DESC']],
+      limit: clampLimit(limit, DEFAULT_RECENT_LIMIT, MAX_RECENT_LIMIT),
+    });
+  }
+
   function markRemoved(id, fromStatuses) {
     const timestamp = now();
     return ArrBridgeGrab.update(
@@ -153,7 +184,9 @@ function createGrabService({
     return new Set(rows.map((row) => row.youtube_id));
   }
 
-  return { addGrab, listQueue, listHistory, removeFromQueue, removeFromHistory, recentlyFailedIds };
+  return {
+    addGrab, listQueue, listHistory, listRecent, removeFromQueue, removeFromHistory, recentlyFailedIds,
+  };
 }
 
-module.exports = { createGrabService };
+module.exports = { createGrabService, grabState };

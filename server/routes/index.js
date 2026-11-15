@@ -23,6 +23,7 @@ const createLogRoutes = require('./logs');
 const createVideoTrashRoutes = require('./videoTrash');
 const createFeedRoutes = require('./feeds');
 const createArrBridgeRoutes = require('./arrBridge');
+const createArrBridgeSettingsRoutes = require('./arrBridgeSettings');
 const createExternalRequestReviewRoutes = require('./externalRequests');
 const { createExternalApiRoutes } = require('./externalApi');
 const { sendExternalError } = require('../modules/externalApi/externalApiResponse');
@@ -82,6 +83,7 @@ function registerRoutes(app, deps) {
     cookieTestRateLimiter,
     feedLimiter,
     arrBridgeLimiter,
+    arrBridgeConnectionLimiter,
     arrBridge,
     configModule,
     channelModule,
@@ -201,6 +203,8 @@ function registerRoutes(app, deps) {
   // session, and answers 404 while it is switched off. Callers that register
   // routes without the bridge service (tests) get no /arr namespace.
   if (arrBridge) app.use(createArrBridgeRoutes({ arrBridgeLimiter, arrBridge }));
+  // Its Settings endpoints, which do need a session.
+  if (arrBridge) app.use(createArrBridgeSettingsRoutes({ verifyToken, arrBridgeConnectionLimiter, arrBridge }));
 
   // The versioned external API stays unreachable until a deployment opts in
   // explicitly. This fail-closed default is independent of AUTH_ENABLED.

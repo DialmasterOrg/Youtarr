@@ -134,6 +134,32 @@ export const CONFIG_FIELDS = {
   downloadsFeedMediaTypes: { default: ['video', 'short', 'livestream'] as string[], trackChanges: true },
   downloadsFeedLinkTemplate: { default: '', trackChanges: true },
 
+  // Sonarr/Radarr bridge. Its key and the Sonarr and Radarr connections are
+  // server-owned and not part of this config.
+  arrBridgeEnabled: { default: false, trackChanges: true },
+  arrBridgeCategories: {
+    default: [
+      { name: 'tv', subfolder: null },
+      { name: 'movies', subfolder: null },
+    ] as Array<{ name: string; subfolder: string | null }>,
+    trackChanges: true,
+  },
+  arrBridgeLooseMatching: { default: false, trackChanges: true },
+  arrBridgeExcludeTerms: {
+    default: [
+      'trailer', 'teaser', 'clip', 'clips', 'reaction', 'review', 'recap', 'behind the scenes',
+      'interview', 'promo', 'preview', 'sneak peek', 'explained', 'breakdown', 'bloopers',
+      'featurette', 'making of', 'soundtrack', 'theme song', 'highlights', 'best of',
+      'compilation', 'deleted scene', 'deleted scenes', 'summary', 'analysis', 'commentary',
+      'podcast', 'parody', 'abridged',
+    ] as string[],
+    trackChanges: true,
+  },
+  arrBridgeMinTvMinutes: { default: 10, trackChanges: true },
+  arrBridgeMinMovieMinutes: { default: 60, trackChanges: true },
+  arrBridgeStagingPath: { default: '', trackChanges: true },
+  arrBridgeStagingRetentionDays: { default: 7, trackChanges: true },
+
   // Auto removal
   autoRemovalEnabled: { default: false, trackChanges: true },
   autoRemovalFreeSpaceThreshold: { default: '', trackChanges: true },
@@ -282,6 +308,14 @@ export const DEFAULT_CONFIG: ConfigState = {
   downloadsFeedItemLimit: CONFIG_FIELDS.downloadsFeedItemLimit.default,
   downloadsFeedMediaTypes: CONFIG_FIELDS.downloadsFeedMediaTypes.default,
   downloadsFeedLinkTemplate: CONFIG_FIELDS.downloadsFeedLinkTemplate.default,
+  arrBridgeEnabled: CONFIG_FIELDS.arrBridgeEnabled.default,
+  arrBridgeCategories: CONFIG_FIELDS.arrBridgeCategories.default,
+  arrBridgeLooseMatching: CONFIG_FIELDS.arrBridgeLooseMatching.default,
+  arrBridgeExcludeTerms: CONFIG_FIELDS.arrBridgeExcludeTerms.default,
+  arrBridgeMinTvMinutes: CONFIG_FIELDS.arrBridgeMinTvMinutes.default,
+  arrBridgeMinMovieMinutes: CONFIG_FIELDS.arrBridgeMinMovieMinutes.default,
+  arrBridgeStagingPath: CONFIG_FIELDS.arrBridgeStagingPath.default,
+  arrBridgeStagingRetentionDays: CONFIG_FIELDS.arrBridgeStagingRetentionDays.default,
   autoRemovalEnabled: CONFIG_FIELDS.autoRemovalEnabled.default,
   autoRemovalFreeSpaceThreshold: CONFIG_FIELDS.autoRemovalFreeSpaceThreshold.default,
   autoRemovalVideoAgeThreshold: CONFIG_FIELDS.autoRemovalVideoAgeThreshold.default,

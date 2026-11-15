@@ -9,6 +9,7 @@ const { getDefaultNameForUrl } = require('./notificationHelpers');
 const { SCHEDULES, normalizeToMinimumInterval, violatesMinimumInterval } = require('./scheduleConfig');
 const { normalizeLevelSetting } = require('../logging/logLevel');
 const { normalizeItemLimit, normalizeMediaTypes } = require('./feeds/feedSettings');
+const { correctStoredSettings: correctStoredArrBridgeSettings } = require('./arrBridge/arrBridgeConfig');
 
 // Storage limit settings: a positive whole number with a unit, or '' for off.
 const STORAGE_SIZE_KEYS = ['downloadPauseUsageLimit', 'downloadPauseMinFreeSpace', 'autoRemovalUsageLimit'];
@@ -98,6 +99,10 @@ class ConfigModule extends EventEmitter {
     }
 
     if (this.normalizeDownloadsFeedFields()) {
+      legacyMigrationNeeded = true;
+    }
+
+    if (this.normalizeArrBridgeFields()) {
       legacyMigrationNeeded = true;
     }
 
@@ -486,6 +491,10 @@ class ConfigModule extends EventEmitter {
               legacyMigrationNeeded = true;
             }
 
+            if (this.normalizeArrBridgeFields()) {
+              legacyMigrationNeeded = true;
+            }
+
             // Save config if modified by merge or legacy migrations
             if (mergeResult.modified || legacyMigrationNeeded) {
               this.saveConfig();
@@ -816,6 +825,21 @@ class ConfigModule extends EventEmitter {
       changed = true;
     }
     return changed;
+  }
+
+  /**
+   * Correct hand-edited Sonarr/Radarr bridge settings, for the same reason as
+   * the download feed settings: /updateconfig rejects invalid values, so a bad
+   * stored one would block every Settings save.
+   * @returns {boolean} True if any value changed
+   */
+  normalizeArrBridgeFields() {
+    const corrections = correctStoredArrBridgeSettings(this.config);
+    for (const { key, previous, replacement } of corrections) {
+      logger.warn({ key, previous, replacement }, 'Corrected an invalid Sonarr/Radarr bridge setting');
+      this.config[key] = replacement;
+    }
+    return corrections.length > 0;
   }
 
   /**

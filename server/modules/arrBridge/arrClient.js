@@ -1,10 +1,12 @@
 // Reads from the user's own Sonarr and Radarr: the series list, one series'
-// episodes, and the movie list. Read-only, and it returns slim rows, because
+// episodes, the movie list, and who the app is. Read-only, and it returns slim rows, because
 // a large library's full answer runs to tens of megabytes.
 const axios = require('axios');
 
 const ARR_REQUEST_TIMEOUT_MS = 10000;
 const ARR_MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
+// The status answer is a small object; a larger body is not Sonarr or Radarr.
+const ARR_MAX_STATUS_BYTES = 256 * 1024;
 const SECONDS_PER_MINUTE = 60;
 
 const MESSAGES = {
@@ -100,10 +102,9 @@ function toMovie(row) {
 function createArrClient({ http = axios, timeoutMs = ARR_REQUEST_TIMEOUT_MS } = {}) {
   // Every failure becomes an ArrUnavailableError. Redirects are not
   // followed: the key header would be sent on to wherever they point.
-  async function getList(connection, path, params) {
-    let response;
+  async function get(connection, path, { params, maxBytes = ARR_MAX_RESPONSE_BYTES } = {}) {
     try {
-      response = await http.get(`${connection.url}${path}`, {
+      const response = await http.get(`${connection.url}${path}`, {
         headers: { 'X-Api-Key': connection.apiKey },
         params,
         // axios's timeout only limits the wait between bytes; the signal
@@ -111,13 +112,29 @@ function createArrClient({ http = axios, timeoutMs = ARR_REQUEST_TIMEOUT_MS } = 
         timeout: timeoutMs,
         signal: AbortSignal.timeout(timeoutMs),
         maxRedirects: 0,
-        maxContentLength: ARR_MAX_RESPONSE_BYTES,
+        maxContentLength: maxBytes,
       });
+      return response?.data;
     } catch (error) {
       throw toUnavailable(error);
     }
-    if (!Array.isArray(response?.data)) throw new ArrUnavailableError('not-json');
-    return response.data;
+  }
+
+  async function getList(connection, path, params) {
+    const data = await get(connection, path, { params });
+    if (!Array.isArray(data)) throw new ArrUnavailableError('not-json');
+    return data;
+  }
+
+  /**
+   * Who answers at this address. Used by the Settings page's connection test.
+   * @param {{url: string, apiKey: string}} connection
+   * @returns {Promise<{appName: string, version: string}>}
+   */
+  async function fetchStatus(connection) {
+    const data = await get(connection, '/api/v3/system/status', { maxBytes: ARR_MAX_STATUS_BYTES });
+    if (!isRow(data) || typeof data.appName !== 'string') throw new ArrUnavailableError('not-json');
+    return { appName: data.appName, version: typeof data.version === 'string' ? data.version : '' };
   }
 
   /**
@@ -148,7 +165,7 @@ function createArrClient({ http = axios, timeoutMs = ARR_REQUEST_TIMEOUT_MS } = 
     return (await getList(connection, '/api/v3/movie')).map(toMovie).filter(Boolean);
   }
 
-  return { fetchSeries, fetchEpisodes, fetchMovies };
+  return { fetchSeries, fetchEpisodes, fetchMovies, fetchStatus };
 }
 
 module.exports = { createArrClient, ArrUnavailableError, ARR_REQUEST_TIMEOUT_MS };

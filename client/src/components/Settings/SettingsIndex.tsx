@@ -17,6 +17,7 @@ export const SETTINGS_PAGES = [
   { key: 'logging', title: 'Logging', description: 'Log level and log files for troubleshooting.' },
   { key: 'notifications', title: 'Notifications', description: 'Toast notifications and alert behavior.' },
   { key: 'rss-feeds', title: 'RSS Feeds', description: 'A private RSS feed of your downloaded videos.' },
+  { key: 'sonarr-radarr', title: 'Sonarr / Radarr', description: 'Let Sonarr and Radarr search and grab YouTube videos through Youtarr.' },
   { key: 'plex', title: 'Plex', description: 'Plex integration and library configuration.' },
   { key: 'jellyfin', title: 'Jellyfin', description: 'Jellyfin connection for native playlist sync.' },
   { key: 'emby', title: 'Emby', description: 'Emby connection for native playlist sync.' },

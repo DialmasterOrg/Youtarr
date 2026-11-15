@@ -540,6 +540,35 @@ describe('DownloadHistory', () => {
       expect(cellTexts.some(text => text === 'Manual Videos')).toBe(true);
     });
 
+    test('displays "Sonarr/Radarr" for a download grabbed through the Sonarr/Radarr bridge', () => {
+      const grabJob: Job[] = [{
+        id: 'grab-job',
+        jobType: 'Manually Added Urls (Sonarr/Radarr grab)',
+        status: 'Completed',
+        output: '',
+        timeCreated: Date.now(),
+        timeInitiated: Date.now(),
+        data: {
+          videos: [{
+            id: 1,
+            youtubeId: 'v1',
+            youTubeChannelName: 'Test',
+            youTubeVideoName: 'Grabbed Video',
+            duration: 100,
+            timeCreated: new Date().toISOString(),
+            originalDate: null,
+            description: null,
+          } as VideoData],
+        },
+      }];
+
+      render(<DownloadHistory {...defaultProps} jobs={grabJob} />);
+
+      const cellTexts = screen.getAllByRole('cell').map(cell => cell.textContent || '');
+      expect(cellTexts.some(text => text === 'Sonarr/Radarr')).toBe(true);
+      expect(cellTexts.some(text => text === 'Manual Videos')).toBe(false);
+    });
+
     test('displays "API: KeyName" for API-triggered downloads', () => {
       const apiJob: Job[] = [{
         id: 'api-job',

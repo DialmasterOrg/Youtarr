@@ -247,9 +247,11 @@ describe('GET /getconfig', () => {
     expect(res.body.arrBridgeEnabled).toBe(true);
   });
 
-  test('leaves out the Sonarr and Radarr API keys but returns their URLs', async () => {
+  // The Settings page reads the connections from /api/arr-bridge/status,
+  // which shows a normalized URL; a hand-edited one may hold credentials.
+  test('leaves out the Sonarr and Radarr connections, URLs included', async () => {
     const { app, configModule } = makeApp();
-    configModule._config.arrBridgeSonarrUrl = 'http://sonarr:8989';
+    configModule._config.arrBridgeSonarrUrl = 'http://user:secret@sonarr:8989';
     configModule._config.arrBridgeSonarrApiKey = 'sonarr-key';
     configModule._config.arrBridgeRadarrUrl = 'http://radarr:7878';
     configModule._config.arrBridgeRadarrApiKey = 'radarr-key';
@@ -257,8 +259,8 @@ describe('GET /getconfig', () => {
     expect(res.status).toBe(200);
     expect(res.body).not.toHaveProperty('arrBridgeSonarrApiKey');
     expect(res.body).not.toHaveProperty('arrBridgeRadarrApiKey');
-    expect(res.body.arrBridgeSonarrUrl).toBe('http://sonarr:8989');
-    expect(res.body.arrBridgeRadarrUrl).toBe('http://radarr:7878');
+    expect(res.body).not.toHaveProperty('arrBridgeSonarrUrl');
+    expect(res.body).not.toHaveProperty('arrBridgeRadarrUrl');
   });
 });
 
@@ -563,6 +565,81 @@ describe('POST /updateconfig', () => {
       const saved = configModule.updateConfig.mock.calls[0][0];
       expect(saved.arrBridgeSonarrApiKey).toBe('sonarr-key');
       expect(saved.arrBridgeRadarrApiKey).toBe('radarr-key');
+    });
+
+    // The stored key is sent to whatever URL is saved, so a client that
+    // could move the URL could have the key sent to a host of its choosing.
+    test('keeps the saved Sonarr and Radarr URLs when the client sends other ones', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.arrBridgeSonarrUrl = 'http://sonarr:8989';
+      configModule._config.arrBridgeSonarrApiKey = 'sonarr-key';
+      configModule._config.arrBridgeRadarrUrl = 'http://radarr:7878';
+      configModule._config.arrBridgeRadarrApiKey = 'radarr-key';
+      await supertest(app).post('/updateconfig').send({
+        arrBridgeSonarrUrl: 'http://elsewhere.example:8989',
+        arrBridgeRadarrUrl: 'http://elsewhere.example:7878',
+      });
+      const saved = configModule.updateConfig.mock.calls[0][0];
+      expect(saved.arrBridgeSonarrUrl).toBe('http://sonarr:8989');
+      expect(saved.arrBridgeRadarrUrl).toBe('http://radarr:7878');
+    });
+
+    test('keeps the saved URLs when the client sends none, and takes none from a client', async () => {
+      const stored = makeApp();
+      stored.configModule._config.arrBridgeSonarrUrl = 'http://sonarr:8989';
+      await supertest(stored.app).post('/updateconfig').send({ arrBridgeEnabled: true });
+      expect(stored.configModule.updateConfig.mock.calls[0][0].arrBridgeSonarrUrl).toBe('http://sonarr:8989');
+
+      const empty = makeApp();
+      await supertest(empty.app).post('/updateconfig').send({ arrBridgeSonarrUrl: 'http://elsewhere.example:8989' });
+      expect(empty.configModule.updateConfig.mock.calls[0][0].arrBridgeSonarrUrl).toBeUndefined();
+    });
+
+    test('rejects a bridge setting that could not be used, with its message', async () => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({ arrBridgeCategories: [{ name: 'a b' }] });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/^Sonarr\/Radarr categories:/);
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+
+    test('saves the bridge settings in their cleaned form', async () => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({
+        arrBridgeExcludeTerms: [' Trailer ', 'trailer'],
+        arrBridgeStagingPath: '/downloads/.arr-staging/',
+        arrBridgeCategories: [{ name: 'tv', subfolder: '' }],
+      });
+      expect(res.status).toBe(200);
+      const saved = configModule.updateConfig.mock.calls[0][0];
+      expect(saved.arrBridgeExcludeTerms).toEqual(['trailer']);
+      expect(saved.arrBridgeStagingPath).toBe('/downloads/.arr-staging');
+      expect(saved.arrBridgeCategories).toEqual([{ name: 'tv', subfolder: null }]);
+    });
+
+    // A tab loaded before the bridge settings existed posts a config without
+    // them, and a save replaces the whole config.
+    test('keeps the stored bridge settings when the client sends none', async () => {
+      const { app, configModule } = makeApp();
+      const categories = [{ name: 'tv', subfolder: 'Shows' }, { name: 'tv-4k', subfolder: null }];
+      configModule._config.arrBridgeEnabled = true;
+      configModule._config.arrBridgeCategories = categories;
+      configModule._config.arrBridgeLooseMatching = true;
+      const res = await supertest(app).post('/updateconfig').send({ darkModeEnabled: true });
+      expect(res.status).toBe(200);
+      const saved = configModule.updateConfig.mock.calls[0][0];
+      expect(saved.arrBridgeEnabled).toBe(true);
+      expect(saved.arrBridgeCategories).toEqual(categories);
+      expect(saved.arrBridgeLooseMatching).toBe(true);
+      expect(saved).not.toHaveProperty('arrBridgeMinTvMinutes');
+    });
+
+    test('a hand-edited stored value never blocks a save that does not send it', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.arrBridgeMinTvMinutes = 'ten';
+      const res = await supertest(app).post('/updateconfig').send({ darkModeEnabled: true });
+      expect(res.status).toBe(200);
+      expect(configModule.updateConfig.mock.calls[0][0].arrBridgeMinTvMinutes).toBe(10);
     });
   });
 

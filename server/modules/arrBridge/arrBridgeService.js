@@ -2,11 +2,12 @@
 // stateful modules server.js hands in, owns the bridge key, and starts or
 // stops the grab executor as the feature is switched on or off.
 const { Op } = require('sequelize');
-const { generateKey, isAuthorized, isEnabled, readSettings } = require('./arrBridgeConfig');
+const { isAuthorized, isEnabled, readSettings } = require('./arrBridgeConfig');
+const { createArrBridgeSettings } = require('./arrBridgeSettings');
 const { createArrCatalog } = require('./arrCatalog');
 const { createArrClient } = require('./arrClient');
 const { createGrabExecutor } = require('./grabExecutor');
-const { createGrabService } = require('./grabService');
+const { createGrabService, grabState } = require('./grabService');
 const { createNewznabApi } = require('./newznabApi');
 const { createSabnzbdApi } = require('./sabnzbdApi');
 const { createSearchQueue } = require('./searchQueue');
@@ -104,6 +105,8 @@ function createArrBridgeService({
   const grabService = createGrabService({
     models, getSettings, staging, wakeExecutor: () => executor.wake(), logger,
   });
+  const arrClient = createClient();
+  const settings = createArrBridgeSettings({ configModule, client: arrClient, staging, logger });
   const searchService = createSearchService({
     searchVideos,
     isYoutubeApiAvailable,
@@ -112,7 +115,7 @@ function createArrBridgeService({
     recentlyFailedIds: grabService.recentlyFailedIds,
     queue: createSearchQueue(),
     // Optional: reads the user's own Sonarr and Radarr when they are set up.
-    catalog: createArrCatalog({ client: createClient(), getSettings, logger }),
+    catalog: createArrCatalog({ client: arrClient, getSettings, logger }),
     logger,
   });
   const newznab = createNewznabApi({ getConfig, searchService, logger });
@@ -133,12 +136,7 @@ function createArrBridgeService({
       running = false;
       return;
     }
-    if (!readSettings(config).apiKey) {
-      // The key is server-owned like the feed token: stored unhashed so
-      // Settings can show it again, and never written to a log.
-      configModule.updateConfig({ ...config, arrBridgeApiKey: generateKey() });
-      logger.info({ event: 'arr_bridge_key_created' }, 'Created the Sonarr/Radarr bridge key');
-    }
+    settings.getOrCreateKey();
     if (running) {
       // A changed category list needs its staging folders; the sweep makes them.
       executor.wake();
@@ -158,9 +156,45 @@ function createArrBridgeService({
     running = false;
   }
 
+  /**
+   * The newest grabs for the Settings page, with the title of each video
+   * Youtarr holds. Removed grabs are included: the list is a history.
+   * @param {unknown} [limit]
+   * @returns {Promise<Array<Object>>}
+   */
+  async function listRecentGrabs(limit) {
+    const rows = await grabService.listRecent(limit);
+    if (rows.length === 0) return [];
+    const videos = await models.Video.findAll({
+      where: { youtubeId: { [Op.in]: [...new Set(rows.map((row) => row.youtube_id))] } },
+      attributes: ['youtubeId', 'youTubeVideoName', 'youTubeChannelName'],
+      raw: true,
+    });
+    const videoById = new Map(videos.map((video) => [video.youtubeId, video]));
+    return rows.map((row) => {
+      const video = videoById.get(row.youtube_id);
+      return {
+        id: row.id,
+        releaseTitle: row.release_title,
+        youtubeId: row.youtube_id,
+        videoTitle: video?.youTubeVideoName || null,
+        channelName: video?.youTubeChannelName || null,
+        kind: row.kind,
+        category: row.category,
+        state: grabState(row),
+        failMessage: row.fail_message || null,
+        createdAt: row.created_at,
+        completedAt: row.completed_at || null,
+        removedAt: row.removed_at || null,
+      };
+    });
+  }
+
   return {
     newznab,
     sabnzbd,
+    settings,
+    listRecentGrabs,
     isEnabled: () => isEnabled(getConfig()),
     isAuthorized: (candidate) => isAuthorized(getConfig(), candidate),
     start,

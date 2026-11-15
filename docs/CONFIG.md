@@ -16,6 +16,7 @@ These settings can be changed from the Settings pages in the web UI.
 - [Cookie Config](#cookie-config)
 - [Notifications](#notifications)
 - [RSS Feeds](#rss-feeds)
+- [Sonarr / Radarr](#sonarr--radarr)
 - [Download Performance](#download-performance)
 - [Advanced Settings](#advanced-settings)
 - [Auto-Removal Settings](#auto-removal-settings)
@@ -740,6 +741,62 @@ Settings for the private RSS feed of downloaded videos, served at `/feeds/downlo
 - **Type**: `string`
 - **Default**: Not set; Youtarr creates it the first time the feed is turned on
 - **Description**: The secret in the feed URL. Youtarr manages it: use **Create new URL** in Settings -> RSS Feeds to replace it. Settings saves never change it.
+
+## Sonarr / Radarr
+
+Settings for the Sonarr/Radarr bridge, served under `/arr/`. See [Sonarr and Radarr](SONARR_RADARR.md) for setup. A value outside its range is corrected at startup.
+
+### Bridge Enabled
+- **Config Key**: `arrBridgeEnabled`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Description**: Turns the bridge on. While it's off, every `/arr/` path answers 404.
+
+### Categories
+- **Config Key**: `arrBridgeCategories`
+- **Type**: `array` of `{ "name": string, "subfolder": string | null }`
+- **Default**: `[{ "name": "tv", "subfolder": null }, { "name": "movies", "subfolder": null }]`
+- **Range**: 1 to 10 categories; a name uses letters, digits, `-` and `_` (up to 32 characters) and must be unique
+- **Description**: The download client categories Youtarr answers to. Each Sonarr or Radarr instance uses one. `subfolder` is where that category's videos are downloaded: a subfolder name, `null` for your normal download settings, `"##ROOT##"` for the downloads folder itself, or `"##USE_GLOBAL_DEFAULT##"` for the default subfolder.
+
+### Loose Matching
+- **Config Key**: `arrBridgeLooseMatching`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Description**: Accepts an episode number without a season and a movie without its year. It can offer the wrong video, so turn off automatic search for the Youtarr indexer in Sonarr and Radarr while it's on.
+
+### Excluded Words
+- **Config Key**: `arrBridgeExcludeTerms`
+- **Type**: `array` of strings
+- **Default**: a list of words such as `trailer`, `clip`, `reaction` and `recap`
+- **Range**: at most 100 entries of up to 60 characters
+- **Description**: A video whose title has one of these words or phrases is never offered.
+
+### Shortest Episode and Shortest Movie
+- **Config Keys**: `arrBridgeMinTvMinutes`, `arrBridgeMinMovieMinutes`
+- **Type**: `number`
+- **Default**: `10` and `60`
+- **Range**: 0 to 600
+- **Description**: Shorter videos are never offered. With a Sonarr or Radarr connection, the runtime the app reports is used instead.
+
+### Staging Path
+- **Config Key**: `arrBridgeStagingPath`
+- **Type**: `string`
+- **Default**: `""`
+- **Description**: The staging folder (`.arr-staging` in your downloads folder) as Sonarr and Radarr see it. Leave it empty when it's mounted at the same path as in Youtarr. An absolute path.
+
+### Staged File Retention
+- **Config Key**: `arrBridgeStagingRetentionDays`
+- **Type**: `number`
+- **Default**: `7`
+- **Range**: 1 to 365
+- **Description**: A staged file that Sonarr or Radarr never imported is removed after this many days. The copy in your Youtarr library stays.
+
+### Bridge Key and Connections
+- **Config Keys**: `arrBridgeApiKey`, `arrBridgeSonarrUrl`, `arrBridgeSonarrApiKey`, `arrBridgeRadarrUrl`, `arrBridgeRadarrApiKey`
+- **Type**: `string`
+- **Default**: Not set
+- **Description**: The key Sonarr and Radarr send to Youtarr, and the optional connections to your own Sonarr and Radarr. Youtarr manages them: use **Create new key** and **Test and save** in Settings -> Sonarr / Radarr. Settings saves never change them.
 
 ## Download Performance
 

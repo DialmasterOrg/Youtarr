@@ -34,7 +34,7 @@ import { getRemovalState, removalFromRow, removedState } from '../../utils/video
 import RemovalDescription from '../shared/RemovalDescription';
 import FailedVideoChip from './FailedVideoChip';
 import FailedDownloadsDetail from './FailedDownloadsDetail';
-import { jobTypeLabel } from '../../utils/jobTypeLabel';
+import { isArrBridgeJob, jobTypeLabel } from '../../utils/jobTypeLabel';
 
 interface DownloadHistoryProps {
   jobs: Job[];
@@ -46,10 +46,13 @@ interface DownloadHistoryProps {
   onVideoDeleted?: () => void;
 }
 
+const ARR_BRIDGE_HISTORY_LABEL = 'Sonarr/Radarr';
+
 function cleanJobTypeLabel(jobType: string): string {
   if (jobType.startsWith('Playlist Retry: ')) return jobTypeLabel(jobType);
   if (jobType.startsWith('Auto-retry')) return 'Auto-retry';
   if (jobType.includes('Channel Downloads')) return 'Channel Downloads';
+  if (isArrBridgeJob(jobType)) return ARR_BRIDGE_HISTORY_LABEL;
   if (jobType.includes('Manually Added Urls')) {
     const apiKeyMatch = jobType.match(/\(via API: (.+)\)/);
     return apiKeyMatch ? `Manual Videos (API: ${apiKeyMatch[1]})` : 'Manual Videos';
@@ -256,6 +259,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                     if (job.jobType.startsWith('Auto-retry')) formattedJobType = 'Auto-retry';
                     else if (job.jobType.startsWith('Playlist Retry: ')) formattedJobType = 'Playlist retries';
                     else if (job.jobType.includes('Channel Downloads')) formattedJobType = 'Channels';
+                    else if (isArrBridgeJob(job.jobType)) formattedJobType = ARR_BRIDGE_HISTORY_LABEL;
                     else if (job.jobType.includes('Manually Added Urls')) {
                       const apiKeyMatch = job.jobType.match(/\(via API: (.+)\)/);
                       formattedJobType = apiKeyMatch ? `API: ${apiKeyMatch[1]}` : 'Manual Videos';
@@ -495,6 +499,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                     if (job.jobType.startsWith('Auto-retry')) formattedJobType = 'Auto-retry';
                     else if (job.jobType.startsWith('Playlist Retry: ')) formattedJobType = 'Playlist retries';
                     else if (job.jobType.includes('Channel Downloads')) formattedJobType = 'Channels';
+                    else if (isArrBridgeJob(job.jobType)) formattedJobType = ARR_BRIDGE_HISTORY_LABEL;
                     else if (job.jobType.includes('Manually Added Urls')) {
                       const apiKeyMatch = job.jobType.match(/\(via API: (.+)\)/);
                       formattedJobType = apiKeyMatch ? `API: ${apiKeyMatch[1]}` : 'Manual Videos';

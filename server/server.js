@@ -687,6 +687,23 @@ const initialize = async () => {
       },
     });
 
+    // Rate limiter for saving and testing a Sonarr or Radarr connection from
+    // Settings: each attempt makes this server call an address the user typed.
+    const arrBridgeConnectionLimiter = rateLimit({
+      windowMs: 1 * 60 * 1000,
+      max: 10,
+      standardHeaders: true,
+      legacyHeaders: false,
+      validate: {
+        trustProxy: false,
+        ip: false,
+      },
+      keyGenerator: (req) => getRateLimitAddress(req),
+      handler: (_req, res) => {
+        res.status(429).json({ error: 'Too many connection tests. Please wait a minute before trying again.' });
+      },
+    });
+
     // Rate limiter for YouTube API key validation. Each test round-trips to
     // Google; users mistyping a key shouldn't burn quota or our outbound rate.
     const youtubeApiKeyTestLimiter = rateLimit({
@@ -899,6 +916,7 @@ const initialize = async () => {
       cookieTestRateLimiter,
       feedLimiter,
       arrBridgeLimiter,
+      arrBridgeConnectionLimiter,
       arrBridge,
       configModule,
       channelModule,

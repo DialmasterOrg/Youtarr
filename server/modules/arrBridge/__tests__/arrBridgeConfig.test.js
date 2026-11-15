@@ -1,6 +1,13 @@
 /* eslint-env jest */
+const fs = require('fs');
+const path = require('path');
 const {
   DEFAULT_CATEGORIES,
+  SETTING_KEYS,
+  getSettingsError,
+  cleanSettings,
+  correctStoredSettings,
+  parseConnectionInput,
   DEFAULT_EXCLUDE_TERMS,
   NEWZNAB_CATEGORIES,
   readSettings,
@@ -211,5 +218,222 @@ describe('arrBridgeConfig', () => {
     expect(movies.subcategories.map((sub) => sub.id)).toEqual([2010, 2020, 2030, 2040, 2045, 2050, 2060]);
     const tv = NEWZNAB_CATEGORIES.find((category) => category.id === 5000);
     expect(tv.subcategories.map((sub) => sub.id)).toEqual([5030, 5040]);
+  });
+
+  describe('settings saved from the Settings page', () => {
+    const DEFAULTS = {
+      arrBridgeEnabled: false,
+      arrBridgeCategories: [{ name: 'tv', subfolder: null }, { name: 'movies', subfolder: null }],
+      arrBridgeLooseMatching: false,
+      arrBridgeExcludeTerms: [...DEFAULT_EXCLUDE_TERMS],
+      arrBridgeMinTvMinutes: 10,
+      arrBridgeMinMovieMinutes: 60,
+      arrBridgeStagingPath: '',
+      arrBridgeStagingRetentionDays: 7,
+    };
+    const categories = (count) => Array.from({ length: count }, (_, index) => ({ name: `cat${index}`, subfolder: null }));
+
+    test('names the eight settings', () => {
+      expect([...SETTING_KEYS].sort()).toEqual(Object.keys(DEFAULTS).sort());
+    });
+
+    test('accepts the defaults', () => {
+      expect(getSettingsError(DEFAULTS)).toBeNull();
+    });
+
+    test('only checks keys that are present', () => {
+      expect(getSettingsError({})).toBeNull();
+      expect(getSettingsError({ darkModeEnabled: 'whatever' })).toBeNull();
+    });
+
+    test.each([
+      ['two names that differ only by case', [{ name: 'tv' }, { name: 'TV' }]],
+      ['an 11th category', categories(11)],
+      ['an empty list', []],
+      ['a path-like name', [{ name: '../x' }]],
+      ['a name with a space', [{ name: 'a b' }]],
+      ['a subfolder that is a path', [{ name: 'tv', subfolder: '../outside' }]],
+      ['something that is not a list', 'tv'],
+    ])('rejects categories with %s', (_label, value) => {
+      expect(getSettingsError({ arrBridgeCategories: value })).toMatch(/^Sonarr\/Radarr categories:/);
+    });
+
+    // The subfolder list in Settings can hold a legacy name the validator
+    // refuses, and the generic message would not say which choice to change.
+    test('names the category whose subfolder cannot be used', () => {
+      expect(getSettingsError({
+        arrBridgeCategories: [{ name: 'movies', subfolder: null }, { name: 'tv', subfolder: 'Kids & Co' }],
+      })).toBe(
+        'Sonarr/Radarr categories: the subfolder chosen for "tv" cannot be used. Subfolder name can only contain letters, numbers, spaces, hyphens, and underscores'
+      );
+    });
+
+    test('accepts a category with a subfolder, an empty one or none', () => {
+      expect(getSettingsError({
+        arrBridgeCategories: [{ name: 'tv', subfolder: 'Shows' }, { name: 'tv-4k', subfolder: '' }, { name: 'movies' }],
+      })).toBeNull();
+    });
+
+    test.each([
+      ['a term over 60 characters', ['x'.repeat(61)]],
+      ['a term that is not text', ['trailer', 5]],
+      ['an empty term', ['trailer', '  ']],
+      ['101 terms', Array.from({ length: 101 }, (_, index) => `term${index}`)],
+      ['something that is not a list', 'trailer'],
+    ])('rejects excluded words with %s', (_label, value) => {
+      expect(getSettingsError({ arrBridgeExcludeTerms: value })).toMatch(/^Sonarr\/Radarr excluded words:/);
+    });
+
+    test('accepts an empty list of excluded words', () => {
+      expect(getSettingsError({ arrBridgeExcludeTerms: [] })).toBeNull();
+    });
+
+    test.each([-1, 601, 'ten', Number.NaN, null])('rejects a minimum length of %p', (value) => {
+      expect(getSettingsError({ arrBridgeMinTvMinutes: value })).toMatch(/^Sonarr\/Radarr minimum length/);
+      expect(getSettingsError({ arrBridgeMinMovieMinutes: value })).toMatch(/^Sonarr\/Radarr minimum length/);
+    });
+
+    test.each([0, 366, 1.5, '7'])('rejects a retention of %p days', (value) => {
+      expect(getSettingsError({ arrBridgeStagingRetentionDays: value })).toMatch(/^Sonarr\/Radarr staged file retention/);
+    });
+
+    test.each(['data/staging', '/data/../etc', 5, `/${'x'.repeat(500)}`])('rejects the staging path %p', (value) => {
+      expect(getSettingsError({ arrBridgeStagingPath: value })).toMatch(/^Sonarr\/Radarr staging path/);
+    });
+
+    test('accepts an empty staging path and an absolute one', () => {
+      expect(getSettingsError({ arrBridgeStagingPath: '' })).toBeNull();
+      expect(getSettingsError({ arrBridgeStagingPath: '/downloads/.arr-staging/' })).toBeNull();
+    });
+
+    test.each(['yes', 1, null])('rejects %p for a switch', (value) => {
+      expect(getSettingsError({ arrBridgeEnabled: value })).toMatch(/^Sonarr\/Radarr/);
+      expect(getSettingsError({ arrBridgeLooseMatching: value })).toMatch(/^Sonarr\/Radarr/);
+    });
+
+    test('cleanSettings returns the saved form of the keys that are present', () => {
+      expect(cleanSettings({
+        arrBridgeExcludeTerms: [' Trailer ', 'trailer', 'Recap'],
+        arrBridgeStagingPath: '/downloads/.arr-staging//',
+        arrBridgeCategories: [{ name: 'tv', subfolder: '' }, { name: 'movies', subfolder: ' Films ', extra: 1 }],
+        darkModeEnabled: true,
+      })).toEqual({
+        arrBridgeExcludeTerms: ['trailer', 'recap'],
+        arrBridgeStagingPath: '/downloads/.arr-staging',
+        arrBridgeCategories: [{ name: 'tv', subfolder: null }, { name: 'movies', subfolder: 'Films' }],
+      });
+    });
+
+    // Otherwise a value saved today is "corrected" at the next startup.
+    test.each(['/x /', '/x/ ', ' /downloads/.arr-staging// ', '/a/b/'])(
+      'the saved form of the staging path %p needs no correction afterwards',
+      (stagingPath) => {
+        expect(getSettingsError({ arrBridgeStagingPath: stagingPath })).toBeNull();
+        const saved = cleanSettings({ arrBridgeStagingPath: stagingPath });
+
+        expect(saved.arrBridgeStagingPath).not.toMatch(/\s$|\/$/);
+        expect(correctStoredSettings(saved)).toEqual([]);
+      }
+    );
+
+    // "İ" lower-cases to two characters: such a word passed the length check
+    // and was then dropped without a message when the list was saved.
+    test('never accepts an excluded word that saving would drop', () => {
+      const word = 'İ'.repeat(40);
+
+      expect(getSettingsError({ arrBridgeExcludeTerms: [word] })).toMatch(/^Sonarr\/Radarr excluded words:/);
+      expect(cleanSettings({ arrBridgeExcludeTerms: ['İstanbul'] }).arrBridgeExcludeTerms).toHaveLength(1);
+    });
+
+    test('correctStoredSettings replaces hand-edited values that could not be saved', () => {
+      const corrections = correctStoredSettings({
+        arrBridgeCategories: [{ name: '../x' }],
+        arrBridgeMinTvMinutes: 'ten',
+        arrBridgeStagingRetentionDays: 0,
+        arrBridgeExcludeTerms: 'trailer',
+        arrBridgeEnabled: 'yes',
+        arrBridgeStagingPath: 'relative/path',
+      });
+      expect(corrections).toEqual([
+        { key: 'arrBridgeEnabled', previous: 'yes', replacement: false },
+        { key: 'arrBridgeCategories', previous: [{ name: '../x' }], replacement: DEFAULTS.arrBridgeCategories },
+        { key: 'arrBridgeExcludeTerms', previous: 'trailer', replacement: [...DEFAULT_EXCLUDE_TERMS] },
+        { key: 'arrBridgeMinTvMinutes', previous: 'ten', replacement: 10 },
+        { key: 'arrBridgeStagingPath', previous: 'relative/path', replacement: '' },
+        { key: 'arrBridgeStagingRetentionDays', previous: 0, replacement: 7 },
+      ]);
+    });
+
+    test('correctStoredSettings keeps the usable part of a hand-edited list', () => {
+      expect(correctStoredSettings({
+        arrBridgeCategories: [{ name: 'tv', subfolder: 'Shows' }, { name: 'bad name' }],
+        arrBridgeExcludeTerms: ['Trailer', 7, 'recap'],
+        arrBridgeMinMovieMinutes: 5000,
+      })).toEqual([
+        {
+          key: 'arrBridgeCategories',
+          previous: [{ name: 'tv', subfolder: 'Shows' }, { name: 'bad name' }],
+          replacement: [{ name: 'tv', subfolder: 'Shows' }],
+        },
+        { key: 'arrBridgeExcludeTerms', previous: ['Trailer', 7, 'recap'], replacement: ['trailer', 'recap'] },
+        { key: 'arrBridgeMinMovieMinutes', previous: 5000, replacement: 600 },
+      ]);
+    });
+
+    test('correctStoredSettings leaves valid and absent settings alone', () => {
+      expect(correctStoredSettings(DEFAULTS)).toEqual([]);
+      expect(correctStoredSettings({})).toEqual([]);
+    });
+
+    test('what correctStoredSettings leaves or produces can always be saved', () => {
+      const stored = {
+        arrBridgeCategories: [{ name: 'tv', subfolder: '../x' }, { name: 'TV' }],
+        arrBridgeExcludeTerms: ['ok', 'x'.repeat(80)],
+        arrBridgeMinTvMinutes: -4,
+        arrBridgeStagingRetentionDays: 9999,
+      };
+      const corrected = { ...stored };
+      for (const { key, replacement } of correctStoredSettings(stored)) corrected[key] = replacement;
+      expect(getSettingsError(corrected)).toBeNull();
+    });
+
+    test('the default exclude terms include parody and abridged', () => {
+      expect(DEFAULT_EXCLUDE_TERMS).toEqual(expect.arrayContaining(['parody', 'abridged']));
+    });
+
+    test('the config template matches the defaults', () => {
+      const template = JSON.parse(
+        fs.readFileSync(path.resolve(__dirname, '../../../../config/config.example.json'), 'utf8')
+      );
+      for (const [key, value] of Object.entries(DEFAULTS)) expect(template[key]).toEqual(value);
+      expect(readSettings(template)).toEqual(readSettings({}));
+    });
+  });
+
+  describe('parseConnectionInput', () => {
+    test('returns a trimmed connection for a valid address and key', () => {
+      expect(parseConnectionInput(' http://sonarr:8989/sonarr/ ', ' abc123 ')).toEqual({
+        connection: { url: 'http://sonarr:8989/sonarr', apiKey: 'abc123' },
+      });
+    });
+
+    test.each(['ftp://sonarr', 'http://user:pw@sonarr:8989', 'http://sonarr:8989/?a=1', 'sonarr:8989', '', undefined, 5])(
+      'explains what is wrong with the address %p',
+      (url) => {
+        expect(parseConnectionInput(url, 'abc123')).toEqual({
+          error: 'Enter the address as http:// or https://, without a username, password or query',
+        });
+      }
+    );
+
+    test.each(['', '   ', undefined, 5])('asks for the key when it is %p', (apiKey) => {
+      expect(parseConnectionInput('http://sonarr:8989', apiKey)).toEqual({ error: 'Enter the API key' });
+    });
+
+    test.each(['a b', 'abc\r\nX-Evil: 1', 'k'.repeat(129)])('refuses the key %p', (apiKey) => {
+      expect(parseConnectionInput('http://sonarr:8989', apiKey)).toEqual({
+        error: 'The API key may only contain letters, digits and symbols, without spaces',
+      });
+    });
   });
 });

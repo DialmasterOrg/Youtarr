@@ -2,6 +2,7 @@ import { ConfigState } from '../types';
 import { SCHEDULE_FIELDS } from '../schedules';
 import { validateRateLimit } from '../sections/ytdlpOptionsHelpers';
 import { validatePrefix } from '../../../utils/filenameTemplate/validate';
+import { getArrBridgeSettingsError } from './arrBridgeSetup';
 
 /**
  * Validate proxy URL format
@@ -73,6 +74,11 @@ export const validateConfig = (config: ConfigState): string | null => {
   const filenamePrefixResult = validatePrefix(config.videoFilenamePrefix);
   if (!filenamePrefixResult.ok) {
     return `Cannot save: ${filenamePrefixResult.error}`;
+  }
+
+  const arrBridgeError = getArrBridgeSettingsError(config);
+  if (arrBridgeError) {
+    return `Cannot save: ${arrBridgeError}`;
   }
 
   return null;

@@ -2,7 +2,12 @@
 paths:
   - "server/modules/arrBridge/**/*"
   - "server/routes/arrBridge.js"
+  - "server/routes/arrBridgeSettings.js"
   - "server/models/arrbridgegrab.js"
+  - "client/src/components/Configuration/sections/ArrBridgeSection.tsx"
+  - "client/src/components/Configuration/sections/components/Arr*.tsx"
+  - "client/src/components/Configuration/hooks/useArrBridge*.ts"
+  - "client/src/components/Configuration/utils/arrBridgeSetup.ts"
 ---
 
 # Sonarr/Radarr bridge
@@ -13,8 +18,9 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 
 - `/arr` skips `verifyToken` because Sonarr and Radarr cannot log in. Every request checks the bridge key, also with `AUTH_ENABLED=false`, and the namespace answers 404 while `arrBridgeEnabled` is off, so a login proxy exemption for `/arr/` stays safe.
 - The key travels as `?apikey=` because the protocols allow nothing else. `redactUrl` and `redactQuery` in `server.js` and the log scrubber hide it; never log `req.query` or a rendered feed, whose item links carry the key.
-- `arrBridgeApiKey` is server-owned like `downloadsFeedToken`: `/getconfig` omits it and `/updateconfig` restores it. `arrBridgeService` creates it the first time the bridge is found enabled.
-- The `arrBridge*` settings, the Sonarr and Radarr URLs and keys included, are hand-edited and absent from `CONFIG_FIELDS` until the Settings page ships. `arrBridgeConfig.readSettings` corrects them on every read, so a category name can never become a path.
+- `arrBridgeApiKey` is server-owned like `downloadsFeedToken`: `/getconfig` omits it and `/updateconfig` restores it. It is created the first time the bridge is found enabled or Settings asks for it.
+- Eight `arrBridge*` settings are in `CONFIG_FIELDS`. `arrBridgeConfig` holds the one rule set `/updateconfig` rejects with and `configModule` corrects stored values with; `readSettings` still corrects on every read, so a category name can never become a path.
+- `/updateconfig` keeps a bridge setting the client did not send: a tab loaded before the settings existed posts a config without them, and a save replaces the whole config, which would switch the bridge off.
 - SABnzbd answers are always HTTP 200, with `status: false` for errors, because anything else marks the whole client unavailable. `mode=version` needs no key, as in real SABnzbd.
 
 ## Indexer
@@ -34,6 +40,11 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 
 - The connection to the user's own Sonarr and Radarr is optional and read-only. Episode data never comes from Skyhook, Sonarr's private service.
 - `arrBridgeSonarrApiKey` and `arrBridgeRadarrApiKey` are server-owned like the bridge key and travel only as a header. `arrClient` turns every failure into an error without the axios object, whose config holds the key; never log that object.
+- `/updateconfig` keeps the stored Sonarr and Radarr URLs as well as the keys: a client able to move a URL would have the stored key sent to a host it chose.
+- A connection changes only through `PUT /api/arr-bridge/connections/:app`, which tests the given URL and key and stores both, never reading the stored key. The Test route reads no body. So a stored key only reaches the URL stored beside it.
+- `/getconfig` omits the connection URLs too, because a hand-edited one may hold credentials. Settings reads normalized URLs from `/api/arr-bridge/status`, which never returns a key.
+- The connection test passes on only the app's name, matched against Sonarr and Radarr, and a digits-and-dots version: the server calls a host the caller chose, so nothing else of its answer may be echoed.
+- The connection card never loads a stored key, but keeps a typed one in its field while the page is open, so a mistyped address is corrected without typing the key again.
 - `arrClient` follows no redirect, because axios would send the key header on to the redirect's target. Its abort signal is the real time limit: axios's `timeout` only bounds the wait between bytes.
 - A read that fails or resolves nothing falls back to the episode-code matcher, never an error document: `arrCatalog` never rejects and asks a failed app again only after 60 s, so alias requests do not each wait.
 - A request is tied to a series by name (title, title without its tag, aliases), as caps advertise no ids. A name two series share resolves to nothing: Sonarr sends it for either and reads the release as its own.
@@ -55,4 +66,6 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 - A SABnzbd category is one app instance: an app keeps only items of its own category, so two instances sharing one import each other's grabs. The carrier NZB holds the kind (tv or movie), not the category.
 - `grabExecutor` follows `externalRequestExecutor`, but each attempt gets a new job id stored on the grab: work on one grab is serialized, and every write names the status it expects, so a removed grab is never revived or staged.
 - A grab is failed only on evidence. A job a restart terminated, or one that never existed, queues the grab again; a file that cannot be checked waits. A failure makes the app blocklist the release and hides the video for 7 days.
+- `grabService.grabState` derives what Settings shows. A removed grab that completed is `handed-off`, never "imported": the app sends the same history delete after an import and after a removal there.
+- A category's name cannot be edited in Settings, only removed and added: existing grabs carry the name and their staging folder is named after it.
 - `ARR_BRIDGE_JOB_LABEL` contains the manual download label on purpose, so job detection, per-video structure and members-only handling treat a grab as a manual download.

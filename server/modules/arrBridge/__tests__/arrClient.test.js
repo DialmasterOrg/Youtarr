@@ -203,6 +203,57 @@ describe('arrClient', () => {
     });
   });
 
+  describe('fetchStatus', () => {
+    test('asks the app who it is, with the key in a header and no redirect followed', async () => {
+      axios.get.mockResolvedValue({ data: { appName: 'Sonarr', version: '4.0.20.3014', osName: 'alpine' } });
+
+      const status = await client.fetchStatus(SONARR);
+
+      expect(status).toEqual({ appName: 'Sonarr', version: '4.0.20.3014' });
+      const [url, options] = axios.get.mock.calls[0];
+      expect(url).toBe('http://sonarr:8989/api/v3/system/status');
+      expect(url).not.toContain(KEY);
+      expect(options).toEqual(expect.objectContaining({
+        headers: { 'X-Api-Key': KEY },
+        timeout: 10000,
+        maxRedirects: 0,
+        maxContentLength: 256 * 1024,
+      }));
+    });
+
+    test('keeps the URL Base path', async () => {
+      axios.get.mockResolvedValue({ data: { appName: 'Radarr', version: '6.4.4.10685' } });
+
+      await client.fetchStatus(RADARR);
+
+      expect(axios.get.mock.calls[0][0]).toBe('http://radarr:7878/radarr/api/v3/system/status');
+    });
+
+    test('a version that is missing or not text reads as empty', async () => {
+      axios.get.mockResolvedValue({ data: { appName: 'Sonarr', version: 4 } });
+
+      expect(await client.fetchStatus(SONARR)).toEqual({ appName: 'Sonarr', version: '' });
+    });
+
+    test.each([
+      ['a list', []],
+      ['a login page', '<html><body>Sign in</body></html>'],
+      ['an object without an app name', {}],
+      ['an app name that is not text', { appName: 7 }],
+      ['nothing', null],
+    ])('%s is not an answer', async (_label, data) => {
+      axios.get.mockResolvedValue({ data });
+
+      await expect(client.fetchStatus(SONARR)).rejects.toMatchObject({ reason: 'not-json' });
+    });
+
+    test('a 401 says the key was rejected', async () => {
+      axios.get.mockRejectedValue(axiosError({ status: 401 }));
+
+      await expect(client.fetchStatus(SONARR)).rejects.toMatchObject({ reason: 'unauthorized', status: 401 });
+    });
+  });
+
   describe('failures', () => {
     test('a 401 says the key was rejected', async () => {
       axios.get.mockRejectedValue(axiosError({ status: 401 }));
