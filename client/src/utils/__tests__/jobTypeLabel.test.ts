@@ -9,6 +9,10 @@ describe('jobTypeLabel', () => {
     expect(jobTypeLabel('Manually Added Urls (via API: my-key)')).toBe('API: my-key');
   });
 
+  test('maps Sonarr/Radarr grabs to their own label', () => {
+    expect(jobTypeLabel('Manually Added Urls (Sonarr/Radarr grab)')).toBe('Sonarr/Radarr grab');
+  });
+
   test('maps plain channel downloads', () => {
     expect(jobTypeLabel('Channel Downloads')).toBe('Channel update');
   });

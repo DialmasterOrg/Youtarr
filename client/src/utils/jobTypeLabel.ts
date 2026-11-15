@@ -13,6 +13,7 @@ const MANUAL_DOWNLOAD_LABEL = 'Manually Added Urls';
 // also matches the run tracker's 'Playlist downloads' label case-insensitively.
 const PLAYLIST_SWEEP_LABEL = 'Playlist Downloads';
 const API_KEY_PATTERN = /\(via API: (.+)\)/;
+const ARR_BRIDGE_SUFFIX = '(Sonarr/Radarr grab)';
 
 export function jobTypeLabel(jobType: string | null | undefined): string {
   if (!jobType) {
@@ -37,6 +38,9 @@ export function jobTypeLabel(jobType: string | null | undefined): string {
     return 'Channel update';
   }
   if (jobType.includes(MANUAL_DOWNLOAD_LABEL)) {
+    if (jobType.endsWith(ARR_BRIDGE_SUFFIX)) {
+      return 'Sonarr/Radarr grab';
+    }
     const apiKeyMatch = jobType.match(API_KEY_PATTERN);
     return apiKeyMatch ? `API: ${apiKeyMatch[1]}` : 'Manual download';
   }

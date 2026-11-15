@@ -236,6 +236,16 @@ describe('GET /getconfig', () => {
     expect(res.status).toBe(200);
     expect(res.body).not.toHaveProperty('downloadsFeedToken');
   });
+
+  test('leaves out the Sonarr/Radarr bridge key but returns the bridge settings', async () => {
+    const { app, configModule } = makeApp();
+    configModule._config.arrBridgeApiKey = 'saved-key';
+    configModule._config.arrBridgeEnabled = true;
+    const res = await supertest(app).get('/getconfig');
+    expect(res.status).toBe(200);
+    expect(res.body).not.toHaveProperty('arrBridgeApiKey');
+    expect(res.body.arrBridgeEnabled).toBe(true);
+  });
 });
 
 describe('POST /updateconfig', () => {
@@ -505,6 +515,30 @@ describe('POST /updateconfig', () => {
         .send({ notificationLinkTemplate: 'edited by hand' });
       expect(res.status).toBe(200);
       expect(configModule.updateConfig).toHaveBeenCalled();
+    });
+  });
+
+  describe('Sonarr/Radarr bridge key', () => {
+    test('keeps the saved key when the client sends a different one', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.arrBridgeApiKey = 'saved-key';
+      await supertest(app).post('/updateconfig').send({ arrBridgeApiKey: 'stale-key' });
+      expect(configModule.updateConfig.mock.calls[0][0].arrBridgeApiKey).toBe('saved-key');
+    });
+
+    test('keeps the saved key when the client sends none, as the Settings page does', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.arrBridgeApiKey = 'saved-key';
+      await supertest(app).post('/updateconfig').send({ arrBridgeEnabled: true });
+      const saved = configModule.updateConfig.mock.calls[0][0];
+      expect(saved.arrBridgeApiKey).toBe('saved-key');
+      expect(saved.arrBridgeEnabled).toBe(true);
+    });
+
+    test('does not let a client set a key when none is saved', async () => {
+      const { app, configModule } = makeApp();
+      await supertest(app).post('/updateconfig').send({ arrBridgeApiKey: 'chosen-by-client' });
+      expect(configModule.updateConfig.mock.calls[0][0].arrBridgeApiKey).toBeUndefined();
     });
   });
 

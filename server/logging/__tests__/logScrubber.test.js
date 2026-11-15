@@ -19,6 +19,23 @@ describe('createLogScrubber', () => {
       .toBe('GET /feeds/downloads.xml?token=[REDACTED]');
   });
 
+  test('hides the Sonarr/Radarr bridge key wherever it appears', () => {
+    const bridgeKey = 'b'.repeat(64);
+    const scrub = createLogScrubber({ arrBridgeApiKey: bridgeKey });
+
+    expect(scrub(`link: http://youtarr/arr/newznab/nzb/Show.S01E01.nzb?id=abc&k=${bridgeKey}`))
+      .toBe('link: http://youtarr/arr/newznab/nzb/Show.S01E01.nzb?id=abc&k=[REDACTED]');
+  });
+
+  test('hides an apikey query value even when it is not the configured key', () => {
+    const scrub = createLogScrubber({});
+
+    expect(scrub('GET /arr/newznab/api?apikey=abc123def456&t=caps 200'))
+      .toBe('GET /arr/newznab/api?apikey=[REDACTED]&t=caps 200');
+    expect(scrub('GET /arr/sabnzbd/api?mode=queue&apikey=abc123def456 200'))
+      .toBe('GET /arr/sabnzbd/api?mode=queue&apikey=[REDACTED] 200');
+  });
+
   test('hides configured notification URLs, which carry webhook and bot tokens', () => {
     const scrub = createLogScrubber({
       appriseUrls: [{ url: 'discord://123456/webhookToken', name: 'Discord' }, 'tgram://botToken123/chatId'],

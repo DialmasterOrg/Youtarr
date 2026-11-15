@@ -31,6 +31,10 @@ const AUTO_RETRY_LABEL_PREFIX = 'Auto-retry: ';
 // Downloads approved through the External API. Unlike the owner's own manual
 // downloads, these never use the owner's membership.
 const EXTERNAL_REQUEST_JOB_LABEL = `${MANUAL_DOWNLOAD_LABEL} (external request)`;
+// Downloads grabbed by Sonarr or Radarr through the bridge. It contains
+// MANUAL_DOWNLOAD_LABEL on purpose: a grab is handled exactly like a manual
+// download (URL-list detection, per-video structure, the owner's membership).
+const ARR_BRIDGE_JOB_LABEL = `${MANUAL_DOWNLOAD_LABEL} (Sonarr/Radarr grab)`;
 // Synthetic status-marker jobType for an idle playlist auto-download sweep
 // (>=1 auto-enabled playlist checked, nothing enqueued, no errors). NOT a
 // download job: it must stay un-matched by every detection helper below.
@@ -92,6 +96,7 @@ module.exports = {
   CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX,
   AUTO_RETRY_LABEL_PREFIX,
   EXTERNAL_REQUEST_JOB_LABEL,
+  ARR_BRIDGE_JOB_LABEL,
   PLAYLIST_SWEEP_LABEL,
   isSpecificUrlDownloadJob,
   isDownloadJob,

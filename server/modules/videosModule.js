@@ -14,7 +14,7 @@ const infoJsonCachePruner = require('./infoJsonCachePruner');
 const { slimInfoJson } = require('./infoJsonSlimmer');
 const scheduledTaskRuns = require('./scheduledTaskRuns');
 const rescanRunSummary = require('./rescanRunSummary');
-const { AUDIO_EXTENSIONS, MEDIA_EXTENSIONS } = require('./filesystem/constants');
+const { AUDIO_EXTENSIONS, MEDIA_EXTENSIONS, ARR_STAGING_DIR_NAME } = require('./filesystem/constants');
 const { probeVideoDimensions } = require('./resolutionTier');
 const createLimiter = require('./subscriptionImport/concurrencyLimiter');
 const { isRescanCandidate, resolveRescanUpdate } = require('./rescanRowUpdate');
@@ -495,6 +495,9 @@ class VideosModule {
       const fullPath = path.join(dir, entry.name);
 
       if (entry.isDirectory()) {
+        // Hardlinks staged for Sonarr and Radarr are not library files: a
+        // row must never be repointed at one.
+        if (entry.name === ARR_STAGING_DIR_NAME) continue;
         await this.scanForVideoFiles(fullPath, fileMap, duplicates, problems);
         continue;
       }

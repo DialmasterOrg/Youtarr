@@ -4,6 +4,7 @@ const path = require('path');
 const logger = require('../logger');
 const configModule = require('./configModule');
 const { isVideoDirectoryFor, isFileForVideo, cleanupEmptyChannelDirectory, cleanupEmptyParents, isSubfolderDir, listSubdirectories, removeDirectoryResilient } = require('./filesystem');
+const { ARR_STAGING_DIR_NAME } = require('./filesystem/constants');
 const m3uGenerator = require('./m3uGenerator');
 const playlistOutputRefresh = require('./playlistOutputRefresh');
 const storageUsage = require('./storageUsage');
@@ -534,6 +535,9 @@ ${excludeClause}        ORDER BY timeCreated ASC
 
       for (const dir of topLevelDirs) {
         const dirName = path.basename(dir);
+
+        // Not a channel folder: Sonarr and Radarr expect it to exist.
+        if (dirName === ARR_STAGING_DIR_NAME) continue;
 
         if (isSubfolderDir(dirName)) {
           // Subfolder directory (e.g., __Music) — check its children as channel dirs

@@ -6,6 +6,7 @@ const {
   CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX,
   AUTO_RETRY_LABEL_PREFIX,
   PLAYLIST_SWEEP_LABEL,
+  ARR_BRIDGE_JOB_LABEL,
   isSpecificUrlDownloadJob,
   isDownloadJob,
   playlistJobLabel,
@@ -37,6 +38,13 @@ describe('jobTypes', () => {
 
     it('matches playlist jobs by prefix', () => {
       expect(isSpecificUrlDownloadJob('Playlist: My Favorites')).toBe(true);
+    });
+
+    it('treats a Sonarr/Radarr grab as a manual URL-list download', () => {
+      expect(ARR_BRIDGE_JOB_LABEL).toBe('Manually Added Urls (Sonarr/Radarr grab)');
+      expect(isSpecificUrlDownloadJob(ARR_BRIDGE_JOB_LABEL)).toBe(true);
+      expect(isDownloadJob(ARR_BRIDGE_JOB_LABEL)).toBe(true);
+      expect(isChannelDownloadAllJob(ARR_BRIDGE_JOB_LABEL)).toBe(false);
     });
 
     it('does not match channel downloads', () => {

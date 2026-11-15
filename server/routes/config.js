@@ -175,6 +175,7 @@ module.exports = function createConfigRoutes({
     delete safeConfig.passwordHash;
     delete safeConfig.username;
     delete safeConfig.downloadsFeedToken;
+    delete safeConfig.arrBridgeApiKey;
 
     safeConfig.isPlatformManaged = {
       youtubeOutputDirectory: !!process.env.DATA_PATH,
@@ -428,6 +429,8 @@ module.exports = function createConfigRoutes({
     updateData.username = currentConfig.username;
     // Server-owned: /getconfig never sends it, and a save must not undo a new URL.
     updateData.downloadsFeedToken = currentConfig.downloadsFeedToken;
+    // Server-owned for the same reason: the Sonarr/Radarr bridge key.
+    updateData.arrBridgeApiKey = currentConfig.arrBridgeApiKey;
     updateData.ytdlpLastChecked = currentConfig.ytdlpLastChecked;
     updateData.ytdlpLastUpdated = currentConfig.ytdlpLastUpdated;
     updateData.ytdlpLastResult = currentConfig.ytdlpLastResult;

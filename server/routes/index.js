@@ -22,6 +22,7 @@ const createSchedulesRoutes = require('./schedules');
 const createLogRoutes = require('./logs');
 const createVideoTrashRoutes = require('./videoTrash');
 const createFeedRoutes = require('./feeds');
+const createArrBridgeRoutes = require('./arrBridge');
 const createExternalRequestReviewRoutes = require('./externalRequests');
 const { createExternalApiRoutes } = require('./externalApi');
 const { sendExternalError } = require('../modules/externalApi/externalApiResponse');
@@ -80,6 +81,8 @@ function registerRoutes(app, deps) {
     filenamePreviewRateLimiter,
     cookieTestRateLimiter,
     feedLimiter,
+    arrBridgeLimiter,
+    arrBridge,
     configModule,
     channelModule,
     plexModule,
@@ -193,6 +196,11 @@ function registerRoutes(app, deps) {
 
   // RSS feeds. The feed itself takes a token in its URL, not a session.
   app.use(createFeedRoutes({ verifyToken, feedLimiter, downloadsFeed }));
+
+  // Sonarr/Radarr bridge. Takes its own key in the query string, not a
+  // session, and answers 404 while it is switched off. Callers that register
+  // routes without the bridge service (tests) get no /arr namespace.
+  if (arrBridge) app.use(createArrBridgeRoutes({ arrBridgeLimiter, arrBridge }));
 
   // The versioned external API stays unreachable until a deployment opts in
   // explicitly. This fail-closed default is independent of AUTH_ENABLED.
