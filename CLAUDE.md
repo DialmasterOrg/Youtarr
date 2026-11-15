@@ -46,7 +46,7 @@ For multi-part requests (e.g., "review this PR AND explain WebSocket handling"),
   - Notifications: `notificationModule`, `modules/notifications/` (service registry, formatters, senders).
   - RSS feeds: `modules/feeds/` (RSS writer, download feed, settings limits).
   - External API: `modules/externalApi/` (catalog, requests, executor, permissions).
-  - Sonarr/Radarr bridge: `modules/arrBridge/` (Newznab indexer, SABnzbd client, release naming, grab executor, staging).
+  - Sonarr/Radarr bridge: `modules/arrBridge/` (Newznab indexer, SABnzbd client, release naming, grab executor, staging, Sonarr/Radarr metadata client and episode matcher).
   - YouTube Data API: `modules/youtubeApi/` (client, quota tracker, error classifier), the optional API path for channel and video search, playlists, metadata and tab counts.
 - `modules/__mocks__/`: Jest manual mocks (`membersAccess`) for tests that mock the database.
 - `utils/`: Python helpers (`validate-cookies.py` runs yt-dlp's cookie parser; `title-filter-regex.py` evaluates Python `re` for channel title filters).

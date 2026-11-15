@@ -1,5 +1,5 @@
 /* eslint-env jest */
-const { createSearchService, estimateBytes } = require('../searchService');
+const { createSearchService, estimateBytes, decodeHtmlEntities } = require('../searchService');
 const { createSearchQueue, SearchUnavailableError } = require('../searchQueue');
 const { parseNewznabRequest } = require('../newznabRequest');
 const { parseNzbLink } = require('../nzbFile');
@@ -30,9 +30,15 @@ function request(query) {
   return parsed.request;
 }
 
-function setup({ results = [], config = {}, apiAvailable = true, failedIds = [], knownDates = new Map() } = {}) {
-  const searchVideos = jest.fn().mockResolvedValue(results);
+function setup({
+  results = [], config = {}, apiAvailable = true, failedIds = [], knownDates = new Map(), catalog,
+} = {}) {
+  // An array answers every query; an object answers by query text.
+  const searchVideos = Array.isArray(results)
+    ? jest.fn().mockResolvedValue(results)
+    : jest.fn(async (query) => results[query] ?? []);
   const deps = {
+    catalog,
     searchVideos,
     isYoutubeApiAvailable: jest.fn(() => apiAvailable),
     getConfig: () => ({ arrBridgeEnabled: true, arrBridgeApiKey: KEY, preferredResolution: '1080', ...config }),
@@ -292,6 +298,296 @@ describe('searchService', () => {
     await service.search(request(episodeQuery()), ORIGIN);
 
     expect(searchVideos).toHaveBeenCalledTimes(1);
+  });
+
+  describe('titles from the YouTube Data API', () => {
+    test.each([
+      ['It&#39;s All Relative', 'It\'s All Relative'],
+      ['Tom &amp; Jerry', 'Tom & Jerry'],
+      ['&quot;Quoted&quot;', '"Quoted"'],
+      ['It&#x27;s', 'It\'s'],
+      ['&lt;b&gt;', '<b>'],
+      ['Fish &foo; Chips', 'Fish &foo; Chips'],
+      ['&amp;#39;', '&#39;'],
+      ['plain', 'plain'],
+    ])('decodeHtmlEntities turns %s into %s', (encoded, decoded) => {
+      expect(decodeHtmlEntities(encoded)).toBe(decoded);
+    });
+
+    test('are decoded before matching', async () => {
+      const { service } = setup({ results: [video('Marvel&#39;s Agents of S.H.I.E.L.D. S01E01 Pilot')] });
+
+      const items = await service.search(
+        request(episodeQuery({ title: 'Marvel\'s Agents of S.H.I.E.L.D.', ep: '1' })),
+        ORIGIN
+      );
+
+      expect(items.map((item) => item.title)).toEqual(['Marvels.Agents.of.S.H.I.E.L.D.S01E01.1080p.WEB-DL-NBC']);
+    });
+
+    test('channel names are decoded before they become the release group', async () => {
+      const { service } = setup({ results: [video('The Office S01E02', { channelName: 'Tom &amp; Jerry' })] });
+
+      const items = await service.search(request(episodeQuery()), ORIGIN);
+
+      expect(items[0].title).toBe('The.Office.US.S01E02.1080p.WEB-DL-TomJerry');
+    });
+  });
+
+  describe('with a Sonarr or Radarr connection', () => {
+    const TITLE_QUERY = 'Beyblade Play It Again Dizzi';
+    const CODE_QUERY = 'Beyblade S01E29';
+    const beybladeQuery = (overrides = {}) => ({
+      t: 'tvsearch', cat: SONARR_CATS, title: 'Beyblade', season: '1', ep: '29', ...overrides,
+    });
+    const beybladeEpisode = (overrides = {}) => ({
+      seriesTitle: 'Beyblade',
+      seriesTitles: ['Beyblade'],
+      episodeTitle: 'Play It Again, Dizzi!',
+      otherEpisodeTitles: ['Bottom of the Ninth', 'Cruising for a Bruising'],
+      runtimeSeconds: 1500,
+      season: 1,
+      episode: 29,
+      absoluteNumber: 29,
+      ...overrides,
+    });
+    // What YouTube returned for the title query on 2026-11-15.
+    const official = () => video('BEYBLADE EN Episode 29: Play it Again Dizzi!', {
+      youtubeId: 'g7VYYfoNaf0', channelName: 'BEYBLADE Official', duration: 1318,
+    });
+    const classic = () => video('Play it Again Dizzi', {
+      youtubeId: 'avUFb3DESfw', channelName: 'Beyblade: The Classic First Season', duration: 1321,
+    });
+    const double = () => video('BEYBLADE | Ep.29 Play it Again Dizzi! | Ep.30 Cruising for a Bruising', {
+      youtubeId: 'b9Xi2xAKqi4', channelName: 'BEYBLADE English - Official Channel', duration: 2635,
+    });
+    const clip = () => video('Episode 29: Play It Again Dizzi!', {
+      youtubeId: 'Ema1nx3zz4g', channelName: 'justin fielding', duration: 6,
+    });
+
+    function makeCatalog({ episode = null, series = null, movie = null } = {}) {
+      return {
+        resolveEpisode: jest.fn().mockResolvedValue(episode),
+        resolveSeries: jest.fn().mockResolvedValue(series),
+        resolveMovie: jest.fn().mockResolvedValue(movie),
+      };
+    }
+
+    test('Beyblade S01E29 finds the 22 minute uploads and never the double episode', async () => {
+      const catalog = makeCatalog({ episode: beybladeEpisode() });
+      const { service, searchVideos } = setup({ results: [official(), clip(), classic(), double()], catalog });
+
+      const items = await service.search(request(beybladeQuery()), ORIGIN);
+
+      expect(catalog.resolveEpisode).toHaveBeenCalledWith({ text: 'Beyblade', season: 1, episode: 29 });
+      expect(searchVideos).toHaveBeenCalledTimes(1);
+      expect(searchVideos).toHaveBeenCalledWith(TITLE_QUERY, 25);
+      expect(items.map((item) => item.title)).toEqual([
+        'Beyblade.S01E29.1080p.WEB-DL-BEYBLADEOfficial',
+        'Beyblade.S01E29.1080p.WEB-DL-BeybladeTheClassicFirstSeason',
+      ]);
+      expect(items.map((item) => item.youtubeId)).toEqual(['g7VYYfoNaf0', 'avUFb3DESfw']);
+    });
+
+    test('every alias request of one search shares one YouTube search and keeps its own name', async () => {
+      const moneyHeist = {
+        seriesTitle: 'Money Heist',
+        seriesTitles: ['Money Heist', 'Haus des Geldes'],
+        episodeTitle: 'Do as Planned',
+        otherEpisodeTitles: [],
+        runtimeSeconds: 2820,
+        season: 1,
+        episode: 1,
+        absoluteNumber: null,
+      };
+      const upload = video('Money Heist - Do as Planned', { duration: 47 * 60, channelName: 'Netflix' });
+      const { deps, searchVideos } = setup({ results: [upload], catalog: makeCatalog({ episode: moneyHeist }) });
+      const service = createSearchService({ ...deps, queue: createSearchQueue() });
+      const aliasQuery = (title) => request({ t: 'tvsearch', cat: SONARR_CATS, title, season: '1', ep: '1' });
+
+      const first = await service.search(aliasQuery('Haus des Geldes'), ORIGIN);
+      const second = await service.search(aliasQuery('Money Heist'), ORIGIN);
+
+      expect(searchVideos).toHaveBeenCalledTimes(1);
+      expect(searchVideos).toHaveBeenCalledWith('Money Heist Do as Planned', 25);
+      expect(first[0].title).toBe('Haus.des.Geldes.S01E01.1080p.WEB-DL-Netflix');
+      expect(second[0].title).toBe('Money.Heist.S01E01.1080p.WEB-DL-Netflix');
+      expect(second[0].guid).toBe(first[0].guid);
+    });
+
+    test('leaves a year tag out of the title query', async () => {
+      const episode = beybladeEpisode({
+        seriesTitle: 'Bluey (2018)', seriesTitles: ['Bluey (2018)', 'Bluey'], episodeTitle: 'Magic Xylophone', runtimeSeconds: 420,
+      });
+      const { service, searchVideos } = setup({ catalog: makeCatalog({ episode }) });
+
+      await service.search(request(beybladeQuery({ title: 'Bluey (2018)', season: '1', ep: '1' })), ORIGIN);
+
+      expect(searchVideos).toHaveBeenNthCalledWith(1, 'Bluey Magic Xylophone', 25);
+    });
+
+    test('falls back to the episode code when the title stage offers nothing', async () => {
+      const reupload = video('Beyblade S01E29', { duration: 1300, channelName: 'Fan' });
+      const { service, searchVideos } = setup({
+        results: { [TITLE_QUERY]: [double(), clip()], [CODE_QUERY]: [reupload] },
+        catalog: makeCatalog({ episode: beybladeEpisode() }),
+      });
+
+      const items = await service.search(request(beybladeQuery()), ORIGIN);
+
+      expect(searchVideos.mock.calls).toEqual([[TITLE_QUERY, 25], [CODE_QUERY, 25]]);
+      expect(items.map((item) => item.youtubeId)).toEqual([reupload.youtubeId]);
+    });
+
+    test('falls back when the only title match failed a grab recently', async () => {
+      const reupload = video('Beyblade S01E29', { duration: 1300, channelName: 'Fan' });
+      const { service } = setup({
+        results: { [TITLE_QUERY]: [official()], [CODE_QUERY]: [reupload] },
+        failedIds: ['g7VYYfoNaf0'],
+        catalog: makeCatalog({ episode: beybladeEpisode() }),
+      });
+
+      const items = await service.search(request(beybladeQuery()), ORIGIN);
+
+      expect(items.map((item) => item.youtubeId)).toEqual([reupload.youtubeId]);
+    });
+
+    test('the episode-code fallback uses the runtime: a double-length upload is not offered', async () => {
+      const { service } = setup({
+        results: { [CODE_QUERY]: [video('Beyblade S01E29', { duration: 2635 })] },
+        catalog: makeCatalog({ episode: beybladeEpisode() }),
+      });
+
+      expect(await service.search(request(beybladeQuery()), ORIGIN)).toEqual([]);
+    });
+
+    test('an episode title that cannot carry the match goes straight to the episode code', async () => {
+      const episode = beybladeEpisode({
+        seriesTitle: 'Bluey (2018)', seriesTitles: ['Bluey (2018)', 'Bluey'], episodeTitle: null, runtimeSeconds: 420,
+      });
+      const short = video('Bluey S01E01 Magic Xylophone', { duration: 7 * 60 });
+      const { service, searchVideos } = setup({ results: [short], catalog: makeCatalog({ episode }) });
+
+      const items = await service.search(request(beybladeQuery({ title: 'Bluey (2018)', season: '1', ep: '1' })), ORIGIN);
+
+      expect(searchVideos.mock.calls).toEqual([['Bluey 2018 S01E01', 25]]);
+      expect(items).toHaveLength(1);
+    });
+
+    test('an episode whose runtime Sonarr does not know is searched by code only', async () => {
+      const catalog = makeCatalog({ episode: beybladeEpisode({ runtimeSeconds: null }) });
+      const { service, searchVideos } = setup({ results: [official()], catalog });
+
+      const items = await service.search(request(beybladeQuery()), ORIGIN);
+
+      expect(searchVideos.mock.calls).toEqual([[CODE_QUERY, 25]]);
+      expect(items).toEqual([]);
+    });
+
+    test('with loose matching on, that episode is still searched by title', async () => {
+      const catalog = makeCatalog({ episode: beybladeEpisode({ runtimeSeconds: null }) });
+      const { service, searchVideos } = setup({
+        results: [official()], catalog, config: { arrBridgeLooseMatching: true },
+      });
+
+      const items = await service.search(request(beybladeQuery()), ORIGIN);
+
+      expect(searchVideos.mock.calls).toEqual([[TITLE_QUERY, 25]]);
+      expect(items.map((item) => item.youtubeId)).toEqual(['g7VYYfoNaf0']);
+    });
+
+    test('a request Sonarr cannot place is the plain episode-code search', async () => {
+      const { service, searchVideos } = setup({
+        results: [video('Beyblade S01E29', { duration: 44 * 60 })],
+        catalog: makeCatalog(),
+      });
+
+      const items = await service.search(request(beybladeQuery()), ORIGIN);
+
+      expect(searchVideos.mock.calls).toEqual([[CODE_QUERY, 25]]);
+      expect(items).toHaveLength(1);
+    });
+
+    test('a season request uses the series runtime', async () => {
+      const catalog = makeCatalog({ series: { id: 3, title: 'Bluey (2018)', titles: ['Bluey (2018)', 'Bluey'], runtimeSeconds: 420 } });
+      const { service } = setup({
+        results: [video('Bluey S03E01', { duration: 7 * 60 }), video('Bluey S03E02', { duration: 45 * 60 })],
+        catalog,
+      });
+
+      const items = await service.search(
+        request({ t: 'tvsearch', cat: SONARR_CATS, title: 'Bluey (2018)', season: '3' }),
+        ORIGIN
+      );
+
+      expect(catalog.resolveSeries).toHaveBeenCalledWith({ text: 'Bluey (2018)' });
+      expect(items.map((item) => item.title)).toEqual(['Bluey.2018.S03E01.1080p.WEB-DL-NBC']);
+    });
+
+    test('a daily request uses the series runtime', async () => {
+      const catalog = makeCatalog({ series: { id: 7, title: 'Last Week Tonight', titles: ['Last Week Tonight'], runtimeSeconds: 1980 } });
+      const publishedAt = '2025-02-16T23:30:00.000Z';
+      const { service } = setup({
+        results: [
+          video('Last Week Tonight: Web Exclusive', { publishedAt, duration: 10 * 60, channelName: 'Clips' }),
+          video('Last Week Tonight: Tariffs', { publishedAt, duration: 30 * 60 }),
+        ],
+        catalog,
+      });
+
+      const items = await service.search(
+        request({ t: 'tvsearch', cat: SONARR_CATS, title: 'Last Week Tonight', season: '2025', ep: '02/16' }),
+        ORIGIN
+      );
+
+      expect(items.map((item) => item.title)).toEqual(['Last.Week.Tonight.2025.02.16.1080p.WEB-DL-NBC']);
+    });
+
+    test('a movie request uses the movie runtime', async () => {
+      const catalog = makeCatalog({ movie: { title: 'Plan 9 from Outer Space', titles: ['Plan 9 from Outer Space'], runtimeSeconds: 4680 } });
+      const fullLength = video('Plan 9 from Outer Space (1957)', { duration: 79 * 60, channelName: 'Classics' });
+      const { service } = setup({
+        results: [video('Plan 9 from Outer Space (1957) in 60 minutes', { duration: 61 * 60 }), fullLength],
+        catalog,
+      });
+
+      const items = await service.search(
+        request({ t: 'search', cat: RADARR_CATS, q: 'Plan 9 from Outer Space 1957' }),
+        ORIGIN
+      );
+
+      expect(catalog.resolveMovie).toHaveBeenCalledWith({ text: 'Plan 9 from Outer Space', year: 1957 });
+      expect(items.map((item) => item.youtubeId)).toEqual([fullLength.youtubeId]);
+    });
+
+    test('requests answered without a search never ask Sonarr or Radarr', async () => {
+      const catalog = makeCatalog({ episode: beybladeEpisode() });
+      const { service } = setup({ catalog });
+
+      await service.search(request({ t: 'tvsearch', cat: SONARR_CATS }), ORIGIN);
+      await service.search(request({ t: 'tvsearch', cat: SONARR_CATS, q: 'Bluey' }), ORIGIN);
+      await service.search(request(episodeQuery({ title: '!!!' })), ORIGIN);
+
+      expect(catalog.resolveEpisode).not.toHaveBeenCalled();
+      expect(catalog.resolveSeries).not.toHaveBeenCalled();
+      expect(catalog.resolveMovie).not.toHaveBeenCalled();
+    });
+
+    test('logs which matcher answered', async () => {
+      const titleRun = setup({ results: [official()], catalog: makeCatalog({ episode: beybladeEpisode() }) });
+      await titleRun.service.search(request(beybladeQuery()), ORIGIN);
+      const codeRun = setup({ results: [video('Beyblade S01E29')], catalog: makeCatalog() });
+      await codeRun.service.search(request(beybladeQuery()), ORIGIN);
+
+      expect(titleRun.deps.logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({ matcher: 'episode-title', offered: 1 }),
+        'Sonarr/Radarr search answered'
+      );
+      expect(codeRun.deps.logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({ matcher: 'episode-code', offered: 1 }),
+        'Sonarr/Radarr search answered'
+      );
+    });
   });
 
   test('estimateBytes scales with length and resolution and is 0 for an unknown length', () => {

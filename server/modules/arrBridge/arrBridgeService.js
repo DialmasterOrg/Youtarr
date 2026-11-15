@@ -3,6 +3,8 @@
 // stops the grab executor as the feature is switched on or off.
 const { Op } = require('sequelize');
 const { generateKey, isAuthorized, isEnabled, readSettings } = require('./arrBridgeConfig');
+const { createArrCatalog } = require('./arrCatalog');
+const { createArrClient } = require('./arrClient');
 const { createGrabExecutor } = require('./grabExecutor');
 const { createGrabService } = require('./grabService');
 const { createNewznabApi } = require('./newznabApi');
@@ -76,10 +78,11 @@ function createUploadDateLookup({ Video, ChannelVideo }) {
  * @param {Function} deps.getActivity - () => the current download activity snapshot
  * @param {Object} deps.logger
  * @param {Function} [deps.createExecutor] - Test seam; defaults to createGrabExecutor
+ * @param {Function} [deps.createClient] - Test seam; defaults to createArrClient
  */
 function createArrBridgeService({
   configModule, models, searchVideos, isYoutubeApiAvailable, downloader, jobLookup, storageGuard,
-  isArchived, getActivity, logger, createExecutor = createGrabExecutor,
+  isArchived, getActivity, logger, createExecutor = createGrabExecutor, createClient = createArrClient,
 }) {
   const getConfig = () => configModule.getConfig();
   const getSettings = () => readSettings(getConfig());
@@ -108,6 +111,8 @@ function createArrBridgeService({
     knownUploadDates: createUploadDateLookup(models),
     recentlyFailedIds: grabService.recentlyFailedIds,
     queue: createSearchQueue(),
+    // Optional: reads the user's own Sonarr and Radarr when they are set up.
+    catalog: createArrCatalog({ client: createClient(), getSettings, logger }),
     logger,
   });
   const newznab = createNewznabApi({ getConfig, searchService, logger });

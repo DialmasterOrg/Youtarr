@@ -1,6 +1,8 @@
 /* eslint-env jest */
 const { createArrBridgeService, createUploadDateLookup } = require('../arrBridgeService');
 
+const KEY = 'k'.repeat(64);
+
 function fakeConfigModule(initial) {
   const listeners = [];
   const module = {
@@ -20,7 +22,7 @@ function fakeConfigModule(initial) {
   return module;
 }
 
-function setup(config) {
+function setup(config, overrides = {}) {
   const configModule = fakeConfigModule(config);
   const executor = { start: jest.fn(), stop: jest.fn(), wake: jest.fn(), handleJobEnded: jest.fn() };
   const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
@@ -28,6 +30,7 @@ function setup(config) {
     configModule,
     models: { ArrBridgeGrab: {}, Video: {}, ChannelVideo: {}, Job: {} },
     searchVideos: jest.fn(),
+    ...overrides,
     isYoutubeApiAvailable: () => false,
     downloader: jest.fn(),
     jobLookup: jest.fn(),
@@ -128,6 +131,47 @@ describe('arrBridgeService', () => {
     expect(typeof service.newznab.handleApi).toBe('function');
     expect(typeof service.newznab.handleNzb).toBe('function');
     expect(typeof service.sabnzbd.handle).toBe('function');
+  });
+
+  test('a search asks the configured Sonarr about the episode and matches by its title', async () => {
+    const sonarr = { url: 'http://sonarr:8989', apiKey: 'sonarr-key-0001' };
+    const arrClient = {
+      fetchSeries: jest.fn().mockResolvedValue([
+        { id: 14, title: 'Beyblade', titles: [], runtimeSeconds: 1500, sceneNumbering: false },
+      ]),
+      fetchEpisodes: jest.fn().mockResolvedValue([
+        { season: 1, episode: 29, title: 'Play It Again, Dizzi!', runtimeSeconds: 1500, absoluteNumber: 29 },
+      ]),
+      fetchMovies: jest.fn(),
+    };
+    const searchVideos = jest.fn().mockResolvedValue([{
+      youtubeId: 'g7VYYfoNaf0',
+      title: 'BEYBLADE EN Episode 29: Play it Again Dizzi!',
+      channelName: 'BEYBLADE Official',
+      duration: 1318,
+      publishedAt: '2020-08-30T16:00:24.000Z',
+    }]);
+    const noRows = { findAll: jest.fn().mockResolvedValue([]) };
+    const { service } = setup(
+      {
+        arrBridgeEnabled: true,
+        arrBridgeApiKey: KEY,
+        arrBridgeSonarrUrl: sonarr.url,
+        arrBridgeSonarrApiKey: sonarr.apiKey,
+        preferredResolution: '1080',
+      },
+      { searchVideos, createClient: () => arrClient, models: { ArrBridgeGrab: noRows, Video: noRows, ChannelVideo: noRows, Job: {} } }
+    );
+
+    const response = await service.newznab.handleApi(
+      { t: 'tvsearch', apikey: KEY, cat: '5030,5040', title: 'Beyblade', season: '1', ep: '29' },
+      'http://youtarr:3011'
+    );
+
+    expect(arrClient.fetchSeries).toHaveBeenCalledWith(sonarr);
+    expect(arrClient.fetchEpisodes).toHaveBeenCalledWith(sonarr, 14);
+    expect(searchVideos).toHaveBeenCalledWith('Beyblade Play It Again Dizzi', 25);
+    expect(response.body).toContain('Beyblade.S01E29.1080p.WEB-DL-BEYBLADEOfficial');
   });
 
   describe('createUploadDateLookup', () => {

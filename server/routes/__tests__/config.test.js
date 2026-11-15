@@ -246,6 +246,20 @@ describe('GET /getconfig', () => {
     expect(res.body).not.toHaveProperty('arrBridgeApiKey');
     expect(res.body.arrBridgeEnabled).toBe(true);
   });
+
+  test('leaves out the Sonarr and Radarr API keys but returns their URLs', async () => {
+    const { app, configModule } = makeApp();
+    configModule._config.arrBridgeSonarrUrl = 'http://sonarr:8989';
+    configModule._config.arrBridgeSonarrApiKey = 'sonarr-key';
+    configModule._config.arrBridgeRadarrUrl = 'http://radarr:7878';
+    configModule._config.arrBridgeRadarrApiKey = 'radarr-key';
+    const res = await supertest(app).get('/getconfig');
+    expect(res.status).toBe(200);
+    expect(res.body).not.toHaveProperty('arrBridgeSonarrApiKey');
+    expect(res.body).not.toHaveProperty('arrBridgeRadarrApiKey');
+    expect(res.body.arrBridgeSonarrUrl).toBe('http://sonarr:8989');
+    expect(res.body.arrBridgeRadarrUrl).toBe('http://radarr:7878');
+  });
 });
 
 describe('POST /updateconfig', () => {
@@ -539,6 +553,16 @@ describe('POST /updateconfig', () => {
       const { app, configModule } = makeApp();
       await supertest(app).post('/updateconfig').send({ arrBridgeApiKey: 'chosen-by-client' });
       expect(configModule.updateConfig.mock.calls[0][0].arrBridgeApiKey).toBeUndefined();
+    });
+
+    test('keeps the saved Sonarr and Radarr keys, which the Settings page never receives', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.arrBridgeSonarrApiKey = 'sonarr-key';
+      configModule._config.arrBridgeRadarrApiKey = 'radarr-key';
+      await supertest(app).post('/updateconfig').send({ arrBridgeSonarrApiKey: 'stale', arrBridgeEnabled: true });
+      const saved = configModule.updateConfig.mock.calls[0][0];
+      expect(saved.arrBridgeSonarrApiKey).toBe('sonarr-key');
+      expect(saved.arrBridgeRadarrApiKey).toBe('radarr-key');
     });
   });
 

@@ -25,6 +25,8 @@ describe('arrBridgeConfig', () => {
         minMovieSeconds: 3600,
         stagingPath: null,
         retentionDays: 7,
+        sonarr: null,
+        radarr: null,
       });
     });
 
@@ -98,6 +100,56 @@ describe('arrBridgeConfig', () => {
     test('reports a stored key and ignores an empty one', () => {
       expect(readSettings({ arrBridgeApiKey: KEY }).apiKey).toBe(KEY);
       expect(readSettings({ arrBridgeApiKey: '' }).apiKey).toBeNull();
+    });
+  });
+
+  describe('Sonarr and Radarr connections', () => {
+    const SONARR_KEY = 'abc123def456';
+
+    test('reads a Sonarr connection and trims the URL', () => {
+      const settings = readSettings({
+        arrBridgeSonarrUrl: 'http://sonarr:8989/sonarr/',
+        arrBridgeSonarrApiKey: ` ${SONARR_KEY} `,
+      });
+      expect(settings.sonarr).toEqual({ url: 'http://sonarr:8989/sonarr', apiKey: SONARR_KEY });
+      expect(settings.radarr).toBeNull();
+    });
+
+    test('reads a Radarr connection on its own', () => {
+      const settings = readSettings({
+        arrBridgeRadarrUrl: 'https://radarr.example.com',
+        arrBridgeRadarrApiKey: SONARR_KEY,
+      });
+      expect(settings.radarr).toEqual({ url: 'https://radarr.example.com', apiKey: SONARR_KEY });
+      expect(settings.sonarr).toBeNull();
+    });
+
+    test('a connection needs both a URL and a key', () => {
+      expect(readSettings({ arrBridgeSonarrUrl: 'http://sonarr:8989' }).sonarr).toBeNull();
+      expect(readSettings({ arrBridgeSonarrApiKey: SONARR_KEY }).sonarr).toBeNull();
+    });
+
+    test.each([
+      ['another scheme', 'ftp://sonarr:8989'],
+      ['a script URL', 'javascript:alert(1)'],
+      ['credentials in the URL', 'http://user:pw@sonarr:8989'],
+      ['a query string', 'http://sonarr:8989/?a=1'],
+      ['a fragment', 'http://sonarr:8989/#x'],
+      ['text that is no URL', 'not a url'],
+      ['an overlong URL', `http://sonarr:8989/${'a'.repeat(600)}`],
+      ['a non-string', 8989],
+    ])('rejects %s', (_label, url) => {
+      expect(readSettings({ arrBridgeSonarrUrl: url, arrBridgeSonarrApiKey: SONARR_KEY }).sonarr).toBeNull();
+    });
+
+    test.each([
+      ['whitespace inside', 'a b'],
+      ['a header injection', 'abc\r\nX-Evil: 1'],
+      ['an overlong key', 'a'.repeat(200)],
+      ['an empty key', '   '],
+      ['a non-string', 12345678],
+    ])('rejects a key with %s', (_label, apiKey) => {
+      expect(readSettings({ arrBridgeSonarrUrl: 'http://sonarr:8989', arrBridgeSonarrApiKey: apiKey }).sonarr).toBeNull();
     });
   });
 

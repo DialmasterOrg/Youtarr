@@ -12,6 +12,20 @@ const YEAR_TOKEN = /^(?:19|20)\d{2}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Daily shows are often uploaded the day after they air.
 const DAILY_TOLERANCE_DAYS = 1;
+// A video's length against the runtime Sonarr or Radarr reports. An hour
+// slot holds about 42 minutes of episode; two episodes in one upload run to
+// 1.5 times the runtime or more.
+const TV_RUNTIME_MIN_RATIO = 0.6;
+const TV_RUNTIME_MAX_RATIO = 1.35;
+// Short shows would otherwise get a window of a minute or two.
+const TV_RUNTIME_SLACK_SECONDS = 180;
+const MOVIE_RUNTIME_MIN_RATIO = 0.85;
+const MOVIE_RUNTIME_MAX_RATIO = 1.15;
+const LONG_RUNTIME_SECONDS = 30 * 60;
+const SHORT_RUNTIME_SECONDS = 10 * 60;
+const LONG_RUNTIME_SAMPLE_SECONDS = 10 * 60;
+const MID_RUNTIME_SAMPLE_SECONDS = 5 * 60;
+const SHORT_RUNTIME_SAMPLE_SECONDS = 90;
 
 const MARKER_PATTERNS = [
   /\bs(\d{1,4})\s*[.\-_ ]?\s*e(\d{1,3})\b/gi,
@@ -129,25 +143,66 @@ function hasExcludedTerm(title, excludeTerms, requestText) {
   });
 }
 
-function passesDuration(candidate, minSeconds, loose) {
+// Below these lengths Sonarr holds an import back as a sample.
+function sampleThresholdSeconds(runtimeSeconds) {
+  if (runtimeSeconds > LONG_RUNTIME_SECONDS) return LONG_RUNTIME_SAMPLE_SECONDS;
+  if (runtimeSeconds > SHORT_RUNTIME_SECONDS) return MID_RUNTIME_SAMPLE_SECONDS;
+  return SHORT_RUNTIME_SAMPLE_SECONDS;
+}
+
+/**
+ * The lengths a video may have to be the episode or movie whose runtime
+ * Sonarr or Radarr reports. Listed runtimes are often the broadcast slot, so
+ * an upload runs shorter; a double episode or a clip falls outside.
+ * @param {number|null} runtimeSeconds
+ * @param {'tv'|'movie'} kind
+ * @returns {{minSeconds: number, maxSeconds: number}|null} Null without a runtime
+ */
+function runtimeWindow(runtimeSeconds, kind) {
+  if (typeof runtimeSeconds !== 'number' || !(runtimeSeconds > 0)) return null;
+  if (kind === 'movie') {
+    return {
+      minSeconds: Math.round(runtimeSeconds * MOVIE_RUNTIME_MIN_RATIO),
+      maxSeconds: Math.round(runtimeSeconds * MOVIE_RUNTIME_MAX_RATIO),
+    };
+  }
+  const lowest = Math.min(runtimeSeconds * TV_RUNTIME_MIN_RATIO, runtimeSeconds - TV_RUNTIME_SLACK_SECONDS);
+  const highest = Math.max(runtimeSeconds * TV_RUNTIME_MAX_RATIO, runtimeSeconds + TV_RUNTIME_SLACK_SECONDS);
+  return {
+    minSeconds: Math.round(Math.max(sampleThresholdSeconds(runtimeSeconds), lowest)),
+    maxSeconds: Math.round(highest),
+  };
+}
+
+/**
+ * @param {Object} candidate
+ * @param {Object} limits
+ * @param {number} limits.minSeconds - The fixed minimum, used without a window
+ * @param {{minSeconds: number, maxSeconds: number}|null} [limits.window] - From runtimeWindow
+ * @param {boolean} limits.loose - Whether an unknown length passes
+ * @returns {boolean}
+ */
+function passesDuration(candidate, { minSeconds, window = null, loose }) {
   if (typeof candidate.duration !== 'number') return loose;
+  if (window) return candidate.duration >= window.minSeconds && candidate.duration <= window.maxSeconds;
   return candidate.duration >= minSeconds;
 }
 
 // The checks every request shares: exclude terms, length, and every
 // significant word of the request text.
-function passesCommon(candidate, { terms, requestText, minSeconds, settings }) {
+function passesCommon(candidate, { terms, requestText, minSeconds, window, settings }) {
   if (hasExcludedTerm(candidate.title, settings.excludeTerms, requestText)) return false;
-  if (!passesDuration(candidate, minSeconds, settings.looseMatching)) return false;
+  if (!passesDuration(candidate, { minSeconds, window, loose: settings.looseMatching })) return false;
   const tokens = titleTokens(candidate.title);
   return terms.every((term) => tokens.has(term));
 }
 
-function tvContext(text, settings) {
+function tvContext(text, settings, runtimeSeconds) {
   return {
     terms: matchTerms(text, { dropTrailingYear: true }),
     requestText: text,
     minSeconds: settings.minTvSeconds,
+    window: runtimeWindow(runtimeSeconds, 'tv'),
     settings,
     allowedBeforeMarker: new Set([...tokenize(text), ...STOPWORDS, ...FILLER_WORDS]),
   };
@@ -180,10 +235,13 @@ function namesAnotherSeries(title, context) {
 }
 
 /**
+ * Every filter takes an optional runtimeSeconds (from Sonarr or Radarr):
+ * with it, a video must be inside runtimeWindow instead of over the fixed
+ * minimum.
  * @returns {Array<Object>} Candidates for one episode, in source order
  */
-function filterTvEpisode(candidates, { text, season, episode, settings }) {
-  const context = tvContext(text, settings);
+function filterTvEpisode(candidates, { text, season, episode, runtimeSeconds, settings }) {
+  const context = tvContext(text, settings, runtimeSeconds);
   if (context.terms.length === 0) return [];
   return candidates.filter((candidate) => {
     if (!passesCommon(candidate, context) || hasEpisodeRange(candidate.title)) return false;
@@ -204,8 +262,8 @@ function filterTvEpisode(candidates, { text, season, episode, settings }) {
  * Always strict: a season answer may be grabbed by a bulk search.
  * @returns {Array<{candidate: Object, episode: number}>}
  */
-function filterTvSeason(candidates, { text, season, settings }) {
-  const context = tvContext(text, { ...settings, looseMatching: false });
+function filterTvSeason(candidates, { text, season, runtimeSeconds, settings }) {
+  const context = tvContext(text, { ...settings, looseMatching: false }, runtimeSeconds);
   if (context.terms.length === 0) return [];
   const matches = [];
   for (const candidate of candidates) {
@@ -225,8 +283,8 @@ const utcDay = (date) => Math.floor(new Date(date).getTime() / DAY_MS);
  * @param {Date} options.date - The air date, at UTC midnight
  * @returns {Array<Object>} Candidates published on or next to the air date
  */
-function filterTvDaily(candidates, { text, date, settings }) {
-  const context = tvContext(text, settings);
+function filterTvDaily(candidates, { text, date, runtimeSeconds, settings }) {
+  const context = tvContext(text, settings, runtimeSeconds);
   if (context.terms.length === 0) return [];
   const airDay = utcDay(date);
   return candidates.filter((candidate) => {
@@ -239,11 +297,12 @@ function filterTvDaily(candidates, { text, date, settings }) {
 /**
  * @returns {Array<Object>} Candidates for a movie, in source order
  */
-function filterMovie(candidates, { title, year, settings }) {
+function filterMovie(candidates, { title, year, runtimeSeconds, settings }) {
   const context = {
     terms: matchTerms(title),
     requestText: title,
     minSeconds: settings.minMovieSeconds,
+    window: runtimeWindow(runtimeSeconds, 'movie'),
     settings,
   };
   if (context.terms.length === 0) return [];
@@ -254,6 +313,7 @@ function filterMovie(candidates, { title, year, settings }) {
 }
 
 module.exports = {
+  tokenize,
   matchTerms,
   titleTokens,
   episodeMarkers,
@@ -264,4 +324,6 @@ module.exports = {
   filterTvSeason,
   filterTvDaily,
   filterMovie,
+  runtimeWindow,
+  passesDuration,
 };

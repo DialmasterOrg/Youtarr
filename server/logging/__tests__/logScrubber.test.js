@@ -27,6 +27,15 @@ describe('createLogScrubber', () => {
       .toBe('link: http://youtarr/arr/newznab/nzb/Show.S01E01.nzb?id=abc&k=[REDACTED]');
   });
 
+  test('hides the keys of the connected Sonarr and Radarr', () => {
+    const sonarrKey = '5'.repeat(32);
+    const radarrKey = '7'.repeat(32);
+    const scrub = createLogScrubber({ arrBridgeSonarrApiKey: sonarrKey, arrBridgeRadarrApiKey: radarrKey });
+
+    expect(scrub(`headers: {"X-Api-Key":"${sonarrKey}"} then {"X-Api-Key":"${radarrKey}"}`))
+      .toBe('headers: {"X-Api-Key":"[REDACTED]"} then {"X-Api-Key":"[REDACTED]"}');
+  });
+
   test('hides an apikey query value even when it is not the configured key', () => {
     const scrub = createLogScrubber({});
 

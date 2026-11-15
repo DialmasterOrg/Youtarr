@@ -14,7 +14,7 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 - `/arr` skips `verifyToken` because Sonarr and Radarr cannot log in. Every request checks the bridge key, also with `AUTH_ENABLED=false`, and the namespace answers 404 while `arrBridgeEnabled` is off, so a login proxy exemption for `/arr/` stays safe.
 - The key travels as `?apikey=` because the protocols allow nothing else. `redactUrl` and `redactQuery` in `server.js` and the log scrubber hide it; never log `req.query` or a rendered feed, whose item links carry the key.
 - `arrBridgeApiKey` is server-owned like `downloadsFeedToken`: `/getconfig` omits it and `/updateconfig` restores it. `arrBridgeService` creates it the first time the bridge is found enabled.
-- The `arrBridge*` settings are hand-edited and absent from `CONFIG_FIELDS` until the Settings page ships. `arrBridgeConfig.readSettings` corrects them on every read, so a category name can never become a path.
+- The `arrBridge*` settings, the Sonarr and Radarr URLs and keys included, are hand-edited and absent from `CONFIG_FIELDS` until the Settings page ships. `arrBridgeConfig.readSettings` corrects them on every read, so a category name can never become a path.
 - SABnzbd answers are always HTTP 200, with `status: false` for errors, because anything else marks the whole client unavailable. `mode=version` needs no key, as in real SABnzbd.
 
 ## Indexer
@@ -29,6 +29,23 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 - Strict TV matching also rejects a title with several episodes, and one with other words between the series name and the marker: "Beyblade Metal Fusion S01E29" contains every word of "Beyblade" but is another series.
 - A search that cannot run is held up to 30 s, then answered with Newznab error 900: never 429, which disables the indexer for 5 to 15 minutes, and never an empty page, which reads as "nothing on YouTube".
 - The failed-grab guard (7 days) keys on `fail_message` and `completed_at`, not status: Sonarr deletes a failed history item within a minute, turning the row `removed` before it searches again.
+
+## Sonarr/Radarr connection and episode-title matching
+
+- The connection to the user's own Sonarr and Radarr is optional and read-only. Episode data never comes from Skyhook, Sonarr's private service.
+- `arrBridgeSonarrApiKey` and `arrBridgeRadarrApiKey` are server-owned like the bridge key and travel only as a header. `arrClient` turns every failure into an error without the axios object, whose config holds the key; never log that object.
+- `arrClient` follows no redirect, because axios would send the key header on to the redirect's target. Its abort signal is the real time limit: axios's `timeout` only bounds the wait between bytes.
+- A read that fails or resolves nothing falls back to the episode-code matcher, never an error document: `arrCatalog` never rejects and asks a failed app again only after 60 s, so alias requests do not each wait.
+- A request is tied to a series by name (title, title without its tag, aliases), as caps advertise no ids. A name two series share resolves to nothing: Sonarr sends it for either and reads the release as its own.
+- Aliases with a scene season are dropped and scene-numbered series get no episode title: Sonarr sends scene numbers for them, which would look up another episode.
+- The title stage searches `<main series title> <episode title>` for every alias, so one Sonarr search costs one YouTube search. Releases are still named from the alias that was asked.
+- A title match needs the episode title as a whole phrase, the series name within the video title or within the channel name, no other episode's number or title, and a length inside the runtime window.
+- Strict matching runs the title stage only with a known runtime: without the window, an hour of episodes listing this title would pass.
+- A video naming a library series whose name contains this one's ("Beyblade Burst"), or a year before the series began, is another series. Loose matching drops this, the series-name and the one-word-title rules, and lets an unknown length pass.
+- A generic, shared or series-named episode title skips the title stage, and a one-word title also needs the episode number: such titles appear in unrelated videos.
+- With a known runtime, `runtimeWindow` replaces the fixed minimum lengths in every filter, loose matching included: it is what rejects a double episode, and it never goes below Sonarr's sample threshold.
+- Movies keep the year requirement under strict matching: The Matrix and The Matrix Reloaded share every title word and nearly a runtime.
+- `searchService` decodes HTML entities in titles and channel names first: the YouTube Data API encodes them (`It&#39;s`), which broke every match on an apostrophe or `&`.
 
 ## Grabs and staging
 

@@ -9,6 +9,7 @@ const {
   filterTvSeason,
   filterTvDaily,
   filterMovie,
+  runtimeWindow,
 } = require('../candidateFilter');
 
 const TWENTY_MINUTES = 20 * 60;
@@ -340,6 +341,93 @@ describe('candidateFilter', () => {
       const candidates = [movie('Blade Runner (2017) full film'), movie('Blade Runner 2049 (2017)')];
       expect(titles(filterMovie(candidates, { title: 'Blade Runner 2049', year: 2017, settings: settings() })))
         .toEqual(['Blade Runner 2049 (2017)']);
+    });
+  });
+
+  describe('runtimeWindow', () => {
+    test.each([
+      ['a 25 minute series', 1500, 'tv', { minSeconds: 900, maxSeconds: 2025 }],
+      ['a 7 minute series, widened to 3 minutes either side', 420, 'tv', { minSeconds: 240, maxSeconds: 600 }],
+      ['a 45 minute series', 2700, 'tv', { minSeconds: 1620, maxSeconds: 3645 }],
+      ['a 2 minute series, held at the sample threshold', 120, 'tv', { minSeconds: 90, maxSeconds: 300 }],
+      ['a 78 minute movie', 4680, 'movie', { minSeconds: 3978, maxSeconds: 5382 }],
+    ])('%s', (_label, runtimeSeconds, kind, expected) => {
+      expect(runtimeWindow(runtimeSeconds, kind)).toEqual(expected);
+    });
+
+    test.each([[0], [null], [undefined], [-60], ['1500']])('is null for the runtime %p', (runtimeSeconds) => {
+      expect(runtimeWindow(runtimeSeconds, 'tv')).toBeNull();
+    });
+  });
+
+  describe('with a known runtime', () => {
+    const BEYBLADE = { text: 'Beyblade', season: 1, episode: 29, runtimeSeconds: 1500 };
+
+    test('an episode of the right length passes below the fixed minimum', () => {
+      const candidates = [candidate('Bluey S01E01 Magic Xylophone', { duration: 7 * 60 })];
+      const request = { text: 'Bluey', season: 1, episode: 1, settings: settings() };
+
+      expect(filterTvEpisode(candidates, request)).toEqual([]);
+      expect(filterTvEpisode(candidates, { ...request, runtimeSeconds: 420 })).toHaveLength(1);
+    });
+
+    test('a double-length video is rejected even with the right marker', () => {
+      const candidates = [candidate('Beyblade S01E29', { duration: 2635 })];
+
+      expect(filterTvEpisode(candidates, { ...BEYBLADE, runtimeSeconds: null, settings: settings() })).toHaveLength(1);
+      expect(filterTvEpisode(candidates, { ...BEYBLADE, settings: settings() })).toEqual([]);
+      expect(filterTvEpisode(candidates, { ...BEYBLADE, settings: settings({ looseMatching: true }) })).toEqual([]);
+    });
+
+    test('an unknown duration still fails strict matching and passes loose matching', () => {
+      const candidates = [candidate('Beyblade S01E29', { duration: null })];
+
+      expect(filterTvEpisode(candidates, { ...BEYBLADE, settings: settings() })).toEqual([]);
+      expect(filterTvEpisode(candidates, { ...BEYBLADE, settings: settings({ looseMatching: true }) })).toHaveLength(1);
+    });
+
+    test('a season answer uses the window too', () => {
+      const candidates = [
+        candidate('Bluey S01E01', { duration: 7 * 60 }),
+        candidate('Bluey S01E02', { duration: 60 * 60 }),
+      ];
+
+      const matches = filterTvSeason(candidates, { text: 'Bluey', season: 1, runtimeSeconds: 420, settings: settings() });
+
+      expect(matches.map((match) => match.episode)).toEqual([1]);
+    });
+
+    test('a daily answer uses the window too', () => {
+      const date = new Date(Date.UTC(2025, 1, 16));
+      const candidates = [
+        candidate('Last Week Tonight: Tariffs', { duration: 33 * 60 }),
+        candidate('Last Week Tonight: Web Exclusive', { duration: 12 * 60 }),
+      ];
+
+      const kept = filterTvDaily(candidates, { text: 'Last Week Tonight', date, runtimeSeconds: 1980, settings: settings() });
+
+      expect(titles(kept)).toEqual(['Last Week Tonight: Tariffs']);
+    });
+
+    test('a movie far from its runtime is rejected even with the year', () => {
+      const candidates = [
+        candidate('Plan 9 from Outer Space (1957)', { duration: 79 * 60 }),
+        candidate('Plan 9 from Outer Space (1957) colorized cut', { duration: 120 * 60 }),
+      ];
+
+      const kept = filterMovie(candidates, {
+        title: 'Plan 9 from Outer Space', year: 1957, runtimeSeconds: 4680, settings: settings(),
+      });
+
+      expect(titles(kept)).toEqual(['Plan 9 from Outer Space (1957)']);
+    });
+
+    test('a short film passes below the fixed movie minimum', () => {
+      const candidates = [candidate('A Trip to the Moon (1902)', { duration: 14 * 60 })];
+      const request = { title: 'A Trip to the Moon', year: 1902, settings: settings() };
+
+      expect(filterMovie(candidates, request)).toEqual([]);
+      expect(filterMovie(candidates, { ...request, runtimeSeconds: 14 * 60 })).toHaveLength(1);
     });
   });
 });

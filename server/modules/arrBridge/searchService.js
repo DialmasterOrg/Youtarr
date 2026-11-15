@@ -1,8 +1,11 @@
 // Turns a classified Newznab request into feed items: the placeholder for the
 // no-query feed, nothing for requests a YouTube-wide search cannot answer
-// honestly, and otherwise one YouTube search, filtered and named.
+// honestly, and otherwise a YouTube search, filtered and named. When the
+// user's Sonarr knows the episode, a search by episode title runs first and
+// the search by episode code only when that offers nothing.
 const { readSettings } = require('./arrBridgeConfig');
 const candidateFilter = require('./candidateFilter');
+const { filterByEpisodeTitle, canMatchByTitle } = require('./episodeMatcher');
 const { PLACEHOLDER_ID, buildNzbLink } = require('./nzbFile');
 const {
   DEFAULT_GROUP, groupToken, resolutionLabel, buildTvTitle, buildDailyTitle, buildMovieTitle,
@@ -26,9 +29,41 @@ const MONTH_NAMES = [
 // queue's size columns; the feed itself always reports 0.
 const ESTIMATED_MBPS = { 480: 1, 720: 2.5, 1080: 4.5, 2160: 14 };
 const QUERY_NOISE = /[^\p{L}\p{N}\p{M}\s&'-]+/gu;
+// "Bluey (2018)": the year tells Sonarr's series apart, not YouTube's videos.
+const TRAILING_YEAR_TAG = /\s*\((?:19|20)\d{2}\)\s*$/;
+const HTML_ENTITY = /&(#x[0-9a-f]{1,6}|#\d{1,7}|[a-z]+);/gi;
+const NAMED_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: '\'', nbsp: ' ' };
+const MAX_CODE_POINT = 0x10ffff;
+// Without a Sonarr or Radarr connection nothing is known about a request.
+const NO_CATALOG = {
+  resolveEpisode: async () => null,
+  resolveSeries: async () => null,
+  resolveMovie: async () => null,
+};
 
 const pad2 = (value) => String(value).padStart(2, '0');
 const cleanQueryText = (text) => String(text).replace(QUERY_NOISE, ' ').replace(/\s+/g, ' ').trim();
+
+/**
+ * The YouTube Data API returns titles and channel names HTML-encoded
+ * ("It&#39;s"); yt-dlp returns them plain, which this leaves alone.
+ * @param {string} text
+ * @returns {string} Decoded once
+ */
+function decodeHtmlEntities(text) {
+  return String(text ?? '').replace(HTML_ENTITY, (entity, body) => {
+    if (body[0] !== '#') return NAMED_ENTITIES[body.toLowerCase()] ?? entity;
+    const hex = body[1] === 'x' || body[1] === 'X';
+    const codePoint = parseInt(body.slice(hex ? 2 : 1), hex ? 16 : 10);
+    return codePoint > 0 && codePoint <= MAX_CODE_POINT ? String.fromCodePoint(codePoint) : entity;
+  });
+}
+
+const decodeResult = (result) => ({
+  ...result,
+  title: decodeHtmlEntities(result.title),
+  channelName: decodeHtmlEntities(result.channelName),
+});
 
 function estimateBytes(durationSeconds, resolution) {
   if (typeof durationSeconds !== 'number' || durationSeconds <= 0) return 0;
@@ -50,27 +85,30 @@ function placeholderItem(kind, origin) {
 
 // What to ask YouTube for, how to filter the answer, and how to name each
 // surviving candidate. Null when the request cannot be searched.
-function planSearch(request, { settings, isYoutubeApiAvailable }) {
+// runtimeSeconds is what Sonarr or Radarr reports, or null.
+function planSearch(request, { settings, isYoutubeApiAvailable, runtimeSeconds = null }) {
   const text = cleanQueryText(request.text);
   if (!text) return null;
   const { season, episode, year, month, day, textSource } = request;
 
   if (request.shape === 'episode') {
     return {
+      matcher: 'episode-code',
       query: `${text} S${pad2(season)}E${pad2(episode)}`,
       count: EPISODE_SEARCH_COUNT,
       select: (results) => candidateFilter
-        .filterTvEpisode(results, { text: request.text, season, episode, settings })
+        .filterTvEpisode(results, { text: request.text, season, episode, runtimeSeconds, settings })
         .map((candidate) => ({ candidate, name: { season, episode } })),
       title: (name, naming) => buildTvTitle({ text: request.text, textSource, ...name, ...naming }),
     };
   }
   if (request.shape === 'season') {
     return {
+      matcher: 'season',
       query: `${text} season ${season}`,
       count: SEASON_SEARCH_COUNT,
       select: (results) => candidateFilter
-        .filterTvSeason(results, { text: request.text, season, settings })
+        .filterTvSeason(results, { text: request.text, season, runtimeSeconds, settings })
         .map((match) => ({ candidate: match.candidate, name: { season, episode: match.episode } })),
       title: (name, naming) => buildTvTitle({ text: request.text, textSource, ...name, ...naming }),
     };
@@ -80,25 +118,46 @@ function planSearch(request, { settings, isYoutubeApiAvailable }) {
     if (!isYoutubeApiAvailable()) return null;
     const date = new Date(Date.UTC(year, month - 1, day));
     return {
+      matcher: 'daily',
       query: `${text} ${MONTH_NAMES[month - 1]} ${day} ${year}`,
       count: EPISODE_SEARCH_COUNT,
       select: (results) => candidateFilter
-        .filterTvDaily(results, { text: request.text, date, settings })
+        .filterTvDaily(results, { text: request.text, date, runtimeSeconds, settings })
         .map((candidate) => ({ candidate, name: { year, month, day } })),
       title: (name, naming) => buildDailyTitle({ text: request.text, textSource, ...name, ...naming }),
     };
   }
   if (request.shape === 'movie') {
     return {
+      matcher: 'movie',
       query: `${text} ${year}`,
       count: EPISODE_SEARCH_COUNT,
       select: (results) => candidateFilter
-        .filterMovie(results, { title: request.text, year, settings })
+        .filterMovie(results, { title: request.text, year, runtimeSeconds, settings })
         .map((candidate) => ({ candidate, name: { year } })),
       title: (name, naming) => buildMovieTitle({ title: request.text, ...name, ...naming }),
     };
   }
   return null;
+}
+
+// The search by what Sonarr calls the episode. The query always uses the
+// series' main title, so the alias requests of one search in Sonarr share a
+// single YouTube search; each is still named from the alias it asked for.
+function planEpisodeTitleSearch(request, episode, settings) {
+  const query = cleanQueryText(`${episode.seriesTitle.replace(TRAILING_YEAR_TAG, '')} ${episode.episodeTitle}`);
+  if (!query) return null;
+  const name = { season: request.season, episode: request.episode };
+  return {
+    matcher: 'episode-title',
+    query,
+    count: EPISODE_SEARCH_COUNT,
+    select: (results) => filterByEpisodeTitle(results, { episode, settings })
+      .map((candidate) => ({ candidate, name })),
+    title: (titleName, naming) => buildTvTitle({
+      text: request.text, textSource: request.textSource, ...titleName, ...naming,
+    }),
+  };
 }
 
 /**
@@ -109,34 +168,27 @@ function planSearch(request, { settings, isYoutubeApiAvailable }) {
  * @param {Function} deps.knownUploadDates - (ids) => Promise<Map<id, Date>> from Youtarr's own rows
  * @param {Function} deps.recentlyFailedIds - (ids) => Promise<Set<id>> of videos whose grab failed lately
  * @param {Object} deps.queue - searchQueue
+ * @param {Object} [deps.catalog] - arrCatalog; without it nothing is known about a request
  * @param {Function} [deps.now]
  * @param {Object} deps.logger
  */
 function createSearchService({
   searchVideos, isYoutubeApiAvailable, getConfig, knownUploadDates, recentlyFailedIds, queue,
-  now = () => new Date(), logger,
+  catalog = NO_CATALOG, now = () => new Date(), logger,
 }) {
-  /**
-   * @param {Object} request - From parseNewznabRequest (never the caps shape)
-   * @param {string} origin - Scheme and host the client used, for the links
-   * @returns {Promise<Array<Object>>} Feed items, best match first. Rejects
-   *   with SearchUnavailableError when YouTube could not be searched.
-   */
-  async function search(request, origin) {
-    if (request.shape === 'rss') return [placeholderItem(request.kind === 'movie' ? 'movie' : 'tv', origin)];
-
-    const config = getConfig();
-    const settings = readSettings(config);
-    const plan = planSearch(request, { settings, isYoutubeApiAvailable });
-    if (!plan) return [];
-
-    const results = await queue.run(
+  // One YouTube search, filtered and turned into feed items.
+  async function runPlan(plan, { request, origin, config, settings }) {
+    const found = await queue.run(
       `${plan.count}:${plan.query.toLowerCase()}`,
       () => searchVideos(plan.query, plan.count)
     );
+    const results = found.map(decodeResult);
     const selected = plan.select(results);
     if (selected.length === 0) {
-      logger.info({ query: plan.query, results: results.length }, 'Sonarr/Radarr search found no match');
+      logger.info(
+        { matcher: plan.matcher, query: plan.query, results: results.length },
+        'Sonarr/Radarr search found no match'
+      );
       return [];
     }
 
@@ -172,13 +224,56 @@ function createSearchService({
       if (items.length === request.limit) break;
     }
     logger.info(
-      { query: plan.query, results: results.length, offered: items.length },
+      { matcher: plan.matcher, query: plan.query, results: results.length, offered: items.length },
       'Sonarr/Radarr search answered'
     );
     return items;
   }
 
+  // The runtime Sonarr or Radarr reports for what a season, daily or movie
+  // request is about, or null.
+  async function knownRuntime(request) {
+    if (request.shape === 'movie') {
+      return (await catalog.resolveMovie({ text: request.text, year: request.year }))?.runtimeSeconds ?? null;
+    }
+    return (await catalog.resolveSeries({ text: request.text }))?.runtimeSeconds ?? null;
+  }
+
+  /**
+   * @param {Object} request - From parseNewznabRequest (never the caps shape)
+   * @param {string} origin - Scheme and host the client used, for the links
+   * @returns {Promise<Array<Object>>} Feed items, best match first. Rejects
+   *   with SearchUnavailableError when YouTube could not be searched.
+   */
+  async function search(request, origin) {
+    if (request.shape === 'rss') return [placeholderItem(request.kind === 'movie' ? 'movie' : 'tv', origin)];
+
+    const config = getConfig();
+    const settings = readSettings(config);
+    const context = { request, origin, config, settings };
+    // Requests that cannot be searched at all never ask Sonarr or Radarr.
+    if (!planSearch(request, { settings, isYoutubeApiAvailable })) return [];
+
+    if (request.shape !== 'episode') {
+      const runtimeSeconds = await knownRuntime(request);
+      return runPlan(planSearch(request, { settings, isYoutubeApiAvailable, runtimeSeconds }), context);
+    }
+
+    const episode = await catalog.resolveEpisode({
+      text: request.text, season: request.season, episode: request.episode,
+    });
+    const titlePlan = canMatchByTitle(episode, settings) ? planEpisodeTitleSearch(request, episode, settings) : null;
+    if (titlePlan) {
+      const items = await runPlan(titlePlan, context);
+      if (items.length > 0) return items;
+    }
+    // Nothing by title (or its only match failed a grab lately): the search
+    // by episode code still finds re-uploads named like releases.
+    const runtimeSeconds = episode?.runtimeSeconds ?? null;
+    return runPlan(planSearch(request, { settings, isYoutubeApiAvailable, runtimeSeconds }), context);
+  }
+
   return { search };
 }
 
-module.exports = { createSearchService, estimateBytes };
+module.exports = { createSearchService, estimateBytes, decodeHtmlEntities };

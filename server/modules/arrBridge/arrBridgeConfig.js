@@ -24,6 +24,10 @@ const MAX_RETENTION_DAYS = 365;
 // A video whose grab failed is not offered again for this long. Sonarr's own
 // blocklist needs an identical publish date, which a YouTube search cannot give.
 const FAILED_GRAB_GUARD_DAYS = 7;
+// The optional read-only connections to the user's own Sonarr and Radarr.
+const MAX_ARR_URL_LENGTH = 500;
+// Printable ASCII without spaces: the key travels in a request header.
+const ARR_API_KEY_PATTERN = /^[\x21-\x7E]{1,128}$/;
 const MAX_EXCLUDE_TERMS = 100;
 const MAX_EXCLUDE_TERM_LENGTH = 60;
 const DEFAULT_EXCLUDE_TERMS = Object.freeze([
@@ -113,11 +117,35 @@ function normalizeRetentionDays(value) {
   return value;
 }
 
+// The base URL of a Sonarr or Radarr, with its URL Base path if it has one.
+// Credentials in the URL would end up in logs, and a query or fragment is a
+// paste mistake, so each makes the connection read as not configured.
+function normalizeArrUrl(value) {
+  if (typeof value !== 'string' || value.length > MAX_ARR_URL_LENGTH) return null;
+  let parsed;
+  try {
+    parsed = new URL(value.trim());
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) return null;
+  return `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, '');
+}
+
+function normalizeConnection(url, apiKey) {
+  const normalizedUrl = normalizeArrUrl(url);
+  const key = typeof apiKey === 'string' ? apiKey.trim() : '';
+  if (!normalizedUrl || !ARR_API_KEY_PATTERN.test(key)) return null;
+  return { url: normalizedUrl, apiKey: key };
+}
+
 /**
  * @param {Object} config - The full config object
  * @returns {{enabled: boolean, apiKey: string|null, categories: Array<{name: string, subfolder: string|null}>,
  *   looseMatching: boolean, excludeTerms: string[], minTvSeconds: number, minMovieSeconds: number,
- *   stagingPath: string|null, retentionDays: number}}
+ *   stagingPath: string|null, retentionDays: number,
+ *   sonarr: {url: string, apiKey: string}|null, radarr: {url: string, apiKey: string}|null}}
  */
 function readSettings(config) {
   const source = config && typeof config === 'object' ? config : {};
@@ -132,6 +160,8 @@ function readSettings(config) {
     minMovieSeconds: normalizeMinutes(source.arrBridgeMinMovieMinutes, DEFAULT_MIN_MOVIE_MINUTES) * 60,
     stagingPath: normalizeStagingPath(source.arrBridgeStagingPath),
     retentionDays: normalizeRetentionDays(source.arrBridgeStagingRetentionDays),
+    sonarr: normalizeConnection(source.arrBridgeSonarrUrl, source.arrBridgeSonarrApiKey),
+    radarr: normalizeConnection(source.arrBridgeRadarrUrl, source.arrBridgeRadarrApiKey),
   };
 }
 
