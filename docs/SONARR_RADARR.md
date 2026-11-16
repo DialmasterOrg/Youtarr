@@ -11,6 +11,7 @@ Youtarr can act as an indexer and a download client for Sonarr and Radarr. Sonar
 - [Settings to check in Sonarr and Radarr](#settings-to-check-in-sonarr-and-radarr)
 - [How matching works](#how-matching-works)
 - [Resolution](#resolution)
+- [Removing Youtarr's copy after the import](#removing-youtarrs-copy-after-the-import)
 - [Categories and a second instance](#categories-and-a-second-instance)
 - [Recent grabs](#recent-grabs)
 - [Login proxies](#login-proxies)
@@ -19,7 +20,7 @@ Youtarr can act as an indexer and a download client for Sonarr and Radarr. Sonar
 ## What to expect
 
 - Youtarr answers a search by searching YouTube, so it finds what people uploaded to YouTube: older TV, public-domain films, and shows that are published on YouTube. It does not find scene releases.
-- A grabbed video is downloaded by Youtarr like any other video and stays in Youtarr's library. Sonarr or Radarr gets its own copy of the file (a hardlink when both are on one filesystem), so removing a grab in Sonarr or Radarr never deletes Youtarr's copy.
+- A grabbed video is downloaded by Youtarr like any other video and stays in Youtarr's library. Sonarr or Radarr gets its own copy of the file (a hardlink when both are on one filesystem), so removing a grab in Sonarr or Radarr never deletes Youtarr's copy. If you would rather not keep it, see [Removing Youtarr's copy after the import](#removing-youtarrs-copy-after-the-import).
 - Grabs show up in Youtarr's Download History as **Sonarr/Radarr**, and in notifications like a manual download.
 - Youtarr only answers searches. It does not announce new uploads, so Sonarr's and Radarr's RSS sync never finds anything here. A new episode is found when a search runs: one you start, a request from Seerr, or the search Sonarr runs when you add a series.
 - Youtarr runs one download job at a time. A grab made during a large channel download waits behind it; Sonarr and Radarr show it as queued.
@@ -80,6 +81,7 @@ What a connection adds:
 - Short shows become searchable: the series' own runtime replaces the 10 minute minimum.
 - For movies, the video's length must also fit the movie's runtime.
 - Youtarr can check the shared folder for you (step 4).
+- [Remove after import](#removing-youtarrs-copy-after-the-import) works: Youtarr asks the app whether it imported a grab before deleting its own copy.
 
 Things to know:
 
@@ -168,6 +170,23 @@ Things to know:
 - A video that is already in your Youtarr library is handed over as it is. It is not downloaded again at this resolution.
 - The grabbed video stays in your Youtarr library at this resolution, also when your Preferred Resolution is different.
 
+## Removing Youtarr's copy after the import
+
+By default a grabbed video stays in your Youtarr library as well as in Sonarr's or Radarr's. To keep it only there, turn on **Remove a video from Youtarr after Sonarr or Radarr imports it** under **Downloads** on the Settings page.
+
+**This needs the connection from [step 3](#step-3-connect-your-sonarr-and-radarr-recommended).** Sonarr and Radarr tell Youtarr the same thing after an import and after you remove an item from their queue, so Youtarr asks the app itself whether it imported the grab, and deletes its own copy only when the app says it did.
+
+Things to know:
+
+- **A video whose import is not confirmed is kept.** The Recent grabs list says so. That is every video grabbed by an app that is not connected: the Settings page warns you when the setting is on and Sonarr or Radarr has no connection.
+- One Sonarr and one Radarr can be connected. A video grabbed by a second instance is kept, because Youtarr cannot ask that instance.
+- When the app cannot be reached, Youtarr asks again for up to a day, then keeps the video.
+- Only a video Youtarr downloaded for the grab is removed. A video that was already in your library, from a channel you follow for example, always stays.
+- The video is deleted like any video Youtarr's automatic cleanup removes: the Videos page shows it as deleted, with "after Sonarr imported it" as the reason, and Youtarr does not download it again by itself. A later grab of the same video downloads it again.
+- Between the download and the import the video is in your Youtarr library, so a media server that indexes it can show it for a short while.
+- The copy is removed when the app takes the item out of its download client history, which Sonarr and Radarr do right after an import while **Remove Completed** is on in their download client settings (the default). With it off, the copy is removed when the staged file's retention ends.
+- Turning the setting on does not touch videos from earlier grabs.
+
 ## Categories and a second instance
 
 A category is the name a Sonarr or Radarr instance gives its download client, and Youtarr uses it to keep instances apart. The defaults are `tv` and `movies`.
@@ -181,10 +200,10 @@ The bottom of the Settings page lists the newest grabs, ten at first:
 
 | State | Meaning |
 |---|---|
-| Waiting to download | Youtarr has the grab and will queue the download. |
+| Waiting to download | Youtarr has the grab and will queue the download. A grab also waits here when Youtarr could not start its download or could not put the file in the staging folder: it tries again every 15 minutes, and the grab only fails after a day of that. |
 | Downloading | The download is queued or running in Youtarr. |
 | Ready to import | The file is in the staging folder, waiting for Sonarr or Radarr. If it stays here, the app's queue says why. |
-| Taken by Sonarr/Radarr | The app took the file: it imported it, or the item was removed in the app. Youtarr cannot tell the two apart. |
+| Taken by Sonarr/Radarr | The app took the file: it imported it, or the item was removed in the app. Youtarr cannot tell the two apart from this alone. With [remove after import](#removing-youtarrs-copy-after-the-import) on, the row also says whether Youtarr removed its own copy or kept it. |
 | Failed | The download failed; the reason is shown. Sonarr or Radarr blocklists the release and searches again. |
 | Removed before it finished | The item was removed in the app before the download ended. The video still finishes downloading into Youtarr. |
 

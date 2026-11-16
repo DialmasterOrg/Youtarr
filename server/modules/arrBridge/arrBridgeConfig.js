@@ -285,6 +285,13 @@ const SETTING_FIELDS = [
     clean: unchanged,
     correct: () => FOLLOW_PREFERRED_RESOLUTION,
   },
+  {
+    key: 'arrBridgeRemoveAfterImport',
+    isValid: isSwitch,
+    error: 'Sonarr/Radarr remove after import must be switched on or off',
+    clean: unchanged,
+    correct: () => false,
+  },
 ];
 const SETTING_KEYS = Object.freeze(SETTING_FIELDS.map((field) => field.key));
 
@@ -328,7 +335,7 @@ function correctStoredSettings(config) {
  * @param {Object} config - The full config object
  * @returns {{enabled: boolean, apiKey: string|null, categories: Array<{name: string, subfolder: string|null}>,
  *   looseMatching: boolean, excludeTerms: string[], minTvSeconds: number, minMovieSeconds: number,
- *   stagingPath: string|null, retentionDays: number, resolution: string|null,
+ *   stagingPath: string|null, retentionDays: number, resolution: string|null, removeAfterImport: boolean,
  *   sonarr: {url: string, apiKey: string}|null, radarr: {url: string, apiKey: string}|null}}
  */
 function readSettings(config) {
@@ -345,6 +352,7 @@ function readSettings(config) {
     stagingPath: normalizeStagingPath(source.arrBridgeStagingPath),
     retentionDays: normalizeRetentionDays(source.arrBridgeStagingRetentionDays),
     resolution: RESOLUTIONS.includes(source.arrBridgeResolution) ? source.arrBridgeResolution : null,
+    removeAfterImport: source.arrBridgeRemoveAfterImport === true,
     sonarr: normalizeConnection(source.arrBridgeSonarrUrl, source.arrBridgeSonarrApiKey),
     radarr: normalizeConnection(source.arrBridgeRadarrUrl, source.arrBridgeRadarrApiKey),
   };

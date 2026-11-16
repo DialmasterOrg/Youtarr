@@ -8,6 +8,7 @@ const { createArrCatalog } = require('./arrCatalog');
 const { createArrClient } = require('./arrClient');
 const { createGrabExecutor } = require('./grabExecutor');
 const { createGrabService, grabState } = require('./grabService');
+const { createLibraryCopyRemover, libraryCopyView } = require('./libraryCopyRemover');
 const { createNewznabApi } = require('./newznabApi');
 const { createSabnzbdApi } = require('./sabnzbdApi');
 const { createSearchQueue } = require('./searchQueue');
@@ -77,19 +78,23 @@ function createUploadDateLookup({ Video, ChannelVideo }) {
  * @param {Object} deps.storageGuard - { isPausedError, getStatus }
  * @param {Function} deps.isArchived - (youtubeId) => the id is in the download archive
  * @param {Function} deps.getActivity - () => the current download activity snapshot
+ * @param {Function} deps.removeVideo - (youtubeId, removal) => Promise<boolean>; deletes a library video
  * @param {Object} deps.logger
  * @param {Function} [deps.createExecutor] - Test seam; defaults to createGrabExecutor
  * @param {Function} [deps.createClient] - Test seam; defaults to createArrClient
  */
 function createArrBridgeService({
   configModule, models, searchVideos, isYoutubeApiAvailable, downloader, jobLookup, storageGuard,
-  isArchived, getActivity, logger, createExecutor = createGrabExecutor, createClient = createArrClient,
+  isArchived, getActivity, removeVideo, logger, createExecutor = createGrabExecutor, createClient = createArrClient,
 }) {
   const getConfig = () => configModule.getConfig();
   const getSettings = () => readSettings(getConfig());
   let running = false;
 
   const staging = createStaging({ getOutputRoot: () => configModule.directoryPath, getSettings, logger });
+  const arrClient = createClient();
+  // Only acts while "remove after import" is on.
+  const libraryCopies = createLibraryCopyRemover({ models, client: arrClient, getSettings, removeVideo, logger });
   const executor = createExecutor({
     models,
     downloader,
@@ -100,12 +105,13 @@ function createArrBridgeService({
     storageGuard,
     staging,
     getSettings,
+    onHandedOff: libraryCopies.request,
+    settleLibraryCopies: libraryCopies.run,
     logger,
   });
   const grabService = createGrabService({
-    models, getSettings, staging, wakeExecutor: () => executor.wake(), logger,
+    models, getSettings, staging, wakeExecutor: () => executor.wake(), onHandedOff: libraryCopies.request, logger,
   });
-  const arrClient = createClient();
   const settings = createArrBridgeSettings({ configModule, client: arrClient, staging, logger });
   const searchService = createSearchService({
     searchVideos,
@@ -183,6 +189,7 @@ function createArrBridgeService({
         category: row.category,
         state: grabState(row),
         failMessage: row.fail_message || null,
+        libraryCopy: libraryCopyView(row),
         createdAt: row.created_at,
         completedAt: row.completed_at || null,
         removedAt: row.removed_at || null,

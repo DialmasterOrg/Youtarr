@@ -80,6 +80,7 @@
   "arrBridgeStagingPath": "",
   "arrBridgeStagingRetentionDays": 7,
   "arrBridgeResolution": "",
+  "arrBridgeRemoveAfterImport": false,
   "autoRemovalEnabled": false,
   "autoRemovalFreeSpaceThreshold": null,
   "autoRemovalVideoAgeThreshold": null,

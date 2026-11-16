@@ -27,6 +27,7 @@ function setup({ existing = null, historyRow = null, updated = 1, failedRows = [
     getSettings: () => ({ categories: [{ name: 'tv', subfolder: null }, { name: 'tv-4k', subfolder: null }] }),
     staging: { remove: jest.fn().mockResolvedValue(undefined) },
     wakeExecutor: jest.fn(),
+    onHandedOff: jest.fn().mockResolvedValue(undefined),
     now: () => NOW,
     logger: { info: jest.fn(), warn: jest.fn() },
     newId: () => GRAB_ID,
@@ -193,6 +194,40 @@ describe('grabService', () => {
       await expect(service.removeFromHistory(GRAB_ID)).resolves.toBeUndefined();
 
       expect(deps.logger.warn).toHaveBeenCalledTimes(1);
+    });
+
+    test('hands the grab over and wakes the executor', async () => {
+      const { service, deps } = setup({ historyRow: row });
+
+      await service.removeFromHistory(GRAB_ID);
+
+      expect(deps.onHandedOff).toHaveBeenCalledWith(row);
+      expect(deps.wakeExecutor).toHaveBeenCalledTimes(1);
+    });
+
+    test('hands the grab over even when its staged folder could not be removed', async () => {
+      const { service, deps } = setup({ historyRow: row });
+      deps.staging.remove.mockRejectedValue(new Error('EACCES'));
+
+      await service.removeFromHistory(GRAB_ID);
+
+      expect(deps.onHandedOff).toHaveBeenCalledWith(row);
+    });
+
+    test('does not hand over a failed grab, which was never imported', async () => {
+      const { service, deps } = setup({ historyRow: { ...row, status: 'failed' } });
+
+      await service.removeFromHistory(GRAB_ID);
+
+      expect(deps.onHandedOff).not.toHaveBeenCalled();
+    });
+
+    test('does not hand over a grab another request already removed', async () => {
+      const { service, deps } = setup({ historyRow: row, updated: 0 });
+
+      await service.removeFromHistory(GRAB_ID);
+
+      expect(deps.onHandedOff).not.toHaveBeenCalled();
     });
 
     test('does nothing for an unknown grab', async () => {

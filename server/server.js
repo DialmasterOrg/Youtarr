@@ -278,6 +278,7 @@ const initialize = async () => {
     const archiveModule = require('./modules/archiveModule');
     const subscriptionImportModule = require('./modules/subscriptionImport');
     const videoSearchModule = require('./modules/videoSearchModule');
+    const videoDeletionModule = require('./modules/videoDeletionModule');
     const channelSearchModule = require('./modules/channelSearchModule');
     const youtubeApi = require('./modules/youtubeApi');
     const ytdlpModule = require('./modules/ytdlpModule');
@@ -326,6 +327,11 @@ const initialize = async () => {
       storageGuard,
       isArchived: (youtubeId) => archiveModule.filterArchivedVideoIds([youtubeId]).has(youtubeId),
       getActivity: () => downloadModule.getCurrentActivitySnapshot(),
+      // Only used by the opt-in "remove after import" setting.
+      removeVideo: async (youtubeId, removal) => {
+        const result = await videoDeletionModule.deleteVideosByYoutubeIds([youtubeId], removal);
+        return result.deleted.includes(youtubeId);
+      },
       logger,
     });
     jobModule.onJobEnded((event) => arrBridge.handleJobEnded(event));

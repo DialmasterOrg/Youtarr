@@ -226,6 +226,60 @@ describe('ArrBridgeSection', () => {
 
       expect(screen.getByText(/must allow WEBDL-720p/)).toBeInTheDocument();
     });
+
+    test('keep Youtarr\'s copy of a grab unless removing it after the import is switched on', () => {
+      const props = setupSection();
+      const remove = screen.getByRole('checkbox', { name: 'Remove a video from Youtarr after Sonarr or Radarr imports it' });
+
+      expect(remove).not.toBeChecked();
+      fireEvent.click(remove);
+
+      expect(props.onConfigChange).toHaveBeenCalledWith({ arrBridgeRemoveAfterImport: true });
+    });
+
+    test('say that removing after the import needs the connection in step 3', () => {
+      setupSection();
+
+      expect(screen.getByText(/This needs the connection in step 3/)).toBeInTheDocument();
+    });
+
+    test('warn about an app that is not connected while removing after the import is on', () => {
+      setupSection({ config: createConfig({ arrBridgeRemoveAfterImport: true }) });
+
+      expect(
+        screen.getByText('Radarr is not connected in step 3. Youtarr cannot confirm its imports, so it keeps every video Radarr grabs.')
+      ).toBeInTheDocument();
+    });
+
+    test('do not warn while removing after the import is off', () => {
+      setupSection();
+
+      expect(screen.queryByText(/is not connected in step 3/)).not.toBeInTheDocument();
+    });
+
+    test('do not warn before the connections are known', () => {
+      mockConnections({ status: null });
+      setupSection({ config: createConfig({ arrBridgeRemoveAfterImport: true }) });
+
+      expect(screen.queryByText(/not connected in step 3/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('what to expect', () => {
+    const expectations = () => within(screen.getByRole('group', { name: 'What to expect' }));
+
+    test('says a grab stays in the Youtarr library by default', () => {
+      setupSection();
+
+      expect(expectations().getByText(/stays in your Youtarr library/)).toBeInTheDocument();
+    });
+
+    test('says a grab leaves the Youtarr library when removing after the import is on', () => {
+      setupSection({ config: createConfig({ arrBridgeRemoveAfterImport: true }) });
+
+      expect(expectations().getByText(/Youtarr removes its own copy/)).toBeInTheDocument();
+      expect(expectations().queryByText(/stays in your Youtarr library/)).not.toBeInTheDocument();
+    });
   });
 
   test('saving a connection goes to the connections hook for that app', async () => {

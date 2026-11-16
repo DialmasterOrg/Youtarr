@@ -15,6 +15,7 @@ const grab = (overrides: Partial<ArrGrab> = {}): ArrGrab => ({
   category: 'tv',
   state: 'handed-off',
   failMessage: null,
+  libraryCopy: null,
   createdAt: '2025-06-10T10:00:00.000Z',
   completedAt: '2025-06-10T10:05:00.000Z',
   removedAt: '2025-06-10T10:07:00.000Z',
@@ -129,6 +130,24 @@ describe('ArrBridgeGrabList', () => {
 
       expect(rows()).toHaveLength(10);
       expect(screen.queryByRole('button', { name: /Show all/ })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('the copy in Youtarr of a grab that was taken', () => {
+    test.each([
+      ['removed', 'Imported. Youtarr removed its own copy.'],
+      ['kept', 'Youtarr kept its copy: Sonarr or Radarr did not confirm the import through the connection in step 3.'],
+      ['checking', 'Asking Sonarr or Radarr whether it was imported, before Youtarr removes its own copy.'],
+    ] as const)('says what happened when it is %s', (libraryCopy, text) => {
+      setup({ grabs: [grab({ libraryCopy })] });
+
+      expect(within(rows()[0]).getByText(text)).toBeInTheDocument();
+    });
+
+    test('says nothing when removing after the import was never asked for', () => {
+      setup({ grabs: [grab({ libraryCopy: null })] });
+
+      expect(within(rows()[0]).queryByText(/its own copy|kept its copy/)).not.toBeInTheDocument();
     });
   });
 });

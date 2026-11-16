@@ -343,6 +343,11 @@ function createArrBridgeSettingsRoutes({ verifyToken, arrBridgeConnectionLimiter
    *                       failMessage:
    *                         type: string
    *                         nullable: true
+   *                       libraryCopy:
+   *                         type: string
+   *                         nullable: true
+   *                         enum: [checking, removed, kept]
+   *                         description: What the "remove after import" setting did with Youtarr's own copy; null when it was never asked.
    *                       createdAt:
    *                         type: string
    *                         format: date-time

@@ -48,12 +48,14 @@ function grabState(row) {
  * @param {Function} deps.getSettings - () => arrBridgeConfig.readSettings(config)
  * @param {Object} deps.staging
  * @param {Function} deps.wakeExecutor - Runs a new grab without waiting for the sweep
+ * @param {Function} [deps.onHandedOff] - (grab) => Promise; the app took a completed grab out of its history
  * @param {Function} [deps.now]
  * @param {Object} deps.logger
  * @param {Function} [deps.newId]
  */
 function createGrabService({
-  models, getSettings, staging, wakeExecutor, now = () => new Date(), logger, newId = crypto.randomUUID,
+  models, getSettings, staging, wakeExecutor, onHandedOff = async () => {}, now = () => new Date(), logger,
+  newId = crypto.randomUUID,
 }) {
   const { ArrBridgeGrab } = models;
 
@@ -146,13 +148,14 @@ function createGrabService({
   }
 
   /**
-   * Removes the grab and its staged folder. Never touches the library copy.
+   * Removes the grab and its staged folder. The library copy is only ever
+   * touched by libraryCopyRemover, which this hands a completed grab to.
    */
   async function removeFromHistory(id) {
     if (!isGrabId(id)) return;
     const grab = await ArrBridgeGrab.findOne({ where: { id, status: { [Op.in]: FINISHED_STATUSES } } });
     if (!grab) return;
-    await markRemoved(id, FINISHED_STATUSES);
+    const [removed] = await markRemoved(id, FINISHED_STATUSES);
     // Only a completed grab owns a staged folder. The folder of a failed
     // one, if it exists, belongs to a later grab of the same release.
     if (grab.status !== 'completed') return;
@@ -161,6 +164,9 @@ function createGrabService({
     } catch (error) {
       logger.warn({ err: error, grabId: id }, 'Could not remove a staged Sonarr/Radarr folder');
     }
+    if (removed !== 1) return;
+    await onHandedOff(grab);
+    wakeExecutor();
   }
 
   /**

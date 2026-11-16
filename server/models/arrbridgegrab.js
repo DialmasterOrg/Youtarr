@@ -18,6 +18,8 @@ ArrBridgeGrab.init({
   bytes: { type: DataTypes.BIGINT, allowNull: true },
   estimated_bytes: { type: DataTypes.BIGINT, allowNull: true },
   fail_message: { type: DataTypes.STRING(500), allowNull: true },
+  // See modules/arrBridge/libraryCopyRemover.
+  library_copy: { type: DataTypes.STRING(20), allowNull: true },
   created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   completed_at: { type: DataTypes.DATE, allowNull: true },

@@ -254,6 +254,70 @@ describe('arrClient', () => {
     });
   });
 
+  describe('fetchImported', () => {
+    const GRAB_ID = '9eef64cc-3f17-465d-857c-fa3c339a6e83';
+    // As Sonarr 4.0.20 and Radarr 6.4.4 answer /api/v3/history.
+    const history = (records) => ({ page: 1, pageSize: 10, totalRecords: records.length, records });
+    const imported = { eventType: 'downloadFolderImported', downloadId: GRAB_ID, sourceTitle: 'Show.S01E01' };
+
+    test('asks the app for the import events of one download', async () => {
+      axios.get.mockResolvedValue({ data: history([imported]) });
+
+      expect(await client.fetchImported(SONARR, GRAB_ID)).toBe(true);
+
+      const [url, options] = axios.get.mock.calls[0];
+      expect(url).toBe('http://sonarr:8989/api/v3/history');
+      expect(options).toEqual(expect.objectContaining({
+        headers: { 'X-Api-Key': KEY },
+        params: { downloadId: GRAB_ID, eventType: 3, pageSize: 10 },
+        maxRedirects: 0,
+      }));
+    });
+
+    test('a download the app never imported is not imported', async () => {
+      axios.get.mockResolvedValue({ data: history([]) });
+
+      expect(await client.fetchImported(RADARR, GRAB_ID)).toBe(false);
+    });
+
+    test('ignores events of another download or another kind', async () => {
+      axios.get.mockResolvedValue({
+        data: history([
+          { ...imported, downloadId: 'another-download' },
+          { ...imported, eventType: 'grabbed' },
+          null,
+        ]),
+      });
+
+      expect(await client.fetchImported(SONARR, GRAB_ID)).toBe(false);
+    });
+
+    test('matches the download id whatever its letter case', async () => {
+      axios.get.mockResolvedValue({ data: history([{ ...imported, downloadId: GRAB_ID.toUpperCase() }]) });
+
+      expect(await client.fetchImported(SONARR, GRAB_ID)).toBe(true);
+    });
+
+    test.each([
+      ['a login page', '<html><body>Sign in</body></html>'],
+      ['a list', []],
+      ['an object without records', { page: 1 }],
+    ])('rejects %s as not the app', async (_name, data) => {
+      axios.get.mockResolvedValue({ data });
+
+      await expect(client.fetchImported(SONARR, GRAB_ID)).rejects.toMatchObject({ reason: 'not-json' });
+    });
+
+    test('an app that cannot be reached rejects without the key', async () => {
+      axios.get.mockRejectedValue(axiosError({ code: 'ECONNREFUSED' }));
+
+      const error = await client.fetchImported(SONARR, GRAB_ID).catch((caught) => caught);
+
+      expect(error).toBeInstanceOf(ArrUnavailableError);
+      expect(JSON.stringify(error)).not.toContain(KEY);
+    });
+  });
+
   describe('fetchFolderNames', () => {
     // As Sonarr 4.0.20 and Radarr 6.4.4 answer /api/v3/filesystem.
     const listing = (names) => ({

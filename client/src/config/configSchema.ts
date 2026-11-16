@@ -160,6 +160,7 @@ export const CONFIG_FIELDS = {
   arrBridgeStagingPath: { default: '', trackChanges: true },
   arrBridgeStagingRetentionDays: { default: 7, trackChanges: true },
   arrBridgeResolution: { default: '', trackChanges: true },
+  arrBridgeRemoveAfterImport: { default: false, trackChanges: true },
 
   // Auto removal
   autoRemovalEnabled: { default: false, trackChanges: true },
@@ -318,6 +319,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   arrBridgeStagingPath: CONFIG_FIELDS.arrBridgeStagingPath.default,
   arrBridgeStagingRetentionDays: CONFIG_FIELDS.arrBridgeStagingRetentionDays.default,
   arrBridgeResolution: CONFIG_FIELDS.arrBridgeResolution.default,
+  arrBridgeRemoveAfterImport: CONFIG_FIELDS.arrBridgeRemoveAfterImport.default,
   autoRemovalEnabled: CONFIG_FIELDS.autoRemovalEnabled.default,
   autoRemovalFreeSpaceThreshold: CONFIG_FIELDS.autoRemovalFreeSpaceThreshold.default,
   autoRemovalVideoAgeThreshold: CONFIG_FIELDS.autoRemovalVideoAgeThreshold.default,

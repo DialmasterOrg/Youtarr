@@ -6,7 +6,9 @@ import { useArrBridgeKey } from '../hooks/useArrBridgeKey';
 import { useArrBridgeConnections } from '../hooks/useArrBridgeConnections';
 import { useArrBridgeGrabs } from '../hooks/useArrBridgeGrabs';
 import { useArrBridgeFolderCheck } from '../hooks/useArrBridgeFolderCheck';
-import { ARR_APPS, ARR_DOCS_URL, releaseResolution, stagingFolderOnHost } from '../utils/arrBridgeSetup';
+import {
+  ARR_APPS, ARR_DOCS_URL, releaseResolution, removeAfterImportWarning, stagingFolderOnHost,
+} from '../utils/arrBridgeSetup';
 import { ArrBridgeSetupValues } from './components/ArrBridgeSetupValues';
 import { ArrBridgeMatchingSettings } from './components/ArrBridgeMatchingSettings';
 import { ArrBridgeCategories } from './components/ArrBridgeCategories';
@@ -38,6 +40,7 @@ export const ArrBridgeSection: React.FC<ArrBridgeSectionProps> = ({
   setSnackbar,
 }) => {
   const enabled = config.arrBridgeEnabled;
+  const removeAfterImport = config.arrBridgeRemoveAfterImport;
   const { bridgeKey, loading, error, regenerating, regenerate } = useArrBridgeKey(token, enabled);
   const connections = useArrBridgeConnections(enabled ? token : null);
   const grabs = useArrBridgeGrabs(token, enabled);
@@ -46,6 +49,7 @@ export const ArrBridgeSection: React.FC<ArrBridgeSectionProps> = ({
     sonarr: Boolean(status?.connections.sonarr.keySet),
     radarr: Boolean(status?.connections.radarr.keySet),
   };
+  const connectionWarning = removeAfterImportWarning(connected);
   // The server checks what is saved: the path it tells the apps, and the
   // connections it asks. A change to either is a reason to ask again.
   const savedStagingPath = savedConfig?.arrBridgeStagingPath ?? '';
@@ -59,7 +63,9 @@ export const ArrBridgeSection: React.FC<ArrBridgeSectionProps> = ({
     <>
       <ConfigurationCard
         title="Sonarr / Radarr"
-        subtitle="Sonarr and Radarr can search YouTube through Youtarr and import what it downloads. Youtarr keeps its own copy."
+        subtitle={`Sonarr and Radarr can search YouTube through Youtarr and import what it downloads. ${
+          removeAfterImport ? 'Youtarr removes its own copy after the import.' : 'Youtarr keeps its own copy.'
+        }`}
       >
         <Box
           className="rounded-[var(--radius-ui)] border border-[var(--border)] bg-muted/30 p-3"
@@ -73,8 +79,9 @@ export const ArrBridgeSection: React.FC<ArrBridgeSectionProps> = ({
               is found when a search runs, not on its own.
             </li>
             <li>
-              A grab is downloaded by Youtarr like any other video and stays in your Youtarr library. Sonarr or
-              Radarr import their own copy.
+              {removeAfterImport
+                ? 'A grab is downloaded by Youtarr like any other video. Once Sonarr or Radarr confirms the import through the connection in step 3, Youtarr removes its own copy.'
+                : 'A grab is downloaded by Youtarr like any other video and stays in your Youtarr library. Sonarr or Radarr import their own copy.'}
             </li>
             <li>
               Setup takes the four steps on this page.{' '}
@@ -180,6 +187,30 @@ export const ArrBridgeSection: React.FC<ArrBridgeSectionProps> = ({
                 categories={config.arrBridgeCategories}
                 onChange={(categories) => onConfigChange({ arrBridgeCategories: categories })}
               />
+              <Box>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={removeAfterImport}
+                      onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                        onConfigChange({ arrBridgeRemoveAfterImport: event.target.checked })
+                      }
+                    />
+                  }
+                  label="Remove a video from Youtarr after Sonarr or Radarr imports it"
+                />
+                <Typography variant="body2" color="text.secondary">
+                  Off, a grabbed video stays in your Youtarr library. On, Youtarr deletes its own copy once Sonarr or
+                  Radarr confirms the import: only a video it downloaded for the grab, never one you already had.
+                  This needs the connection in step 3, because Youtarr asks the app whether it imported the grab. A
+                  video whose import is not confirmed is kept.
+                </Typography>
+                {removeAfterImport && status && connectionWarning && (
+                  <Alert severity="warning" className="mt-2">
+                    {connectionWarning}
+                  </Alert>
+                )}
+              </Box>
             </Box>
           </ConfigurationCard>
 

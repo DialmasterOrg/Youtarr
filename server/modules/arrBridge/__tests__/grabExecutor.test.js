@@ -13,6 +13,7 @@ const LIBRARY_FILE = '/data/NBC/The Office [abcdefghijk].mkv';
 const STAGED_FILE = `/data/.arr-staging/tv/${TITLE}/${TITLE}.mkv`;
 const minutesAgo = (minutes) => new Date(NOW.getTime() - minutes * 60 * 1000);
 const daysAgo = (days) => minutesAgo(days * 24 * 60);
+const minutesAfter = (minutes) => new Date(NOW.getTime() + minutes * 60 * 1000);
 
 function matchesValue(actual, expected) {
   if (expected === null || typeof expected !== 'object' || expected instanceof Date) return actual === expected;
@@ -20,6 +21,7 @@ function matchesValue(actual, expected) {
     const operand = expected[operator];
     if (operator === Op.ne) return actual !== operand;
     if (operator === Op.in) return operand.includes(actual);
+    if (operator === Op.notIn) return !operand.includes(actual);
     if (operator === Op.lt) return actual !== null && actual < operand;
     throw new Error(`Unsupported operator ${String(operator)}`);
   });
@@ -58,6 +60,7 @@ function grab(overrides = {}) {
     staged_path: null,
     bytes: null,
     fail_message: null,
+    library_copy: null,
     created_at: minutesAgo(1),
     updated_at: minutesAgo(1),
     completed_at: null,
@@ -69,7 +72,9 @@ function grab(overrides = {}) {
 const queued = (overrides = {}) => grab({ status: 'queued', job_id: JOB_ID, ...overrides });
 const downloadedVideo = { youtubeId: YOUTUBE_ID, filePath: LIBRARY_FILE, audioFilePath: null };
 
-function setup({ rows = [], video = null, jobs = {}, storedJob = null, categories, resolution = null } = {}) {
+function setup({
+  rows = [], video = null, jobs = {}, storedJob = null, categories, resolution = null, now = () => NOW,
+} = {}) {
   const state = { video };
   const ArrBridgeGrab = grabTable(rows);
   const deps = {
@@ -93,8 +98,10 @@ function setup({ rows = [], video = null, jobs = {}, storedJob = null, categorie
       resolution,
     }),
     fileState: jest.fn(async (filePath) => (filePath === LIBRARY_FILE ? 'present' : 'missing')),
+    onHandedOff: jest.fn().mockResolvedValue(undefined),
+    settleLibraryCopies: jest.fn().mockResolvedValue(undefined),
     newId: () => JOB_ID,
-    now: () => NOW,
+    now,
     logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
     scheduleWake: jest.fn(),
   };
@@ -200,13 +207,42 @@ describe('grabExecutor', () => {
       expect(row.status).toBe('removed');
     });
 
-    test('fails with the staging message when the library file cannot be staged', async () => {
+    test('waits instead of failing when the library file cannot be staged', async () => {
       const { executor, deps, rows } = setup({ rows: [grab()], video: downloadedVideo });
-      deps.staging.stage.mockRejectedValue(Object.assign(new Error('gone'), { code: 'ENOENT' }));
+      deps.staging.stage.mockRejectedValue(Object.assign(new Error('full'), { code: 'ENOSPC' }));
 
       await expect(executor.runOnce()).resolves.toBeUndefined();
+      await executor.runOnce();
 
-      expect(rows[0]).toMatchObject({ status: 'failed', fail_message: 'Youtarr could not stage the file for import' });
+      expect(deps.staging.stage).toHaveBeenCalledTimes(1);
+      expect(rows[0]).toMatchObject({ status: 'pending', fail_message: null, completed_at: null });
+    });
+
+    test('stages the file once the wait after a staging error is over', async () => {
+      const clock = { time: NOW };
+      const { executor, deps, rows } = setup({ rows: [grab()], video: downloadedVideo, now: () => clock.time });
+      deps.staging.stage.mockRejectedValueOnce(Object.assign(new Error('full'), { code: 'ENOSPC' }));
+      await executor.runOnce();
+
+      clock.time = minutesAfter(16);
+      await executor.runOnce();
+
+      expect(deps.downloader).not.toHaveBeenCalled();
+      expect(rows[0]).toMatchObject({ status: 'completed', staged_path: STAGED_FILE, fail_message: null });
+    });
+
+    test('fails with the staging message when staging still fails a day later', async () => {
+      const clock = { time: NOW };
+      const { executor, deps, rows } = setup({ rows: [grab()], video: downloadedVideo, now: () => clock.time });
+      deps.staging.stage.mockRejectedValue(Object.assign(new Error('denied'), { code: 'EACCES' }));
+      await executor.runOnce();
+
+      clock.time = minutesAfter(24 * 60);
+      await executor.runOnce();
+
+      expect(rows[0]).toMatchObject({
+        status: 'failed', fail_message: 'Youtarr could not stage the file for import', completed_at: clock.time,
+      });
     });
   });
 
@@ -254,6 +290,93 @@ describe('grabExecutor', () => {
       await executor.handleJobEnded({ jobId: JOB_ID });
 
       expect(rows[0]).toMatchObject({ status: 'failed', fail_message: 'ERROR: Video unavailable' });
+    });
+
+    test('waits for a later sweep when the downloaded file cannot be staged', async () => {
+      const clock = { time: NOW };
+      const { executor, deps, rows } = setup({
+        rows: [queued()], video: downloadedVideo, jobs: { [JOB_ID]: endedJob() }, now: () => clock.time,
+      });
+      deps.staging.stage.mockRejectedValueOnce(Object.assign(new Error('full'), { code: 'ENOSPC' }));
+
+      await executor.handleJobEnded({ jobId: JOB_ID });
+      expect(rows[0]).toMatchObject({ status: 'pending', job_id: null, fail_message: null });
+
+      clock.time = minutesAfter(16);
+      await executor.runOnce();
+      expect(deps.downloader).not.toHaveBeenCalled();
+      expect(rows[0]).toMatchObject({ status: 'completed', staged_path: STAGED_FILE });
+    });
+
+    test('tries again later when the job errored before trying the video', async () => {
+      const clock = { time: NOW };
+      const job = endedJob({}, 'Error');
+      job.output = 'Output directory is not accessible: EACCES';
+      const { executor, deps, rows } = setup({ rows: [queued()], jobs: { [JOB_ID]: job }, now: () => clock.time });
+
+      await executor.handleJobEnded({ jobId: JOB_ID });
+      await executor.runOnce();
+      expect(deps.downloader).not.toHaveBeenCalled();
+      expect(rows[0]).toMatchObject({ status: 'pending', job_id: null, fail_message: null, completed_at: null });
+
+      clock.time = minutesAfter(16);
+      await executor.runOnce();
+      expect(deps.downloader).toHaveBeenCalledTimes(1);
+      expect(rows[0].status).toBe('queued');
+    });
+
+    test.each([
+      'Output directory is not accessible: the share is down',
+      'Download process error: spawn yt-dlp ENOENT',
+      'Job could not be started: Unknown error',
+    ])('waits when the job ended with "%s", before yt-dlp ran', async (output) => {
+      const job = endedJob({}, 'Error');
+      job.output = output;
+      const { executor, rows } = setup({ rows: [queued()], jobs: { [JOB_ID]: job } });
+
+      await executor.handleJobEnded({ jobId: JOB_ID });
+
+      expect(rows[0]).toMatchObject({ status: 'pending', fail_message: null });
+    });
+
+    test('fails a grab whose job errored while finishing, after yt-dlp ran', async () => {
+      const job = endedJob({}, 'Error');
+      job.output = 'Job finalization error: database is down';
+      const { executor, rows } = setup({ rows: [queued()], jobs: { [JOB_ID]: job } });
+
+      await executor.handleJobEnded({ jobId: JOB_ID });
+
+      expect(rows[0]).toMatchObject({
+        status: 'failed',
+        fail_message: 'The download finished without a video file (members-only, filtered or unavailable)',
+      });
+    });
+
+    test('fails a grab whose job still errors before trying the video a day later', async () => {
+      const clock = { time: NOW };
+      const job = endedJob({}, 'Error');
+      job.output = 'Output directory is not accessible: the share is down';
+      const { executor, rows } = setup({ rows: [queued()], jobs: { [JOB_ID]: job }, now: () => clock.time });
+      await executor.handleJobEnded({ jobId: JOB_ID });
+
+      clock.time = minutesAfter(24 * 60);
+      await executor.runOnce();
+      await executor.handleJobEnded({ jobId: JOB_ID });
+
+      expect(rows[0]).toMatchObject({ status: 'failed', fail_message: 'Youtarr could not start the download' });
+    });
+
+    test('fails a video an errored job tried and left without a file', async () => {
+      const { executor, rows } = setup({
+        rows: [queued()], jobs: { [JOB_ID]: endedJob({ failedVideos: [] }, 'Error') },
+      });
+
+      await executor.handleJobEnded({ jobId: JOB_ID });
+
+      expect(rows[0]).toMatchObject({
+        status: 'failed',
+        fail_message: 'The download finished without a video file (members-only, filtered or unavailable)',
+      });
     });
 
     test('waits instead of failing when the downloaded file cannot be checked', async () => {
@@ -480,6 +603,116 @@ describe('grabExecutor', () => {
       expect(recent.status).toBe('completed');
       expect(deps.staging.remove).toHaveBeenCalledTimes(1);
       expect(deps.staging.remove).toHaveBeenCalledWith({ category: 'tv', releaseTitle: TITLE });
+    });
+
+    test('hands an expired grab over', async () => {
+      const old = grab({ status: 'completed', completed_at: daysAgo(8), library_copy: 'owned' });
+      const { executor, deps } = setup({ rows: [old] });
+
+      await executor.runOnce();
+
+      expect(deps.onHandedOff).toHaveBeenCalledTimes(1);
+      expect(deps.onHandedOff.mock.calls[0][0]).toMatchObject({ id: GRAB_ID, library_copy: 'owned' });
+    });
+
+    test('hands an expired grab over even when its staged folder could not be removed', async () => {
+      const old = grab({ status: 'completed', completed_at: daysAgo(8), library_copy: 'owned' });
+      const { executor, deps } = setup({ rows: [old] });
+      deps.staging.remove.mockRejectedValue(new Error('EACCES'));
+
+      await executor.runOnce();
+
+      expect(old.status).toBe('removed');
+      expect(deps.onHandedOff).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('the library copy', () => {
+    test('is recorded as the grab\'s own when Youtarr downloads the video for it', async () => {
+      const { executor, rows } = setup({ rows: [grab()] });
+
+      await executor.runOnce();
+
+      expect(rows[0]).toMatchObject({ status: 'queued', library_copy: 'owned' });
+    });
+
+    test('is not the grab\'s own when the video was already in the library', async () => {
+      const { executor, rows } = setup({ rows: [grab()], video: downloadedVideo });
+
+      await executor.runOnce();
+
+      expect(rows[0]).toMatchObject({ status: 'completed', library_copy: null });
+    });
+
+    test('is not the grab\'s own when the library row only lost its file', async () => {
+      const { executor, deps, rows } = setup({
+        rows: [grab()], video: { youtubeId: YOUTUBE_ID, filePath: '/data/NBC/gone.mkv', audioFilePath: null },
+      });
+
+      await executor.runOnce();
+
+      expect(deps.downloader).toHaveBeenCalledTimes(1);
+      expect(rows[0]).toMatchObject({ status: 'queued', library_copy: null });
+    });
+
+    test('is not the grab\'s own when another job was already downloading the video', async () => {
+      const { executor, deps, rows } = setup({ rows: [grab()] });
+      deps.downloader.mockResolvedValue({ queued: 0, acceptedIds: [], alreadyActiveIds: [YOUTUBE_ID] });
+
+      await executor.runOnce();
+
+      expect(rows[0]).toMatchObject({ status: 'pending', library_copy: null });
+    });
+
+    test('is no longer the grab\'s own once its download was interrupted: another job may fetch the video', async () => {
+      const job = endedJob({}, 'Terminated');
+      job.output = 'Job terminated during server restart';
+      const { executor, state, rows } = setup({ rows: [queued({ library_copy: 'owned' })], jobs: { [JOB_ID]: job } });
+
+      await executor.handleJobEnded({ jobId: JOB_ID });
+      expect(rows[0]).toMatchObject({ status: 'pending', library_copy: null });
+
+      state.video = downloadedVideo;
+      await executor.runOnce();
+      expect(rows[0]).toMatchObject({ status: 'completed', library_copy: null });
+    });
+
+    test('is no longer the grab\'s own once its job ended before trying the video', async () => {
+      const job = endedJob({}, 'Error');
+      job.output = 'Output directory is not accessible: EACCES';
+      const { executor, rows } = setup({ rows: [queued({ library_copy: 'owned' })], jobs: { [JOB_ID]: job } });
+
+      await executor.handleJobEnded({ jobId: JOB_ID });
+
+      expect(rows[0]).toMatchObject({ status: 'pending', library_copy: null });
+    });
+
+    test('stays the grab\'s own while a downloaded file waits to be staged again', async () => {
+      const { executor, deps, rows } = setup({
+        rows: [queued({ library_copy: 'owned' })], video: downloadedVideo, jobs: { [JOB_ID]: endedJob() },
+      });
+      deps.staging.stage.mockRejectedValueOnce(Object.assign(new Error('full'), { code: 'ENOSPC' }));
+
+      await executor.handleJobEnded({ jobId: JOB_ID });
+
+      expect(rows[0]).toMatchObject({ status: 'pending', library_copy: 'owned' });
+    });
+
+    test('is settled at the end of every sweep', async () => {
+      const { executor, deps } = setup();
+
+      await executor.runOnce();
+
+      expect(deps.settleLibraryCopies).toHaveBeenCalledTimes(1);
+    });
+
+    test('a failure to settle does not fail the sweep', async () => {
+      const { executor, deps } = setup();
+      deps.settleLibraryCopies.mockRejectedValue(new Error('db down'));
+
+      await expect(executor.runOnce()).resolves.toBeUndefined();
+
+      expect(deps.logger.warn).toHaveBeenCalledTimes(1);
     });
   });
 

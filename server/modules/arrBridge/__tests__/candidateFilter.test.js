@@ -105,6 +105,18 @@ describe('candidateFilter', () => {
       ['Bluey Season 1 Episode 1 & 2'],
       ['Bluey Season 1 Episodes 1 and 2'],
       ['Bluey 1x01-1x03'],
+      ['Bluey Season 1 Episode 1-2'],
+      ['Bluey Season 1 Episode 1 - 2'],
+      ['Bluey (Season 1 Episode 1 - 2)'],
+      ['Bluey Season 1 Episode 1, 2'],
+      ['Bluey 1x01 - 1x03'],
+      ['Bluey 1x01-03'],
+      ['Bluey 1x01 & 02'],
+      ['Bluey 1x01 - 02'],
+      ['Bluey Season 1 Episode 1 - 3 (Full Episodes)'],
+      ['Bluey Season 1 Episode 1 - 2 Full Episodes'],
+      ['Bluey Season 1 Episode 1 - 2 HD'],
+      ['Bluey 1x01 - 03 [HD]'],
     ])('sees more than one episode in %s', (title) => {
       expect(hasEpisodeRange(title)).toBe(true);
     });
@@ -115,6 +127,12 @@ describe('candidateFilter', () => {
       ['Bluey S01E01 | Full Episode'],
       ['Bluey Season 1 Episode 1 Full Episode'],
       ['The Beverly Hillbillies S01E01 (1962) The Clampetts Strike Oil'],
+      ['Kitchen Nightmares Season 1 Episode 5 - 24 Hours to Hell'],
+      ['Kitchen Nightmares Season 1 Episode 5 - 1080p HD'],
+      ['Kitchen Nightmares Season 1 Episode 5-1080p'],
+      ['Kitchen Nightmares Season 1 Episode 5, 2007'],
+      ['Kitchen Nightmares 1x05 - 4K Remaster'],
+      ['Kitchen Nightmares 1x05 - 24 Hours to Hell'],
     ])('sees one episode in %s', (title) => {
       expect(hasEpisodeRange(title)).toBe(false);
     });

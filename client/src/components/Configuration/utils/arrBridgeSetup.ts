@@ -47,6 +47,28 @@ export interface ArrConnectionResult {
 
 export type ArrGrabState = 'waiting' | 'downloading' | 'ready' | 'failed' | 'handed-off' | 'cancelled';
 
+export type ArrLibraryCopy = 'checking' | 'removed' | 'kept';
+
+export const LIBRARY_COPY_NOTES: Record<ArrLibraryCopy, string> = {
+  checking: 'Asking Sonarr or Radarr whether it was imported, before Youtarr removes its own copy.',
+  removed: 'Imported. Youtarr removed its own copy.',
+  kept: 'Youtarr kept its copy: Sonarr or Radarr did not confirm the import through the connection in step 3.',
+};
+
+/**
+ * "Remove after import" only removes a video once the app that grabbed it
+ * confirms the import, so an app without a connection keeps every video.
+ * @returns What to tell the user, or null when both apps are connected
+ */
+export function removeAfterImportWarning(connected: Record<ArrApp, boolean>): string | null {
+  if (connected.sonarr && connected.radarr) return null;
+  if (!connected.sonarr && !connected.radarr) {
+    return 'Sonarr and Radarr are not connected in step 3. Youtarr cannot confirm an import without a connection, so it keeps every grabbed video.';
+  }
+  const app = connected.sonarr ? 'Radarr' : 'Sonarr';
+  return `${app} is not connected in step 3. Youtarr cannot confirm its imports, so it keeps every video ${app} grabs.`;
+}
+
 export interface ArrGrab {
   id: string;
   releaseTitle: string;
@@ -57,6 +79,8 @@ export interface ArrGrab {
   category: string;
   state: ArrGrabState;
   failMessage: string | null;
+  /** What "remove after import" did with Youtarr's copy; null when it was never asked. */
+  libraryCopy: ArrLibraryCopy | null;
   createdAt: string;
   completedAt: string | null;
   removedAt: string | null;

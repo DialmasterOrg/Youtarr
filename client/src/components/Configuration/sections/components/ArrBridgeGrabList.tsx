@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Alert, Box, Button, Chip, Typography } from '../../../ui';
-import { ArrGrab, GRAB_STATE_LABELS } from '../../utils/arrBridgeSetup';
+import { ArrGrab, GRAB_STATE_LABELS, LIBRARY_COPY_NOTES } from '../../utils/arrBridgeSetup';
 
 // The page stays short; the rest of the list is one click away.
 const COLLAPSED_ROWS = 10;
@@ -42,6 +42,9 @@ const GrabRow: React.FC<{ grab: ArrGrab }> = ({ grab }) => {
           <span className="mt-1 block break-words text-muted-foreground">{grab.failMessage}</span>
         )}
         {grab.state === 'ready' && <span className="mt-1 block text-muted-foreground">{READY_HINT}</span>}
+        {grab.libraryCopy && (
+          <span className="mt-1 block break-words text-muted-foreground">{LIBRARY_COPY_NOTES[grab.libraryCopy]}</span>
+        )}
       </span>
       <span className="text-muted-foreground md:text-right">{formatWhen(grab.createdAt)}</span>
     </li>

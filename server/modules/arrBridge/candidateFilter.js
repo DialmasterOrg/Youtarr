@@ -36,11 +36,21 @@ const MARKER_PATTERNS = [
 // A marker that continues into a second episode: "S01E01-E10", "S01E01-03",
 // "S1E1 & 2", "S01E01, E02", "Episodes 1-10", "1x01-1x03". Such a video
 // holds several episodes and must never be offered as one of them.
+// The second number must stand alone: "Episode 5 - 1080p" and "1x05 - 4K"
+// name a resolution. A dash with a space before it is the usual separator
+// before an episode's own title ("Episode 5 - 24 Hours to Hell"), so a bare
+// number after one is a second episode only when the title ends there, or
+// goes on with a bracket or a filler word ("Episode 1 - 3 (Full Episodes)").
+const SPACED_RANGE_END = String.raw`\s*(?:$|[()[\]|]|(?:full|complete|hd|episodes)\b)`;
 const RANGE_PATTERNS = [
   /\bs\d{1,4}\s*[.\-_ ]?\s*e\d{1,3}\s*(?:[-–&+,]|to|through|thru)\s*(?:s\d{1,4}\s*)?e(?:p\.?)?\s*\d/i,
   /\bs\d{1,4}\s*[.\-_ ]?\s*e\d{1,3}(?:[-–]|\s*&\s*)\d{1,3}\b/i,
-  /\bepisodes?\s*\d{1,3}\s*(?:[-–&+,]|to|through|thru|and)\s*\d/i,
-  /\b\d{1,2}x\d{2,3}\s*[-–&+,]\s*\d/i,
+  /\bepisodes\s*\d{1,3}\s*(?:[-–&+,]|to|through|thru|and)\s*\d{1,3}\b/i,
+  /\bepisode\s*\d{1,3}(?:[-–]|\s*(?:[&+,]|to|through|thru|and)\s*)\d{1,3}\b/i,
+  new RegExp(String.raw`\bepisode\s*\d{1,3}\s+[-–]\s*\d{1,3}${SPACED_RANGE_END}`, 'i'),
+  /\b\d{1,2}x\d{2,3}\s*(?:[-–&+,]|to|through|thru)\s*\d{1,2}x\d{2,3}\b/i,
+  /\b\d{1,2}x\d{2,3}(?:[-–]|\s*[&+,]\s*)\d{1,3}\b/i,
+  new RegExp(String.raw`\b\d{1,2}x\d{2,3}\s+[-–]\s*\d{1,3}${SPACED_RANGE_END}`, 'i'),
 ];
 // Words that may sit between a series name and its episode marker without
 // meaning another series.

@@ -3,25 +3,33 @@
 // Youtarr download, and when that job ends stages the file for Sonarr or
 // Radarr. It wakes on a new grab, on every finished job, and on a one-minute
 // sweep that also recovers what a restart interrupted. Nothing here removes
-// a video from Youtarr's library.
+// a video from Youtarr's library; with "remove after import" on, the sweep
+// hands that to libraryCopyRemover.
 const crypto = require('crypto');
 const fs = require('fs');
 const { Op } = require('sequelize');
 const { ARR_BRIDGE_JOB_LABEL, AUTO_RETRY_LABEL_PREFIX } = require('../download/jobTypes');
 const { MAX_AUTO_RETRY_COUNT } = require('../download/transient403RetryPlanner');
 const { parseAuxData } = require('../jobAuxData');
+const { LIBRARY_COPY } = require('./libraryCopyRemover');
 const { resolutionOfTitle } = require('./releaseNaming');
 
 const SWEEP_INTERVAL_MS = 60 * 1000;
 const SWEEP_BATCH_SIZE = 20;
 const RESOLVE_BATCH_SIZE = 100;
 const DAY_MS = 24 * 60 * 60 * 1000;
+// A grab that could not run through no fault of its video (the download job
+// errored before trying it, or the file could not be staged) is tried again
+// this much later, and only fails once that has gone on this long.
+const RETRY_HOLD_MS = 15 * 60 * 1000;
+const RETRY_GIVE_UP_MS = DAY_MS;
 const MAX_FAIL_MESSAGE_LENGTH = 200;
 const FINAL_JOB_STATUSES = new Set(['Complete', 'Complete with Warnings', 'Error', 'Failed', 'Terminated', 'Killed']);
 const STOPPED_JOB_STATUSES = new Set(['Terminated', 'Killed']);
 // jobModule terminates running and pending jobs when the server starts and
 // says so in their output. Such a job did not fail: the video was never tried.
 const RESTART_OUTPUT_PATTERN = /server restart/i;
+const UNTRIED_OUTPUT_PATTERN = /^(?:Output directory is not accessible|Download process error|Job could not be started)\b/;
 // A file is only gone when the filesystem says so; any other error (a
 // network share hiccup) is no verdict.
 const ABSENT_CODES = new Set(['ENOENT', 'ENOTDIR']);
@@ -29,6 +37,7 @@ const NO_ENDED_JOBS = new Set();
 // Shown in Sonarr and Radarr as the reason a download failed.
 const MESSAGES = {
   queueFailed: 'Youtarr could not queue the download',
+  notStarted: 'Youtarr could not start the download',
   stagingFailed: 'Youtarr could not stage the file for import',
   audioOnly: 'Youtarr downloaded audio only for this video, so there is no video file to import',
   stopped: 'The download was stopped in Youtarr',
@@ -65,6 +74,15 @@ function wasInterrupted({ job, failure }) {
   return job.status === 'Terminated' && !failure && RESTART_OUTPUT_PATTERN.test(job.output || '');
 }
 
+// The job errored before yt-dlp ran: the downloads folder was unreachable
+// (downloadExecutor's pre-flight check), the process could not start, or the
+// job never left the queue (jobModule.failUnstartedJob). Named by their
+// output, so any other Error job counts as having tried the video: a
+// finalization error comes after yt-dlp ran, and retrying it downloads again.
+function endedBeforeTrying({ job, failure }) {
+  return job.status === 'Error' && !failure && UNTRIED_OUTPUT_PATTERN.test(job.output || '');
+}
+
 /**
  * @param {Object} deps
  * @param {Object} deps.models - { ArrBridgeGrab, Video, Job }
@@ -75,6 +93,8 @@ function wasInterrupted({ job, failure }) {
  * @param {Object} deps.storageGuard - { isPausedError }
  * @param {Object} deps.staging
  * @param {Function} deps.getSettings - () => arrBridgeConfig.readSettings(config)
+ * @param {Function} [deps.onHandedOff] - (grab) => Promise; a completed grab's staged file expired
+ * @param {Function} [deps.settleLibraryCopies] - () => Promise; libraryCopyRemover.run
  * @param {Function} [deps.fileState] - (path) => Promise<'present'|'missing'|'unknown'>
  * @param {Function} [deps.newId] - Makes the id of each download job
  * @param {Function} [deps.now]
@@ -84,6 +104,7 @@ function wasInterrupted({ job, failure }) {
  */
 function createGrabExecutor({
   models, downloader, needsRedownload, jobLookup, storageGuard, staging, getSettings,
+  onHandedOff = async () => {}, settleLibraryCopies = async () => {},
   fileState = statFileState, newId = crypto.randomUUID, now = () => new Date(), logger,
   sweepIntervalMs = SWEEP_INTERVAL_MS, scheduleWake = setImmediate,
 }) {
@@ -92,6 +113,9 @@ function createGrabExecutor({
   // both reach a row, and a sweep must not judge a grab whose download is
   // being queued at that moment.
   const chains = new Map();
+  // Grab id -> { until, since }: grabs the sweep leaves alone for now. Kept
+  // in memory only, so a restart tries each of them again at once.
+  const holds = new Map();
   let sweeping = null;
   let sweepAgain = false;
   let wakeScheduled = false;
@@ -119,13 +143,39 @@ function createGrabExecutor({
     return updated === 1;
   }
 
-  const fail = (grab, fromStatus, message) => transition(grab, fromStatus, {
-    status: 'failed', fail_message: message, completed_at: now(),
-  });
+  const fail = (grab, fromStatus, message) => {
+    holds.delete(grab.id);
+    return transition(grab, fromStatus, { status: 'failed', fail_message: message, completed_at: now() });
+  };
+
+  // Holds a grab back from the sweep. False once it has been held again and
+  // again for RETRY_GIVE_UP_MS: the caller fails it then.
+  function hold(grabId) {
+    const time = now().getTime();
+    const since = holds.get(grabId)?.since ?? time;
+    if (time - since >= RETRY_GIVE_UP_MS) return false;
+    holds.set(grabId, { until: time + RETRY_HOLD_MS, since });
+    return true;
+  }
+
+  // An entry outlives its hold, so the next one knows when the first began.
+  function heldGrabIds() {
+    const time = now().getTime();
+    const held = [];
+    for (const [grabId, { until, since }] of holds) {
+      if (until > time) held.push(grabId);
+      else if (time - since >= RETRY_GIVE_UP_MS + RETRY_HOLD_MS) holds.delete(grabId);
+    }
+    return held;
+  }
 
   // Back to the sweep, which starts over: stage the file if it is there by
   // then, otherwise queue a new download.
-  const requeue = (grab) => transition(grab, 'queued', { status: 'pending', job_id: null });
+  // The video stops being the grab's own: until it is queued again, another
+  // job may be the one that downloads it.
+  const requeue = (grab) => transition(grab, 'queued', { status: 'pending', job_id: null, library_copy: null });
+  // The grab's own download put the file there; only staging is left to do.
+  const requeueForStaging = (grab) => transition(grab, 'queued', { status: 'pending', job_id: null });
 
   async function findVideo(youtubeId) {
     return Video.findOne({
@@ -152,12 +202,17 @@ function createGrabExecutor({
       });
     } catch (error) {
       logger.warn({ err: error, grabId: grab.id }, 'Could not stage a file for Sonarr/Radarr');
-      return fail(grab, fromStatus, MESSAGES.stagingFailed);
+      // The download itself worked, and a full disk or a permission problem
+      // can be fixed: the sweep stages the library file again later.
+      if (!hold(grab.id)) return fail(grab, fromStatus, MESSAGES.stagingFailed);
+      if (fromStatus === 'queued') await requeueForStaging(grab);
+      return false;
     }
     const completed = await transition(grab, fromStatus, {
       status: 'completed', staged_path: staged.stagedPath, bytes: staged.bytes, completed_at: now(),
     });
     if (completed) {
+      holds.delete(grab.id);
       logger.info({ grabId: grab.id, youtubeId: grab.youtube_id, method: staged.method }, 'Sonarr/Radarr grab staged');
       return true;
     }
@@ -170,6 +225,8 @@ function createGrabExecutor({
   async function executePending(grabId) {
     const grab = await ArrBridgeGrab.findByPk(grabId);
     if (!grab || grab.status !== 'pending') return;
+    // Held after the sweep that sent this had already read its rows.
+    if (holds.get(grabId)?.until > now().getTime()) return;
 
     const video = await findVideo(grab.youtube_id);
     const state = await videoFileState(video);
@@ -193,7 +250,10 @@ function createGrabExecutor({
     // A new job id per attempt, recorded with the claim: a grab queued again
     // after a restart cannot reuse the id of its terminated job.
     const jobId = newId();
-    if (!(await transition(grab, 'pending', { status: 'queued', job_id: jobId }))) return;
+    // Only a video with no library row is downloaded for the grab alone;
+    // "remove after import" never touches any other.
+    const libraryCopy = video ? null : LIBRARY_COPY.OWNED;
+    if (!(await transition(grab, 'pending', { status: 'queued', job_id: jobId, library_copy: libraryCopy }))) return;
     let admitted;
     try {
       admitted = await downloader({
@@ -276,7 +336,17 @@ function createGrabExecutor({
       }
       return;
     }
-    const message = failMessage({ video: finalVideo, failure, job });
+    const untried = endedBeforeTrying({ job, failure });
+    if (untried && hold(grab.id)) {
+      if (await requeue(grab)) {
+        logger.warn(
+          { grabId: grab.id, youtubeId: grab.youtube_id, jobId },
+          'Sonarr/Radarr grab will be tried again: its download job ended before trying the video'
+        );
+      }
+      return;
+    }
+    const message = untried ? MESSAGES.notStarted : failMessage({ video: finalVideo, failure, job });
     if (await fail(grab, 'queued', message)) {
       logger.info({ grabId: grab.id, youtubeId: grab.youtube_id, message }, 'Sonarr/Radarr grab failed');
     }
@@ -291,6 +361,7 @@ function createGrabExecutor({
     for (const grab of expired) {
       if (await transition(grab, 'completed', { status: 'removed', removed_at: now() })) {
         await removeStaged(grab);
+        await onHandedOff(grab);
       }
     }
   }
@@ -303,14 +374,20 @@ function createGrabExecutor({
     }
     const queued = await ArrBridgeGrab.findAll({ where: { status: 'queued' }, limit: RESOLVE_BATCH_SIZE });
     queued.forEach((grab) => exclusive(grab.id, () => resolveQueued(grab.id, NO_ENDED_JOBS)));
+    const held = heldGrabIds();
     const pending = await ArrBridgeGrab.findAll({
-      where: { status: 'pending' },
+      where: { status: 'pending', ...(held.length > 0 ? { id: { [Op.notIn]: held } } : {}) },
       // A held grab goes to the back so one busy video cannot starve the rest.
       order: [['updated_at', 'ASC'], ['id', 'ASC']],
       limit: SWEEP_BATCH_SIZE,
     });
     pending.forEach((grab) => exclusive(grab.id, () => executePending(grab.id)));
     await removeExpired();
+    try {
+      await settleLibraryCopies();
+    } catch (error) {
+      logger.warn({ err: error }, 'Could not settle the library copies of Sonarr/Radarr grabs');
+    }
   }
 
   /** Start one sweep, or queue another behind the one already running. */

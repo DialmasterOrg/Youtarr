@@ -33,9 +33,15 @@ describe('arrBridgeConfig', () => {
         stagingPath: null,
         retentionDays: 7,
         resolution: null,
+        removeAfterImport: false,
         sonarr: null,
         radarr: null,
       });
+    });
+
+    test('removes the library copy after an import only when switched on', () => {
+      expect(readSettings({ arrBridgeRemoveAfterImport: true }).removeAfterImport).toBe(true);
+      expect(readSettings({ arrBridgeRemoveAfterImport: 'yes' }).removeAfterImport).toBe(false);
     });
 
     test('is enabled only for a literal true', () => {
@@ -239,10 +245,11 @@ describe('arrBridgeConfig', () => {
       arrBridgeStagingPath: '',
       arrBridgeStagingRetentionDays: 7,
       arrBridgeResolution: '',
+      arrBridgeRemoveAfterImport: false,
     };
     const categories = (count) => Array.from({ length: count }, (_, index) => ({ name: `cat${index}`, subfolder: null }));
 
-    test('names the nine settings', () => {
+    test('names the ten settings', () => {
       expect([...SETTING_KEYS].sort()).toEqual(Object.keys(DEFAULTS).sort());
     });
 
@@ -318,6 +325,12 @@ describe('arrBridgeConfig', () => {
     test.each(['yes', 1, null])('rejects %p for a switch', (value) => {
       expect(getSettingsError({ arrBridgeEnabled: value })).toMatch(/^Sonarr\/Radarr/);
       expect(getSettingsError({ arrBridgeLooseMatching: value })).toMatch(/^Sonarr\/Radarr/);
+      expect(getSettingsError({ arrBridgeRemoveAfterImport: value })).toMatch(/^Sonarr\/Radarr/);
+    });
+
+    test('a hand-edited remove-after-import value that is not a switch is turned off', () => {
+      expect(correctStoredSettings({ arrBridgeRemoveAfterImport: 'yes' }))
+        .toEqual([{ key: 'arrBridgeRemoveAfterImport', previous: 'yes', replacement: false }]);
     });
 
     test('cleanSettings returns the saved form of the keys that are present', () => {

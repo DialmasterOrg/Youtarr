@@ -10,6 +10,12 @@ const ARR_MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
 const ARR_MAX_STATUS_BYTES = 256 * 1024;
 // The staging folder holds a folder per category and one per waiting grab.
 const ARR_MAX_FOLDER_LIST_BYTES = 4 * 1024 * 1024;
+// "The download folder was imported", as a history filter and as a record
+// reads it, in Sonarr and in Radarr.
+const IMPORTED_EVENT_TYPE = 3;
+const IMPORTED_EVENT_NAME = 'downloadFolderImported';
+const HISTORY_PAGE_SIZE = 10;
+const ARR_MAX_HISTORY_BYTES = 4 * 1024 * 1024;
 const SECONDS_PER_MINUTE = 60;
 
 const MESSAGES = {
@@ -158,6 +164,26 @@ function createArrClient({ http = axios, timeoutMs = ARR_REQUEST_TIMEOUT_MS } = 
   }
 
   /**
+   * Whether the app's history holds an import of this download. The app
+   * records the download client's item id as the download id.
+   * @param {{url: string, apiKey: string}} connection
+   * @param {string} downloadId - The grab id
+   * @returns {Promise<boolean>}
+   */
+  async function fetchImported(connection, downloadId) {
+    const data = await get(connection, '/api/v3/history', {
+      params: { downloadId, eventType: IMPORTED_EVENT_TYPE, pageSize: HISTORY_PAGE_SIZE },
+      maxBytes: ARR_MAX_HISTORY_BYTES,
+    });
+    if (!isRow(data) || !Array.isArray(data.records)) throw new ArrUnavailableError('not-json');
+    const wanted = String(downloadId).toLowerCase();
+    return data.records.some((record) => isRow(record)
+      && record.eventType === IMPORTED_EVENT_NAME
+      && typeof record.downloadId === 'string'
+      && record.downloadId.toLowerCase() === wanted);
+  }
+
+  /**
    * @param {{url: string, apiKey: string}} connection
    * @returns {Promise<Array<{id: number, title: string, titles: string[], year: number|null,
    *   runtimeSeconds: number|null, sceneNumbering: boolean}>>}
@@ -185,7 +211,7 @@ function createArrClient({ http = axios, timeoutMs = ARR_REQUEST_TIMEOUT_MS } = 
     return (await getList(connection, '/api/v3/movie')).map(toMovie).filter(Boolean);
   }
 
-  return { fetchSeries, fetchEpisodes, fetchMovies, fetchStatus, fetchFolderNames };
+  return { fetchSeries, fetchEpisodes, fetchMovies, fetchStatus, fetchFolderNames, fetchImported };
 }
 
 module.exports = { createArrClient, ArrUnavailableError, ARR_REQUEST_TIMEOUT_MS };

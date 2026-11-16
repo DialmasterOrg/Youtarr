@@ -6,6 +6,7 @@ import {
   getSetupValues,
   hasOnlyDefaultCategories,
   releaseResolution,
+  removeAfterImportWarning,
   stagingFolderOnHost,
   GRAB_STATE_LABELS,
   ArrCategory,
@@ -243,6 +244,30 @@ describe('GRAB_STATE_LABELS', () => {
   test('has a label for every state', () => {
     expect(Object.keys(GRAB_STATE_LABELS).sort()).toEqual(
       ['cancelled', 'downloading', 'failed', 'handed-off', 'ready', 'waiting']
+    );
+  });
+});
+
+describe('removeAfterImportWarning', () => {
+  test('says nothing when both apps are connected', () => {
+    expect(removeAfterImportWarning({ sonarr: true, radarr: true })).toBeNull();
+  });
+
+  test('says no video is removed when neither app is connected', () => {
+    expect(removeAfterImportWarning({ sonarr: false, radarr: false })).toBe(
+      'Sonarr and Radarr are not connected in step 3. Youtarr cannot confirm an import without a connection, so it keeps every grabbed video.'
+    );
+  });
+
+  test('names Sonarr when only Radarr is connected', () => {
+    expect(removeAfterImportWarning({ sonarr: false, radarr: true })).toBe(
+      'Sonarr is not connected in step 3. Youtarr cannot confirm its imports, so it keeps every video Sonarr grabs.'
+    );
+  });
+
+  test('names Radarr when only Sonarr is connected', () => {
+    expect(removeAfterImportWarning({ sonarr: true, radarr: false })).toBe(
+      'Radarr is not connected in step 3. Youtarr cannot confirm its imports, so it keeps every video Radarr grabs.'
     );
   });
 });

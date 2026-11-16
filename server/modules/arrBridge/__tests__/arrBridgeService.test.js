@@ -38,7 +38,10 @@ function setup(config, overrides = {}) {
     isArchived: () => false,
     getActivity: () => null,
     logger,
-    createExecutor: () => executor,
+    createExecutor: (deps) => {
+      executor.deps = deps;
+      return executor;
+    },
   });
   return { service, configModule, executor, logger };
 }
@@ -174,6 +177,47 @@ describe('arrBridgeService', () => {
     expect(response.body).toContain('Beyblade.S01E29.1080p.WEB-DL-BEYBLADEOfficial');
   });
 
+  test('removes the library copy of a handed-off grab once the connected Sonarr recorded its import', async () => {
+    const sonarr = { url: 'http://sonarr:8989', apiKey: 'sonarr-key-0001' };
+    const grab = {
+      id: '9b89e5bc-8c90-4e72-b245-270fed2eacc2',
+      youtube_id: 'g7VYYfoNaf0',
+      kind: 'tv',
+      status: 'removed',
+      library_copy: 'owned',
+      removed_at: new Date(),
+    };
+    const ArrBridgeGrab = {
+      update: jest.fn(async (values) => {
+        Object.assign(grab, values);
+        return [1];
+      }),
+      findAll: jest.fn(async ({ where }) => (where.library_copy === grab.library_copy ? [grab] : [])),
+    };
+    const Video = { findOne: jest.fn().mockResolvedValue({ youtubeId: grab.youtube_id, filePath: null }) };
+    const removeVideo = jest.fn().mockResolvedValue(true);
+    const arrClient = { fetchImported: jest.fn().mockResolvedValue(true) };
+    const { executor } = setup(
+      {
+        arrBridgeEnabled: true,
+        arrBridgeApiKey: KEY,
+        arrBridgeRemoveAfterImport: true,
+        arrBridgeSonarrUrl: sonarr.url,
+        arrBridgeSonarrApiKey: sonarr.apiKey,
+      },
+      { removeVideo, createClient: () => arrClient, models: { ArrBridgeGrab, Video, ChannelVideo: {}, Job: {} } }
+    );
+
+    await executor.deps.onHandedOff(grab);
+    expect(grab.library_copy).toBe('remove');
+
+    await executor.deps.settleLibraryCopies();
+
+    expect(arrClient.fetchImported).toHaveBeenCalledWith(sonarr, grab.id);
+    expect(removeVideo).toHaveBeenCalledWith('g7VYYfoNaf0', expect.objectContaining({ detail: 'after Sonarr imported it' }));
+    expect(grab.library_copy).toBe('removed');
+  });
+
   test('exposes the settings the Settings page works with, sharing the bridge key', () => {
     const { service, configModule } = setup({ arrBridgeEnabled: true });
     service.start();
@@ -224,11 +268,26 @@ describe('arrBridgeService', () => {
         category: 'tv',
         state: 'handed-off',
         failMessage: null,
+        libraryCopy: null,
         createdAt: CREATED,
         completedAt: COMPLETED,
         removedAt: REMOVED,
       }]);
       expect(ArrBridgeGrab.findAll.mock.calls[0][0].limit).toBe(20);
+    });
+
+    test.each([
+      ['remove', 'checking'],
+      ['removed', 'removed'],
+      ['kept', 'kept'],
+      ['owned', null],
+      [null, null],
+    ])('reports a library copy stored as %p as %p', async (stored, shown) => {
+      const { service } = withRows([{ ...grabRow, library_copy: stored }], []);
+
+      const [grab] = await service.listRecentGrabs();
+
+      expect(grab.libraryCopy).toBe(shown);
     });
 
     test('leaves the titles empty for a video Youtarr does not hold', async () => {

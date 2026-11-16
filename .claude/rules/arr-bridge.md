@@ -19,7 +19,7 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 - `/arr` skips `verifyToken` because Sonarr and Radarr cannot log in. Every request checks the bridge key, also with `AUTH_ENABLED=false`, and the namespace answers 404 while `arrBridgeEnabled` is off, so a login proxy exemption for `/arr/` stays safe.
 - The key travels as `?apikey=` because the protocols allow nothing else. `redactUrl` and `redactQuery` in `server.js` and the log scrubber hide it; never log `req.query` or a rendered feed, whose item links carry the key.
 - `arrBridgeApiKey` is server-owned like `downloadsFeedToken`: `/getconfig` omits it and `/updateconfig` restores it. It is created the first time the bridge is found enabled or Settings asks for it.
-- Nine `arrBridge*` settings are in `CONFIG_FIELDS`. `arrBridgeConfig` holds the one rule set `/updateconfig` rejects with and `configModule` corrects stored values with; `readSettings` still corrects on every read, so a category name can never become a path.
+- Ten `arrBridge*` settings are in `CONFIG_FIELDS`. `arrBridgeConfig` holds the one rule set `/updateconfig` rejects with and `configModule` corrects stored values with; `readSettings` still corrects on every read, so a category name can never become a path.
 - `/updateconfig` keeps a bridge setting the client did not send: a tab loaded before the settings existed posts a config without them, and a save replaces the whole config, which would switch the bridge off.
 - SABnzbd answers are always HTTP 200, with `status: false` for errors, because anything else marks the whole client unavailable. `mode=version` needs no key, as in real SABnzbd.
 
@@ -63,12 +63,18 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 
 ## Grabs and staging
 
-- The apps only ever get a hardlink under `.arr-staging` (a copy across filesystems): they move the file and delete the folder themselves. A grab never removes the library file, a Videos row or an archive line.
+- The apps only ever get a hardlink under `.arr-staging` (a copy across filesystems): they move the file and delete the folder themselves.
+- With `arrBridgeRemoveAfterImport` on, `libraryCopyRemover` deletes Youtarr's copy of a grab only after a confirmed import, through `videoDeletionModule` (`auto_removal`; the archive line stays). Off, a grab never removes a library file, a Videos row or an archive line.
+- One history delete serves an import and a removal, so only the connected app's history (`downloadId` is the grab id) proves an import; unconfirmed keeps the copy. A hardlink count is no proof: any other link reads as one.
+- `library_copy` is `owned` only for a video with no library row that the grab's own job downloads; a requeue clears it, because another job may then be the one that downloads the video.
+- Removal waits while another grab of the same video is pending or queued: that grab still stages from the library file.
 - `videosModule.scanForVideoFiles`, `libraryRootCheck`, the orphan folder sweep and `videoMetadataProcessor` skip `.arr-staging` (`ARR_STAGING_DIR_NAME` in `filesystem/constants.js`). Any new walk of the downloads folder must skip it too.
 - Category folders exist from the moment the bridge is on, because Radarr raises a health error for a missing one. `.ignore` and `.plexignore` keep media servers out: their adapters match library items by file name.
 - A SABnzbd category is one app instance: an app keeps only items of its own category, so two instances sharing one import each other's grabs. The carrier NZB holds the kind (tv or movie), not the category.
 - `grabExecutor` follows `externalRequestExecutor`, but each attempt gets a new job id stored on the grab: work on one grab is serialized, and every write names the status it expects, so a removed grab is never revived or staged.
-- A grab is failed only on evidence. A job a restart terminated, or one that never existed, queues the grab again; a file that cannot be checked waits. A failure makes the app blocklist the release and hides the video for 7 days.
+- A grab is failed only on evidence. A job a restart terminated, or one that never existed, queues the grab again at once; a file that cannot be checked waits.
+- A job that errored before trying the video, or a staging error, holds the grab 15 minutes and retries for a day, in memory. A failure makes the app blocklist the release and hides the video 7 days.
+- `endedBeforeTrying` names the three `Error` outputs written before yt-dlp runs (output folder check, process start, `failUnstartedJob`); rewording them in `downloadExecutor` or `jobModule` makes such grabs fail again. Any other `Error` job counts as tried, so a finalization error never re-downloads.
 - `grabService.grabState` derives what Settings shows. A removed grab that completed is `handed-off`, never "imported": the app sends the same history delete after an import and after a removal there.
 - A category's name cannot be edited in Settings, only removed and added: existing grabs carry the name and their staging folder is named after it.
 - `ARR_BRIDGE_JOB_LABEL` contains the manual download label on purpose, so job detection, per-video structure and members-only handling treat a grab as a manual download.
