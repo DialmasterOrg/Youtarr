@@ -81,6 +81,10 @@ export const ArrBridgeMatchingSettings: React.FC<ArrBridgeMatchingSettingsProps>
           }
           label="Loose matching"
         />
+        <Typography variant="body2" color="text.secondary">
+          Also offers an episode number without a season and a movie without its year. It finds more, and it can
+          offer the wrong video.
+        </Typography>
         {loose && (
           <Alert severity="warning" className="mt-2">
             Loose matching can offer the wrong video. Turn off &quot;Enable Automatic Search&quot; for the Youtarr

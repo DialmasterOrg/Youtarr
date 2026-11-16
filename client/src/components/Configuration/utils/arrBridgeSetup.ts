@@ -84,12 +84,25 @@ export interface ArrSetupValues {
   urlBase: string;
 }
 
+/** Where Sonarr and Radarr run, which decides the address they reach Youtarr at. */
+export type ArrLocation = 'docker' | 'elsewhere';
+
+// The container name in Youtarr's compose file, and the port it listens on
+// inside Docker whatever port is published.
+export const YOUTARR_CONTAINER_NAME = 'youtarr';
+export const YOUTARR_CONTAINER_PORT = '3011';
+const DOCKER_ORIGIN = { protocol: 'http:', hostname: YOUTARR_CONTAINER_NAME, port: YOUTARR_CONTAINER_PORT };
+
 /**
- * The values to type into Sonarr and Radarr, from the address this page is
- * open at. Another container reaches Youtarr under a different address, which
- * the page says beside them.
+ * The values to type into Sonarr and Radarr. Apps in Docker on Youtarr's
+ * network reach it by container name; anything else uses the address this
+ * page is open at.
  */
-export function getSetupValues(origin: { protocol: string; hostname: string; port: string }): ArrSetupValues {
+export function getSetupValues(
+  pageOrigin: { protocol: string; hostname: string; port: string },
+  location: ArrLocation = 'elsewhere'
+): ArrSetupValues {
+  const origin = location === 'docker' ? DOCKER_ORIGIN : pageOrigin;
   const useSsl = origin.protocol === 'https:';
   const address = `${origin.protocol}//${origin.hostname}${origin.port ? `:${origin.port}` : ''}`;
   return {
@@ -100,6 +113,58 @@ export function getSetupValues(origin: { protocol: string; hostname: string; por
     useSsl,
     urlBase: '/arr/sabnzbd',
   };
+}
+
+const DEFAULT_RELEASE_RESOLUTION = 1080;
+
+/**
+ * The resolution releases are labeled with, as the server works it out:
+ * Sonarr and Radarr have a quality for 2160, 1080, 720 and 480 only.
+ * @param bridgeResolution - arrBridgeResolution; empty follows the preferred one
+ * @param preferredResolution - The preferredResolution setting
+ */
+export function releaseResolution(bridgeResolution: string, preferredResolution: string): number {
+  const height = Number.parseInt(bridgeResolution || preferredResolution, 10);
+  if (!Number.isFinite(height)) return DEFAULT_RELEASE_RESOLUTION;
+  if (height >= 2160) return 2160;
+  if (height >= 1080) return 1080;
+  if (height >= 720) return 720;
+  return 480;
+}
+
+const STAGING_FOLDER_NAME = '.arr-staging';
+
+/**
+ * The staging folder as the user knows it: inside the downloads folder they
+ * configured, not the path inside Youtarr's container.
+ */
+export function stagingFolderOnHost(downloadsFolder: string | null | undefined): string | null {
+  const folder = (downloadsFolder ?? '').trim().replace(/\/+$/, '');
+  return folder ? `${folder}/${STAGING_FOLDER_NAME}` : null;
+}
+
+/** What a shared-folder check answered (GET /api/arr-bridge/connections/:app/shared-folder). */
+export interface ArrFolderCheck {
+  ok: boolean;
+  visible?: boolean;
+  path?: string;
+  reason?: string;
+  message?: string;
+}
+
+const DEFAULT_CATEGORY_LABELS: Record<string, string> = {
+  tv: 'TV grabs are saved to',
+  movies: 'Movie grabs are saved to',
+};
+
+export function categoryRowLabel(name: string): string {
+  return DEFAULT_CATEGORY_LABELS[name] ?? `Grabs in category ${name} are saved to`;
+}
+
+/** Whether the categories are still the two Youtarr starts with. */
+export function hasOnlyDefaultCategories(categories: ArrCategory[]): boolean {
+  const names = categories.map((category) => category.name).sort();
+  return names.length === 2 && names[0] === 'movies' && names[1] === 'tv';
 }
 
 // Mirrors the server's validateSubFolderName. The subfolder list offers every
@@ -155,10 +220,10 @@ export function getArrBridgeSettingsError(settings: ArrBridgeSavedSettings): str
   }
   const days = settings.arrBridgeStagingRetentionDays;
   if (!Number.isInteger(days) || days < 1 || days > MAX_RETENTION_DAYS) {
-    return `Sonarr / Radarr: keep staged files for 1 to ${MAX_RETENTION_DAYS} days`;
+    return `Sonarr / Radarr: remove files nobody imported after 1 to ${MAX_RETENTION_DAYS} days`;
   }
   if (!isStagingPath(settings.arrBridgeStagingPath)) {
-    return 'Sonarr / Radarr: the folder as Sonarr and Radarr see it must be an absolute path, like /downloads/.arr-staging';
+    return "Sonarr / Radarr: the folder's path inside Sonarr and Radarr must be an absolute path, like /downloads/.arr-staging";
   }
   return null;
 }

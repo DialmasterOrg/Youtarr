@@ -1,15 +1,17 @@
 import React, { ChangeEvent } from 'react';
-import { Alert, Box, FormControlLabel, Switch, TextField, Typography } from '../../ui';
+import { Alert, Box, FormControlLabel, Switch, Typography } from '../../ui';
 import { ConfigurationCard } from '../common/ConfigurationCard';
 import { ConfigState, SnackbarState } from '../types';
 import { useArrBridgeKey } from '../hooks/useArrBridgeKey';
 import { useArrBridgeConnections } from '../hooks/useArrBridgeConnections';
 import { useArrBridgeGrabs } from '../hooks/useArrBridgeGrabs';
-import { ARR_APPS, ARR_DOCS_URL, MAX_RETENTION_DAYS } from '../utils/arrBridgeSetup';
-import { ArrBridgeNumberField } from './components/ArrBridgeNumberField';
+import { useArrBridgeFolderCheck } from '../hooks/useArrBridgeFolderCheck';
+import { ARR_APPS, ARR_DOCS_URL, releaseResolution, stagingFolderOnHost } from '../utils/arrBridgeSetup';
 import { ArrBridgeSetupValues } from './components/ArrBridgeSetupValues';
 import { ArrBridgeMatchingSettings } from './components/ArrBridgeMatchingSettings';
 import { ArrBridgeCategories } from './components/ArrBridgeCategories';
+import { ArrBridgeResolutionField } from './components/ArrBridgeResolutionField';
+import { ArrBridgeSharedFolder } from './components/ArrBridgeSharedFolder';
 import { ArrConnectionCard } from './components/ArrConnectionCard';
 import { ArrBridgeGrabList } from './components/ArrBridgeGrabList';
 
@@ -22,9 +24,11 @@ interface ArrBridgeSectionProps {
 }
 
 /**
- * Settings -> Sonarr / Radarr. The switch, matching, categories and staging
- * settings are saved with the page's Save button; the key and the
- * connections are server-owned and change through their own buttons.
+ * Settings -> Sonarr / Radarr, in the order someone sets it up: turn it on,
+ * add Youtarr to the apps, connect them, check the shared folder; the
+ * settings to tune come after. The switch and the settings are saved with
+ * the page's Save button; the key and the connections are server-owned and
+ * change through their own buttons.
  */
 export const ArrBridgeSection: React.FC<ArrBridgeSectionProps> = ({
   token,
@@ -38,6 +42,18 @@ export const ArrBridgeSection: React.FC<ArrBridgeSectionProps> = ({
   const connections = useArrBridgeConnections(enabled ? token : null);
   const grabs = useArrBridgeGrabs(token, enabled);
   const status = connections.status;
+  const connected = {
+    sonarr: Boolean(status?.connections.sonarr.keySet),
+    radarr: Boolean(status?.connections.radarr.keySet),
+  };
+  // The server checks what is saved: the path it tells the apps, and the
+  // connections it asks. A change to either is a reason to ask again.
+  const savedStagingPath = savedConfig?.arrBridgeStagingPath ?? '';
+  const folderCheck = useArrBridgeFolderCheck(
+    enabled && savedConfig?.arrBridgeEnabled ? token : null,
+    connected,
+    [savedStagingPath, status?.connections.sonarr.url ?? '', status?.connections.radarr.url ?? ''].join('|')
+  );
 
   return (
     <>
@@ -45,6 +61,33 @@ export const ArrBridgeSection: React.FC<ArrBridgeSectionProps> = ({
         title="Sonarr / Radarr"
         subtitle="Sonarr and Radarr can search YouTube through Youtarr and import what it downloads. Youtarr keeps its own copy."
       >
+        <Box
+          className="rounded-[var(--radius-ui)] border border-[var(--border)] bg-muted/30 p-3"
+          role="group"
+          aria-label="What to expect"
+        >
+          <Typography variant="subtitle2">What to expect</Typography>
+          <ul className="m-0 mt-1 list-disc pl-5 text-sm">
+            <li>
+              Youtarr answers the searches Sonarr and Radarr run. It does not announce new uploads, so a new episode
+              is found when a search runs, not on its own.
+            </li>
+            <li>
+              A grab is downloaded by Youtarr like any other video and stays in your Youtarr library. Sonarr or
+              Radarr import their own copy.
+            </li>
+            <li>
+              Setup takes the four steps on this page.{' '}
+              <a href={ARR_DOCS_URL} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                Setup guide
+              </a>
+            </li>
+          </ul>
+        </Box>
+
+        <Typography variant="subtitle2" className="mt-4">
+          Step 1: Turn it on and save
+        </Typography>
         <FormControlLabel
           control={
             <Switch
@@ -56,79 +99,30 @@ export const ArrBridgeSection: React.FC<ArrBridgeSectionProps> = ({
           }
           label="Enable the Sonarr / Radarr bridge"
         />
-        <Typography variant="body2" color="text.secondary" className="mt-1">
-          Sonarr and Radarr also need to see Youtarr&apos;s staging folder.{' '}
-          <a href={ARR_DOCS_URL} target="_blank" rel="noopener noreferrer" className="text-primary underline">
-            Setup guide
-          </a>
-        </Typography>
-
-        {enabled && (
-          <ArrBridgeSetupValues
-            bridgeKey={bridgeKey}
-            loading={loading}
-            error={error}
-            regenerating={regenerating}
-            onRegenerate={regenerate}
-            categories={config.arrBridgeCategories}
-            saved={Boolean(savedConfig?.arrBridgeEnabled)}
-            setSnackbar={setSnackbar}
-          />
-        )}
       </ConfigurationCard>
 
       {enabled && (
         <>
-          <ConfigurationCard title="Matching" subtitle="Which YouTube videos Youtarr offers for an episode or a movie.">
-            <ArrBridgeMatchingSettings
-              config={config}
-              onConfigChange={onConfigChange}
-              sonarrConnected={Boolean(status?.connections.sonarr.keySet)}
-              radarrConnected={Boolean(status?.connections.radarr.keySet)}
-            />
-          </ConfigurationCard>
-
           <ConfigurationCard
-            title="Categories and shared folder"
-            subtitle="Where grabbed videos are downloaded, and the folder Sonarr and Radarr import them from."
+            title="Step 2: Add Youtarr to Sonarr and Radarr"
+            subtitle="In each app, add Youtarr as an indexer and as a download client, with these values."
           >
-            <ArrBridgeCategories
-              token={token}
+            <ArrBridgeSetupValues
+              bridgeKey={bridgeKey}
+              loading={loading}
+              error={error}
+              regenerating={regenerating}
+              onRegenerate={regenerate}
               categories={config.arrBridgeCategories}
-              onChange={(categories) => onConfigChange({ arrBridgeCategories: categories })}
+              saved={Boolean(savedConfig?.arrBridgeEnabled)}
+              resolution={releaseResolution(config.arrBridgeResolution, config.preferredResolution)}
+              setSnackbar={setSnackbar}
             />
-            <Box className="mt-4 flex flex-col gap-3">
-              {status && (
-                <Typography variant="body2">
-                  Staging folder in Youtarr: <code className="break-all">{status.stagingRoot}</code>
-                </Typography>
-              )}
-              <Box className="grid gap-4 md:grid-cols-2">
-                <TextField
-                  fullWidth
-                  label="The same folder as Sonarr and Radarr see it"
-                  value={config.arrBridgeStagingPath}
-                  placeholder="Leave empty when the path is the same"
-                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                    onConfigChange({ arrBridgeStagingPath: event.target.value })
-                  }
-                  helperText="Only when the folder is mounted at another path in Sonarr and Radarr. An absolute path."
-                />
-                <ArrBridgeNumberField
-                  label="Keep staged files for (days)"
-                  value={config.arrBridgeStagingRetentionDays}
-                  min={1}
-                  max={MAX_RETENTION_DAYS}
-                  onChange={(days) => onConfigChange({ arrBridgeStagingRetentionDays: days })}
-                  helperText="A staged file nobody imported is removed after this long. Your library copy stays."
-                />
-              </Box>
-            </Box>
           </ConfigurationCard>
 
           <ConfigurationCard
-            title="Connect to Sonarr and Radarr (optional)"
-            subtitle="With a connection, Youtarr reads episode titles and runtimes from your own Sonarr and Radarr to find official uploads that have no season number. It only reads."
+            title="Step 3: Connect your Sonarr and Radarr (recommended)"
+            subtitle="Youtarr reads episode titles and runtimes from your own Sonarr and Radarr. Without it, most official uploads are not found: they are titled with the episode's name and carry no season number. It also lets Youtarr check the shared folder in step 4. It only reads."
           >
             {connections.error && <Alert severity="error">{connections.error}</Alert>}
             {!connections.error && !status && (
@@ -151,6 +145,51 @@ export const ArrBridgeSection: React.FC<ArrBridgeSectionProps> = ({
                 ))}
               </Box>
             )}
+          </ConfigurationCard>
+
+          <ConfigurationCard
+            title="Step 4: Check the shared folder"
+            subtitle="The folder Sonarr and Radarr import finished grabs from."
+          >
+            <ArrBridgeSharedFolder
+              hostFolder={stagingFolderOnHost(config.youtubeOutputDirectory)}
+              connected={connected}
+              checks={folderCheck.results}
+              checking={folderCheck.checking}
+              onRecheck={folderCheck.recheck}
+              stagingPath={config.arrBridgeStagingPath}
+              stagingPathSaved={config.arrBridgeStagingPath === savedStagingPath}
+              onStagingPathChange={(path) => onConfigChange({ arrBridgeStagingPath: path })}
+              retentionDays={config.arrBridgeStagingRetentionDays}
+              onRetentionDaysChange={(days) => onConfigChange({ arrBridgeStagingRetentionDays: days })}
+            />
+          </ConfigurationCard>
+
+          <ConfigurationCard
+            title="Downloads"
+            subtitle="The quality grabs are downloaded at, and where they are saved."
+          >
+            <Box className="flex flex-col gap-4">
+              <ArrBridgeResolutionField
+                value={config.arrBridgeResolution}
+                preferredResolution={config.preferredResolution}
+                onChange={(resolution) => onConfigChange({ arrBridgeResolution: resolution })}
+              />
+              <ArrBridgeCategories
+                token={token}
+                categories={config.arrBridgeCategories}
+                onChange={(categories) => onConfigChange({ arrBridgeCategories: categories })}
+              />
+            </Box>
+          </ConfigurationCard>
+
+          <ConfigurationCard title="Matching" subtitle="Which YouTube videos Youtarr offers for an episode or a movie.">
+            <ArrBridgeMatchingSettings
+              config={config}
+              onConfigChange={onConfigChange}
+              sonarrConnected={connected.sonarr}
+              radarrConnected={connected.radarr}
+            />
           </ConfigurationCard>
 
           <ConfigurationCard title="Recent grabs">

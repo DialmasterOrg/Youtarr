@@ -5,7 +5,7 @@
 // the search by episode code only when that offers nothing.
 const { readSettings } = require('./arrBridgeConfig');
 const candidateFilter = require('./candidateFilter');
-const { filterByEpisodeTitle, canMatchByTitle } = require('./episodeMatcher');
+const { filterByEpisodeTitle, canMatchByTitle, seriesChannelRank } = require('./episodeMatcher');
 const { PLACEHOLDER_ID, buildNzbLink } = require('./nzbFile');
 const {
   DEFAULT_GROUP, groupToken, resolutionLabel, buildTvTitle, buildDailyTitle, buildMovieTitle,
@@ -153,7 +153,10 @@ function planEpisodeTitleSearch(request, episode, settings) {
     query,
     count: EPISODE_SEARCH_COUNT,
     select: (results) => filterByEpisodeTitle(results, { episode, settings })
-      .map((candidate) => ({ candidate, name })),
+      .map((candidate) => ({ candidate, name, channelRank: seriesChannelRank(candidate, episode) })),
+    // Sonarr grabs the newer of two equal releases, whatever the feed's
+    // order, and a re-upload is always newer than the show's own upload.
+    closestChannelOnly: !settings.looseMatching,
     title: (titleName, naming) => buildTvTitle({
       text: request.text, textSource: request.textSource, ...titleName, ...naming,
     }),
@@ -194,11 +197,14 @@ function createSearchService({
 
     const ids = selected.map(({ candidate }) => candidate.youtubeId);
     const [failedIds, knownDates] = await Promise.all([recentlyFailedIds(ids), knownUploadDates(ids)]);
-    const resolution = resolutionLabel(config.preferredResolution);
+    const resolution = resolutionLabel(settings.resolution ?? config.preferredResolution);
     const usedTitles = new Set();
     const items = [];
-    for (const { candidate, name } of selected) {
-      if (failedIds.has(candidate.youtubeId)) continue;
+    let offerable = selected.filter(({ candidate }) => !failedIds.has(candidate.youtubeId));
+    // Re-uploads stay available for when the show's own upload fails a grab.
+    const closest = plan.closestChannelOnly ? Math.max(0, ...offerable.map(({ channelRank }) => channelRank)) : 0;
+    if (closest > 0) offerable = offerable.filter(({ channelRank }) => channelRank === closest);
+    for (const { candidate, name } of offerable) {
       const group = groupToken(candidate.channelName, request.kind);
       const title = plan.title(name, { resolution, group });
       // Two videos with one release title would share a staging folder.

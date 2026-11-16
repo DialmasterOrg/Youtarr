@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import {
   Alert,
   Box,
@@ -8,6 +8,8 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  RadioGroup,
+  RadioGroupItem,
   TextField,
   Typography,
 } from '../../../ui';
@@ -18,11 +20,19 @@ import {
   ARR_DOCS_URL,
   ArrApp,
   ArrCategory,
+  ArrLocation,
+  YOUTARR_CONTAINER_NAME,
+  YOUTARR_CONTAINER_PORT,
   getSetupValues,
 } from '../../utils/arrBridgeSetup';
 import { locationUtils } from '../../../../utils/location';
 
 const DEFAULT_CATEGORY: Record<ArrApp, string> = { sonarr: 'tv', radarr: 'movies' };
+const LOCATION_QUESTION = 'Where do Sonarr and Radarr run?';
+const LOCATION_CHOICES: Array<{ value: ArrLocation; label: string }> = [
+  { value: 'docker', label: 'In Docker, on the same network as Youtarr' },
+  { value: 'elsewhere', label: 'Somewhere else' },
+];
 
 interface ArrBridgeSetupValuesProps {
   bridgeKey: string | null;
@@ -33,6 +43,8 @@ interface ArrBridgeSetupValuesProps {
   categories: ArrCategory[];
   /** Whether the saved config already has the bridge on. */
   saved: boolean;
+  /** The resolution releases are labeled with, which the quality profile must allow. */
+  resolution: number;
   setSnackbar: React.Dispatch<React.SetStateAction<SnackbarState>>;
 }
 
@@ -67,7 +79,9 @@ const ValueList: React.FC<ValueListProps> = ({ title, where, rows }) => (
 );
 
 /**
- * The bridge key and the exact values to type into Sonarr and Radarr.
+ * The bridge key and the exact values to type into Sonarr and Radarr. The
+ * address depends on where those apps run, which only the user knows, so the
+ * page asks; Docker on Youtarr's network is the usual setup.
  */
 export const ArrBridgeSetupValues: React.FC<ArrBridgeSetupValuesProps> = ({
   bridgeKey,
@@ -77,15 +91,21 @@ export const ArrBridgeSetupValues: React.FC<ArrBridgeSetupValuesProps> = ({
   onRegenerate,
   categories,
   saved,
+  resolution,
   setSnackbar,
 }) => {
   const [confirmingNewKey, setConfirmingNewKey] = useState(false);
+  const [location, setLocation] = useState<ArrLocation>('docker');
+  const radioId = useId();
 
-  const values = getSetupValues({
-    protocol: locationUtils.getProtocol(),
-    hostname: locationUtils.getHostname(),
-    port: locationUtils.getPort(),
-  });
+  const values = getSetupValues(
+    {
+      protocol: locationUtils.getProtocol(),
+      hostname: locationUtils.getHostname(),
+      port: locationUtils.getPort(),
+    },
+    location
+  );
 
   const copy = async (text: string, what: string) => {
     try {
@@ -112,7 +132,7 @@ export const ArrBridgeSetupValues: React.FC<ArrBridgeSetupValuesProps> = ({
   };
 
   return (
-    <Box className="mt-4 flex flex-col gap-4">
+    <Box className="flex flex-col gap-4">
       {error && <Alert severity="error">{error}</Alert>}
       {!error && loading && (
         <Typography variant="body2" color="text.secondary">
@@ -141,6 +161,39 @@ export const ArrBridgeSetupValues: React.FC<ArrBridgeSetupValuesProps> = ({
               </Button>
             </Box>
             {!saved && <Alert severity="info">These values start working after you save.</Alert>}
+          </Box>
+
+          <Box className="flex flex-col gap-2">
+            <Typography variant="subtitle2">{LOCATION_QUESTION}</Typography>
+            <RadioGroup
+              value={location}
+              onValueChange={(value) => setLocation(value as ArrLocation)}
+              aria-label={LOCATION_QUESTION}
+            >
+              {LOCATION_CHOICES.map((choice) => (
+                <label
+                  key={choice.value}
+                  className="flex items-center gap-2 text-sm"
+                  htmlFor={`${radioId}-${choice.value}`}
+                >
+                  <RadioGroupItem id={`${radioId}-${choice.value}`} value={choice.value} /> {choice.label}
+                </label>
+              ))}
+            </RadioGroup>
+            <Typography variant="body2" color="text.secondary">
+              {location === 'docker' ? (
+                <>
+                  <code>{YOUTARR_CONTAINER_NAME}</code> is the name of Youtarr&apos;s container; if you gave it
+                  another name, use that. {YOUTARR_CONTAINER_PORT} is the port Youtarr listens on inside Docker,
+                  whatever port you publish.
+                </>
+              ) : (
+                <>
+                  These values use the address this page is open at. Sonarr and Radarr must be able to reach it:{' '}
+                  <code>localhost</code> only works when they run on this same machine, outside Docker.
+                </>
+              )}
+            </Typography>
           </Box>
 
           <Box className="grid gap-4 md:grid-cols-2">
@@ -175,21 +228,20 @@ export const ArrBridgeSetupValues: React.FC<ArrBridgeSetupValuesProps> = ({
             ))}
           </Box>
 
-          <Typography variant="body2" color="text.secondary">
-            The address above is the one this page is open at. If Sonarr or Radarr run in Docker on the same network
-            as Youtarr, use Youtarr&apos;s container name and port 3011 instead.
+          <Typography variant="body2">
+            Leave the username and password empty, then press Test on both. In each app, the quality profile of a
+            series or movie must allow WEBDL-{resolution}p, the resolution Youtarr labels its releases with (see
+            Downloads below).
           </Typography>
 
-          <Alert severity="warning">
-            <Typography variant="body2">
-              Sonarr and Radarr can&apos;t log in, so they use this key. Anyone with it can search and start downloads,
-              so treat it like a password. If you use a login proxy like Authelia or Cloudflare Access, add an exception
-              for <code>/arr/</code>.{' '}
-              <a href={ARR_DOCS_URL} target="_blank" rel="noopener noreferrer" className="text-primary underline">
-                Read more
-              </a>
-            </Typography>
-          </Alert>
+          <Typography variant="body2" color="text.secondary">
+            Sonarr and Radarr can&apos;t log in, so they use this key. Anyone with it can search and start downloads,
+            so treat it like a password. If you use a login proxy like Authelia or Cloudflare Access, add an exception
+            for <code>/arr/</code>.{' '}
+            <a href={ARR_DOCS_URL} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+              Read more
+            </a>
+          </Typography>
         </>
       )}
 

@@ -36,6 +36,13 @@ describe('createLogScrubber', () => {
       .toBe('headers: {"X-Api-Key":"[REDACTED]"} then {"X-Api-Key":"[REDACTED]"}');
   });
 
+  test('hides a key that was hand-edited with spaces around it, in the trimmed form that is sent', () => {
+    const sonarrKey = '5'.repeat(32);
+    const scrub = createLogScrubber({ arrBridgeSonarrApiKey: `  ${sonarrKey} ` });
+
+    expect(scrub(`headers: {"X-Api-Key":"${sonarrKey}"}`)).toBe('headers: {"X-Api-Key":"[REDACTED]"}');
+  });
+
   test('hides an apikey query value even when it is not the configured key', () => {
     const scrub = createLogScrubber({});
 

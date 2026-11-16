@@ -79,6 +79,7 @@
   "arrBridgeMinMovieMinutes": 60,
   "arrBridgeStagingPath": "",
   "arrBridgeStagingRetentionDays": 7,
+  "arrBridgeResolution": "",
   "autoRemovalEnabled": false,
   "autoRemovalFreeSpaceThreshold": null,
   "autoRemovalVideoAgeThreshold": null,

@@ -100,6 +100,17 @@ function resolutionLabel(preferredResolution) {
   return 480;
 }
 
+// The last one counts: a series can be named after a resolution.
+const TITLE_RESOLUTION = /^.*\.(480|720|1080|2160)p\.WEB-DL-/;
+
+/**
+ * @param {unknown} releaseTitle - A title this module built
+ * @returns {string|null} The resolution it was labeled with ('1080'), or null
+ */
+function resolutionOfTitle(releaseTitle) {
+  return TITLE_RESOLUTION.exec(typeof releaseTitle === 'string' ? releaseTitle : '')?.[1] ?? null;
+}
+
 const pad2 = (value) => String(value).padStart(2, '0');
 
 // Sonarr removes a leading "The" from q, and a release named from the rest
@@ -153,6 +164,7 @@ module.exports = {
   seriesToken,
   groupToken,
   resolutionLabel,
+  resolutionOfTitle,
   buildTvTitle,
   buildDailyTitle,
   buildMovieTitle,

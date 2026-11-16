@@ -1,8 +1,12 @@
 import {
+  categoryRowLabel,
   describeMatching,
   getArrBridgeSettingsError,
   getCategoriesError,
   getSetupValues,
+  hasOnlyDefaultCategories,
+  releaseResolution,
+  stagingFolderOnHost,
   GRAB_STATE_LABELS,
   ArrCategory,
 } from '../arrBridgeSetup';
@@ -34,6 +38,69 @@ describe('getSetupValues', () => {
 
   test('uses port 80 for an http address without a port', () => {
     expect(getSetupValues({ protocol: 'http:', hostname: 'youtarr.lan', port: '' }).port).toBe('80');
+  });
+
+  // Inside Docker, the address the browser uses means nothing to Sonarr.
+  test('for apps in Docker on Youtarr\'s network, the values are the container name and port', () => {
+    expect(getSetupValues({ protocol: 'https:', hostname: 'youtarr.example.com', port: '' }, 'docker')).toEqual({
+      indexerUrl: 'http://youtarr:3011/arr/newznab',
+      apiPath: '/api',
+      host: 'youtarr',
+      port: '3011',
+      useSsl: false,
+      urlBase: '/arr/sabnzbd',
+    });
+  });
+});
+
+describe('releaseResolution', () => {
+  test.each([
+    ['', '480', 480],
+    ['', '1440', 1080],
+    ['', '360', 480],
+    ['', '2160', 2160],
+    ['720', '480', 720],
+    ['2160', '1080', 2160],
+    ['', 'best', 1080],
+  ])('bridge "%s" with preferred "%s" labels releases %sp', (bridge, preferred, expected) => {
+    expect(releaseResolution(bridge, preferred)).toBe(expected);
+  });
+});
+
+describe('stagingFolderOnHost', () => {
+  test('is the .arr-staging folder inside the downloads folder', () => {
+    expect(stagingFolderOnHost('/mnt/media/youtube')).toBe('/mnt/media/youtube/.arr-staging');
+    expect(stagingFolderOnHost('/mnt/media/youtube/ ')).toBe('/mnt/media/youtube/.arr-staging');
+  });
+
+  test('is unknown without a downloads folder', () => {
+    expect(stagingFolderOnHost('')).toBeNull();
+    expect(stagingFolderOnHost(null)).toBeNull();
+    expect(stagingFolderOnHost(undefined)).toBeNull();
+  });
+});
+
+describe('categoryRowLabel', () => {
+  test.each([
+    ['tv', 'TV grabs are saved to'],
+    ['movies', 'Movie grabs are saved to'],
+    ['tv-4k', 'Grabs in category tv-4k are saved to'],
+  ])('%s -> %s', (name, label) => {
+    expect(categoryRowLabel(name)).toBe(label);
+  });
+});
+
+describe('hasOnlyDefaultCategories', () => {
+  test('is true for tv and movies in any order', () => {
+    expect(hasOnlyDefaultCategories([category('movies'), category('tv')])).toBe(true);
+  });
+
+  test.each([
+    ['one more', [category('tv'), category('movies'), category('tv-4k')]],
+    ['one fewer', [category('tv')]],
+    ['another name', [category('tv'), category('films')]],
+  ])('is false with %s', (_label, categories) => {
+    expect(hasOnlyDefaultCategories(categories)).toBe(false);
   });
 });
 
@@ -107,7 +174,7 @@ describe('getArrBridgeSettingsError', () => {
 
   test.each([0, 366, 1.5, Number.NaN])('refuses a retention of %p days', (days) => {
     expect(getArrBridgeSettingsError({ ...valid, arrBridgeStagingRetentionDays: days })).toBe(
-      'Sonarr / Radarr: keep staged files for 1 to 365 days'
+      'Sonarr / Radarr: remove files nobody imported after 1 to 365 days'
     );
   });
 

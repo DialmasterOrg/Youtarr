@@ -170,6 +170,14 @@ describe('searchService', () => {
       expect(items[0].title).toContain('.1080p.WEB-DL-');
     });
 
+    test('the bridge\'s own resolution replaces the preferred resolution in the label', async () => {
+      const { service } = setup({
+        results: [video('The Office S01E02')], config: { preferredResolution: '480', arrBridgeResolution: '2160' },
+      });
+      const items = await service.search(request(episodeQuery()), ORIGIN);
+      expect(items[0].title).toContain('.2160p.WEB-DL-');
+    });
+
     test('tells two candidates apart by group and gives each its own guid', async () => {
       const { service } = setup({
         results: [
@@ -450,6 +458,80 @@ describe('searchService', () => {
       const items = await service.search(request(beybladeQuery()), ORIGIN);
 
       expect(items.map((item) => item.youtubeId)).toEqual([reupload.youtubeId]);
+    });
+
+    describe('re-uploads beside the series\' own channel (MrBeast S2026E14, 2026-11-15)', () => {
+      const mrBeastQuery = () => request({ t: 'tvsearch', cat: SONARR_CATS, title: 'MrBeast', season: '2026', ep: '14' });
+      const mrBeastEpisode = () => beybladeEpisode({
+        seriesTitle: 'MrBeast',
+        seriesTitles: ['MrBeast'],
+        episodeTitle: 'I Granted 100 Kids Their Biggest Wish!',
+        otherEpisodeTitles: [],
+        runtimeSeconds: 840,
+        season: 2026,
+        episode: 14,
+        absoluteNumber: null,
+      });
+      // In YouTube's order: a re-upload ranks above the show's own video.
+      const results = () => [
+        video('I Granted 100 Kids Their Biggest Wish! #mrbeast', { youtubeId: 'SaHE3nRRX0w', channelName: 'Rsk', duration: 850 }),
+        video('I Granted 100 Kids Their Biggest Wish!', { youtubeId: 'lVylRtlPOIE', channelName: 'MrBeast', duration: 875 }),
+        video('I Granted 100 Kids Their Biggest Wish!@MrBeast', { youtubeId: 'y5DX6n_dVAI', channelName: 'Badol', duration: 871 }),
+      ];
+      const impostor = () => video('I Granted 100 Kids Their Biggest Wish!', {
+        youtubeId: 'aLNBbQUcpXI', channelName: 'MrBeast 103M view 6 hours ago', duration: 870,
+      });
+
+      test('only the upload from the channel named after the series is offered', async () => {
+        const { service } = setup({ results: results(), catalog: makeCatalog({ episode: mrBeastEpisode() }) });
+
+        const items = await service.search(mrBeastQuery(), ORIGIN);
+
+        expect(items.map((item) => item.youtubeId)).toEqual(['lVylRtlPOIE']);
+      });
+
+      test('a channel that only contains the series name is not offered beside one that has exactly it', async () => {
+        const { service } = setup({
+          results: [impostor(), ...results()], catalog: makeCatalog({ episode: mrBeastEpisode() }),
+        });
+
+        const items = await service.search(mrBeastQuery(), ORIGIN);
+
+        expect(items.map((item) => item.youtubeId)).toEqual(['lVylRtlPOIE']);
+      });
+
+      test('a channel that contains the series name still hides plain re-uploads when none has exactly it', async () => {
+        const { service } = setup({
+          results: [impostor(), ...results().filter((result) => result.channelName !== 'MrBeast')],
+          catalog: makeCatalog({ episode: mrBeastEpisode() }),
+        });
+
+        const items = await service.search(mrBeastQuery(), ORIGIN);
+
+        expect(items.map((item) => item.youtubeId)).toEqual(['aLNBbQUcpXI']);
+      });
+
+      test('the re-uploads are offered once that upload failed a grab', async () => {
+        const { service } = setup({
+          results: results(), failedIds: ['lVylRtlPOIE'], catalog: makeCatalog({ episode: mrBeastEpisode() }),
+        });
+
+        const items = await service.search(mrBeastQuery(), ORIGIN);
+
+        expect(items.map((item) => item.youtubeId)).toEqual(['SaHE3nRRX0w', 'y5DX6n_dVAI']);
+      });
+
+      test('loose matching offers all of them, the series\' channel first', async () => {
+        const { service } = setup({
+          results: results(),
+          config: { arrBridgeLooseMatching: true },
+          catalog: makeCatalog({ episode: mrBeastEpisode() }),
+        });
+
+        const items = await service.search(mrBeastQuery(), ORIGIN);
+
+        expect(items.map((item) => item.youtubeId)).toEqual(['lVylRtlPOIE', 'SaHE3nRRX0w', 'y5DX6n_dVAI']);
+      });
     });
 
     test('the episode-code fallback uses the runtime: a double-length upload is not offered', async () => {

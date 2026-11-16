@@ -4,6 +4,7 @@ const {
   seriesToken,
   groupToken,
   resolutionLabel,
+  resolutionOfTitle,
   buildTvTitle,
   buildDailyTitle,
   buildMovieTitle,
@@ -90,6 +91,26 @@ describe('releaseNaming', () => {
     test('falls back for a missing name', () => {
       expect(groupToken(null, 'tv')).toBe(DEFAULT_GROUP);
     });
+  });
+
+  describe('resolutionOfTitle', () => {
+    test.each([
+      ['The.Office.US.S01E02.1080p.WEB-DL-NBC', '1080'],
+      ['Office.AKA.The.Office.S01E02.2160p.WEB-DL-NBC', '2160'],
+      ['Last.Week.Tonight.2025.02.16.720p.WEB-DL-LastWeekTonight', '720'],
+      ['Plan.9.from.Outer.Space.1957.480p.WEB-DL-YOUTARR', '480'],
+      // A series named after a resolution keeps its own label.
+      ['1080p.The.Show.S01E01.720p.WEB-DL-YOUTARR', '720'],
+    ])('%s -> %s', (title, expected) => {
+      expect(resolutionOfTitle(title)).toBe(expected);
+    });
+
+    test.each(['The.Office.US.S01E02.WEB-DL-NBC', 'The.Office.US.S01E02.1440p.WEB-DL-NBC', '', null])(
+      'is null for %p',
+      (title) => {
+        expect(resolutionOfTitle(title)).toBeNull();
+      }
+    );
   });
 
   describe('resolutionLabel', () => {

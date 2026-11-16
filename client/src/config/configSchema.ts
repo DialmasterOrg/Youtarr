@@ -159,6 +159,7 @@ export const CONFIG_FIELDS = {
   arrBridgeMinMovieMinutes: { default: 60, trackChanges: true },
   arrBridgeStagingPath: { default: '', trackChanges: true },
   arrBridgeStagingRetentionDays: { default: 7, trackChanges: true },
+  arrBridgeResolution: { default: '', trackChanges: true },
 
   // Auto removal
   autoRemovalEnabled: { default: false, trackChanges: true },
@@ -316,6 +317,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   arrBridgeMinMovieMinutes: CONFIG_FIELDS.arrBridgeMinMovieMinutes.default,
   arrBridgeStagingPath: CONFIG_FIELDS.arrBridgeStagingPath.default,
   arrBridgeStagingRetentionDays: CONFIG_FIELDS.arrBridgeStagingRetentionDays.default,
+  arrBridgeResolution: CONFIG_FIELDS.arrBridgeResolution.default,
   autoRemovalEnabled: CONFIG_FIELDS.autoRemovalEnabled.default,
   autoRemovalFreeSpaceThreshold: CONFIG_FIELDS.autoRemovalFreeSpaceThreshold.default,
   autoRemovalVideoAgeThreshold: CONFIG_FIELDS.autoRemovalVideoAgeThreshold.default,

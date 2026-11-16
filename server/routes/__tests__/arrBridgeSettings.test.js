@@ -27,6 +27,7 @@ function makeApp({ settings = {}, verifyToken, limiter, listRecentGrabs } = {}) 
       saveConnection: jest.fn().mockResolvedValue(SAVED),
       testStoredConnection: jest.fn().mockResolvedValue({ ok: true, appName: 'Sonarr', version: '4.0.20.3014' }),
       removeConnection: jest.fn(() => ({ url: null, keySet: false })),
+      checkSharedFolder: jest.fn().mockResolvedValue({ ok: true, visible: true, path: '/data/.arr-staging' }),
       ...settings,
     },
     listRecentGrabs: listRecentGrabs || jest.fn().mockResolvedValue([GRAB]),
@@ -57,6 +58,7 @@ describe('the Sonarr/Radarr bridge settings routes', () => {
     ['put', '/api/arr-bridge/connections/sonarr'],
     ['post', '/api/arr-bridge/connections/sonarr/test'],
     ['delete', '/api/arr-bridge/connections/sonarr'],
+    ['get', '/api/arr-bridge/connections/sonarr/shared-folder'],
     ['get', '/api/arr-bridge/grabs'],
   ])('%s %s needs a session', async (method, path) => {
     const { app, arrBridge } = makeApp({ verifyToken: refuseSession });
@@ -160,6 +162,7 @@ describe('the Sonarr/Radarr bridge settings routes', () => {
   test.each([
     ['put', '/api/arr-bridge/connections/sonarr'],
     ['post', '/api/arr-bridge/connections/sonarr/test'],
+    ['get', '/api/arr-bridge/connections/sonarr/shared-folder'],
   ])('%s %s checks the session before it counts against the limiter', async (method, path) => {
     const limiter = jest.fn((_req, _res, next) => next());
     const { app } = makeApp({ verifyToken: refuseSession, limiter });
@@ -193,6 +196,47 @@ describe('the Sonarr/Radarr bridge settings routes', () => {
 
       expect(res.status).toBe(429);
       expect(arrBridge.settings.testStoredConnection).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('GET /api/arr-bridge/connections/:app/shared-folder', () => {
+    test('says whether the app sees the staging folder', async () => {
+      const { app, arrBridge } = makeApp();
+
+      const res = await supertest(app).get('/api/arr-bridge/connections/radarr/shared-folder');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ ok: true, visible: true, path: '/data/.arr-staging' });
+      expect(arrBridge.settings.checkSharedFolder).toHaveBeenCalledWith('radarr');
+    });
+
+    test('runs behind the connection limiter', async () => {
+      const limiter = jest.fn((_req, res) => res.status(429).json({ error: 'Too many attempts' }));
+      const { app, arrBridge } = makeApp({ limiter });
+
+      const res = await supertest(app).get('/api/arr-bridge/connections/sonarr/shared-folder');
+
+      expect(res.status).toBe(429);
+      expect(arrBridge.settings.checkSharedFolder).not.toHaveBeenCalled();
+    });
+
+    test('an unknown app is not asked', async () => {
+      const { app, arrBridge } = makeApp();
+
+      const res = await supertest(app).get('/api/arr-bridge/connections/prowlarr/shared-folder');
+
+      expect(res.status).toBe(404);
+      expect(arrBridge.settings.checkSharedFolder).not.toHaveBeenCalled();
+    });
+
+    test('a failure is logged and answered without details', async () => {
+      const { app, log } = makeApp({ settings: { checkSharedFolder: jest.fn().mockRejectedValue(new Error('boom')) } });
+
+      const res = await supertest(app).get('/api/arr-bridge/connections/sonarr/shared-folder');
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: 'Could not check the folder' });
+      expect(log.error).toHaveBeenCalled();
     });
   });
 

@@ -792,6 +792,13 @@ Settings for the Sonarr/Radarr bridge, served under `/arr/`. See [Sonarr and Rad
 - **Range**: 1 to 365
 - **Description**: A staged file that Sonarr or Radarr never imported is removed after this many days. The copy in your Youtarr library stays.
 
+### Resolution for Sonarr and Radarr
+- **Config Key**: `arrBridgeResolution`
+- **Type**: `string`
+- **Default**: `""` (use [`preferredResolution`](#preferred-resolution))
+- **Values**: `""`, `"2160"`, `"1080"`, `"720"`, `"480"`
+- **Description**: The resolution Youtarr labels its releases with and downloads grabs at. It is a ceiling: a video that only exists in a lower resolution downloads at that, and Sonarr or Radarr read the real resolution from the file on import. 1440p and 360p are not offered because Sonarr and Radarr have no quality for them. A video that is already in your Youtarr library is handed over as it is.
+
 ### Bridge Key and Connections
 - **Config Keys**: `arrBridgeApiKey`, `arrBridgeSonarrUrl`, `arrBridgeSonarrApiKey`, `arrBridgeRadarrUrl`, `arrBridgeRadarrApiKey`
 - **Type**: `string`

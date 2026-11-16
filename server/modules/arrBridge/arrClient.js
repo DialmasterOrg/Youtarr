@@ -1,12 +1,15 @@
 // Reads from the user's own Sonarr and Radarr: the series list, one series'
-// episodes, the movie list, and who the app is. Read-only, and it returns slim rows, because
-// a large library's full answer runs to tens of megabytes.
+// episodes, the movie list, who the app is, and the folders it sees at a
+// path. Read-only, and it returns slim rows, because a large library's full
+// answer runs to tens of megabytes.
 const axios = require('axios');
 
 const ARR_REQUEST_TIMEOUT_MS = 10000;
 const ARR_MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
 // The status answer is a small object; a larger body is not Sonarr or Radarr.
 const ARR_MAX_STATUS_BYTES = 256 * 1024;
+// The staging folder holds a folder per category and one per waiting grab.
+const ARR_MAX_FOLDER_LIST_BYTES = 4 * 1024 * 1024;
 const SECONDS_PER_MINUTE = 60;
 
 const MESSAGES = {
@@ -138,6 +141,23 @@ function createArrClient({ http = axios, timeoutMs = ARR_REQUEST_TIMEOUT_MS } = 
   }
 
   /**
+   * The folders the app itself sees inside a folder. A path it cannot see
+   * lists nothing. Used to check that it can reach the staging folder.
+   * @param {{url: string, apiKey: string}} connection
+   * @param {string} folderPath - An absolute path, as the app knows it
+   * @returns {Promise<string[]>} Folder names
+   */
+  async function fetchFolderNames(connection, folderPath) {
+    // Without the trailing slash the app lists the parent, filtered by name.
+    const data = await get(connection, '/api/v3/filesystem', {
+      params: { path: `${String(folderPath).replace(/\/+$/, '')}/`, includeFiles: false },
+      maxBytes: ARR_MAX_FOLDER_LIST_BYTES,
+    });
+    if (!isRow(data) || !Array.isArray(data.directories)) throw new ArrUnavailableError('not-json');
+    return data.directories.map((entry) => entry?.name).filter((name) => typeof name === 'string');
+  }
+
+  /**
    * @param {{url: string, apiKey: string}} connection
    * @returns {Promise<Array<{id: number, title: string, titles: string[], year: number|null,
    *   runtimeSeconds: number|null, sceneNumbering: boolean}>>}
@@ -165,7 +185,7 @@ function createArrClient({ http = axios, timeoutMs = ARR_REQUEST_TIMEOUT_MS } = 
     return (await getList(connection, '/api/v3/movie')).map(toMovie).filter(Boolean);
   }
 
-  return { fetchSeries, fetchEpisodes, fetchMovies, fetchStatus };
+  return { fetchSeries, fetchEpisodes, fetchMovies, fetchStatus, fetchFolderNames };
 }
 
 module.exports = { createArrClient, ArrUnavailableError, ARR_REQUEST_TIMEOUT_MS };

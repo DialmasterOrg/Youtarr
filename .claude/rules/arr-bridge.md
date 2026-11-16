@@ -19,7 +19,7 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 - `/arr` skips `verifyToken` because Sonarr and Radarr cannot log in. Every request checks the bridge key, also with `AUTH_ENABLED=false`, and the namespace answers 404 while `arrBridgeEnabled` is off, so a login proxy exemption for `/arr/` stays safe.
 - The key travels as `?apikey=` because the protocols allow nothing else. `redactUrl` and `redactQuery` in `server.js` and the log scrubber hide it; never log `req.query` or a rendered feed, whose item links carry the key.
 - `arrBridgeApiKey` is server-owned like `downloadsFeedToken`: `/getconfig` omits it and `/updateconfig` restores it. It is created the first time the bridge is found enabled or Settings asks for it.
-- Eight `arrBridge*` settings are in `CONFIG_FIELDS`. `arrBridgeConfig` holds the one rule set `/updateconfig` rejects with and `configModule` corrects stored values with; `readSettings` still corrects on every read, so a category name can never become a path.
+- Nine `arrBridge*` settings are in `CONFIG_FIELDS`. `arrBridgeConfig` holds the one rule set `/updateconfig` rejects with and `configModule` corrects stored values with; `readSettings` still corrects on every read, so a category name can never become a path.
 - `/updateconfig` keeps a bridge setting the client did not send: a tab loaded before the settings existed posts a config without them, and a save replaces the whole config, which would switch the bridge off.
 - SABnzbd answers are always HTTP 200, with `status: false` for errors, because anything else marks the whole client unavailable. `mode=version` needs no key, as in real SABnzbd.
 
@@ -29,6 +29,7 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 - tv-search advertises `title` because Sonarr removes a leading "The" from `q`. A `q`-only TV request (Prowlarr drops `title`) is named `<Q>.AKA.The.<Q>`, which Sonarr matches with or without the article.
 - Release titles come from the request, never the video's title: tokens such as `E05`, `720p` or `German` change the parsed episode, quality or language. The channel name is the release group, screened by a denylist.
 - One release title is the feed title, NZB name, SABnzbd history `name`, staging folder and staged file name, because the apps map the file from that name, never from their own grab history.
+- The label's resolution is `arrBridgeResolution`, else `preferredResolution`; one setting, not per category, because a search does not say which category asks. With it set, the grab downloads at the resolution in its release name.
 - The feed reports size 0: Sonarr rejects a realistic YouTube size as too small for the series runtime. The estimate rides in the NZB link only for the queue's size columns.
 - The no-query feed returns one placeholder item, because both apps' indexer Test fails on an empty feed. Its link answers 404.
 - Strict matching is the default (an episode marker for TV, the year for a movie): whatever is offered parses as exactly the wanted item, and automatic search may grab it. Season answers stay strict even with loose matching on.
@@ -44,6 +45,7 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 - A connection changes only through `PUT /api/arr-bridge/connections/:app`, which tests the given URL and key and stores both, never reading the stored key. The Test route reads no body. So a stored key only reaches the URL stored beside it.
 - `/getconfig` omits the connection URLs too, because a hand-edited one may hold credentials. Settings reads normalized URLs from `/api/arr-bridge/status`, which never returns a key.
 - The connection test passes on only the app's name, matched against Sonarr and Radarr, and a digits-and-dots version: the server calls a host the caller chose, so nothing else of its answer may be echoed.
+- `checkSharedFolder` asks the app to list the staging root as it knows it and passes on only whether a category folder is there: read-only, nothing listed is echoed, and another folder at that path does not pass.
 - The connection card never loads a stored key, but keeps a typed one in its field while the page is open, so a mistyped address is corrected without typing the key again.
 - `arrClient` follows no redirect, because axios would send the key header on to the redirect's target. Its abort signal is the real time limit: axios's `timeout` only bounds the wait between bytes.
 - A read that fails or resolves nothing falls back to the episode-code matcher, never an error document: `arrCatalog` never rejects and asks a failed app again only after 60 s, so alias requests do not each wait.
@@ -52,6 +54,7 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 - The title stage searches `<main series title> <episode title>` for every alias, so one Sonarr search costs one YouTube search. Releases are still named from the alias that was asked.
 - A title match needs the episode title as a whole phrase, the series name within the video title or within the channel name, no other episode's number or title, and a length inside the runtime window.
 - Strict matching runs the title stage only with a known runtime: without the window, an hour of episodes listing this title would pass.
+- Sonarr grabs the newer of equal releases whatever the feed order, and a re-upload is always newer. So the strict title stage offers only the closest channel (`seriesChannelRank`); others return once its grab failed.
 - A video naming a library series whose name contains this one's ("Beyblade Burst"), or a year before the series began, is another series. Loose matching drops this, the series-name and the one-word-title rules, and lets an unknown length pass.
 - A generic, shared or series-named episode title skips the title stage, and a one-word title also needs the episode number: such titles appear in unrelated videos.
 - With a known runtime, `runtimeWindow` replaces the fixed minimum lengths in every filter, loose matching included: it is what rejects a double episode, and it never goes below Sonarr's sample threshold.

@@ -9,6 +9,7 @@ import { DEFAULT_CONFIG } from '../../../../config/configSchema';
 jest.mock('../../hooks/useArrBridgeKey', () => ({ useArrBridgeKey: jest.fn() }));
 jest.mock('../../hooks/useArrBridgeConnections', () => ({ useArrBridgeConnections: jest.fn() }));
 jest.mock('../../hooks/useArrBridgeGrabs', () => ({ useArrBridgeGrabs: jest.fn() }));
+jest.mock('../../hooks/useArrBridgeFolderCheck', () => ({ useArrBridgeFolderCheck: jest.fn() }));
 jest.mock('../../../../hooks/useSubfolders', () => ({
   useSubfolders: () => ({ subfolders: [], loading: false, createSubfolder: jest.fn() }),
 }));
@@ -16,21 +17,29 @@ jest.mock('../../../../hooks/useSubfolders', () => ({
 const { useArrBridgeKey } = require('../../hooks/useArrBridgeKey');
 const { useArrBridgeConnections } = require('../../hooks/useArrBridgeConnections');
 const { useArrBridgeGrabs } = require('../../hooks/useArrBridgeGrabs');
+const { useArrBridgeFolderCheck } = require('../../hooks/useArrBridgeFolderCheck');
 
 const KEY = 'a'.repeat(64);
+const IN_YOUTARR = '/usr/src/app/data/.arr-staging';
 const STATUS = {
   enabled: true,
-  stagingRoot: '/usr/src/app/data/.arr-staging',
-  stagingClientPath: '/usr/src/app/data/.arr-staging',
+  stagingRoot: IN_YOUTARR,
+  stagingClientPath: IN_YOUTARR,
   connections: {
     sonarr: { url: 'http://sonarr:8989', keySet: true },
     radarr: { url: null, keySet: false },
   },
 };
+const STEP_HEADINGS = [
+  'Step 2: Add Youtarr to Sonarr and Radarr',
+  'Step 3: Connect your Sonarr and Radarr (recommended)',
+  'Step 4: Check the shared folder',
+];
 
 const createConfig = (overrides: Partial<ConfigState> = {}): ConfigState => ({
   ...DEFAULT_CONFIG,
   arrBridgeEnabled: true,
+  youtubeOutputDirectory: '/mnt/media/youtube',
   ...overrides,
 });
 
@@ -70,19 +79,24 @@ describe('ArrBridgeSection', () => {
       bridgeKey: KEY, loading: false, error: null, regenerating: false, regenerate: jest.fn(),
     });
     useArrBridgeGrabs.mockReturnValue({ grabs: [], loading: false, error: null, refresh: jest.fn() });
+    useArrBridgeFolderCheck.mockReturnValue({
+      results: { sonarr: { ok: true, visible: true, path: IN_YOUTARR } }, checking: false, recheck: jest.fn(),
+    });
     mockConnections();
   });
 
   describe('while the bridge is off', () => {
     const off = () => setupSection({ config: createConfig({ arrBridgeEnabled: false }) });
 
-    test('shows only the switch', () => {
+    test('shows the switch and what to expect, and none of the later steps', () => {
       off();
 
       expect(screen.getByRole('checkbox', { name: 'Enable the Sonarr / Radarr bridge' })).not.toBeChecked();
+      expect(screen.getByText(/does not announce new uploads/)).toBeInTheDocument();
       expect(screen.queryByLabelText('API key')).not.toBeInTheDocument();
-      expect(screen.queryByRole('heading', { name: 'Matching' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('heading', { name: 'Recent grabs' })).not.toBeInTheDocument();
+      for (const heading of [...STEP_HEADINGS, 'Downloads', 'Matching', 'Recent grabs']) {
+        expect(screen.queryByRole('heading', { name: heading })).not.toBeInTheDocument();
+      }
     });
 
     test('asks the server for nothing, because the key request would create a key', () => {
@@ -91,6 +105,7 @@ describe('ArrBridgeSection', () => {
       expect(useArrBridgeKey).toHaveBeenCalledWith('session', false);
       expect(useArrBridgeConnections).toHaveBeenCalledWith(null);
       expect(useArrBridgeGrabs).toHaveBeenCalledWith('session', false);
+      expect(useArrBridgeFolderCheck.mock.calls[0][0]).toBeNull();
     });
 
     test('turning it on reports the switch', () => {
@@ -102,15 +117,22 @@ describe('ArrBridgeSection', () => {
     });
   });
 
+  test('lays the setup out as numbered steps, with the settings after them', () => {
+    setupSection();
+
+    const headings = screen.getAllByRole('heading').map((heading) => heading.textContent);
+    const order = [...STEP_HEADINGS, 'Downloads', 'Matching', 'Recent grabs'].map((name) => headings.indexOf(name));
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(screen.getByText('Step 1: Turn it on and save')).toBeInTheDocument();
+  });
+
   test('shows every part of the page while the bridge is on', () => {
     setupSection();
 
     expect(screen.getByLabelText('API key')).toHaveValue(KEY);
-    expect(screen.getByRole('heading', { name: 'Matching' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Categories and shared folder' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Sonarr connection' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Radarr connection' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Recent grabs' })).toBeInTheDocument();
     expect(useArrBridgeConnections).toHaveBeenCalledWith('session');
   });
 
@@ -121,6 +143,13 @@ describe('ArrBridgeSection', () => {
     expect(screen.getByText('These values start working after you save.')).toBeInTheDocument();
   });
 
+  test('says why the connection matters instead of calling it optional', () => {
+    setupSection();
+
+    expect(screen.getByText(/Without it, most official uploads are not found/)).toBeInTheDocument();
+    expect(screen.queryByText(/\(optional\)/)).not.toBeInTheDocument();
+  });
+
   test('tells the matching summary which apps are connected', () => {
     setupSection();
 
@@ -128,17 +157,75 @@ describe('ArrBridgeSection', () => {
     expect(screen.queryByText(/With your Radarr connection/)).not.toBeInTheDocument();
   });
 
-  test('shows where the staging folder is and reports the staging settings', () => {
-    const props = setupSection();
+  describe('the shared folder step', () => {
+    test('names the folder inside the user\'s downloads folder, never the path inside Youtarr', () => {
+      setupSection();
 
-    expect(screen.getByText('/usr/src/app/data/.arr-staging')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('The same folder as Sonarr and Radarr see it'), {
-      target: { value: '/downloads/.arr-staging' },
+      expect(screen.getByText('/mnt/media/youtube/.arr-staging')).toBeInTheDocument();
+      expect(screen.queryByText(IN_YOUTARR)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Staging folder in Youtarr/)).not.toBeInTheDocument();
     });
-    fireEvent.change(screen.getByLabelText('Keep staged files for (days)'), { target: { value: '14' } });
 
-    expect(props.onConfigChange).toHaveBeenCalledWith({ arrBridgeStagingPath: '/downloads/.arr-staging' });
-    expect(props.onConfigChange).toHaveBeenCalledWith({ arrBridgeStagingRetentionDays: 14 });
+    test('shows what each connected app answered', () => {
+      setupSection();
+
+      expect(screen.getByText('Sonarr can see the folder.')).toBeInTheDocument();
+      expect(screen.getByText(/Connect Radarr in step 3/)).toBeInTheDocument();
+    });
+
+    test('asks only the connected apps, and again when the saved path or a connection changes', () => {
+      const config = createConfig({ arrBridgeStagingPath: '/downloads/staging' });
+      setupSection({ config });
+
+      expect(useArrBridgeFolderCheck).toHaveBeenLastCalledWith(
+        'session',
+        { sonarr: true, radarr: false },
+        '/downloads/staging|http://sonarr:8989|'
+      );
+    });
+
+    test('does not ask before the bridge is saved as on', () => {
+      const config = createConfig();
+      setupSection({ config, savedConfig: { ...config, arrBridgeEnabled: false } });
+
+      expect(useArrBridgeFolderCheck.mock.calls[0][0]).toBeNull();
+    });
+
+    test('checks the saved path, and says so while another one is typed', () => {
+      const saved = createConfig({ arrBridgeStagingPath: '/downloads/staging' });
+      setupSection({ config: { ...saved, arrBridgeStagingPath: '/downloads/other' }, savedConfig: saved });
+
+      expect(useArrBridgeFolderCheck.mock.calls[0][2]).toBe('/downloads/staging|http://sonarr:8989|');
+      expect(screen.getByText(/Save to check this path/)).toBeInTheDocument();
+    });
+
+    test('reports the folder settings', () => {
+      const props = setupSection({ config: createConfig({ arrBridgeStagingPath: '/downloads/staging' }) });
+
+      fireEvent.change(screen.getByLabelText("The folder's path inside Sonarr and Radarr"), {
+        target: { value: '/downloads/.arr-staging' },
+      });
+      fireEvent.change(screen.getByLabelText('Remove files nobody imported after (days)'), { target: { value: '14' } });
+
+      expect(props.onConfigChange).toHaveBeenCalledWith({ arrBridgeStagingPath: '/downloads/.arr-staging' });
+      expect(props.onConfigChange).toHaveBeenCalledWith({ arrBridgeStagingRetentionDays: 14 });
+    });
+  });
+
+  describe('the downloads settings', () => {
+    test('hold the resolution and where grabs are saved', () => {
+      setupSection({ config: createConfig({ preferredResolution: '720' }) });
+
+      expect(screen.getByRole('button', { name: 'Resolution' })).toHaveTextContent('Same as Preferred Resolution (720p)');
+      expect(screen.getByText('TV grabs are saved to')).toBeInTheDocument();
+      expect(screen.getByText('Movie grabs are saved to')).toBeInTheDocument();
+    });
+
+    test('the setup step names the quality that resolution needs', () => {
+      setupSection({ config: createConfig({ preferredResolution: '480', arrBridgeResolution: '720' }) });
+
+      expect(screen.getByText(/must allow WEBDL-720p/)).toBeInTheDocument();
+    });
   });
 
   test('saving a connection goes to the connections hook for that app', async () => {

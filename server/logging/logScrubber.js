@@ -23,6 +23,8 @@ function notificationUrls(config) {
 
 function createLogScrubber(config) {
   const secrets = [...SECRET_CONFIG_KEYS.map((key) => config[key]), ...notificationUrls(config)]
+    // A hand-edited value may carry spaces that the code using it trims.
+    .map((value) => (typeof value === 'string' ? value.trim() : value))
     .filter((value) => typeof value === 'string' && value.length >= MIN_SECRET_LENGTH)
     // Longest first, so a secret containing another is replaced whole.
     .sort((a, b) => b.length - a.length);

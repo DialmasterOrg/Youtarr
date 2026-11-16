@@ -173,6 +173,33 @@ function createArrBridgeSettings({ configModule, client, staging, logger }) {
     return check(app, stored);
   }
 
+  /**
+   * Whether the app sees the staging folder under the path it is told. The
+   * proof is one of the category folders Youtarr keeps there, so another
+   * folder that happens to exist at that path does not pass. Only that
+   * verdict leaves this function, never what the app listed.
+   * @param {'sonarr'|'radarr'} app
+   * @returns {Promise<{ok: false, reason: string, message: string}|{ok: true, visible: boolean, path: string}>}
+   */
+  async function checkSharedFolder(app) {
+    const appName = APP_NAMES[app];
+    const { [app]: stored, categories } = readSettings(getConfig());
+    if (!stored) return failure('not-configured', appName);
+    const folderPath = staging.clientPath(staging.stagingRoot());
+    let names;
+    try {
+      names = await client.fetchFolderNames(stored, folderPath);
+    } catch (error) {
+      const reason = typeof error?.reason === 'string' ? error.reason : UNREACHABLE;
+      const code = typeof error?.code === 'string' ? error.code : null;
+      // Never the error object: an HTTP client's error holds the key.
+      logger.info({ app, reason, code }, 'Sonarr/Radarr shared folder check failed');
+      return failure(reason, appName, { code, url: stored.url });
+    }
+    const visible = categories.some((category) => names.includes(category.name));
+    return { ok: true, visible, path: folderPath };
+  }
+
   function removeConnection(app) {
     const next = { ...getConfig() };
     delete next[CONNECTION_KEYS[app].url];
@@ -183,7 +210,14 @@ function createArrBridgeSettings({ configModule, client, staging, logger }) {
   }
 
   return {
-    isApp, getOrCreateKey, regenerateKey, getStatus, saveConnection, testStoredConnection, removeConnection,
+    isApp,
+    getOrCreateKey,
+    regenerateKey,
+    getStatus,
+    saveConnection,
+    testStoredConnection,
+    checkSharedFolder,
+    removeConnection,
   };
 }
 

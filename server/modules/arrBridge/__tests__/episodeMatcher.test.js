@@ -1,5 +1,5 @@
 /* eslint-env jest */
-const { filterByEpisodeTitle, canMatchByTitle, bareEpisodeNumbers } = require('../episodeMatcher');
+const { filterByEpisodeTitle, canMatchByTitle, seriesChannelRank, bareEpisodeNumbers } = require('../episodeMatcher');
 
 function candidate(youtubeId, title, channelName, duration) {
   return { youtubeId, title, channelName, duration, publishedAt: '2020-08-30T16:00:24.000Z' };
@@ -129,6 +129,45 @@ describe('episodeMatcher', () => {
     test('may come from the channel name', () => {
       expect(passes('Play it Again Dizzi', show('Play It Again, Dizzi!'), settings(), { channelName: 'Some Show Official' }))
         .toBe(true);
+    });
+
+    // What YouTube returned for "MrBeast I Granted 100 Kids Their Biggest Wish"
+    // on 2026-11-15: two re-uploads around the show's own video.
+    test('a channel named after the series comes before re-uploads that only mention it', () => {
+      const episode = show('I Granted 100 Kids Their Biggest Wish!', {
+        seriesTitle: 'MrBeast', seriesTitles: ['MrBeast'], runtimeSeconds: 840,
+      });
+      const results = [
+        candidate('SaHE3nRRX0w', 'I Granted 100 Kids Their Biggest Wish! #mrbeast', 'Rsk', 850),
+        candidate('lVylRtlPOIE', 'I Granted 100 Kids Their Biggest Wish!', 'MrBeast', 875),
+        candidate('y5DX6n_dVAI', 'I Granted 100 Kids Their Biggest Wish!@MrBeast', 'Badol', 871),
+      ];
+
+      expect(ids(filterByEpisodeTitle(results, { episode, settings: settings() })))
+        .toEqual(['lVylRtlPOIE', 'SaHE3nRRX0w', 'y5DX6n_dVAI']);
+      expect(ids(filterByEpisodeTitle(results, { episode, settings: LOOSE })))
+        .toEqual(['lVylRtlPOIE', 'SaHE3nRRX0w', 'y5DX6n_dVAI']);
+    });
+
+    // "MrBeast 103M view 6 hours ago" was a real channel re-uploading S2026E16.
+    test('a channel with exactly the series name comes before one that only contains it', () => {
+      const episode = show('Escape 100 Cops, Win $500,000', {
+        seriesTitle: 'MrBeast', seriesTitles: ['MrBeast'], runtimeSeconds: 1200,
+      });
+      const results = [
+        candidate('aLNBbQUcpXI', 'Escape 100 Cops, Win $500,000', 'MrBeast 103M view 6 hours ago', 1190),
+        candidate('Qtl8lJwbd4g', 'Escape 100 Cops, Win $500,000', 'MrBeast', 1195),
+      ];
+
+      expect(ids(filterByEpisodeTitle(results, { episode, settings: settings() }))).toEqual(['Qtl8lJwbd4g', 'aLNBbQUcpXI']);
+      expect(results.map((result) => seriesChannelRank(result, episode))).toEqual([1, 2]);
+      expect(seriesChannelRank(candidate('x', 'Escape 100 Cops, Win $500,000 #mrbeast', 'Rsk', 1190), episode)).toBe(0);
+    });
+
+    test('a tag or an article in the series name does not stop a channel from having exactly its name', () => {
+      const episode = show('Diversity Day', { seriesTitle: 'The Office (US)', seriesTitles: ['The Office (US)'] });
+
+      expect(seriesChannelRank(video('Diversity Day', { channelName: 'The Office' }), episode)).toBe(2);
     });
 
     test('may be an alias', () => {

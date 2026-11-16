@@ -18,6 +18,7 @@ const setup = (overrides: Partial<React.ComponentProps<typeof ArrBridgeSetupValu
     onRegenerate: jest.fn().mockResolvedValue(true),
     categories: [{ name: 'tv', subfolder: null }, { name: 'movies', subfolder: null }],
     saved: true,
+    resolution: 1080,
     setSnackbar: jest.fn(),
     ...overrides,
   };
@@ -25,22 +26,57 @@ const setup = (overrides: Partial<React.ComponentProps<typeof ArrBridgeSetupValu
   return props;
 };
 
+const IN_DOCKER = 'In Docker, on the same network as Youtarr';
+const ELSEWHERE = 'Somewhere else';
+const chooseElsewhere = () => fireEvent.click(screen.getByRole('radio', { name: ELSEWHERE }));
+
 describe('ArrBridgeSetupValues', () => {
   afterEach(() => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
   });
 
-  test('shows the key and the values to type into Sonarr for the address the page is open at', () => {
+  describe('where Sonarr and Radarr run', () => {
+    test('starts with Docker on Youtarr\'s network, where the address is the container\'s name and port', () => {
+      setup();
+
+      expect(screen.getByRole('radio', { name: IN_DOCKER })).toBeChecked();
+      const sonarr = within(screen.getByRole('group', { name: 'In Sonarr' }));
+      expect(sonarr.getByText('http://youtarr:3011/arr/newznab')).toBeInTheDocument();
+      expect(sonarr.getByText('youtarr')).toBeInTheDocument();
+      expect(sonarr.getByText('3011')).toBeInTheDocument();
+      expect(screen.getByText(/is the name of Youtarr's container/)).toBeInTheDocument();
+    });
+
+    test('somewhere else uses the address this page is open at', () => {
+      setup();
+
+      chooseElsewhere();
+
+      expect(screen.getByRole('radio', { name: ELSEWHERE })).toBeChecked();
+      const sonarr = within(screen.getByRole('group', { name: 'In Sonarr' }));
+      expect(sonarr.getByText(INDEXER_URL)).toBeInTheDocument();
+      expect(sonarr.getByText(window.location.hostname)).toBeInTheDocument();
+      expect(sonarr.queryByText('youtarr')).not.toBeInTheDocument();
+      expect(screen.getByText(/the address this page is open at/)).toBeInTheDocument();
+    });
+  });
+
+  test('shows the key and the values to type into Sonarr', () => {
     setup();
 
     expect(screen.getByLabelText('API key')).toHaveValue(KEY);
     const sonarr = within(screen.getByRole('group', { name: 'In Sonarr' }));
-    expect(sonarr.getByText(INDEXER_URL)).toBeInTheDocument();
     expect(sonarr.getByText('/api')).toBeInTheDocument();
     expect(sonarr.getByText('/arr/sabnzbd')).toBeInTheDocument();
-    expect(sonarr.getByText(window.location.hostname)).toBeInTheDocument();
     expect(sonarr.getByText('tv')).toBeInTheDocument();
     expect(sonarr.getByText('No')).toBeInTheDocument();
+  });
+
+  test('says which quality the profile must allow, and to press Test', () => {
+    setup({ resolution: 720 });
+
+    expect(screen.getByText(/must allow WEBDL-720p/)).toBeInTheDocument();
+    expect(screen.getByText(/press Test on both/)).toBeInTheDocument();
   });
 
   test('gives Radarr the movies category', () => {
@@ -77,13 +113,16 @@ describe('ArrBridgeSetupValues', () => {
     }));
   });
 
-  test('copies the indexer URL', async () => {
+  test('copies the indexer URL for where the apps run', async () => {
     const writeText = jest.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
     setup();
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy indexer URL' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('http://youtarr:3011/arr/newznab'));
 
+    chooseElsewhere();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy indexer URL' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(INDEXER_URL));
   });
 
@@ -140,9 +179,11 @@ describe('ArrBridgeSetupValues', () => {
     expect(screen.queryByLabelText('API key')).not.toBeInTheDocument();
   });
 
-  test('warns that the key is a secret and names the login proxy path', () => {
+  test('says that the key is a secret and names the login proxy path, without raising an alarm', () => {
     setup();
 
+    expect(screen.getByText(/treat it like a password/)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByText('/arr/')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Read more' })).toHaveAttribute(
       'href', 'https://dialmasterorg.github.io/Youtarr/docs/sonarr-radarr/'

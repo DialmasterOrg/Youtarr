@@ -103,4 +103,32 @@ describe('ArrBridgeGrabList', () => {
     expect(screen.getByText('Could not load the recent grabs.')).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Recent grabs' })).not.toBeInTheDocument();
   });
+
+  describe('a long list', () => {
+    const many = (count: number) => Array.from({ length: count }, (_, index) => grab({ id: `g${index}` }));
+
+    test('shows the newest 10 and offers the rest', () => {
+      setup({ grabs: many(14) });
+
+      expect(rows()).toHaveLength(10);
+      expect(screen.getByRole('button', { name: 'Show all 14' })).toBeInTheDocument();
+    });
+
+    test('shows them all when asked, and can fold them away again', () => {
+      setup({ grabs: many(14) });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Show all 14' }));
+      expect(rows()).toHaveLength(14);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Show fewer' }));
+      expect(rows()).toHaveLength(10);
+    });
+
+    test('10 or fewer need no button', () => {
+      setup({ grabs: many(10) });
+
+      expect(rows()).toHaveLength(10);
+      expect(screen.queryByRole('button', { name: /Show all/ })).not.toBeInTheDocument();
+    });
+  });
 });

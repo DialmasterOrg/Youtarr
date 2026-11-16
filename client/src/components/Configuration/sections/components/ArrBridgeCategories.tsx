@@ -1,8 +1,16 @@
-import React, { ChangeEvent, KeyboardEvent, useState } from 'react';
+import React, { ChangeEvent, KeyboardEvent, useId, useState } from 'react';
 import { Box, Button, TextField, Typography } from '../../../ui';
 import { SubfolderAutocomplete } from '../../../shared/SubfolderAutocomplete';
 import { useSubfolders } from '../../../../hooks/useSubfolders';
-import { ArrCategory, MAX_ARR_CATEGORIES, getCategoriesError } from '../../utils/arrBridgeSetup';
+import {
+  ArrCategory,
+  MAX_ARR_CATEGORIES,
+  categoryRowLabel,
+  getCategoriesError,
+  hasOnlyDefaultCategories,
+} from '../../utils/arrBridgeSetup';
+
+const NO_SUBFOLDER_LABEL = "Youtarr's normal download location";
 
 interface ArrBridgeCategoriesProps {
   token: string | null;
@@ -11,13 +19,16 @@ interface ArrBridgeCategoriesProps {
 }
 
 /**
- * The SABnzbd categories Youtarr answers to. A category is one Sonarr or
- * Radarr instance, and decides where that instance's downloads go. A name is
- * not editable once added: the grabs already made carry it.
+ * Where grabs are saved. Behind that sits a SABnzbd category per row: a
+ * category is one Sonarr or Radarr instance, so adding and removing them only
+ * matters to someone running a second instance and stays folded away until
+ * then. A name is not editable once added: the grabs already made carry it.
  */
 export const ArrBridgeCategories: React.FC<ArrBridgeCategoriesProps> = ({ token, categories, onChange }) => {
   const { subfolders, loading: subfoldersLoading, createSubfolder } = useSubfolders(token);
   const [newName, setNewName] = useState('');
+  const [managing, setManaging] = useState(() => !hasOnlyDefaultCategories(categories));
+  const managePanelId = useId();
 
   const trimmedName = newName.trim();
   const atLimit = categories.length >= MAX_ARR_CATEGORIES;
@@ -42,58 +53,71 @@ export const ArrBridgeCategories: React.FC<ArrBridgeCategoriesProps> = ({ token,
 
   return (
     <Box className="flex flex-col gap-3">
-      <Typography variant="body2" color="text.secondary">
-        Each Sonarr or Radarr instance uses one category. Two instances that share a category import each
-        other&apos;s downloads, so give a second instance its own (for example tv-4k).
-      </Typography>
-
-      <ul className="m-0 flex list-none flex-col gap-3 p-0" aria-label="Categories">
+      <ul className="m-0 flex list-none flex-col gap-3 p-0" aria-label="Where grabs are saved">
         {categories.map((category) => (
-          <li
-            key={category.name}
-            className="grid items-center gap-3 rounded-[var(--radius-ui)] border border-[var(--border)] p-3 md:grid-cols-[minmax(6rem,auto)_1fr_auto]"
-          >
-            <Typography variant="subtitle2" className="break-all font-mono">
-              {category.name}
-            </Typography>
+          <li key={category.name} className="grid items-center gap-3 md:grid-cols-[1fr_auto]">
             <SubfolderAutocomplete
               mode="download"
-              label={`Download ${category.name} to`}
+              label={categoryRowLabel(category.name)}
+              noOverrideLabel={NO_SUBFOLDER_LABEL}
               value={category.subfolder}
               onChange={(value) => setSubfolder(category.name, value)}
               subfolders={subfolders}
               loading={subfoldersLoading}
               createSubfolder={createSubfolder}
             />
-            <Button
-              variant="outlined"
-              disabled={categories.length <= 1}
-              aria-label={`Remove ${category.name}`}
-              onClick={() => onChange(categories.filter((entry) => entry.name !== category.name))}
-            >
-              Remove
-            </Button>
+            {managing && (
+              <Button
+                variant="outlined"
+                disabled={categories.length <= 1}
+                aria-label={`Remove ${category.name}`}
+                onClick={() => onChange(categories.filter((entry) => entry.name !== category.name))}
+              >
+                Remove
+              </Button>
+            )}
           </li>
         ))}
       </ul>
 
-      <Box className="flex flex-wrap items-start gap-2">
-        <TextField
-          size="small"
-          label="New category name"
-          value={newName}
-          disabled={atLimit}
-          error={newNameError !== null}
-          helperText={
-            newNameError ?? (atLimit ? `At most ${MAX_ARR_CATEGORIES} categories.` : 'Letters, digits, - and _.')
-          }
-          onChange={(event: ChangeEvent<HTMLInputElement>) => setNewName(event.target.value)}
-          onKeyDown={handleKeyDown}
-        />
-        <Button variant="outlined" disabled={!canAdd} onClick={addCategory}>
-          Add category
+      <Box>
+        <Button
+          variant="text"
+          aria-expanded={managing}
+          aria-controls={managePanelId}
+          onClick={() => setManaging((open) => !open)}
+        >
+          I run more than one Sonarr or Radarr
         </Button>
       </Box>
+
+      {managing && (
+        <Box id={managePanelId} className="flex flex-col gap-3">
+          <Typography variant="body2" color="text.secondary">
+            Each row above is a category, the name a Sonarr or Radarr gives its download client: <code>tv</code>{' '}
+            and <code>movies</code> to begin with. Two instances that share a category import each other&apos;s
+            downloads, so add a category for a second instance (for example <code>tv-4k</code>) and enter it as
+            the Category of that instance&apos;s download client.
+          </Typography>
+          <Box className="flex flex-wrap items-start gap-2">
+            <TextField
+              size="small"
+              label="New category name"
+              value={newName}
+              disabled={atLimit}
+              error={newNameError !== null}
+              helperText={
+                newNameError ?? (atLimit ? `At most ${MAX_ARR_CATEGORIES} categories.` : 'Letters, digits, - and _.')
+              }
+              onChange={(event: ChangeEvent<HTMLInputElement>) => setNewName(event.target.value)}
+              onKeyDown={handleKeyDown}
+            />
+            <Button variant="outlined" disabled={!canAdd} onClick={addCategory}>
+              Add category
+            </Button>
+          </Box>
+        </Box>
+      )}
     </Box>
   );
 };

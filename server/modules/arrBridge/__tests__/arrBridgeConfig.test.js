@@ -32,6 +32,7 @@ describe('arrBridgeConfig', () => {
         minMovieSeconds: 3600,
         stagingPath: null,
         retentionDays: 7,
+        resolution: null,
         sonarr: null,
         radarr: null,
       });
@@ -102,6 +103,13 @@ describe('arrBridgeConfig', () => {
       expect(readSettings({ arrBridgeStagingRetentionDays: 30 }).retentionDays).toBe(30);
       expect(readSettings({ arrBridgeStagingRetentionDays: 0 }).retentionDays).toBe(7);
       expect(readSettings({ arrBridgeStagingRetentionDays: 2.5 }).retentionDays).toBe(7);
+    });
+
+    test('reads the resolution for grabs, and follows the preferred resolution for anything else', () => {
+      expect(readSettings({ arrBridgeResolution: '1080' }).resolution).toBe('1080');
+      expect(readSettings({ arrBridgeResolution: '' }).resolution).toBeNull();
+      expect(readSettings({ arrBridgeResolution: '1440' }).resolution).toBeNull();
+      expect(readSettings({ arrBridgeResolution: 1080 }).resolution).toBeNull();
     });
 
     test('reports a stored key and ignores an empty one', () => {
@@ -230,10 +238,11 @@ describe('arrBridgeConfig', () => {
       arrBridgeMinMovieMinutes: 60,
       arrBridgeStagingPath: '',
       arrBridgeStagingRetentionDays: 7,
+      arrBridgeResolution: '',
     };
     const categories = (count) => Array.from({ length: count }, (_, index) => ({ name: `cat${index}`, subfolder: null }));
 
-    test('names the eight settings', () => {
+    test('names the nine settings', () => {
       expect([...SETTING_KEYS].sort()).toEqual(Object.keys(DEFAULTS).sort());
     });
 
@@ -343,6 +352,21 @@ describe('arrBridgeConfig', () => {
 
       expect(getSettingsError({ arrBridgeExcludeTerms: [word] })).toMatch(/^Sonarr\/Radarr excluded words:/);
       expect(cleanSettings({ arrBridgeExcludeTerms: ['İstanbul'] }).arrBridgeExcludeTerms).toHaveLength(1);
+    });
+
+    test.each(['', '2160', '1080', '720', '480'])('accepts the resolution "%s"', (value) => {
+      expect(getSettingsError({ arrBridgeResolution: value })).toBeNull();
+    });
+
+    // Sonarr and Radarr have no quality for 1440p or 360p.
+    test.each(['1440', '360', 'best', 1080, null])('refuses the resolution %p', (value) => {
+      expect(getSettingsError({ arrBridgeResolution: value })).toMatch(/^Sonarr\/Radarr resolution/);
+    });
+
+    test('a hand-edited resolution that cannot be saved goes back to following the preferred resolution', () => {
+      expect(correctStoredSettings({ arrBridgeResolution: '1440' }))
+        .toEqual([{ key: 'arrBridgeResolution', previous: '1440', replacement: '' }]);
+      expect(correctStoredSettings({ arrBridgeResolution: '720' })).toEqual([]);
     });
 
     test('correctStoredSettings replaces hand-edited values that could not be saved', () => {

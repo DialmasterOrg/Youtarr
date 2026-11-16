@@ -23,6 +23,10 @@ const MAX_MIN_DURATION_MINUTES = 600;
 const DEFAULT_RETENTION_DAYS = 7;
 const MAX_RETENTION_DAYS = 365;
 const MAX_STAGING_PATH_LENGTH = 500;
+// The resolutions Sonarr and Radarr have a quality for. An empty setting
+// follows preferredResolution.
+const RESOLUTIONS = Object.freeze(['2160', '1080', '720', '480']);
+const FOLLOW_PREFERRED_RESOLUTION = '';
 // A video whose grab failed is not offered again for this long. Sonarr's own
 // blocklist needs an identical publish date, which a YouTube search cannot give.
 const FAILED_GRAB_GUARD_DAYS = 7;
@@ -208,6 +212,7 @@ const isStagingPath = (value) => (
   typeof value === 'string' && (value.trim() === '' || normalizeStagingPath(value) !== null)
 );
 const isRetentionDays = (value) => Number.isInteger(value) && value >= 1 && value <= MAX_RETENTION_DAYS;
+const isResolution = (value) => value === FOLLOW_PREFERRED_RESOLUTION || RESOLUTIONS.includes(value);
 const isSwitch = (value) => typeof value === 'boolean';
 const unchanged = (value) => value;
 const copyCategories = (value) => normalizeCategories(value).map((category) => ({ ...category }));
@@ -273,6 +278,13 @@ const SETTING_FIELDS = [
     clean: unchanged,
     correct: normalizeRetentionDays,
   },
+  {
+    key: 'arrBridgeResolution',
+    isValid: isResolution,
+    error: 'Sonarr/Radarr resolution must be 2160, 1080, 720, 480, or empty to use the preferred resolution',
+    clean: unchanged,
+    correct: () => FOLLOW_PREFERRED_RESOLUTION,
+  },
 ];
 const SETTING_KEYS = Object.freeze(SETTING_FIELDS.map((field) => field.key));
 
@@ -316,7 +328,7 @@ function correctStoredSettings(config) {
  * @param {Object} config - The full config object
  * @returns {{enabled: boolean, apiKey: string|null, categories: Array<{name: string, subfolder: string|null}>,
  *   looseMatching: boolean, excludeTerms: string[], minTvSeconds: number, minMovieSeconds: number,
- *   stagingPath: string|null, retentionDays: number,
+ *   stagingPath: string|null, retentionDays: number, resolution: string|null,
  *   sonarr: {url: string, apiKey: string}|null, radarr: {url: string, apiKey: string}|null}}
  */
 function readSettings(config) {
@@ -332,6 +344,7 @@ function readSettings(config) {
     minMovieSeconds: normalizeMinutes(source.arrBridgeMinMovieMinutes, DEFAULT_MIN_MOVIE_MINUTES) * 60,
     stagingPath: normalizeStagingPath(source.arrBridgeStagingPath),
     retentionDays: normalizeRetentionDays(source.arrBridgeStagingRetentionDays),
+    resolution: RESOLUTIONS.includes(source.arrBridgeResolution) ? source.arrBridgeResolution : null,
     sonarr: normalizeConnection(source.arrBridgeSonarrUrl, source.arrBridgeSonarrApiKey),
     radarr: normalizeConnection(source.arrBridgeRadarrUrl, source.arrBridgeRadarrApiKey),
   };

@@ -39,7 +39,7 @@ describe('validateConfig', () => {
 
   test('explains a staged file retention outside its range', () => {
     expect(validateConfig(createConfig({ arrBridgeStagingRetentionDays: 0 }))).toBe(
-      'Cannot save: Sonarr / Radarr: keep staged files for 1 to 365 days'
+      'Cannot save: Sonarr / Radarr: remove files nobody imported after 1 to 365 days'
     );
   });
 

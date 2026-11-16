@@ -69,7 +69,7 @@ function grab(overrides = {}) {
 const queued = (overrides = {}) => grab({ status: 'queued', job_id: JOB_ID, ...overrides });
 const downloadedVideo = { youtubeId: YOUTUBE_ID, filePath: LIBRARY_FILE, audioFilePath: null };
 
-function setup({ rows = [], video = null, jobs = {}, storedJob = null, categories } = {}) {
+function setup({ rows = [], video = null, jobs = {}, storedJob = null, categories, resolution = null } = {}) {
   const state = { video };
   const ArrBridgeGrab = grabTable(rows);
   const deps = {
@@ -90,6 +90,7 @@ function setup({ rows = [], video = null, jobs = {}, storedJob = null, categorie
     getSettings: () => ({
       categories: categories || [{ name: 'tv', subfolder: null }, { name: 'tv-4k', subfolder: 'Shows' }],
       retentionDays: 7,
+      resolution,
     }),
     fileState: jest.fn(async (filePath) => (filePath === LIBRARY_FILE ? 'present' : 'missing')),
     newId: () => JOB_ID,
@@ -134,6 +135,19 @@ describe('grabExecutor', () => {
       const { executor, deps } = setup({ rows: [grab({ category: 'tv-4k' })] });
       await executor.runOnce();
       expect(deps.downloader.mock.calls[0][0].overrideSettings).toEqual({ subfolder: 'Shows' });
+    });
+
+    test('downloads at the resolution in the release name when the bridge has its own resolution', async () => {
+      const { executor, deps } = setup({ rows: [grab()], resolution: '720' });
+      await executor.runOnce();
+      // The release was offered as 1080p before the setting changed to 720.
+      expect(deps.downloader.mock.calls[0][0].overrideSettings).toEqual({ resolution: '1080' });
+    });
+
+    test('falls back to the setting for a release name without a resolution', async () => {
+      const { executor, deps } = setup({ rows: [grab({ release_title: 'The.Office.US.S01E02.WEB-DL-NBC' })], resolution: '720' });
+      await executor.runOnce();
+      expect(deps.downloader.mock.calls[0][0].overrideSettings).toEqual({ resolution: '720' });
     });
 
     test('allows a re-download only when the archive would otherwise skip the video', async () => {

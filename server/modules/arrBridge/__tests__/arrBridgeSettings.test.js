@@ -5,7 +5,7 @@ const { createArrBridgeSettings } = require('../arrBridgeSettings');
 const SONARR_KEY = '5p1ke0000000000000000000000000ab';
 const RADARR_KEY = 'r4d4rr00000000000000000000000000';
 
-function setup(config = {}, { status } = {}) {
+function setup(config = {}, { status, folderNames } = {}) {
   const configModule = {
     config,
     getConfig: () => configModule.config,
@@ -15,6 +15,7 @@ function setup(config = {}, { status } = {}) {
   };
   const client = {
     fetchStatus: jest.fn(status || (async () => ({ appName: 'Sonarr', version: '4.0.20.3014' }))),
+    fetchFolderNames: jest.fn(folderNames || (async () => ['movies', 'tv'])),
   };
   const staging = {
     stagingRoot: () => '/data/.arr-staging',
@@ -305,6 +306,87 @@ describe('arrBridgeSettings', () => {
       const result = await settings.saveConnection('sonarr', { url: 'http://sonarr:8989', apiKey: SONARR_KEY });
 
       expect(result).toMatchObject({ ok: false, reason: 'unreachable' });
+      expect(logged(logger)).not.toContain(SONARR_KEY);
+    });
+  });
+
+  describe('checkSharedFolder', () => {
+    const SONARR = { arrBridgeSonarrUrl: 'http://sonarr:8989', arrBridgeSonarrApiKey: SONARR_KEY };
+
+    test('the app sees the folder when it lists one of the category folders Youtarr keeps there', async () => {
+      const { settings, client } = setup(SONARR);
+
+      const result = await settings.checkSharedFolder('sonarr');
+
+      expect(client.fetchFolderNames).toHaveBeenCalledWith(
+        { url: 'http://sonarr:8989', apiKey: SONARR_KEY },
+        '/data/.arr-staging'
+      );
+      expect(result).toEqual({ ok: true, visible: true, path: '/data/.arr-staging' });
+    });
+
+    test('asks about the folder under the path Sonarr and Radarr are told', async () => {
+      const { settings, client } = setup({ ...SONARR, arrBridgeStagingPath: '/downloads/youtarr-staging' });
+
+      const result = await settings.checkSharedFolder('sonarr');
+
+      expect(client.fetchFolderNames.mock.calls[0][1]).toBe('/downloads/youtarr-staging');
+      expect(result.path).toBe('/downloads/youtarr-staging');
+    });
+
+    test('a second instance\'s category counts too', async () => {
+      const { settings } = setup(
+        { ...SONARR, arrBridgeCategories: [{ name: 'tv-4k', subfolder: null }] },
+        { folderNames: async () => ['tv-4k'] }
+      );
+
+      expect((await settings.checkSharedFolder('sonarr')).visible).toBe(true);
+    });
+
+    test.each([
+      ['a folder that is not there lists nothing', []],
+      ['another folder that happens to exist at that path', ['Season 1', 'Season 2']],
+    ])('the app does not see it: %s', async (_label, names) => {
+      const { settings } = setup(SONARR, { folderNames: async () => names });
+
+      expect(await settings.checkSharedFolder('sonarr'))
+        .toEqual({ ok: true, visible: false, path: '/data/.arr-staging' });
+    });
+
+    test('passes on nothing of what the app listed', async () => {
+      const { settings } = setup(SONARR, { folderNames: async () => ['tv', 'private-folder-name'] });
+
+      expect(JSON.stringify(await settings.checkSharedFolder('sonarr'))).not.toContain('private-folder-name');
+    });
+
+    test('reports why the app could not be asked', async () => {
+      const { settings } = setup(SONARR, {
+        folderNames: async () => {
+          throw new ArrUnavailableError('unauthorized');
+        },
+      });
+
+      expect(await settings.checkSharedFolder('sonarr'))
+        .toEqual({ ok: false, reason: 'unauthorized', message: 'Sonarr rejected the API key.' });
+    });
+
+    test('without a stored connection nothing is asked', async () => {
+      const { settings, client } = setup({});
+
+      expect(await settings.checkSharedFolder('radarr'))
+        .toEqual({ ok: false, reason: 'not-configured', message: 'No Radarr connection is saved.' });
+      expect(client.fetchFolderNames).not.toHaveBeenCalled();
+    });
+
+    test('never writes the key to the log', async () => {
+      const { settings, logger } = setup(SONARR, {
+        folderNames: async () => {
+          throw new ArrUnavailableError('unreachable', { code: 'ECONNREFUSED' });
+        },
+      });
+
+      await settings.checkSharedFolder('sonarr');
+
       expect(logged(logger)).not.toContain(SONARR_KEY);
     });
   });

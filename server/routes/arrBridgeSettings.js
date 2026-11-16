@@ -245,6 +245,55 @@ function createArrBridgeSettingsRoutes({ verifyToken, arrBridgeConnectionLimiter
 
   /**
    * @swagger
+   * /api/arr-bridge/connections/{app}/shared-folder:
+   *   get:
+   *     summary: Check that Sonarr or Radarr can see the staging folder
+   *     description: Asks the saved Sonarr or Radarr whether it sees the staging folder under the path it is told to import from. Read-only, and nothing of what the app lists is returned.
+   *     tags: [Sonarr/Radarr bridge]
+   *     parameters:
+   *       - in: path
+   *         name: app
+   *         required: true
+   *         schema:
+   *           type: string
+   *           enum: [sonarr, radarr]
+   *     responses:
+   *       200:
+   *         description: ok true with visible and the path that was asked about, or ok false with the reason the app could not be asked
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 ok:
+   *                   type: boolean
+   *                 visible:
+   *                   type: boolean
+   *                 path:
+   *                   type: string
+   *                 reason:
+   *                   type: string
+   *                 message:
+   *                   type: string
+   *       404:
+   *         description: Unknown app
+   *       429:
+   *         description: Too many attempts
+   *       500:
+   *         description: The check could not run
+   */
+  router.get('/api/arr-bridge/connections/:app/shared-folder', verifyToken, requireApp, arrBridgeConnectionLimiter, async (req, res) => {
+    const { app } = req.params;
+    try {
+      return res.json(await settings.checkSharedFolder(app));
+    } catch (err) {
+      req.log.error({ err, app }, 'Failed to check the Sonarr/Radarr shared folder');
+      return res.status(500).json({ error: 'Could not check the folder' });
+    }
+  });
+
+  /**
+   * @swagger
    * /api/arr-bridge/grabs:
    *   get:
    *     summary: List recent Sonarr/Radarr grabs

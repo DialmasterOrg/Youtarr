@@ -254,6 +254,61 @@ describe('arrClient', () => {
     });
   });
 
+  describe('fetchFolderNames', () => {
+    // As Sonarr 4.0.20 and Radarr 6.4.4 answer /api/v3/filesystem.
+    const listing = (names) => ({
+      parent: '/usr/src/app/data/',
+      directories: names.map((name) => ({ type: 'folder', name, path: `/usr/src/app/data/.arr-staging/${name}/` })),
+      files: [],
+    });
+
+    test('asks the app to list the folder, with a trailing slash so the folder itself is listed', async () => {
+      axios.get.mockResolvedValue({ data: listing(['movies', 'tv']) });
+
+      const names = await client.fetchFolderNames(SONARR, '/usr/src/app/data/.arr-staging');
+
+      expect(names).toEqual(['movies', 'tv']);
+      const [url, options] = axios.get.mock.calls[0];
+      expect(url).toBe('http://sonarr:8989/api/v3/filesystem');
+      expect(options).toEqual(expect.objectContaining({
+        headers: { 'X-Api-Key': KEY },
+        params: { path: '/usr/src/app/data/.arr-staging/', includeFiles: false },
+        maxRedirects: 0,
+      }));
+    });
+
+    test('does not double a trailing slash', async () => {
+      axios.get.mockResolvedValue({ data: listing([]) });
+
+      await client.fetchFolderNames(RADARR, '/downloads/staging/');
+
+      expect(axios.get.mock.calls[0][1].params.path).toBe('/downloads/staging/');
+    });
+
+    test('a folder the app cannot see lists nothing', async () => {
+      axios.get.mockResolvedValue({ data: { parent: '/nope/', directories: [], files: [] } });
+
+      expect(await client.fetchFolderNames(SONARR, '/nope/not-mounted')).toEqual([]);
+    });
+
+    test('keeps only names that are text', async () => {
+      axios.get.mockResolvedValue({ data: { directories: [{ name: 'tv' }, { name: 7 }, null, { path: '/x' }] } });
+
+      expect(await client.fetchFolderNames(SONARR, '/data')).toEqual(['tv']);
+    });
+
+    test.each([
+      ['a login page', '<html><body>Sign in</body></html>'],
+      ['a list', []],
+      ['an object without directories', { parent: '/' }],
+      ['nothing', null],
+    ])('%s is not an answer', async (_label, data) => {
+      axios.get.mockResolvedValue({ data });
+
+      await expect(client.fetchFolderNames(SONARR, '/data')).rejects.toMatchObject({ reason: 'not-json' });
+    });
+  });
+
   describe('failures', () => {
     test('a 401 says the key was rejected', async () => {
       axios.get.mockRejectedValue(axiosError({ status: 401 }));

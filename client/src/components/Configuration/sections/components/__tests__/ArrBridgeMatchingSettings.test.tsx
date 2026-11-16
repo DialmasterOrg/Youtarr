@@ -39,6 +39,19 @@ describe('ArrBridgeMatchingSettings', () => {
     expect(screen.getByText(/Loose matching can offer the wrong video/)).toBeInTheDocument();
   });
 
+  test('says what loose matching does before it is switched on', () => {
+    setup();
+
+    expect(screen.getByText(/Also offers an episode number without a season and a movie without its year/))
+      .toBeInTheDocument();
+  });
+
+  test('the resolution is not a matching setting', () => {
+    setup();
+
+    expect(screen.queryByRole('button', { name: 'Resolution' })).not.toBeInTheDocument();
+  });
+
   test('shows no warning under strict matching', () => {
     setup();
 
