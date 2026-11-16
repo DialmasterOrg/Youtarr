@@ -65,6 +65,7 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 - A title match needs the episode title as a whole phrase, the series name within the video title or within the channel name, no other episode's number or title, and a length inside the runtime window.
 - Strict matching runs the title stage only with a known runtime: without the window, an hour of episodes listing this title would pass.
 - Sonarr grabs the newer of equal releases whatever the feed order, and a re-upload is always newer. So the strict title stage offers only the closest channel (`seriesChannelRank`); others return once its grab failed.
+- A channel whose name carries an excluded word, singular or plural ("Mission Impossible Reviews"), never counts as the series' channel: it won closest-channel and hid the real episode behind a review.
 - A video naming a library series whose name contains this one's ("Beyblade Burst"), or a year before the series began, is another series. Loose matching drops this, the series-name and the one-word-title rules, and lets an unknown length pass.
 - A generic, shared or series-named episode title skips the title stage, and a one-word title also needs the episode number: such titles appear in unrelated videos.
 - With a known runtime, `runtimeWindow` replaces the fixed minimum lengths in every filter, loose matching included: it is what rejects a double episode, and it never goes below Sonarr's sample threshold.
@@ -88,3 +89,4 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 - `grabService.grabState` derives what Settings shows. A removed grab that completed is `handed-off`, never "imported": the app sends the same history delete after an import and after a removal there.
 - A category's name cannot be edited in Settings, only removed and added: existing grabs carry the name and their staging folder is named after it.
 - `ARR_BRIDGE_JOB_LABEL` contains the manual download label on purpose, so job detection, per-video structure and members-only handling treat a grab as a manual download.
+- A grab's auto-retry job keeps the `(Sonarr/Radarr grab)` label suffix (`isArrBridgeJob` in `jobTypes.js` and `jobTypeLabel.ts`): a finished job keeps no request data, and Download History hides grabs by job type.

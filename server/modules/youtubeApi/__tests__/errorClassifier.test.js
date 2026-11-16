@@ -31,6 +31,16 @@ describe('classifyYoutubeApiError', () => {
     expect(classifyYoutubeApiError(err)).toBe(YoutubeApiErrorCode.QUOTA_EXCEEDED);
   });
 
+  test('classifies 403 dailyLimitExceeded as an exhausted quota', () => {
+    const err = {
+      response: {
+        status: 403,
+        data: { error: { errors: [{ reason: 'dailyLimitExceeded' }] } },
+      },
+    };
+    expect(classifyYoutubeApiError(err)).toBe(YoutubeApiErrorCode.QUOTA_EXCEEDED);
+  });
+
   test('classifies 403 rateLimitExceeded', () => {
     const err = {
       response: {

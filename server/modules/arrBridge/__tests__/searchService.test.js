@@ -765,6 +765,35 @@ describe('searchService', () => {
       });
     });
 
+    // Mission: Impossible (1988) S01E10 on 2026-11-16: the review channel's
+    // video was the only release offered and the episode itself was hidden.
+    test('a review channel named after the series does not hide the episode\'s real upload', async () => {
+      const episode = beybladeEpisode({
+        seriesTitle: 'Mission: Impossible (1988)',
+        seriesTitles: ['Mission: Impossible (1988)'],
+        episodeTitle: 'The Lions',
+        otherEpisodeTitles: [],
+        runtimeSeconds: 2700,
+        season: 1,
+        episode: 10,
+        absoluteNumber: 10,
+      });
+      const review = video('Mission Impossible S01E10: The Lions', {
+        youtubeId: 'qQmJpJ-ChgI', channelName: 'Mission Impossible Reviews', duration: 1773,
+      });
+      const upload = video('Mission: Impossible (1988) S01E10 The Lions', {
+        youtubeId: 'qHAsaUolgws', channelName: 'Alisha H', duration: 2823,
+      });
+      const { service } = setup({ results: [review, upload], catalog: makeCatalog({ episode }) });
+
+      const items = await service.search(
+        request({ t: 'tvsearch', cat: SONARR_CATS, title: 'Mission: Impossible (1988)', season: '1', ep: '10' }),
+        ORIGIN
+      );
+
+      expect(items.map((item) => item.youtubeId)).toEqual(['qQmJpJ-ChgI', 'qHAsaUolgws']);
+    });
+
     test('the episode-code fallback uses the runtime: a double-length upload is not offered', async () => {
       const { service } = setup({
         results: { [CODE_QUERY]: [video('Beyblade S01E29', { duration: 2635 })] },

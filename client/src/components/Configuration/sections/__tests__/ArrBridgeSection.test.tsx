@@ -295,6 +295,19 @@ describe('ArrBridgeSection', () => {
       expect(expectations().getByText(/stays in your Youtarr library/)).toBeInTheDocument();
     });
 
+    test('says a grab is a one-off download outside the subscriptions', () => {
+      setupSection();
+
+      expect(expectations().getByText(/does not subscribe to the channel/)).toBeInTheDocument();
+      expect(expectations().getByText(/nothing is added to your Channels page/)).toBeInTheDocument();
+    });
+
+    test('says where a kept grab shows up in Youtarr', () => {
+      setupSection();
+
+      expect(expectations().getByText(/shows in Download History and on the Videos page/)).toBeInTheDocument();
+    });
+
     test('says a grab leaves the Youtarr library when removing after the import is on', () => {
       setupSection({ config: createConfig({ arrBridgeRemoveAfterImport: true }) });
 

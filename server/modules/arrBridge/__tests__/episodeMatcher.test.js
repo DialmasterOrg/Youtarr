@@ -160,14 +160,46 @@ describe('episodeMatcher', () => {
       ];
 
       expect(ids(filterByEpisodeTitle(results, { episode, settings: settings() }))).toEqual(['Qtl8lJwbd4g', 'aLNBbQUcpXI']);
-      expect(results.map((result) => seriesChannelRank(result, episode))).toEqual([1, 2]);
-      expect(seriesChannelRank(candidate('x', 'Escape 100 Cops, Win $500,000 #mrbeast', 'Rsk', 1190), episode)).toBe(0);
+      expect(results.map((result) => seriesChannelRank(result, episode, settings()))).toEqual([1, 2]);
+      expect(seriesChannelRank(candidate('x', 'Escape 100 Cops, Win $500,000 #mrbeast', 'Rsk', 1190), episode, settings()))
+        .toBe(0);
     });
 
     test('a tag or an article in the series name does not stop a channel from having exactly its name', () => {
       const episode = show('Diversity Day', { seriesTitle: 'The Office (US)', seriesTitles: ['The Office (US)'] });
 
-      expect(seriesChannelRank(video('Diversity Day', { channelName: 'The Office' }), episode)).toBe(2);
+      expect(seriesChannelRank(video('Diversity Day', { channelName: 'The Office' }), episode, settings())).toBe(2);
+    });
+
+    describe('a channel named after the series with an excluded word ("Mission Impossible Reviews")', () => {
+      const episode = show('The Lions', {
+        seriesTitle: 'Mission: Impossible (1988)',
+        seriesTitles: ['Mission: Impossible (1988)'],
+        runtimeSeconds: 2700,
+        season: 1,
+        episode: 10,
+      });
+      // What YouTube returned for "Mission Impossible The Lions" on 2026-11-16:
+      // a 29 minute review and the 47 minute episode.
+      const review = candidate('qQmJpJ-ChgI', '1988 S01E10: THE LIONS', 'Mission Impossible Reviews', 1773);
+      const upload = candidate('qHAsaUolgws', 'Mission: Impossible (1988) S01E10 The Lions', 'Alisha H', 2823);
+
+      test('is not the series\' channel, so its name does not stand in for the series name', () => {
+        expect(ids(filterByEpisodeTitle([review, upload], { episode, settings: settings() }))).toEqual(['qHAsaUolgws']);
+        expect(seriesChannelRank(review, episode, settings())).toBe(0);
+      });
+
+      test('does not come first under loose matching', () => {
+        expect(ids(filterByEpisodeTitle([upload, review], { episode, settings: LOOSE })))
+          .toEqual(['qHAsaUolgws', 'qQmJpJ-ChgI']);
+      });
+
+      test('still is the series\' channel when the series name itself has the word', () => {
+        const reviewShow = show('Opening Night', { seriesTitle: 'The Review Show', seriesTitles: ['The Review Show'] });
+
+        expect(seriesChannelRank(video('Opening Night', { channelName: 'The Review Show' }), reviewShow, settings()))
+          .toBe(2);
+      });
     });
 
     test('may be an alias', () => {

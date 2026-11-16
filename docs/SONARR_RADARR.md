@@ -13,6 +13,7 @@ Youtarr can act as an indexer and a download client for Sonarr and Radarr. Sonar
 - [Resolution](#resolution)
 - [Using Youtarr beside other indexers](#using-youtarr-beside-other-indexers)
 - [Removing Youtarr's copy after the import](#removing-youtarrs-copy-after-the-import)
+- [Keeping grabs apart from the rest of Youtarr](#keeping-grabs-apart-from-the-rest-of-youtarr)
 - [Categories and a second instance](#categories-and-a-second-instance)
 - [Recent grabs](#recent-grabs)
 - [Login proxies](#login-proxies)
@@ -21,8 +22,10 @@ Youtarr can act as an indexer and a download client for Sonarr and Radarr. Sonar
 ## What to expect
 
 - Youtarr answers a search by searching YouTube, so it finds what people uploaded to YouTube: older TV, public-domain films, and shows that are published on YouTube. It does not find scene releases.
-- A grabbed video is downloaded by Youtarr like any other video and stays in Youtarr's library. Sonarr or Radarr gets its own copy of the file (a hardlink when both are on one filesystem), so removing a grab in Sonarr or Radarr never deletes Youtarr's copy. If you would rather not keep it, see [Removing Youtarr's copy after the import](#removing-youtarrs-copy-after-the-import).
-- Grabs show up in Youtarr's Download History as **Sonarr/Radarr**, and in notifications like a manual download.
+- A grab is a one-off download, separate from your subscriptions. Youtarr does not subscribe to the channel or download anything else from it, and nothing is added to your Channels page.
+- A grabbed video is downloaded by Youtarr like any other video and stays in Youtarr's library. Sonarr or Radarr gets its own copy of the file, so removing a grab in Sonarr or Radarr never deletes Youtarr's copy. Whether that copy takes extra space depends on your folders; see [Step 4](#step-4-the-shared-folder). If you would rather not keep Youtarr's copy, see [Removing Youtarr's copy after the import](#removing-youtarrs-copy-after-the-import).
+- A video Youtarr already has is handed over as it is. It is not downloaded again, Sonarr or Radarr gets the existing file at the quality it has, and Youtarr never removes it.
+- Grabs show up in Youtarr's Download History as **Sonarr/Radarr**, on the Videos page under the channel that uploaded them, and in notifications like a manual download. To keep them out of sight, see [Keeping grabs apart from the rest of Youtarr](#keeping-grabs-apart-from-the-rest-of-youtarr).
 - Youtarr only answers searches. It does not announce new uploads, so Sonarr's and Radarr's RSS sync never finds anything here. A new episode is found when a search runs: one you start, a request from Seerr, or the search Sonarr runs when you add a series.
 - Youtarr runs one download job at a time. A grab made during a large channel download waits behind it; Sonarr and Radarr show it as queued.
 - The indexer can also be added through Prowlarr; see [Using Prowlarr](#using-prowlarr). The download client is always added in Sonarr and Radarr themselves.
@@ -123,7 +126,7 @@ Also:
 - **Give Sonarr and Radarr write access.** Youtarr creates the staged folders as its own user, writable by its group. Run Sonarr and Radarr with the same user or group (`YOUTARR_UID` / `YOUTARR_GID` in Youtarr, `PUID` / `PGID` in most Sonarr and Radarr images).
 - **Keep it out of your library folders.** The staging folder must not sit inside a Sonarr or Radarr root folder.
 
-**Note:** Sonarr and Radarr get their own hardlink only when the staging folder and their library are on the same filesystem. Across filesystems they copy the file instead, which takes the space twice.
+**Note:** Sonarr and Radarr move the staged file into their library. The video takes no extra space only when the staging folder and their library are inside one volume of their container, for example one media folder that is mounted as a whole and holds both. With the staging folder as a volume of its own, as in the example above, or with the library on another disk, the move becomes a copy, and the video takes its space twice for as long as Youtarr keeps its copy. That is how Docker works, also when both folders are on the same disk. [Removing Youtarr's copy after the import](#removing-youtarrs-copy-after-the-import) frees that space.
 
 Youtarr puts `.ignore` and `.plexignore` files in the staging folder, so Plex, Jellyfin and Emby skip it when they index your downloads folder.
 
@@ -131,7 +134,7 @@ Youtarr puts `.ignore` and `.plexignore` files in the staging folder, so Plex, J
 
 - **Quality profile.** Youtarr labels each release `WEB-DL` at the resolution the video really has, up to the lower of **Resolution** and **Offer releases as** on the Sonarr / Radarr page (see [Resolution](#resolution)). The profile of the series or movie must allow WEBDL at the resolution a video really has, up to that one: a video that only exists in 480p is offered as 480p, and a profile that does not allow 480p will not take it. Sonarr's default "Any" profile does not include 2160p.
 - **Delay profile.** Usenet must be enabled: Youtarr presents itself as a Usenet indexer.
-- **Automatic search.** With the default strict matching you can leave "Enable Automatic Search" on. If you turn on loose matching in Youtarr, turn it off for the Youtarr indexer and search interactively.
+- **Automatic search.** With the default strict matching you can leave "Enable Automatic Search" on; [How matching works](#how-matching-works) names the cases it can still get wrong. If you turn on loose matching in Youtarr, turn it off for the Youtarr indexer and search interactively.
 
 ## How matching works
 
@@ -144,6 +147,11 @@ Sonarr and Radarr decide what a release is from its name alone, so Youtarr only 
 - A search for a whole season is answered from one YouTube search for each name of the series, and each video offered still needs its own episode marker.
 
 **Loose matching** accepts an episode number without a season and a movie without its year. It finds more and can offer the wrong video.
+
+**Strict matching is careful, not certain.** Two cases are known to get through:
+
+- **Two shows with the same name.** A search for the first episode of The Office (US) can be answered with the first episode of the British series: both are "The Office", season 1, episode 1, and about as long. For a show that shares its name with another, search interactively, or check its first grabs.
+- **Without a connection, a title that has the episode marker and then the series' words.** "Age Of Conan - S01E10 : Mission Impossible" is offered for Mission: Impossible S01E10. With a [connection](#step-3-connect-your-sonarr-and-radarr-recommended), the episode's runtime keeps out a video of another length.
 
 Both modes skip:
 
@@ -237,6 +245,25 @@ Things to know:
 - The copy is removed when the app takes the item out of its download client history, which Sonarr and Radarr do right after an import while **Remove Completed** is on in their download client settings (the default). With it off, the copy is removed when the staged file's retention ends.
 - Turning the setting on does not touch videos from earlier grabs.
 
+## Keeping grabs apart from the rest of Youtarr
+
+A grab is an ordinary Youtarr download, so it appears where downloads appear. This is where, and what keeps it out:
+
+| Where | What you see | To keep it out |
+|---|---|---|
+| Download History | A row labeled **Sonarr/Radarr** | Tick **Hide Sonarr/Radarr grabs** above the list. The box appears once the list has a grab, and the choice is remembered in that browser. |
+| Videos page | The video, under the channel that uploaded it | Turn on [remove after import](#removing-youtarrs-copy-after-the-import). A removed video counts as deleted, and the page hides deleted videos unless you ask for them. |
+| Channels page | Nothing. A grab never adds a channel. | |
+| Your media server | The file is in Youtarr's download location, so a media server that indexes it shows the video there as well as in the Sonarr or Radarr library | Choose a subfolder for the category under **Downloads** on the Settings page and leave that folder out of your media server's libraries, or turn on remove after import. |
+| Downloads RSS feed | The video, like any download | Remove after import takes it out of the feed again. |
+| Notifications | A notification like the one for a manual download | |
+
+Good to know:
+
+- A grab that stays in Youtarr follows your automatic removal rules like any other video.
+- With remove after import on, the Download History row stays, and the video is listed among the deleted videos until you empty the trash (**Settings -> Maintenance & Rescan**).
+- A grab that had to be tried again shows a second row, **Auto-retry**. The box hides that row too.
+
 ## Categories and a second instance
 
 A category is the name a Sonarr or Radarr instance gives its download client, and Youtarr uses it to keep instances apart. The defaults are `tv` and `movies`.
@@ -287,6 +314,10 @@ Its title probably has no season and episode marker. Connect your Sonarr ([step 
 
 Youtarr's log has one line for every search, "Sonarr/Radarr search answered" or "Sonarr/Radarr search found no match", with the text it searched YouTube for and how many videos came back. See [Collecting Logs](TROUBLESHOOTING.md#collecting-logs) for where to find the log.
 
+**A search finds nothing for a movie you know is on YouTube**
+
+Strict matching needs the movie's year, as Radarr lists it, in the video's title. Many uploads carry no year or another one: Radarr lists Plan 9 from Outer Space as 1957, and many uploads say 1958 or 1959. YouTube also does not return the same videos for the same search every time, so a search that found the movie once can find nothing the next time. Search again later, or turn on loose matching and search interactively: it accepts a title without the year.
+
 **"Unknown Series" in Sonarr's log**
 
 Sonarr could not match the release name to a series. This is expected for the one placeholder release Youtarr lists so that the indexer Test passes; it is never grabbed. For a real release, the series must be in your library under the name that was searched.
@@ -313,7 +344,7 @@ The app cannot delete inside the staging folder. Run it with the same user or gr
 
 **The import copies the file instead of linking it**
 
-The staging folder and the app's library are on different filesystems.
+The staging folder and the app's library are not inside one volume of the app's container, or they are on different disks. See the note under [Step 4: The shared folder](#step-4-the-shared-folder).
 
 **A grab fails right away**
 

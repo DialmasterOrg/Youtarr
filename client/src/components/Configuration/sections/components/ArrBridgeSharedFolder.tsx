@@ -70,7 +70,9 @@ const FolderCheckRow: React.FC<FolderCheckRowProps> = ({ app, connected, check, 
               <>
                 mount that folder into {name} at <code className="break-all">{check.path}</code>.
               </>
-            )}
+            )}{' '}
+            With the folder as a volume of its own, {name} copies the file at import instead of linking it, so the
+            video takes its space twice while Youtarr keeps its copy.
           </li>
           <li>If {name} already sees that folder under another path, enter that path below and save.</li>
         </ul>

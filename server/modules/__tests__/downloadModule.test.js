@@ -1471,6 +1471,25 @@ describe('DownloadModule', () => {
       expect(doSpecificDownloadsSpy.mock.calls[0][0].body.externalRequest).toBe(true);
     });
 
+    it.each([
+      ['a Sonarr/Radarr grab', 'Manually Added Urls (Sonarr/Radarr grab)'],
+      ['a retry of one', 'Auto-retry: 1 video (Sonarr/Radarr grab)'],
+    ])('names the retry of %s after the grab', async (_name, jobLabel) => {
+      await downloadModule.enqueueAutoRetryJob({
+        retryVideos: [retryVideo], autoRetryAttempt: 1, sourceJobData: { jobLabel },
+      });
+
+      expect(doSpecificDownloadsSpy.mock.calls[0][0].body.jobLabel).toBe('Auto-retry: 1 video (Sonarr/Radarr grab)');
+    });
+
+    it('leaves the retry of a manual download with the plain label', async () => {
+      await downloadModule.enqueueAutoRetryJob({
+        retryVideos: [retryVideo], autoRetryAttempt: 1, sourceJobData: { jobLabel: 'Manually Added Urls' },
+      });
+
+      expect(doSpecificDownloadsSpy.mock.calls[0][0].body.jobLabel).toBe('Auto-retry: 1 video');
+    });
+
     it('splits mixed authenticated and anonymous retries into separate jobs', async () => {
       const anonymousVideo = {
         youtubeId: 'zzz999xxx11',

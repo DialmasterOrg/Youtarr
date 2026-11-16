@@ -79,9 +79,13 @@ export const ArrBridgeSection: React.FC<ArrBridgeSectionProps> = ({
               is found when a search runs, not on its own.
             </li>
             <li>
+              A grab is a one-off download, separate from your subscriptions. Youtarr does not subscribe to the channel
+              or download anything else from it, and nothing is added to your Channels page.
+            </li>
+            <li>
               {removeAfterImport
                 ? 'A grab is downloaded by Youtarr like any other video. Once Sonarr or Radarr confirms the import through the connection in step 3, Youtarr removes its own copy.'
-                : 'A grab is downloaded by Youtarr like any other video and stays in your Youtarr library. Sonarr or Radarr import their own copy.'}
+                : 'A grab is downloaded by Youtarr like any other video and stays in your Youtarr library, where it shows in Download History and on the Videos page. Sonarr or Radarr import their own copy.'}
             </li>
             <li>
               Setup takes the four steps on this page.{' '}

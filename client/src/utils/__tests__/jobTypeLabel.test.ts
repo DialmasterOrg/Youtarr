@@ -16,6 +16,12 @@ describe('jobTypeLabel', () => {
     expect(isArrBridgeJob(null)).toBe(false);
   });
 
+  test('recognizes the automatic retry of a Sonarr/Radarr grab, and no other retry', () => {
+    expect(isArrBridgeJob('Auto-retry: 1 video (Sonarr/Radarr grab)')).toBe(true);
+    expect(isArrBridgeJob('Auto-retry: 2 videos (no cookies) (Sonarr/Radarr grab)')).toBe(true);
+    expect(isArrBridgeJob('Auto-retry: 1 video')).toBe(false);
+  });
+
   test('maps Sonarr/Radarr grabs to their own label', () => {
     expect(jobTypeLabel('Manually Added Urls (Sonarr/Radarr grab)')).toBe('Sonarr/Radarr grab');
   });

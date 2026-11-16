@@ -65,11 +65,23 @@ const seriesTermsOf = (episode) => episode.seriesTitles
   .map((name) => matchTerms(name, { dropTrailingYear: true }))
   .filter((terms) => terms.length > 0);
 
+// The series' own titles and the episode's: a word they contain never excludes.
+const ownTextOf = (episode) => [...episode.seriesTitles, episode.episodeTitle].join(' ');
+
+// "Mission Impossible Reviews" covers the show, it is not the show's channel.
+// Channel names carry the excluded words in the plural, which a title's
+// exclude terms are not matched in.
+function coversSeries(channelName, { excludeTerms, ownText }) {
+  return hasExcludedTerm(channelName, [...excludeTerms, ...excludeTerms.map((term) => `${term}s`)], ownText);
+}
+
 // How closely the uploading channel's name ties it to the series: it is the
 // series name, it contains the name ("BEYBLADE Official", but also the
 // re-uploader "MrBeast 103M view 6 hours ago"), or it does not name it.
-function channelRank(candidate, seriesTerms) {
+// A channel about the series (its name has an excluded word) does not.
+function channelRank(candidate, seriesTerms, exclusions) {
   const channelName = candidate.channelName ?? '';
+  if (coversSeries(channelName, exclusions)) return CHANNEL_UNRELATED;
   const ownTerms = matchTerms(channelName).join(' ');
   if (seriesTerms.some((terms) => terms.join(' ') === ownTerms)) return CHANNEL_IS_SERIES_NAME;
   const channelWords = titleTokens(channelName);
@@ -81,20 +93,23 @@ function channelRank(candidate, seriesTerms) {
 /**
  * @param {Object} candidate - A YouTube search result
  * @param {Object} episode - arrCatalog.resolveEpisode's result
+ * @param {Object} settings - readSettings() result
  * @returns {number} 2 when the channel has the series' name, 1 when its name
  *   contains it, 0 otherwise
  */
-function seriesChannelRank(candidate, episode) {
-  return channelRank(candidate, seriesTermsOf(episode));
+function seriesChannelRank(candidate, episode, settings) {
+  return channelRank(candidate, seriesTermsOf(episode), {
+    excludeTerms: settings.excludeTerms, ownText: ownTextOf(episode),
+  });
 }
 
 // The series name, under any of its titles, in the video's title or in the
 // channel's name: a channel dedicated to a show leaves it out of the titles.
 // Never half in each: "Doctor Mike" asking "Who will survive?" is not Doctor Who.
-function namesSeries(candidate, seriesTerms) {
+function namesSeries(candidate, seriesTerms, exclusions) {
   const titleWords = titleTokens(candidate.title);
   return seriesTerms.some((terms) => terms.every((term) => titleWords.has(term)))
-    || channelRank(candidate, seriesTerms) > CHANNEL_UNRELATED;
+    || channelRank(candidate, seriesTerms, exclusions) > CHANNEL_UNRELATED;
 }
 
 // Signs that the video belongs to another series of a similar name: it names
@@ -139,7 +154,8 @@ function filterByEpisodeTitle(candidates, { episode, settings }) {
   const seriesTerms = seriesTermsOf(episode);
   const needsNumber = matchTerms(episode.episodeTitle).length < MIN_TITLE_WORDS_WITHOUT_NUMBER;
   // A word of the series name or the episode title never excludes.
-  const ownText = [...episode.seriesTitles, episode.episodeTitle].join(' ');
+  const ownText = ownTextOf(episode);
+  const exclusions = { excludeTerms: settings.excludeTerms, ownText };
   const otherSeries = {
     siblingPhrases: (episode.siblingTitles ?? []).map(phrase).filter((sibling) => sibling.trim() !== ''),
     seriesYear: episode.seriesYear ?? null,
@@ -158,13 +174,13 @@ function filterByEpisodeTitle(candidates, { episode, settings }) {
     if (!titlePhrase.includes(wanted)) return false;
     if (namesAnotherEpisode(candidate, titlePhrase, episode, otherPhrases)) return false;
     if (loose) return true;
-    if (!namesSeries(candidate, seriesTerms)) return false;
+    if (!namesSeries(candidate, seriesTerms, exclusions)) return false;
     if (namesAnotherSeries(candidate, titlePhrase, otherSeries)) return false;
     return !needsNumber || carriesEpisodeNumber(candidate, episode);
   });
   // YouTube ranks a re-upload titled "<episode> #<series>" above the show's
   // own upload; the show's own channel is the better match.
-  const ranks = new Map(kept.map((candidate) => [candidate, channelRank(candidate, seriesTerms)]));
+  const ranks = new Map(kept.map((candidate) => [candidate, channelRank(candidate, seriesTerms, exclusions)]));
   return kept.sort((a, b) => ranks.get(b) - ranks.get(a));
 }
 

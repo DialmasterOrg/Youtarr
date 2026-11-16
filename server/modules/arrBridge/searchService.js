@@ -161,7 +161,7 @@ function planEpisodeTitleSearch(request, episode, settings) {
     query,
     count: EPISODE_SEARCH_COUNT,
     select: (results) => filterByEpisodeTitle(results, { episode, settings })
-      .map((candidate) => ({ candidate, name, channelRank: seriesChannelRank(candidate, episode) })),
+      .map((candidate) => ({ candidate, name, channelRank: seriesChannelRank(candidate, episode, settings) })),
     // Sonarr grabs the newer of two equal releases, whatever the feed's
     // order, and a re-upload is always newer than the show's own upload.
     closestChannelOnly: !settings.looseMatching,

@@ -70,6 +70,12 @@ describe('ArrBridgeSharedFolder', () => {
       expect(checkOf('Sonarr').getByText(/does not follow a Remote Path Mapping/)).toBeInTheDocument();
     });
 
+    test('says that a volume of its own makes the import a copy', () => {
+      setup({ checks: { sonarr: NOT_SEEN, radarr: SEEN } });
+
+      expect(checkOf('Sonarr').getByText(/copies the file at import instead of linking it/)).toBeInTheDocument();
+    });
+
     test('opens the other-path field', () => {
       setup({ checks: { sonarr: NOT_SEEN, radarr: SEEN } });
 

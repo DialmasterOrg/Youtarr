@@ -7,7 +7,10 @@ const DownloadExecutor = require('./download/downloadExecutor');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const tempPathManager = require('./download/tempPathManager');
 const downloadSettingsResolver = require('./download/downloadSettingsResolver');
-const { MANUAL_DOWNLOAD_LABEL, EXTERNAL_REQUEST_JOB_LABEL, playlistJobLabel, playlistRetryJobLabel, autoRetryJobLabel } = require('./download/jobTypes');
+const {
+  MANUAL_DOWNLOAD_LABEL, EXTERNAL_REQUEST_JOB_LABEL, playlistJobLabel, playlistRetryJobLabel, autoRetryJobLabel,
+  isArrBridgeJob,
+} = require('./download/jobTypes');
 const MessageEmitter = require('./messageEmitter');
 const ChannelVideo = require('../models/channelvideo');
 const logger = require('../logger');
@@ -215,10 +218,13 @@ class DownloadModule {
       (video) => video && video.anonymousRetry === true
     );
 
+    const sourceLabel = this.getJobDataValue(sourceJobData, 'jobLabel');
     const body = {
       urls: retryVideos.map((video) => video.url),
       overrideSettings: { ...this.getOverrideSettings(sourceJobData) },
-      jobLabel: autoRetryJobLabel(retryVideos.length, { anonymous: anonymousRetry }),
+      jobLabel: autoRetryJobLabel(retryVideos.length, {
+        anonymous: anonymousRetry, arrBridge: isArrBridgeJob(sourceLabel),
+      }),
       autoRetryAttempt,
       anonymousRetry,
     };
@@ -228,7 +234,6 @@ class DownloadModule {
     if (runId) body.runId = runId;
     if (this.getJobDataValue(sourceJobData, 'structurePerVideo')) body.structurePerVideo = true;
     // The retry's label no longer names the External API, so the flag carries it.
-    const sourceLabel = this.getJobDataValue(sourceJobData, 'jobLabel');
     if (this.isExternalRequestJob(sourceJobData, sourceLabel)) body.externalRequest = true;
 
     logger.info(

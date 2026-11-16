@@ -47,6 +47,15 @@ interface DownloadHistoryProps {
 }
 
 const ARR_BRIDGE_HISTORY_LABEL = 'Sonarr/Radarr';
+const HIDE_ARR_BRIDGE_STORAGE_KEY = 'youtarr:downloadHistoryHideArrBridge';
+
+function readHideArrBridgeJobs(): boolean {
+  try {
+    return localStorage.getItem(HIDE_ARR_BRIDGE_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
 
 function cleanJobTypeLabel(jobType: string): string {
   if (jobType.startsWith('Playlist Retry: ')) return jobTypeLabel(jobType);
@@ -113,6 +122,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
 }) => {
   const [modalVideo, setModalVideo] = useState<VideoData | null>(null);
   const [showNoVideoJobs, setShowNoVideoJobs] = useState(false);
+  const [hideArrBridgeJobs, setHideArrBridgeJobs] = useState(readHideArrBridgeJobs);
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [currentPage, setCurrentPage] = useState(1);
@@ -126,8 +136,26 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
     setImageErrors((prev) => ({ ...prev, [youtubeId]: true }));
   };
 
+  // Offered only where there is something to hide, and remembered per browser.
+  const hasArrBridgeJobs = jobs.some((job) => isArrBridgeJob(job.jobType));
+  const handleHideArrBridgeJobs = (hide: boolean) => {
+    try {
+      localStorage.setItem(HIDE_ARR_BRIDGE_STORAGE_KEY, String(hide));
+    } catch {
+      // localStorage may be unavailable (private mode, quota); keep the in-memory value
+    }
+    setHideArrBridgeJobs(hide);
+  };
+  const hideArrBridgeControl = hasArrBridgeJobs ? (
+    <FormControlLabel
+      control={<Checkbox checked={hideArrBridgeJobs} onChange={(e) => handleHideArrBridgeJobs(e.target.checked)} />}
+      label="Hide Sonarr/Radarr grabs"
+    />
+  ) : null;
+
   const jobsToDisplay = jobs
     .filter((job) => !job.jobType?.includes('Import Subscriptions'))
+    .filter((job) => !(hideArrBridgeJobs && isArrBridgeJob(job.jobType)))
     .filter((job) => {
       if (showNoVideoJobs) {
         return true;
@@ -155,7 +183,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
   React.useEffect(() => {
     setCurrentPage(1);
     setVisibleCount(itemsPerPage);
-  }, [showNoVideoJobs, itemsPerPage]);
+  }, [showNoVideoJobs, hideArrBridgeJobs, itemsPerPage]);
 
   React.useEffect(() => {
     if (!useInfiniteScroll) {
@@ -218,6 +246,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                   control={<Checkbox checked={showNoVideoJobs} onChange={(e) => { setShowNoVideoJobs(e.target.checked); setCurrentPage(1); }} />}
                   label="Show jobs without videos"
                 />
+                {hideArrBridgeControl}
               </Toolbar>
               {!useInfiniteScroll && (
                 <Box className="flex justify-center mb-2">
@@ -450,6 +479,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
               control={<Checkbox checked={showNoVideoJobs} onChange={(e) => { setShowNoVideoJobs(e.target.checked); setCurrentPage(1); }} />}
               label="Show jobs with no videos"
             />
+            {hideArrBridgeControl}
           </Toolbar>
 
           <TableContainer>
