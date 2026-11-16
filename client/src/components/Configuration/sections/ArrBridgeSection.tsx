@@ -122,7 +122,9 @@ export const ArrBridgeSection: React.FC<ArrBridgeSectionProps> = ({
               onRegenerate={regenerate}
               categories={config.arrBridgeCategories}
               saved={Boolean(savedConfig?.arrBridgeEnabled)}
-              resolution={releaseResolution(config.arrBridgeResolution, config.preferredResolution)}
+              resolution={releaseResolution(
+                config.arrBridgeResolution, config.preferredResolution, config.arrBridgeLabelLimit
+              )}
               setSnackbar={setSnackbar}
             />
           </ConfigurationCard>
@@ -178,9 +180,10 @@ export const ArrBridgeSection: React.FC<ArrBridgeSectionProps> = ({
           >
             <Box className="flex flex-col gap-4">
               <ArrBridgeResolutionField
-                value={config.arrBridgeResolution}
+                resolution={config.arrBridgeResolution}
+                labelLimit={config.arrBridgeLabelLimit}
                 preferredResolution={config.preferredResolution}
-                onChange={(resolution) => onConfigChange({ arrBridgeResolution: resolution })}
+                onChange={onConfigChange}
               />
               <ArrBridgeCategories
                 token={token}

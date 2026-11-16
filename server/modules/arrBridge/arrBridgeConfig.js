@@ -27,6 +27,10 @@ const MAX_STAGING_PATH_LENGTH = 500;
 // follows preferredResolution.
 const RESOLUTIONS = Object.freeze(['2160', '1080', '720', '480']);
 const FOLLOW_PREFERRED_RESOLUTION = '';
+// The highest resolution a release is labeled with. It only lowers the label;
+// the download resolution stays as it is.
+const LABEL_LIMITS = Object.freeze(['1080', '720', '480']);
+const NO_LABEL_LIMIT = '';
 // A video whose grab failed is not offered again for this long. Sonarr's own
 // blocklist needs an identical publish date, which a YouTube search cannot give.
 const FAILED_GRAB_GUARD_DAYS = 7;
@@ -213,6 +217,7 @@ const isStagingPath = (value) => (
 );
 const isRetentionDays = (value) => Number.isInteger(value) && value >= 1 && value <= MAX_RETENTION_DAYS;
 const isResolution = (value) => value === FOLLOW_PREFERRED_RESOLUTION || RESOLUTIONS.includes(value);
+const isLabelLimit = (value) => value === NO_LABEL_LIMIT || LABEL_LIMITS.includes(value);
 const isSwitch = (value) => typeof value === 'boolean';
 const unchanged = (value) => value;
 const copyCategories = (value) => normalizeCategories(value).map((category) => ({ ...category }));
@@ -286,6 +291,13 @@ const SETTING_FIELDS = [
     correct: () => FOLLOW_PREFERRED_RESOLUTION,
   },
   {
+    key: 'arrBridgeLabelLimit',
+    isValid: isLabelLimit,
+    error: 'Sonarr/Radarr label limit must be 1080, 720, 480, or empty for no limit',
+    clean: unchanged,
+    correct: () => NO_LABEL_LIMIT,
+  },
+  {
     key: 'arrBridgeRemoveAfterImport',
     isValid: isSwitch,
     error: 'Sonarr/Radarr remove after import must be switched on or off',
@@ -335,8 +347,8 @@ function correctStoredSettings(config) {
  * @param {Object} config - The full config object
  * @returns {{enabled: boolean, apiKey: string|null, categories: Array<{name: string, subfolder: string|null}>,
  *   looseMatching: boolean, excludeTerms: string[], minTvSeconds: number, minMovieSeconds: number,
- *   stagingPath: string|null, retentionDays: number, resolution: string|null, removeAfterImport: boolean,
- *   sonarr: {url: string, apiKey: string}|null, radarr: {url: string, apiKey: string}|null}}
+ *   stagingPath: string|null, retentionDays: number, resolution: string|null, labelLimit: 480|720|1080|null,
+ *   removeAfterImport: boolean, sonarr: {url: string, apiKey: string}|null, radarr: {url: string, apiKey: string}|null}}
  */
 function readSettings(config) {
   const source = config && typeof config === 'object' ? config : {};
@@ -352,6 +364,7 @@ function readSettings(config) {
     stagingPath: normalizeStagingPath(source.arrBridgeStagingPath),
     retentionDays: normalizeRetentionDays(source.arrBridgeStagingRetentionDays),
     resolution: RESOLUTIONS.includes(source.arrBridgeResolution) ? source.arrBridgeResolution : null,
+    labelLimit: LABEL_LIMITS.includes(source.arrBridgeLabelLimit) ? Number(source.arrBridgeLabelLimit) : null,
     removeAfterImport: source.arrBridgeRemoveAfterImport === true,
     sonarr: normalizeConnection(source.arrBridgeSonarrUrl, source.arrBridgeSonarrApiKey),
     radarr: normalizeConnection(source.arrBridgeRadarrUrl, source.arrBridgeRadarrApiKey),

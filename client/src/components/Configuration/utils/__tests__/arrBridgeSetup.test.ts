@@ -63,8 +63,17 @@ describe('releaseResolution', () => {
     ['720', '480', 720],
     ['2160', '1080', 2160],
     ['', 'best', 1080],
-  ])('bridge "%s" with preferred "%s" labels releases %sp', (bridge, preferred, expected) => {
-    expect(releaseResolution(bridge, preferred)).toBe(expected);
+  ])('bridge "%s" with preferred "%s" and no label limit labels releases up to %sp', (bridge, preferred, expected) => {
+    expect(releaseResolution(bridge, preferred, '')).toBe(expected);
+  });
+
+  test.each([
+    ['1080', '480', '720', 720],
+    ['', '2160', '480', 480],
+    ['720', '480', '1080', 720],
+    ['', 'best', '720', 720],
+  ])('bridge "%s" with preferred "%s" and label limit "%s" labels releases up to %sp', (bridge, preferred, limit, expected) => {
+    expect(releaseResolution(bridge, preferred, limit)).toBe(expected);
   });
 });
 

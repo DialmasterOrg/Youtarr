@@ -141,19 +141,26 @@ export function getSetupValues(
 
 const DEFAULT_RELEASE_RESOLUTION = 1080;
 
-/**
- * The resolution releases are labeled with, as the server works it out:
- * Sonarr and Radarr have a quality for 2160, 1080, 720 and 480 only.
- * @param bridgeResolution - arrBridgeResolution; empty follows the preferred one
- * @param preferredResolution - The preferredResolution setting
- */
-export function releaseResolution(bridgeResolution: string, preferredResolution: string): number {
-  const height = Number.parseInt(bridgeResolution || preferredResolution, 10);
-  if (!Number.isFinite(height)) return DEFAULT_RELEASE_RESOLUTION;
+// Sonarr and Radarr have a quality for 2160, 1080, 720 and 480 only.
+function resolutionTier(height: number): number {
   if (height >= 2160) return 2160;
   if (height >= 1080) return 1080;
   if (height >= 720) return 720;
   return 480;
+}
+
+/**
+ * The highest resolution a release is labeled with, as the server works it
+ * out: a release carries the video's real resolution, up to this.
+ * @param bridgeResolution - arrBridgeResolution; empty follows the preferred one
+ * @param preferredResolution - The preferredResolution setting
+ * @param labelLimit - arrBridgeLabelLimit; empty for no limit
+ */
+export function releaseResolution(bridgeResolution: string, preferredResolution: string, labelLimit: string): number {
+  const height = Number.parseInt(bridgeResolution || preferredResolution, 10);
+  const download = Number.isFinite(height) ? resolutionTier(height) : DEFAULT_RELEASE_RESOLUTION;
+  const limit = Number.parseInt(labelLimit, 10);
+  return Number.isFinite(limit) ? Math.min(download, resolutionTier(limit)) : download;
 }
 
 const STAGING_FOLDER_NAME = '.arr-staging';

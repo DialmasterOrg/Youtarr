@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import userEvent from '@testing-library/user-event';
 import { ArrBridgeSection } from '../ArrBridgeSection';
 import { renderWithProviders } from '../../../../test-utils';
 import { ConfigState } from '../../types';
@@ -221,10 +222,30 @@ describe('ArrBridgeSection', () => {
       expect(screen.getByText('Movie grabs are saved to')).toBeInTheDocument();
     });
 
-    test('the setup step names the quality that resolution needs', () => {
-      setupSection({ config: createConfig({ preferredResolution: '480', arrBridgeResolution: '720' }) });
+    test('show the stored label limit and report a new one', async () => {
+      const user = userEvent.setup();
+      const props = setupSection({ config: createConfig({ arrBridgeLabelLimit: '1080' }) });
+      const labelLimit = screen.getByRole('button', { name: 'Offer releases as' });
+      expect(labelLimit).toHaveTextContent('1080p at most');
 
-      expect(screen.getByText(/must allow WEBDL-720p/)).toBeInTheDocument();
+      await user.click(labelLimit);
+      await user.click(await screen.findByRole('option', { name: '480p at most' }));
+
+      expect(props.onConfigChange).toHaveBeenCalledWith({ arrBridgeLabelLimit: '480' });
+    });
+
+    test('the setup step names the download resolution as the highest quality the profile needs', () => {
+      setupSection({ config: createConfig({ preferredResolution: '480', arrBridgeResolution: '1080' }) });
+
+      expect(screen.getByText(/The highest label is currently 1080p: it follows/)).toBeInTheDocument();
+    });
+
+    test('the setup step names the label limit when it is below the download resolution', () => {
+      setupSection({
+        config: createConfig({ preferredResolution: '480', arrBridgeResolution: '1080', arrBridgeLabelLimit: '720' }),
+      });
+
+      expect(screen.getByText(/The highest label is currently 720p: it follows/)).toBeInTheDocument();
     });
 
     test('keep Youtarr\'s copy of a grab unless removing it after the import is switched on', () => {

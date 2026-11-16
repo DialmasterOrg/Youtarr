@@ -8,16 +8,20 @@ const candidateFilter = require('./candidateFilter');
 const { filterByEpisodeTitle, canMatchByTitle, seriesChannelRank } = require('./episodeMatcher');
 const { PLACEHOLDER_ID, buildNzbLink } = require('./nzbFile');
 const {
-  DEFAULT_GROUP, groupToken, resolutionLabel, buildTvTitle, buildDailyTitle, buildMovieTitle,
+  DEFAULT_GROUP, groupToken, labelFor, buildTvTitle, buildDailyTitle, buildMovieTitle,
 } = require('./releaseNaming');
+const { LOOKUP_BUDGET_MS } = require('./videoResolution');
 
 const EPISODE_SEARCH_COUNT = 25;
+// Sonarr and Radarr wait 100 s for an answer. The resolution lookup only
+// gets what is left of this, so a slow search never pushes past it.
+const REQUEST_BUDGET_MS = 80 * 1000;
 const SEASON_SEARCH_COUNT = 50;
 // The apps' indexer Test fails on an empty no-query feed. These titles parse
 // but match nothing in a real library, and their link answers 404.
 const PLACEHOLDER_TITLES = {
-  tv: `Youtarr.Bridge.Placeholder.S01E01.480p.WEB-DL-${DEFAULT_GROUP}`,
-  movie: `Youtarr.Bridge.Placeholder.1900.480p.WEB-DL-${DEFAULT_GROUP}`,
+  tv: `Youtarr.Bridge.Placeholder.S01E01.480p.YT.WEB-DL-${DEFAULT_GROUP}`,
+  movie: `Youtarr.Bridge.Placeholder.1900.480p.YT.WEB-DL-${DEFAULT_GROUP}`,
 };
 const PLACEHOLDER_DATE = new Date('2020-01-01T00:00:00.000Z');
 const PLACEHOLDER_INFO_URL = 'https://dialmasterorg.github.io/Youtarr/';
@@ -40,6 +44,8 @@ const NO_CATALOG = {
   resolveSeries: async () => null,
   resolveMovie: async () => null,
 };
+// Without it every label is the download resolution.
+const NO_VIDEO_RESOLUTION = { lookup: async () => new Map() };
 
 const pad2 = (value) => String(value).padStart(2, '0');
 const cleanQueryText = (text) => String(text).replace(QUERY_NOISE, ' ').replace(/\s+/g, ' ').trim();
@@ -119,6 +125,8 @@ function planSearch(request, { settings, isYoutubeApiAvailable, runtimeSeconds =
     const date = new Date(Date.UTC(year, month - 1, day));
     return {
       matcher: 'daily',
+      // Only the API gives the exact upload dates a daily episode is matched by.
+      needsApi: true,
       query: `${text} ${MONTH_NAMES[month - 1]} ${day} ${year}`,
       count: EPISODE_SEARCH_COUNT,
       select: (results) => candidateFilter
@@ -165,31 +173,50 @@ function planEpisodeTitleSearch(request, episode, settings) {
 
 /**
  * @param {Object} deps
- * @param {Function} deps.searchVideos - (query, count) => Promise<Array> in videoSearchModule's result shape
+ * @param {Function} deps.searchVideos - (query, count, { needsApi }) => Promise<Array> in videoSearchModule's result shape
  * @param {Function} deps.isYoutubeApiAvailable - () => boolean; exact upload dates need the API
  * @param {Function} deps.getConfig - () => the full config
  * @param {Function} deps.knownUploadDates - (ids) => Promise<Map<id, Date>> from Youtarr's own rows
  * @param {Function} deps.recentlyFailedIds - (ids) => Promise<Set<id>> of videos whose grab failed lately
  * @param {Object} deps.queue - searchQueue
  * @param {Object} [deps.catalog] - arrCatalog; without it nothing is known about a request
+ * @param {Object} [deps.videoResolution] - videoResolution; without it nothing is known about a video's resolution
  * @param {Function} [deps.now]
  * @param {Object} deps.logger
  */
 function createSearchService({
   searchVideos, isYoutubeApiAvailable, getConfig, knownUploadDates, recentlyFailedIds, queue,
-  catalog = NO_CATALOG, now = () => new Date(), logger,
+  catalog = NO_CATALOG, videoResolution = NO_VIDEO_RESOLUTION, now = () => new Date(), logger,
 }) {
+  // The real resolution of each candidate that is known. Never rejects: a
+  // failed lookup, or none for lack of time, leaves every label at the ceiling.
+  async function realResolutions(candidates, ceiling, startedAt) {
+    const budgetMs = Math.min(LOOKUP_BUDGET_MS, REQUEST_BUDGET_MS - (now().getTime() - startedAt.getTime()));
+    if (budgetMs <= 0) return new Map();
+    try {
+      return await videoResolution.lookup(candidates, { ceiling, budgetMs });
+    } catch (err) {
+      logger.warn({ err }, 'Sonarr/Radarr resolution lookup failed; labeling with the download resolution or label limit');
+      return new Map();
+    }
+  }
+
   // One YouTube search, filtered and turned into feed items.
-  async function runPlan(plan, { request, origin, config, settings }) {
+  async function runPlan(plan, { request, origin, config, settings, startedAt }) {
     const found = await queue.run(
       `${plan.count}:${plan.query.toLowerCase()}`,
-      () => searchVideos(plan.query, plan.count)
+      () => searchVideos(plan.query, plan.count, { needsApi: plan.needsApi === true })
     );
     const results = found.map(decodeResult);
     const selected = plan.select(results);
     if (selected.length === 0) {
       logger.info(
-        { matcher: plan.matcher, query: plan.query, results: results.length },
+        {
+          matcher: plan.matcher,
+          query: plan.query,
+          results: results.length,
+          withoutDuration: results.filter(({ duration }) => !(typeof duration === 'number' && duration > 0)).length,
+        },
         'Sonarr/Radarr search found no match'
       );
       return [];
@@ -197,14 +224,23 @@ function createSearchService({
 
     const ids = selected.map(({ candidate }) => candidate.youtubeId);
     const [failedIds, knownDates] = await Promise.all([recentlyFailedIds(ids), knownUploadDates(ids)]);
-    const resolution = resolutionLabel(settings.resolution ?? config.preferredResolution);
+    const downloadResolution = settings.resolution ?? config.preferredResolution;
+    const ceiling = labelFor({ realTier: null, downloadResolution, labelLimit: settings.labelLimit });
     const usedTitles = new Set();
     const items = [];
     let offerable = selected.filter(({ candidate }) => !failedIds.has(candidate.youtubeId));
     // Re-uploads stay available for when the show's own upload fails a grab.
     const closest = plan.closestChannelOnly ? Math.max(0, ...offerable.map(({ channelRank }) => channelRank)) : 0;
     if (closest > 0) offerable = offerable.filter(({ channelRank }) => channelRank === closest);
+    const realTiers = await realResolutions(
+      offerable.slice(0, request.limit).map(({ candidate }) => candidate),
+      ceiling,
+      startedAt
+    );
     for (const { candidate, name } of offerable) {
+      const resolution = labelFor({
+        realTier: realTiers.get(candidate.youtubeId) ?? null, downloadResolution, labelLimit: settings.labelLimit,
+      });
       const group = groupToken(candidate.channelName, request.kind);
       const title = plan.title(name, { resolution, group });
       // Two videos with one release title would share a staging folder.
@@ -242,7 +278,8 @@ function createSearchService({
     if (request.shape === 'movie') {
       return (await catalog.resolveMovie({ text: request.text, year: request.year }))?.runtimeSeconds ?? null;
     }
-    return (await catalog.resolveSeries({ text: request.text }))?.runtimeSeconds ?? null;
+    const series = await catalog.resolveSeries({ text: request.text, textSource: request.textSource });
+    return series?.runtimeSeconds ?? null;
   }
 
   /**
@@ -254,11 +291,17 @@ function createSearchService({
   async function search(request, origin) {
     if (request.shape === 'rss') return [placeholderItem(request.kind === 'movie' ? 'movie' : 'tv', origin)];
 
+    const startedAt = now();
     const config = getConfig();
     const settings = readSettings(config);
-    const context = { request, origin, config, settings };
+    const context = { request, origin, config, settings, startedAt };
     // Requests that cannot be searched at all never ask Sonarr or Radarr.
-    if (!planSearch(request, { settings, isYoutubeApiAvailable })) return [];
+    if (!planSearch(request, { settings, isYoutubeApiAvailable })) {
+      if (request.shape === 'daily' && !isYoutubeApiAvailable()) {
+        logger.info({ shape: 'daily' }, 'Sonarr/Radarr daily search skipped: the YouTube API is not available');
+      }
+      return [];
+    }
 
     if (request.shape !== 'episode') {
       const runtimeSeconds = await knownRuntime(request);
@@ -266,7 +309,7 @@ function createSearchService({
     }
 
     const episode = await catalog.resolveEpisode({
-      text: request.text, season: request.season, episode: request.episode,
+      text: request.text, textSource: request.textSource, season: request.season, episode: request.episode,
     });
     const titlePlan = canMatchByTitle(episode, settings) ? planEpisodeTitleSearch(request, episode, settings) : null;
     if (titlePlan) {
@@ -282,4 +325,6 @@ function createSearchService({
   return { search };
 }
 
-module.exports = { createSearchService, estimateBytes, decodeHtmlEntities };
+module.exports = {
+  createSearchService, estimateBytes, decodeHtmlEntities, PLACEHOLDER_TITLES,
+};

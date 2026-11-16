@@ -57,6 +57,15 @@ describe('grabService', () => {
       expect(deps.wakeExecutor).toHaveBeenCalledTimes(1);
     });
 
+    test('stores a title built before the YT marker existed unchanged', async () => {
+      const { service, ArrBridgeGrab } = setup();
+      const releaseTitle = 'Show.S01E05.1080p.WEB-DL-Chan';
+
+      await service.addGrab({ fields: fields({ releaseTitle }), category: 'tv' });
+
+      expect(ArrBridgeGrab.create).toHaveBeenCalledWith(expect.objectContaining({ release_title: releaseTitle }));
+    });
+
     test('returns the grab already in progress for the same release instead of adding another', async () => {
       const { service, deps, ArrBridgeGrab } = setup({ existing: { id: 'first-grab', youtube_id: 'abcdefghijk' } });
 

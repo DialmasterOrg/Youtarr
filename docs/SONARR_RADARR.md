@@ -11,6 +11,7 @@ Youtarr can act as an indexer and a download client for Sonarr and Radarr. Sonar
 - [Settings to check in Sonarr and Radarr](#settings-to-check-in-sonarr-and-radarr)
 - [How matching works](#how-matching-works)
 - [Resolution](#resolution)
+- [Using Youtarr beside other indexers](#using-youtarr-beside-other-indexers)
 - [Removing Youtarr's copy after the import](#removing-youtarrs-copy-after-the-import)
 - [Categories and a second instance](#categories-and-a-second-instance)
 - [Recent grabs](#recent-grabs)
@@ -66,13 +67,13 @@ Leave the username and password empty. Press **Test** on both; both should pass.
 
 If Prowlarr manages your indexers, add Youtarr there instead of in each app: Indexers -> Add Indexer -> **Generic Newznab**, with the same URL, API Path and API Key as in the table above. Prowlarr then syncs it to Sonarr and Radarr as "Youtarr (Prowlarr)". Add the download client in Sonarr and Radarr as described above; Prowlarr does not sync download clients.
 
-Prowlarr does not pass a series' full name on, so episodes found through it are named like `Office.AKA.The.Office.S01E02...`. Sonarr matches that name to the series with or without the leading "The". With renaming turned off in Sonarr, the imported file keeps that name.
+Prowlarr does not pass a series' full name on, so episodes found through it are named like `Office.AKA.The.Office.S01E02.1080p.YT.WEB-DL-Channel`. Sonarr matches that name to the series with or without the leading "The". With renaming turned off in Sonarr, the imported file keeps that name.
 
 ## Step 3: Connect your Sonarr and Radarr (recommended)
 
 Official channels often title an episode "Episode 29: Play It Again, Dizzi!" with no season. Strict matching cannot use that title by itself, so without a connection most official uploads are not found. If you connect Youtarr to your Sonarr, it reads the episode's title and runtime from Sonarr and can match such uploads.
 
-Under **Step 3** on the Settings page, enter the app's address and its API key (in the app: Settings -> General -> API Key) and press **Test and save**. Youtarr asks the app who it is and saves the connection only when it answers.
+Under **Step 3** on the Settings page, enter the app's address and its API key (in the app: Settings -> General -> API Key) and press **Test and save**. Youtarr asks the app who it is, then asks it to look up one title, and saves the connection only when both work.
 
 What a connection adds:
 
@@ -86,6 +87,9 @@ What a connection adds:
 Things to know:
 
 - The connection only reads. Youtarr never changes anything in Sonarr or Radarr through it.
+- The connection works at any library size. To tie a search to a series, Youtarr asks the app to read the release name it is about to offer, which takes a few milliseconds even with thousands of series. It never reads your whole library for that.
+- **Test and save** fails with "could not look up a title" when the app answers but cannot do that lookup. Check that the address points at Sonarr or Radarr itself, and update the app if it is old.
+- With a very large Sonarr library, the check that keeps out videos of a similarly named series (a video named "Beyblade Burst" is not offered for "Beyblade") may be off. Youtarr reads the list of all series for it in the background, and a very large library can take too long. The log says so, and Youtarr tries again an hour later. Searches are not held up by it.
 - Use the app's direct address. **Test and save** tells you when an address redirects or answers with a login page, and saves nothing in that case.
 - One Sonarr and one Radarr can be connected. A second instance (a 4K one) usually holds the same series, so the one connection serves its searches too.
 - Daily shows, and anime that Sonarr searches by scene numbers, are still matched by episode number only.
@@ -125,7 +129,7 @@ Youtarr puts `.ignore` and `.plexignore` files in the staging folder, so Plex, J
 
 ## Settings to check in Sonarr and Radarr
 
-- **Quality profile.** Youtarr labels every release `WEB-DL` at one resolution: the **Resolution** setting on the Sonarr / Radarr page (see [Resolution](#resolution)). The profile of the series or movie must allow WEBDL at that resolution. Sonarr's default "Any" profile does not include 2160p.
+- **Quality profile.** Youtarr labels each release `WEB-DL` at the resolution the video really has, up to the lower of **Resolution** and **Offer releases as** on the Sonarr / Radarr page (see [Resolution](#resolution)). The profile of the series or movie must allow WEBDL at the resolution a video really has, up to that one: a video that only exists in 480p is offered as 480p, and a profile that does not allow 480p will not take it. Sonarr's default "Any" profile does not include 2160p.
 - **Delay profile.** Usenet must be enabled: Youtarr presents itself as a Usenet indexer.
 - **Automatic search.** With the default strict matching you can leave "Enable Automatic Search" on. If you turn on loose matching in Youtarr, turn it off for the Youtarr indexer and search interactively.
 
@@ -137,7 +141,7 @@ Sonarr and Radarr decide what a release is from its name alone, so Youtarr only 
 
 - An episode is offered when the video's title has the series name and the episode, written like `S01E05`, `1x05` or `Season 1 Episode 5`.
 - A movie is offered when the video's title has every word of the movie's name and its year.
-- A search for a whole season is answered from one YouTube search, and each video offered still needs its own episode marker.
+- A search for a whole season is answered from one YouTube search for each name of the series, and each video offered still needs its own episode marker.
 
 **Loose matching** accepts an episode number without a season and a movie without its year. It finds more and can offer the wrong video.
 
@@ -152,23 +156,69 @@ Good to know:
 
 - When several videos match, an automatic search lets Sonarr or Radarr choose, and a newer upload usually wins. Search interactively to choose yourself: each release links to its YouTube page and is named after the channel that uploaded it.
 - A search for a whole season finds nothing when the season is numbered by year (`Season 2024`), which is how TheTVDB lists most shows made for YouTube. Sonarr searches by season whenever a season has more than one wanted episode, so for such a show search the episodes one at a time.
-- Daily shows (searched by date) need a YouTube API key in **Settings -> YouTube API**, because only the API gives exact upload dates.
-- With a YouTube API key, each new search costs 100 units of your daily quota. Results are remembered for 10 minutes.
+- Daily shows (searched by date) need a YouTube API key in **Settings -> YouTube API**, because only the API gives exact upload dates. For the same reason they are not held to the daily share described below.
+- With a YouTube API key, one YouTube search costs about 100 to 200 units of your daily quota: 100 for each page of results, plus 1 to read the videos' lengths. A second page is needed when the first has too few usable results. Results are remembered for 10 minutes, so repeating a search in that time costs nothing.
+- One search in Sonarr or Radarr can be several YouTube searches. Sonarr asks once per name of a series (its title and each alias), and a search for whole seasons asks once per season. With a [Sonarr connection](#step-3-connect-your-sonarr-and-radarr-recommended), an episode found by its title costs one YouTube search for all names together. A Radarr search of many movies is at least one YouTube search per movie.
+- Searches from Sonarr and Radarr may use at most 5,000 units a day, half of Google's default daily quota of 10,000. After that they use yt-dlp until the quota resets at midnight Pacific time. The rest of Youtarr (Find Videos, channel search and so on) keeps using the API. Youtarr counts this itself, in memory, so a restart starts the count again.
+- When the whole daily quota is used up, by anything, everything in Youtarr uses yt-dlp until midnight Pacific time, and searches for daily shows find nothing in that time. The log has a line for it: "Sonarr/Radarr daily search skipped: the YouTube API is not available".
+- Without a YouTube API key none of this applies: every search uses yt-dlp.
 - When Youtarr cannot search right now (YouTube is rate limiting it, for example), it waits up to 30 seconds and then answers with an error instead of "nothing found".
 
 ## Resolution
 
-Every release Youtarr offers carries one resolution, and a grab is downloaded at it. Set it under **Downloads -> Resolution** on the Sonarr / Radarr settings page:
+Two settings under **Downloads** on the Sonarr / Radarr settings page decide the resolution of a grab and of the release Youtarr offers.
+
+**Resolution** is the resolution a grab is downloaded at:
 
 - **Same as Preferred Resolution** (the default) uses the resolution of your other downloads, from Settings -> Core.
 - **2160p, 1080p, 720p or 480p** applies to grabs only. These are the resolutions Sonarr and Radarr have a quality for.
 
+**Offer releases as** is the highest resolution a release is labeled with:
+
+- **Their real resolution** (the default) labels each release with the video's real resolution.
+- **1080p at most, 720p at most or 480p at most** lowers the label, so Sonarr and Radarr pick Youtarr only when nothing better is offered. See [Using Youtarr beside other indexers](#using-youtarr-beside-other-indexers).
+
+**The label is the video's real resolution**, never more than **Resolution** and never more than **Offer releases as**. With Resolution at 1080p, a video that exists in 2160p is offered as 1080p, and a video that only exists in 480p is offered as 480p. Youtarr finds the real resolution in this order:
+
+1. A video that is already in your Youtarr library: the resolution of its file.
+2. With a YouTube API key (**Settings -> YouTube API**): YouTube says whether a video is in high definition. A video that is not is labeled 480p. When the label cannot be higher than 720p anyway (**Resolution** or **Offer releases as** is 720p), a high-definition video is labeled 720p.
+3. An answer Youtarr found in the last 6 hours.
+4. Otherwise Youtarr asks yt-dlp about each video it is about to offer, without your cookies. It checks 2 videos at a time and at most 10 for each request Sonarr or Radarr sends, and stops after about 20 seconds, so a request can take that much longer. After 3 checks in a row get no answer (a YouTube bot check, for example), it stops checking for 15 minutes. It also makes at most 100 of these checks an hour; past that, a video is labeled as described below until the hour has passed.
+
+A video whose real resolution Youtarr could not read is labeled with **Resolution**, or with **Offer releases as** when that is lower. When either setting is 480p, every release is labeled 480p and nothing is checked.
+
 Things to know:
 
-- The resolution is a ceiling, not a promise. Youtarr downloads the best quality up to it, so a video that only exists in 480p downloads in 480p although the release said 1080p. Sonarr and Radarr read the real resolution from the file when they import it, and show that.
-- Youtarr cannot list one release per available resolution: a YouTube search does not say which resolutions a video has.
+- A grab is downloaded at **Resolution** as it is set when the download starts, whatever the release name says.
+- The resolution is a ceiling, not a promise. Youtarr downloads the best quality up to it, so a video that only exists in 480p downloads in 480p. Sonarr and Radarr read the real resolution from the file when they import it, and show that. A release labeled lower than its file (labeled 480p, the file is 1080p) is imported as 1080p.
 - A video that is already in your Youtarr library is handed over as it is. It is not downloaded again at this resolution.
 - The grabbed video stays in your Youtarr library at this resolution, also when your Preferred Resolution is different.
+
+## Using Youtarr beside other indexers
+
+When Sonarr or Radarr also use other indexers, they compare Youtarr's releases with everything else they find. Every Youtarr release carries `YT` before `WEB-DL` in its name, for example `Show.S01E05.1080p.YT.WEB-DL-Channel`, where `Channel` is the YouTube channel that uploaded the video.
+
+**What Sonarr and Radarr do by themselves.** They choose a release by quality first, then by custom format score, and only then by the indexer's priority. A Youtarr release labeled 1080p competes with a 1080p WEB-DL from another indexer as an equal, and beats a 720p one. At import they read the real resolution from the file, and they refuse to replace a file you already have with one of lower quality ("Not an upgrade"). So a Youtarr grab does not replace a copy they rank as equal or better. One they rank higher does, when the profile allows upgrades: a video that really is 1080p replaces a 720p copy, wherever that copy came from.
+
+To keep Youtarr for what other indexers do not have, use one or more of these:
+
+- **Tags.** Give the Youtarr indexer a tag, in its settings under Settings -> Indexers. An indexer with a tag is only used for series or movies that carry one of its tags, so tag the series and movies that are only on YouTube.
+- **Interactive search only.** Turn off **Enable Automatic Search** on the Youtarr indexer. Sonarr and Radarr then use it only in an interactive search, where you choose the release yourself.
+- **Indexer priority only breaks ties.** Sonarr and Radarr compare quality and custom format score first. A higher **Indexer Priority** number (in the indexer's advanced settings: 1 to 50, lower is preferred, 25 by default) does not by itself stop a 1080p Youtarr release from beating a 720p release elsewhere.
+
+**The last resort: a lower label and the lowest priority.** Set **Offer releases as** to **480p at most** in Youtarr, and the Youtarr indexer's **Indexer Priority** to 50 in Sonarr and Radarr. A Youtarr release then loses to any release of a higher quality, and the priority puts it behind other indexers when releases tie. Sonarr and Radarr grab from Youtarr only when nothing better is offered. The video is still downloaded at **Resolution**, and the app records the file's real quality at import. The quality profile must allow WEBDL-480p, or every Youtarr release is rejected.
+
+**A custom format.** For finer control, add a custom format that matches Youtarr's releases (Settings -> Custom Formats -> add one), with a **Release Title** condition and this regular expression:
+
+```
+\bYT[ ._-]WEB[ ._-]?DL\b
+```
+
+Then give it a score in the quality profiles that use Youtarr (Settings -> Profiles, under Custom Formats):
+
+- **A negative score** makes a release of the same quality from another indexer win over Youtarr's, and later replace a copy Youtarr already delivered, when the profile allows upgrades.
+- **A total below the profile's minimum.** A release whose custom format scores add up to less than the profile's **Minimum Custom Format Score** is rejected, so a large negative score blocks Youtarr's releases for that profile.
+- **A score never beats a higher quality.** A 1080p Youtarr release still wins over a 720p release elsewhere, whatever its score. Use **Offer releases as** for that.
 
 ## Removing Youtarr's copy after the import
 
@@ -244,6 +294,10 @@ Sonarr could not match the release name to a series. This is expected for the on
 **"WEBDL-2160p is not wanted in profile"**
 
 The quality profile does not allow the resolution Youtarr labels its releases with. Allow it in the profile, or choose a lower [Resolution](#resolution) in Youtarr.
+
+**"WEBDL-480p is not wanted in profile"**
+
+The quality profile does not allow 480p. Youtarr labels a release 480p when **Offer releases as** is set to **480p at most**, and when the video only exists in 480p. Allow WEBDL-480p in the profile, or set **Offer releases as** higher (see [Resolution](#resolution)).
 
 **The import waits with "Sample"**
 

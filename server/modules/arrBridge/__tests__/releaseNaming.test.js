@@ -4,7 +4,7 @@ const {
   seriesToken,
   groupToken,
   resolutionLabel,
-  resolutionOfTitle,
+  labelFor,
   buildTvTitle,
   buildDailyTitle,
   buildMovieTitle,
@@ -93,26 +93,6 @@ describe('releaseNaming', () => {
     });
   });
 
-  describe('resolutionOfTitle', () => {
-    test.each([
-      ['The.Office.US.S01E02.1080p.WEB-DL-NBC', '1080'],
-      ['Office.AKA.The.Office.S01E02.2160p.WEB-DL-NBC', '2160'],
-      ['Last.Week.Tonight.2025.02.16.720p.WEB-DL-LastWeekTonight', '720'],
-      ['Plan.9.from.Outer.Space.1957.480p.WEB-DL-YOUTARR', '480'],
-      // A series named after a resolution keeps its own label.
-      ['1080p.The.Show.S01E01.720p.WEB-DL-YOUTARR', '720'],
-    ])('%s -> %s', (title, expected) => {
-      expect(resolutionOfTitle(title)).toBe(expected);
-    });
-
-    test.each(['The.Office.US.S01E02.WEB-DL-NBC', 'The.Office.US.S01E02.1440p.WEB-DL-NBC', '', null])(
-      'is null for %p',
-      (title) => {
-        expect(resolutionOfTitle(title)).toBeNull();
-      }
-    );
-  });
-
   describe('resolutionLabel', () => {
     test.each([
       ['2160', 2160],
@@ -129,29 +109,44 @@ describe('releaseNaming', () => {
     });
   });
 
+  describe('labelFor', () => {
+    test.each([
+      [480, '1080', null, 480],
+      [1440, '2160', null, 1080],
+      [2160, '1080', null, 1080],
+      [null, '1080', null, 1080],
+      [1080, '1080', 480, 480],
+      [null, 'abc', null, 1080],
+      [360, '1080', null, 480],
+      [null, '720', 1080, 720],
+    ])('real %p, download %p, limit %p -> %p', (realTier, downloadResolution, labelLimit, expected) => {
+      expect(labelFor({ realTier, downloadResolution, labelLimit })).toBe(expected);
+    });
+  });
+
   describe('buildTvTitle', () => {
     const base = { season: 1, episode: 2, resolution: 1080, group: 'NBC' };
 
     test('names the release from the title Sonarr sent', () => {
       expect(buildTvTitle({ ...base, text: 'The Office (US)', textSource: 'title' }))
-        .toBe('The.Office.US.S01E02.1080p.WEB-DL-NBC');
+        .toBe('The.Office.US.S01E02.1080p.YT.WEB-DL-NBC');
     });
 
     test('adds the AKA form when only a cleaned q is known', () => {
       expect(buildTvTitle({ ...base, text: 'Office', textSource: 'q' }))
-        .toBe('Office.AKA.The.Office.S01E02.1080p.WEB-DL-NBC');
+        .toBe('Office.AKA.The.Office.S01E02.1080p.YT.WEB-DL-NBC');
     });
 
     test('skips the AKA form when q still starts with The', () => {
       expect(buildTvTitle({ ...base, text: 'The Office', textSource: 'q' }))
-        .toBe('The.Office.S01E02.1080p.WEB-DL-NBC');
+        .toBe('The.Office.S01E02.1080p.YT.WEB-DL-NBC');
     });
 
     test('keeps year seasons and wide episode numbers', () => {
       expect(buildTvTitle({ ...base, text: 'MrBeast', textSource: 'title', season: 2024, episode: 5 }))
-        .toBe('MrBeast.S2024E05.1080p.WEB-DL-NBC');
+        .toBe('MrBeast.S2024E05.1080p.YT.WEB-DL-NBC');
       expect(buildTvTitle({ ...base, text: 'Show', textSource: 'title', season: 0, episode: 105 }))
-        .toBe('Show.S00E105.1080p.WEB-DL-NBC');
+        .toBe('Show.S00E105.1080p.YT.WEB-DL-NBC');
     });
 
     test('returns null when the series text has nothing usable', () => {
@@ -173,7 +168,7 @@ describe('releaseNaming', () => {
       day: 16,
       resolution: 1080,
       group: 'LastWeekTonight',
-    })).toBe('Last.Week.Tonight.with.John.Oliver.2025.02.16.1080p.WEB-DL-LastWeekTonight');
+    })).toBe('Last.Week.Tonight.with.John.Oliver.2025.02.16.1080p.YT.WEB-DL-LastWeekTonight');
   });
 
   test('buildDailyTitle returns null for unusable text', () => {
@@ -185,12 +180,12 @@ describe('releaseNaming', () => {
   describe('buildMovieTitle', () => {
     test('puts the year after the title', () => {
       expect(buildMovieTitle({ title: 'Blade Runner 2049', year: 2017, resolution: 2160, group: 'YOUTARR' }))
-        .toBe('Blade.Runner.2049.2017.2160p.WEB-DL-YOUTARR');
+        .toBe('Blade.Runner.2049.2017.2160p.YT.WEB-DL-YOUTARR');
     });
 
     test('never adds the AKA form', () => {
       expect(buildMovieTitle({ title: 'Matrix', year: 1999, resolution: 1080, group: 'YOUTARR' }))
-        .toBe('Matrix.1999.1080p.WEB-DL-YOUTARR');
+        .toBe('Matrix.1999.1080p.YT.WEB-DL-YOUTARR');
     });
 
     test('returns null for unusable text', () => {

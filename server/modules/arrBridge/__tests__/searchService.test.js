@@ -4,11 +4,13 @@ const { createSearchQueue, SearchUnavailableError } = require('../searchQueue');
 const { parseNewznabRequest } = require('../newznabRequest');
 const { parseNzbLink } = require('../nzbFile');
 const { renderSearch } = require('../newznabXml');
+const { createVideoResolution, LOOKUP_BUDGET_MS } = require('../videoResolution');
 
 const ORIGIN = 'http://youtarr:3011';
 const KEY = 'k'.repeat(64);
 const NOW = new Date('2025-06-01T00:00:00.000Z');
 const SONARR_CATS = '5030,5040';
+const NO_API = { needsApi: false };
 const RADARR_CATS = '2000,2010,2020,2030,2040,2045,2050,2060';
 
 let nextId = 0;
@@ -31,7 +33,8 @@ function request(query) {
 }
 
 function setup({
-  results = [], config = {}, apiAvailable = true, failedIds = [], knownDates = new Map(), catalog,
+  results = [], config = {}, apiAvailable = true, failedIds = [], knownDates = new Map(), catalog, videoResolution,
+  now = () => NOW,
 } = {}) {
   // An array answers every query; an object answers by query text.
   const searchVideos = Array.isArray(results)
@@ -39,13 +42,14 @@ function setup({
     : jest.fn(async (query) => results[query] ?? []);
   const deps = {
     catalog,
+    videoResolution,
     searchVideos,
     isYoutubeApiAvailable: jest.fn(() => apiAvailable),
     getConfig: () => ({ arrBridgeEnabled: true, arrBridgeApiKey: KEY, preferredResolution: '1080', ...config }),
     knownUploadDates: jest.fn().mockResolvedValue(knownDates),
     recentlyFailedIds: jest.fn().mockResolvedValue(new Set(failedIds)),
     queue: { run: (_key, work) => work() },
-    now: () => NOW,
+    now,
     logger: { info: jest.fn(), debug: jest.fn(), warn: jest.fn() },
   };
   return { service: createSearchService(deps), deps, searchVideos };
@@ -68,7 +72,7 @@ describe('searchService', () => {
 
       expect(items).toHaveLength(1);
       expect(items[0]).toMatchObject({
-        title: 'Youtarr.Bridge.Placeholder.S01E01.480p.WEB-DL-YOUTARR',
+        title: 'Youtarr.Bridge.Placeholder.S01E01.480p.YT.WEB-DL-YOUTARR',
         kind: 'tv',
         pubDate: new Date('2020-01-01T00:00:00.000Z'),
       });
@@ -80,7 +84,7 @@ describe('searchService', () => {
     test('RSS for movie categories returns the movie placeholder', async () => {
       const { service } = setup();
       const items = await service.search(request({ t: 'movie', cat: RADARR_CATS }), ORIGIN);
-      expect(items[0]).toMatchObject({ title: 'Youtarr.Bridge.Placeholder.1900.480p.WEB-DL-YOUTARR', kind: 'movie' });
+      expect(items[0]).toMatchObject({ title: 'Youtarr.Bridge.Placeholder.1900.480p.YT.WEB-DL-YOUTARR', kind: 'movie' });
     });
 
     test('RSS without categories returns the TV placeholder (Prowlarr Test)', async () => {
@@ -102,6 +106,31 @@ describe('searchService', () => {
       expect(searchVideos).not.toHaveBeenCalled();
     });
 
+    test('a daily request without a YouTube API key logs one info line, not a warning', async () => {
+      const { service, deps } = setup({ apiAvailable: false });
+      const daily = request({ t: 'tvsearch', cat: SONARR_CATS, title: 'Last Week Tonight', season: '2025', ep: '02/16' });
+      await service.search(daily, ORIGIN);
+      expect(deps.logger.warn).not.toHaveBeenCalled();
+      expect(deps.logger.info).toHaveBeenCalledTimes(1);
+      expect(deps.logger.info).toHaveBeenCalledWith(
+        { shape: 'daily' },
+        'Sonarr/Radarr daily search skipped: the YouTube API is not available'
+      );
+    });
+
+    test('a daily request with empty text while the API is available stays silent', async () => {
+      const { service, deps } = setup({ apiAvailable: true });
+      const daily = request({ t: 'tvsearch', cat: SONARR_CATS, title: '!!!', season: '2025', ep: '02/16' });
+      expect(await service.search(daily, ORIGIN)).toEqual([]);
+      expect(deps.logger.warn).not.toHaveBeenCalled();
+    });
+
+    test('other unsearchable requests stay silent', async () => {
+      const { service, deps } = setup();
+      await service.search(request({ t: 'tvsearch', cat: SONARR_CATS, q: 'Bluey' }), ORIGIN);
+      expect(deps.logger.warn).not.toHaveBeenCalled();
+    });
+
     test('text with nothing usable returns nothing', async () => {
       const { service, searchVideos } = setup({ results: [video('S01E02')] });
       expect(await service.search(request(episodeQuery({ title: '!!!' })), ORIGIN)).toEqual([]);
@@ -113,7 +142,7 @@ describe('searchService', () => {
     test('searches YouTube for the series and episode code', async () => {
       const { service, searchVideos } = setup();
       await service.search(request(episodeQuery()), ORIGIN);
-      expect(searchVideos).toHaveBeenCalledWith('The Office US S01E02', 25);
+      expect(searchVideos).toHaveBeenCalledWith('The Office US S01E02', 25, NO_API);
     });
 
     test('names matching candidates from the title Sonarr sent', async () => {
@@ -124,7 +153,7 @@ describe('searchService', () => {
 
       expect(items).toHaveLength(1);
       expect(items[0]).toMatchObject({
-        title: 'The.Office.US.S01E02.1080p.WEB-DL-NBC',
+        title: 'The.Office.US.S01E02.1080p.YT.WEB-DL-NBC',
         guid: `youtarr-${match.youtubeId}-tv`,
         comments: `https://www.youtube.com/watch?v=${match.youtubeId}`,
         pubDate: new Date('2024-03-01T12:00:00.000Z'),
@@ -136,7 +165,7 @@ describe('searchService', () => {
     test('uses the AKA name when only a cleaned q was sent', async () => {
       const { service } = setup({ results: [video('The Office S01E02')] });
       const items = await service.search(request(episodeQuery({ title: undefined, q: 'Office' })), ORIGIN);
-      expect(items[0].title).toBe('Office.AKA.The.Office.S01E02.1080p.WEB-DL-NBC');
+      expect(items[0].title).toBe('Office.AKA.The.Office.S01E02.1080p.YT.WEB-DL-NBC');
     });
 
     test('the link carries what the grab needs and parses back', async () => {
@@ -167,7 +196,7 @@ describe('searchService', () => {
     test('labels the release with the configured resolution', async () => {
       const { service } = setup({ results: [video('The Office S01E02')], config: { preferredResolution: '1440' } });
       const items = await service.search(request(episodeQuery()), ORIGIN);
-      expect(items[0].title).toContain('.1080p.WEB-DL-');
+      expect(items[0].title).toContain('.1080p.YT.WEB-DL-');
     });
 
     test('the bridge\'s own resolution replaces the preferred resolution in the label', async () => {
@@ -175,7 +204,7 @@ describe('searchService', () => {
         results: [video('The Office S01E02')], config: { preferredResolution: '480', arrBridgeResolution: '2160' },
       });
       const items = await service.search(request(episodeQuery()), ORIGIN);
-      expect(items[0].title).toContain('.2160p.WEB-DL-');
+      expect(items[0].title).toContain('.2160p.YT.WEB-DL-');
     });
 
     test('tells two candidates apart by group and gives each its own guid', async () => {
@@ -187,8 +216,8 @@ describe('searchService', () => {
       });
       const items = await service.search(request(episodeQuery()), ORIGIN);
       expect(items.map((item) => item.title)).toEqual([
-        'The.Office.US.S01E02.1080p.WEB-DL-NBC',
-        'The.Office.US.S01E02.1080p.WEB-DL-Peacock',
+        'The.Office.US.S01E02.1080p.YT.WEB-DL-NBC',
+        'The.Office.US.S01E02.1080p.YT.WEB-DL-Peacock',
       ]);
       expect(new Set(items.map((item) => item.guid)).size).toBe(2);
     });
@@ -252,10 +281,10 @@ describe('searchService', () => {
       ORIGIN
     );
 
-    expect(searchVideos).toHaveBeenCalledWith('Bluey 2018 season 3', 50);
+    expect(searchVideos).toHaveBeenCalledWith('Bluey 2018 season 3', 50, NO_API);
     expect(items.map((item) => item.title)).toEqual([
-      'Bluey.2018.S03E01.1080p.WEB-DL-NBC',
-      'Bluey.2018.S03E07.1080p.WEB-DL-NBC',
+      'Bluey.2018.S03E01.1080p.YT.WEB-DL-NBC',
+      'Bluey.2018.S03E07.1080p.YT.WEB-DL-NBC',
     ]);
   });
 
@@ -270,8 +299,8 @@ describe('searchService', () => {
       ORIGIN
     );
 
-    expect(searchVideos).toHaveBeenCalledWith('Last Week Tonight February 16 2025', 25);
-    expect(items.map((item) => item.title)).toEqual(['Last.Week.Tonight.2025.02.16.1080p.WEB-DL-NBC']);
+    expect(searchVideos).toHaveBeenCalledWith('Last Week Tonight February 16 2025', 25, { needsApi: true });
+    expect(items.map((item) => item.title)).toEqual(['Last.Week.Tonight.2025.02.16.1080p.YT.WEB-DL-NBC']);
   });
 
   test('a movie request searches title and year and names the release from the request', async () => {
@@ -280,10 +309,10 @@ describe('searchService', () => {
 
     const items = await service.search(request({ t: 'search', cat: RADARR_CATS, q: 'Matrix 1999' }), ORIGIN);
 
-    expect(searchVideos).toHaveBeenCalledWith('Matrix 1999', 25);
+    expect(searchVideos).toHaveBeenCalledWith('Matrix 1999', 25, NO_API);
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({
-      title: 'Matrix.1999.1080p.WEB-DL-WarnerBros',
+      title: 'Matrix.1999.1080p.YT.WEB-DL-WarnerBros',
       guid: `youtarr-${match.youtubeId}-movie`,
       kind: 'movie',
     });
@@ -330,7 +359,7 @@ describe('searchService', () => {
         ORIGIN
       );
 
-      expect(items.map((item) => item.title)).toEqual(['Marvels.Agents.of.S.H.I.E.L.D.S01E01.1080p.WEB-DL-NBC']);
+      expect(items.map((item) => item.title)).toEqual(['Marvels.Agents.of.S.H.I.E.L.D.S01E01.1080p.YT.WEB-DL-NBC']);
     });
 
     test('channel names are decoded before they become the release group', async () => {
@@ -338,7 +367,194 @@ describe('searchService', () => {
 
       const items = await service.search(request(episodeQuery()), ORIGIN);
 
-      expect(items[0].title).toBe('The.Office.US.S01E02.1080p.WEB-DL-TomJerry');
+      expect(items[0].title).toBe('The.Office.US.S01E02.1080p.YT.WEB-DL-TomJerry');
+    });
+  });
+
+  describe('the resolution in the label', () => {
+    const lookupAnswering = (tiers) => ({ lookup: jest.fn().mockResolvedValue(new Map(tiers)) });
+    const twoUploads = () => [
+      video('The Office S01E02', { youtubeId: 'aaaaaaaaaaa', channelName: 'A' }),
+      video('The Office S01E02', { youtubeId: 'bbbbbbbbbbb', channelName: 'B' }),
+    ];
+
+    test('is the video\'s real resolution where it is known, else the download resolution', async () => {
+      const { service } = setup({ results: twoUploads(), videoResolution: lookupAnswering([['aaaaaaaaaaa', 480]]) });
+
+      const items = await service.search(request(episodeQuery()), ORIGIN);
+
+      expect(items.map((item) => item.title)).toEqual([
+        'The.Office.US.S01E02.480p.YT.WEB-DL-A',
+        'The.Office.US.S01E02.1080p.YT.WEB-DL-B',
+      ]);
+    });
+
+    test('never goes above the label limit', async () => {
+      const { service } = setup({
+        results: twoUploads(),
+        config: { arrBridgeLabelLimit: '480' },
+        videoResolution: lookupAnswering([['aaaaaaaaaaa', 480]]),
+      });
+
+      const items = await service.search(request(episodeQuery()), ORIGIN);
+
+      expect(items.map((item) => item.title)).toEqual([
+        'The.Office.US.S01E02.480p.YT.WEB-DL-A',
+        'The.Office.US.S01E02.480p.YT.WEB-DL-B',
+      ]);
+    });
+
+    test('is looked up once, with the label ceiling, for what can be offered', async () => {
+      const videoResolution = lookupAnswering([]);
+      const results = ['A', 'B', 'C'].map((name) => video('The Office S01E02', { channelName: name, definition: 'sd' }));
+      const { service } = setup({ results, videoResolution, failedIds: [results[0].youtubeId] });
+
+      await service.search(request(episodeQuery({ limit: '1' })), ORIGIN);
+
+      expect(videoResolution.lookup).toHaveBeenCalledTimes(1);
+      const [candidates, options] = videoResolution.lookup.mock.calls[0];
+      expect(candidates).toEqual([expect.objectContaining({ youtubeId: results[1].youtubeId, definition: 'sd' })]);
+      expect(options).toEqual({ ceiling: 1080, budgetMs: LOOKUP_BUDGET_MS });
+    });
+
+    test('is looked up only for the closest channel\'s upload when only that one is offered', async () => {
+      const videoResolution = lookupAnswering([]);
+      const catalog = {
+        resolveEpisode: jest.fn().mockResolvedValue({
+          seriesTitle: 'MrBeast',
+          seriesTitles: ['MrBeast'],
+          episodeTitle: 'I Granted 100 Kids Their Biggest Wish!',
+          otherEpisodeTitles: [],
+          runtimeSeconds: 840,
+          season: 2026,
+          episode: 14,
+          absoluteNumber: null,
+        }),
+        resolveSeries: jest.fn(),
+        resolveMovie: jest.fn(),
+      };
+      const { service } = setup({
+        results: [
+          video('I Granted 100 Kids Their Biggest Wish! #mrbeast', { youtubeId: 'SaHE3nRRX0w', channelName: 'Rsk', duration: 850 }),
+          video('I Granted 100 Kids Their Biggest Wish!', { youtubeId: 'lVylRtlPOIE', channelName: 'MrBeast', duration: 875 }),
+        ],
+        catalog,
+        videoResolution,
+      });
+
+      await service.search(request({ t: 'tvsearch', cat: SONARR_CATS, title: 'MrBeast', season: '2026', ep: '14' }), ORIGIN);
+
+      expect(videoResolution.lookup.mock.calls[0][0].map((candidate) => candidate.youtubeId)).toEqual(['lVylRtlPOIE']);
+    });
+
+    test('follows the bridge\'s own download resolution', async () => {
+      const videoResolution = lookupAnswering([]);
+      const { service } = setup({
+        results: [video('The Office S01E02')], config: { arrBridgeResolution: '720' }, videoResolution,
+      });
+
+      const [item] = await service.search(request(episodeQuery()), ORIGIN);
+
+      expect(videoResolution.lookup.mock.calls[0][1]).toEqual({ ceiling: 720, budgetMs: LOOKUP_BUDGET_MS });
+      expect(item.title).toContain('.720p.YT.WEB-DL-');
+    });
+
+    test('a request already 70 s old gives the lookup the 10 s left', async () => {
+      let clock = NOW.getTime();
+      const videoResolution = lookupAnswering([]);
+      const { service, searchVideos } = setup({ videoResolution, now: () => new Date(clock) });
+      searchVideos.mockImplementation(async () => {
+        clock += 70 * 1000;
+        return [video('The Office S01E02')];
+      });
+
+      await service.search(request(episodeQuery()), ORIGIN);
+
+      expect(videoResolution.lookup.mock.calls[0][1]).toEqual({ ceiling: 1080, budgetMs: 10 * 1000 });
+    });
+
+    test('a request 80 s old makes no lookup and labels every release with the ceiling', async () => {
+      let clock = NOW.getTime();
+      const videoResolution = lookupAnswering([]);
+      const { service, searchVideos } = setup({
+        videoResolution, config: { arrBridgeLabelLimit: '720' }, now: () => new Date(clock),
+      });
+      searchVideos.mockImplementation(async () => {
+        clock += 80 * 1000;
+        return [video('The Office S01E02')];
+      });
+
+      const [item] = await service.search(request(episodeQuery()), ORIGIN);
+
+      expect(videoResolution.lookup).not.toHaveBeenCalled();
+      expect(item.title).toBe('The.Office.US.S01E02.720p.YT.WEB-DL-NBC');
+    });
+
+    describe('with the real lookup', () => {
+      function realLookup() {
+        const libraryResolutions = jest.fn().mockResolvedValue(new Map());
+        const probe = jest.fn().mockResolvedValue(1080);
+        const videoResolution = createVideoResolution({
+          libraryResolutions, probe, logger: { info: jest.fn(), warn: jest.fn() },
+        });
+        return { videoResolution, libraryResolutions, probe };
+      }
+
+      test.each([
+        ['a label limit of 480', { arrBridgeLabelLimit: '480' }],
+        ['a download resolution of 480', { preferredResolution: '480' }],
+      ])('%s reads no library row and starts no probe', async (_label, config) => {
+        const { videoResolution, libraryResolutions, probe } = realLookup();
+        const { service } = setup({ results: twoUploads(), config, videoResolution });
+
+        const items = await service.search(request(episodeQuery()), ORIGIN);
+
+        expect(items.map((item) => item.title)).toEqual([
+          'The.Office.US.S01E02.480p.YT.WEB-DL-A',
+          'The.Office.US.S01E02.480p.YT.WEB-DL-B',
+        ]);
+        expect(libraryResolutions).not.toHaveBeenCalled();
+        expect(probe).not.toHaveBeenCalled();
+      });
+
+      test('a label limit of 720 lets an hd definition settle the label without a probe', async () => {
+        const { videoResolution, probe } = realLookup();
+        const { service } = setup({
+          results: [video('The Office S01E02', { definition: 'hd' })],
+          config: { arrBridgeLabelLimit: '720' },
+          videoResolution,
+        });
+
+        const [item] = await service.search(request(episodeQuery()), ORIGIN);
+
+        expect(item.title).toBe('The.Office.US.S01E02.720p.YT.WEB-DL-NBC');
+        expect(probe).not.toHaveBeenCalled();
+      });
+    });
+
+    test('falls back to the download resolution when the lookup fails', async () => {
+      const failure = new Error('lookup broke');
+      const { service, deps } = setup({
+        results: twoUploads(), videoResolution: { lookup: jest.fn().mockRejectedValue(failure) },
+      });
+
+      const items = await service.search(request(episodeQuery()), ORIGIN);
+
+      expect(items.map((item) => item.title)).toEqual([
+        'The.Office.US.S01E02.1080p.YT.WEB-DL-A',
+        'The.Office.US.S01E02.1080p.YT.WEB-DL-B',
+      ]);
+      expect(deps.logger.warn).toHaveBeenCalledWith(expect.objectContaining({ err: failure }), expect.any(String));
+    });
+
+    test('sets the size estimate the link carries', async () => {
+      const { service } = setup({ results: twoUploads(), videoResolution: lookupAnswering([['aaaaaaaaaaa', 480]]) });
+
+      const [item] = await service.search(request(episodeQuery()), ORIGIN);
+
+      const url = new URL(item.link);
+      const fields = parseNzbLink(decodeURIComponent(url.pathname.split('/').pop()), Object.fromEntries(url.searchParams));
+      expect(fields.estimatedBytes).toBe(estimateBytes(22 * 60, 480));
     });
   });
 
@@ -387,14 +603,29 @@ describe('searchService', () => {
 
       const items = await service.search(request(beybladeQuery()), ORIGIN);
 
-      expect(catalog.resolveEpisode).toHaveBeenCalledWith({ text: 'Beyblade', season: 1, episode: 29 });
+      expect(catalog.resolveEpisode).toHaveBeenCalledWith({
+        text: 'Beyblade', textSource: 'title', season: 1, episode: 29,
+      });
       expect(searchVideos).toHaveBeenCalledTimes(1);
-      expect(searchVideos).toHaveBeenCalledWith(TITLE_QUERY, 25);
+      expect(searchVideos).toHaveBeenCalledWith(TITLE_QUERY, 25, NO_API);
       expect(items.map((item) => item.title)).toEqual([
-        'Beyblade.S01E29.1080p.WEB-DL-BEYBLADEOfficial',
-        'Beyblade.S01E29.1080p.WEB-DL-BeybladeTheClassicFirstSeason',
+        'Beyblade.S01E29.1080p.YT.WEB-DL-BEYBLADEOfficial',
+        'Beyblade.S01E29.1080p.YT.WEB-DL-BeybladeTheClassicFirstSeason',
       ]);
       expect(items.map((item) => item.youtubeId)).toEqual(['g7VYYfoNaf0', 'avUFb3DESfw']);
+    });
+
+    // The catalog asks Sonarr about the release name it would offer, which
+    // is an AKA name for a q-only request (Prowlarr).
+    test('tells the catalog the text came from q', async () => {
+      const catalog = makeCatalog();
+      const { service } = setup({ catalog });
+
+      await service.search(request({ t: 'tvsearch', cat: SONARR_CATS, q: 'Beyblade', season: '1', ep: '29' }), ORIGIN);
+      await service.search(request({ t: 'tvsearch', cat: SONARR_CATS, q: 'Beyblade', season: '1' }), ORIGIN);
+
+      expect(catalog.resolveEpisode).toHaveBeenCalledWith({ text: 'Beyblade', textSource: 'q', season: 1, episode: 29 });
+      expect(catalog.resolveSeries).toHaveBeenCalledWith({ text: 'Beyblade', textSource: 'q' });
     });
 
     test('every alias request of one search shares one YouTube search and keeps its own name', async () => {
@@ -417,9 +648,9 @@ describe('searchService', () => {
       const second = await service.search(aliasQuery('Money Heist'), ORIGIN);
 
       expect(searchVideos).toHaveBeenCalledTimes(1);
-      expect(searchVideos).toHaveBeenCalledWith('Money Heist Do as Planned', 25);
-      expect(first[0].title).toBe('Haus.des.Geldes.S01E01.1080p.WEB-DL-Netflix');
-      expect(second[0].title).toBe('Money.Heist.S01E01.1080p.WEB-DL-Netflix');
+      expect(searchVideos).toHaveBeenCalledWith('Money Heist Do as Planned', 25, NO_API);
+      expect(first[0].title).toBe('Haus.des.Geldes.S01E01.1080p.YT.WEB-DL-Netflix');
+      expect(second[0].title).toBe('Money.Heist.S01E01.1080p.YT.WEB-DL-Netflix');
       expect(second[0].guid).toBe(first[0].guid);
     });
 
@@ -431,7 +662,7 @@ describe('searchService', () => {
 
       await service.search(request(beybladeQuery({ title: 'Bluey (2018)', season: '1', ep: '1' })), ORIGIN);
 
-      expect(searchVideos).toHaveBeenNthCalledWith(1, 'Bluey Magic Xylophone', 25);
+      expect(searchVideos).toHaveBeenNthCalledWith(1, 'Bluey Magic Xylophone', 25, NO_API);
     });
 
     test('falls back to the episode code when the title stage offers nothing', async () => {
@@ -443,7 +674,7 @@ describe('searchService', () => {
 
       const items = await service.search(request(beybladeQuery()), ORIGIN);
 
-      expect(searchVideos.mock.calls).toEqual([[TITLE_QUERY, 25], [CODE_QUERY, 25]]);
+      expect(searchVideos.mock.calls).toEqual([[TITLE_QUERY, 25, NO_API], [CODE_QUERY, 25, NO_API]]);
       expect(items.map((item) => item.youtubeId)).toEqual([reupload.youtubeId]);
     });
 
@@ -552,7 +783,7 @@ describe('searchService', () => {
 
       const items = await service.search(request(beybladeQuery({ title: 'Bluey (2018)', season: '1', ep: '1' })), ORIGIN);
 
-      expect(searchVideos.mock.calls).toEqual([['Bluey 2018 S01E01', 25]]);
+      expect(searchVideos.mock.calls).toEqual([['Bluey 2018 S01E01', 25, NO_API]]);
       expect(items).toHaveLength(1);
     });
 
@@ -562,7 +793,7 @@ describe('searchService', () => {
 
       const items = await service.search(request(beybladeQuery()), ORIGIN);
 
-      expect(searchVideos.mock.calls).toEqual([[CODE_QUERY, 25]]);
+      expect(searchVideos.mock.calls).toEqual([[CODE_QUERY, 25, NO_API]]);
       expect(items).toEqual([]);
     });
 
@@ -574,7 +805,7 @@ describe('searchService', () => {
 
       const items = await service.search(request(beybladeQuery()), ORIGIN);
 
-      expect(searchVideos.mock.calls).toEqual([[TITLE_QUERY, 25]]);
+      expect(searchVideos.mock.calls).toEqual([[TITLE_QUERY, 25, NO_API]]);
       expect(items.map((item) => item.youtubeId)).toEqual(['g7VYYfoNaf0']);
     });
 
@@ -586,7 +817,7 @@ describe('searchService', () => {
 
       const items = await service.search(request(beybladeQuery()), ORIGIN);
 
-      expect(searchVideos.mock.calls).toEqual([[CODE_QUERY, 25]]);
+      expect(searchVideos.mock.calls).toEqual([[CODE_QUERY, 25, NO_API]]);
       expect(items).toHaveLength(1);
     });
 
@@ -602,8 +833,8 @@ describe('searchService', () => {
         ORIGIN
       );
 
-      expect(catalog.resolveSeries).toHaveBeenCalledWith({ text: 'Bluey (2018)' });
-      expect(items.map((item) => item.title)).toEqual(['Bluey.2018.S03E01.1080p.WEB-DL-NBC']);
+      expect(catalog.resolveSeries).toHaveBeenCalledWith({ text: 'Bluey (2018)', textSource: 'title' });
+      expect(items.map((item) => item.title)).toEqual(['Bluey.2018.S03E01.1080p.YT.WEB-DL-NBC']);
     });
 
     test('a daily request uses the series runtime', async () => {
@@ -622,7 +853,7 @@ describe('searchService', () => {
         ORIGIN
       );
 
-      expect(items.map((item) => item.title)).toEqual(['Last.Week.Tonight.2025.02.16.1080p.WEB-DL-NBC']);
+      expect(items.map((item) => item.title)).toEqual(['Last.Week.Tonight.2025.02.16.1080p.YT.WEB-DL-NBC']);
     });
 
     test('a movie request uses the movie runtime', async () => {
@@ -653,6 +884,20 @@ describe('searchService', () => {
       expect(catalog.resolveEpisode).not.toHaveBeenCalled();
       expect(catalog.resolveSeries).not.toHaveBeenCalled();
       expect(catalog.resolveMovie).not.toHaveBeenCalled();
+    });
+
+    test('the no-match line counts the results without a known length', async () => {
+      const { service, deps } = setup({
+        results: [video('Other show'), video('Another show', { duration: null }), video('Third show')],
+        catalog: makeCatalog(),
+      });
+
+      expect(await service.search(request(beybladeQuery()), ORIGIN)).toEqual([]);
+
+      expect(deps.logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({ results: 3, withoutDuration: 1 }),
+        'Sonarr/Radarr search found no match'
+      );
     });
 
     test('logs which matcher answered', async () => {

@@ -75,8 +75,18 @@ describe('ArrBridgeSetupValues', () => {
   test('says which quality the profile must allow, and to press Test', () => {
     setup({ resolution: 720 });
 
-    expect(screen.getByText(/must allow WEBDL-720p/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/must allow WEBDL at the resolution a video really has, because Youtarr labels each release with it\. The highest label is currently 720p: it follows/)
+    ).toBeInTheDocument();
     expect(screen.getByText(/press Test on both/)).toBeInTheDocument();
+  });
+
+  test('names the two settings the highest label follows, set apart from the sentence', () => {
+    setup({ resolution: 720 });
+
+    expect(screen.getByText('Resolution', { selector: 'strong' })).toBeInTheDocument();
+    expect(screen.getByText('Offer releases as', { selector: 'strong' })).toBeInTheDocument();
+    expect(screen.getByText(/under Downloads below\./)).toBeInTheDocument();
   });
 
   test('gives Radarr the movies category', () => {

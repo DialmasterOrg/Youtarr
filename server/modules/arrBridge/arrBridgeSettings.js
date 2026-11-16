@@ -4,6 +4,7 @@
 const {
   CONNECTION_KEYS, generateKey, normalizeArrUrl, parseConnectionInput, readSettings,
 } = require('./arrBridgeConfig');
+const { PLACEHOLDER_TITLES } = require('./searchService');
 
 const APP_NAMES = Object.freeze({ sonarr: 'Sonarr', radarr: 'Radarr' });
 // Nothing else of the app's answer is passed on, so the connection test
@@ -52,6 +53,7 @@ const FAILURE_MESSAGES = {
   redirect: () => 'The address answers with a redirect. Use the address it redirects to.',
   'not-json': (appName) => `The address did not answer like ${appName}. It may be a login page or another app.`,
   'not-configured': (appName) => `No ${appName} connection is saved.`,
+  'lookup-failed': (appName) => `${appName} answered, but could not look up a title. Check that the address points at ${appName} itself and that its version is current.`,
   [UNREACHABLE]: unreachableMessage,
 };
 
@@ -137,6 +139,19 @@ function createArrBridgeSettings({ configModule, client, staging, logger }) {
         reason: 'wrong-app',
         message: `That address belongs to ${other || 'another app'}, not ${appName}.`,
       };
+    }
+    // A search resolves its series through this call, so a connection that
+    // only answers system/status is not usable. Not knowing the placeholder
+    // is the normal answer; only a failed call fails the test.
+    try {
+      if (app === 'sonarr') await client.fetchParsedEpisode(connection, PLACEHOLDER_TITLES.tv);
+      else await client.fetchParsedMovie(connection, PLACEHOLDER_TITLES.movie);
+    } catch (error) {
+      const reason = typeof error?.reason === 'string' ? error.reason : UNREACHABLE;
+      const code = typeof error?.code === 'string' ? error.code : null;
+      // Never the error object: an HTTP client's error holds the key.
+      logger.info({ app, reason, code }, 'Sonarr/Radarr connection test failed on the lookup');
+      return failure('lookup-failed', appName);
     }
     return { ok: true, appName, version: VERSION_PATTERN.test(status.version) ? status.version : '' };
   }

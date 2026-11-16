@@ -144,17 +144,22 @@ describe('grabExecutor', () => {
       expect(deps.downloader.mock.calls[0][0].overrideSettings).toEqual({ subfolder: 'Shows' });
     });
 
-    test('downloads at the resolution in the release name when the bridge has its own resolution', async () => {
-      const { executor, deps } = setup({ rows: [grab()], resolution: '720' });
+    test('downloads at the bridge resolution whatever the release name says', async () => {
+      const { executor, deps } = setup({ rows: [grab({ release_title: 'Show.S01E05.480p.YT.WEB-DL-Chan' })], resolution: '1080' });
       await executor.runOnce();
-      // The release was offered as 1080p before the setting changed to 720.
       expect(deps.downloader.mock.calls[0][0].overrideSettings).toEqual({ resolution: '1080' });
     });
 
-    test('falls back to the setting for a release name without a resolution', async () => {
-      const { executor, deps } = setup({ rows: [grab({ release_title: 'The.Office.US.S01E02.WEB-DL-NBC' })], resolution: '720' });
+    test('ignores the resolution in a release name built before the YT marker', async () => {
+      const { executor, deps } = setup({ rows: [grab({ release_title: 'Show.S01E05.480p.WEB-DL-Chan' })], resolution: '1080' });
       await executor.runOnce();
-      expect(deps.downloader.mock.calls[0][0].overrideSettings).toEqual({ resolution: '720' });
+      expect(deps.downloader.mock.calls[0][0].overrideSettings).toEqual({ resolution: '1080' });
+    });
+
+    test('sends no resolution when the bridge has none', async () => {
+      const { executor, deps } = setup({ rows: [grab({ release_title: 'Show.S01E05.480p.YT.WEB-DL-Chan' })], resolution: null });
+      await executor.runOnce();
+      expect(deps.downloader.mock.calls[0][0].overrideSettings).not.toHaveProperty('resolution');
     });
 
     test('allows a re-download only when the archive would otherwise skip the video', async () => {

@@ -12,7 +12,6 @@ const { ARR_BRIDGE_JOB_LABEL, AUTO_RETRY_LABEL_PREFIX } = require('../download/j
 const { MAX_AUTO_RETRY_COUNT } = require('../download/transient403RetryPlanner');
 const { parseAuxData } = require('../jobAuxData');
 const { LIBRARY_COPY } = require('./libraryCopyRemover');
-const { resolutionOfTitle } = require('./releaseNaming');
 
 const SWEEP_INTERVAL_MS = 60 * 1000;
 const SWEEP_BATCH_SIZE = 20;
@@ -240,11 +239,7 @@ function createGrabExecutor({
     const category = settings.categories.find((entry) => entry.name === grab.category);
     const overrideSettings = {};
     if (category?.subfolder) overrideSettings.subfolder = category.subfolder;
-    // The release name already told Sonarr or Radarr a resolution, so the
-    // download follows it even if the setting changed since the search.
-    if (settings.resolution) {
-      overrideSettings.resolution = resolutionOfTitle(grab.release_title) ?? settings.resolution;
-    }
+    if (settings.resolution) overrideSettings.resolution = settings.resolution;
     if (await needsRedownload(grab.youtube_id)) overrideSettings.allowRedownload = true;
 
     // A new job id per attempt, recorded with the claim: a grab queued again

@@ -1,5 +1,6 @@
 /* eslint-env jest */
-const { createArrBridgeService, createUploadDateLookup } = require('../arrBridgeService');
+const { Op } = require('sequelize');
+const { createArrBridgeService, createUploadDateLookup, createLibraryResolutionLookup } = require('../arrBridgeService');
 
 const KEY = 'k'.repeat(64);
 
@@ -30,8 +31,9 @@ function setup(config, overrides = {}) {
     configModule,
     models: { ArrBridgeGrab: {}, Video: {}, ChannelVideo: {}, Job: {} },
     searchVideos: jest.fn(),
-    ...overrides,
+    probeResolution: jest.fn().mockResolvedValue(null),
     isYoutubeApiAvailable: () => false,
+    ...overrides,
     downloader: jest.fn(),
     jobLookup: jest.fn(),
     storageGuard: { isPausedError: () => false, getStatus: () => ({ paused: false }) },
@@ -138,14 +140,14 @@ describe('arrBridgeService', () => {
 
   test('a search asks the configured Sonarr about the episode and matches by its title', async () => {
     const sonarr = { url: 'http://sonarr:8989', apiKey: 'sonarr-key-0001' };
+    const beyblade = { id: 14, title: 'Beyblade', titles: [], year: null, runtimeSeconds: 1500, sceneNumbering: false };
     const arrClient = {
-      fetchSeries: jest.fn().mockResolvedValue([
-        { id: 14, title: 'Beyblade', titles: [], runtimeSeconds: 1500, sceneNumbering: false },
-      ]),
+      fetchParsedEpisode: jest.fn().mockResolvedValue({ series: beyblade, episodes: [] }),
+      fetchSeriesById: jest.fn().mockResolvedValue(beyblade),
+      fetchSeries: jest.fn().mockResolvedValue([beyblade]),
       fetchEpisodes: jest.fn().mockResolvedValue([
         { season: 1, episode: 29, title: 'Play It Again, Dizzi!', runtimeSeconds: 1500, absoluteNumber: 29 },
       ]),
-      fetchMovies: jest.fn(),
     };
     const searchVideos = jest.fn().mockResolvedValue([{
       youtubeId: 'g7VYYfoNaf0',
@@ -171,10 +173,96 @@ describe('arrBridgeService', () => {
       'http://youtarr:3011'
     );
 
-    expect(arrClient.fetchSeries).toHaveBeenCalledWith(sonarr);
+    expect(arrClient.fetchParsedEpisode).toHaveBeenCalledWith(sonarr, 'Beyblade.S01E29.480p.YT.WEB-DL-YOUTARR');
+    expect(arrClient.fetchSeriesById).toHaveBeenCalledWith(sonarr, 14);
     expect(arrClient.fetchEpisodes).toHaveBeenCalledWith(sonarr, 14);
-    expect(searchVideos).toHaveBeenCalledWith('Beyblade Play It Again Dizzi', 25);
-    expect(response.body).toContain('Beyblade.S01E29.1080p.WEB-DL-BEYBLADEOfficial');
+    expect(searchVideos).toHaveBeenCalledWith('Beyblade Play It Again Dizzi', 25, {
+      useApi: true, onApiUnits: expect.any(Function),
+    });
+    expect(response.body).toContain('Beyblade.S01E29.1080p.YT.WEB-DL-BEYBLADEOfficial');
+  });
+
+  test('a search labels each release with the resolution the probe reports', async () => {
+    const searchVideos = jest.fn().mockResolvedValue([{
+      youtubeId: 'g7VYYfoNaf0',
+      title: 'Beyblade S01E29',
+      channelName: 'BEYBLADE Official',
+      duration: 1318,
+      publishedAt: '2020-08-30T16:00:24.000Z',
+    }]);
+    const probeResolution = jest.fn().mockResolvedValue(480);
+    const noRows = { findAll: jest.fn().mockResolvedValue([]) };
+    const { service } = setup(
+      { arrBridgeEnabled: true, arrBridgeApiKey: KEY, preferredResolution: '1080' },
+      { searchVideos, probeResolution, models: { ArrBridgeGrab: noRows, Video: noRows, ChannelVideo: noRows, Job: {} } }
+    );
+
+    const response = await service.newznab.handleApi(
+      { t: 'tvsearch', apikey: KEY, cat: '5030,5040', title: 'Beyblade', season: '1', ep: '29' },
+      'http://youtarr:3011'
+    );
+
+    expect(probeResolution).toHaveBeenCalledWith('g7VYYfoNaf0');
+    expect(response.body).toContain('Beyblade.S01E29.480p.YT.WEB-DL-BEYBLADEOfficial');
+  });
+
+  describe('daily API share', () => {
+    // One service, so its budget carries over from search to search.
+    const makeService = (searchVideos, overrides = {}) => {
+      const noRows = { findAll: jest.fn().mockResolvedValue([]) };
+      return setup(
+        { arrBridgeEnabled: true, arrBridgeApiKey: KEY, preferredResolution: '1080' },
+        { searchVideos, models: { ArrBridgeGrab: noRows, Video: noRows, ChannelVideo: noRows, Job: {} }, ...overrides }
+      ).service;
+    };
+    const tv = (service, query) => service.newznab.handleApi(
+      { t: 'tvsearch', apikey: KEY, cat: '5030,5040', ...query }, 'http://youtarr:3011'
+    );
+    const episode = { title: 'Bluey', season: '1', ep: '1' };
+    const spendsEverything = () => jest.fn().mockImplementation(async (_query, _count, options) => {
+      options.onApiUnits(5000);
+      return [];
+    });
+
+    test('a search under the share uses the API and reports its units to the budget', async () => {
+      const searchVideos = spendsEverything();
+      const service = makeService(searchVideos);
+      await tv(service, episode);
+      expect(searchVideos.mock.calls[0][2]).toEqual({ useApi: true, onApiUnits: expect.any(Function) });
+
+      await tv(service, { ...episode, title: 'Peppa' });
+      expect(searchVideos.mock.calls[1][2].useApi).toBe(false);
+    });
+
+    test('the wrapped search hands the results back unchanged, under and over the share', async () => {
+      const resultFor = (name) => [{
+        youtubeId: `id-${name}`, title: `${name} S01E01`, channelName: `${name} Official`,
+        duration: 1318, publishedAt: '2020-08-30T16:00:24.000Z',
+      }];
+      const returned = [];
+      const searchVideos = jest.fn().mockImplementation(async (query, _count, options) => {
+        options.onApiUnits(5000);
+        const found = resultFor(query.split(' ')[0]);
+        returned.push(found);
+        return found;
+      });
+      const service = makeService(searchVideos);
+      const under = await tv(service, episode);
+      const over = await tv(service, { ...episode, title: 'Peppa' });
+      expect(searchVideos.mock.calls.map((call) => call[2].useApi)).toEqual([true, false]);
+      expect(under.body).toContain('Bluey.S01E01');
+      expect(over.body).toContain('Peppa.S01E01');
+      expect(returned).toEqual([resultFor('Bluey'), resultFor('Peppa')]);
+    });
+
+    test('a daily request over the share still uses the API', async () => {
+      const searchVideos = spendsEverything();
+      const service = makeService(searchVideos, { isYoutubeApiAvailable: () => true });
+      await tv(service, episode);
+      await tv(service, { title: 'Last Week Tonight', season: '2025', ep: '02/16' });
+      expect(searchVideos).toHaveBeenCalledTimes(2);
+      expect(searchVideos.mock.calls[1][2].useApi).toBe(true);
+    });
   });
 
   test('removes the library copy of a handed-off grab once the connected Sonarr recorded its import', async () => {
@@ -346,6 +434,48 @@ describe('arrBridgeService', () => {
       expect((await knownUploadDates([])).size).toBe(0);
       expect(Video.findAll).not.toHaveBeenCalled();
       expect(ChannelVideo.findAll).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createLibraryResolutionLookup', () => {
+    // Applies the query's id and removed conditions, as the database would.
+    function lookup(rows) {
+      const Video = {
+        findAll: jest.fn(async ({ where }) => rows.filter((row) => (
+          where.youtubeId[Op.in].includes(row.youtubeId)
+          && (where.removed === undefined || row.removed === where.removed)
+        ))),
+      };
+      return { libraryResolutions: createLibraryResolutionLookup({ Video }), Video };
+    }
+    const row = (youtubeId, videoResolution, removed = false) => ({
+      youtubeId, video_resolution: videoResolution, removed,
+    });
+
+    test('reads each stored pixel size as the resolution Sonarr will see', async () => {
+      const { libraryResolutions } = lookup([row('a', '1920x1080'), row('b', '640x360'), row('c', '1920x960')]);
+
+      const tiers = await libraryResolutions(['a', 'b', 'c']);
+
+      expect(tiers).toEqual(new Map([['a', 1080], ['b', 480], ['c', 1080]]));
+    });
+
+    test.each([
+      ['a failed probe (0x0)', row('a', '0x0')],
+      ['no stored size', row('a', null)],
+      ['an unreadable size', row('a', '1080p')],
+      ['a removed row', row('a', '1920x1080', true)],
+    ])('treats %s as unknown, not as 480', async (_label, stored) => {
+      const { libraryResolutions } = lookup([stored]);
+
+      expect(await libraryResolutions(['a'])).toEqual(new Map());
+    });
+
+    test('asks nothing for an empty list', async () => {
+      const { libraryResolutions, Video } = lookup([]);
+
+      expect(await libraryResolutions([])).toEqual(new Map());
+      expect(Video.findAll).not.toHaveBeenCalled();
     });
   });
 });

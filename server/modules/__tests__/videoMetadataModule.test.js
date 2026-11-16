@@ -10,6 +10,7 @@ describe('VideoMetadataModule', () => {
   let mockYtDlpRunner;
   let mockYoutubeApi;
   let mockChannelVideoReanchor;
+  let mockCommandBuilder;
 
   beforeEach(() => {
     jest.resetModules();
@@ -52,6 +53,7 @@ describe('VideoMetadataModule', () => {
 
     mockYtDlpRunner = {
       fetchMetadata: jest.fn(),
+      run: jest.fn(),
       isMembersOnlyError: jest.fn((message = '') => {
         const normalized = String(message);
         return [
@@ -77,6 +79,14 @@ describe('VideoMetadataModule', () => {
       applyExactDateForGroup: jest.fn().mockResolvedValue(undefined),
     };
 
+    // Like the real builder with a cookies file configured: cookies unless turned off.
+    mockCommandBuilder = {
+      buildMetadataFetchArgs: jest.fn((url, { cookiesEnabled = true } = {}) => [
+        ...(cookiesEnabled ? ['--cookies', '/config/cookies.user.txt'] : []),
+        '--skip-download', '--dump-single-json', url,
+      ]),
+    };
+
     jest.doMock('fs', () => ({ promises: mockFs }));
     jest.doMock('../../models', () => ({ Video: mockVideo }));
     jest.doMock('../../models/channelvideo', () => mockChannelVideo);
@@ -86,6 +96,7 @@ describe('VideoMetadataModule', () => {
     jest.doMock('../youtubeApi', () => mockYoutubeApi);
     jest.doMock('../channelVideoReanchor', () => mockChannelVideoReanchor);
     jest.doMock('../membersAccess');
+    jest.doMock('../download/ytdlpCommandBuilder', () => mockCommandBuilder);
 
     videoMetadataModule = require('../videoMetadataModule');
   });
@@ -611,6 +622,78 @@ describe('VideoMetadataModule', () => {
       expect(mockChannelVideo.update).not.toHaveBeenCalled();
       expect(mockChannelVideoReanchor.applyExactDateForVideo).not.toHaveBeenCalled();
       expect(mockFs.writeFile).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('probeAvailableResolutions', () => {
+    const formats = [
+      { height: 360, width: 640, vcodec: 'avc1', format_note: '360p' },
+      { height: 1080, width: 1920, vcodec: 'vp9', format_note: '1080p' },
+      { vcodec: 'none', acodec: 'opus', format_note: 'medium' },
+    ];
+
+    test('runs one fresh yt-dlp fetch without cookies and returns the tiers', async () => {
+      mockYtDlpRunner.run.mockResolvedValue(JSON.stringify({ formats }));
+
+      const tiers = await videoMetadataModule.probeAvailableResolutions('abcdefghijk');
+
+      expect(tiers).toEqual([360, 1080]);
+      expect(mockYtDlpRunner.run).toHaveBeenCalledTimes(1);
+      const [args, options] = mockYtDlpRunner.run.mock.calls[0];
+      expect(args).not.toContain('--cookies');
+      expect(args).toContain('https://www.youtube.com/watch?v=abcdefghijk');
+      expect(options).toEqual({ timeoutMs: 30000 });
+      expect(mockYtDlpRunner.fetchMetadata).not.toHaveBeenCalled();
+    });
+
+    test('takes a shorter time limit', async () => {
+      mockYtDlpRunner.run.mockResolvedValue(JSON.stringify({ formats }));
+
+      await videoMetadataModule.probeAvailableResolutions('abcdefghijk', { timeoutMs: 5000 });
+
+      expect(mockYtDlpRunner.run.mock.calls[0][1]).toEqual({ timeoutMs: 5000 });
+    });
+
+    test('neither reads nor writes the info.json cache, nor touches any row', async () => {
+      mockFs.access.mockResolvedValue(undefined);
+      mockFs.readFile.mockResolvedValue(JSON.stringify({ formats: [{ height: 360, vcodec: 'avc1', format_note: '360p' }] }));
+      mockYtDlpRunner.run.mockResolvedValue(JSON.stringify({ formats, upload_date: '20240301', availability: 'public' }));
+
+      const tiers = await videoMetadataModule.probeAvailableResolutions('abcdefghijk');
+
+      expect(tiers).toEqual([360, 1080]);
+      expect(mockFs.access).not.toHaveBeenCalled();
+      expect(mockFs.readFile).not.toHaveBeenCalled();
+      expect(mockFs.writeFile).not.toHaveBeenCalled();
+      expect(mockFs.mkdir).not.toHaveBeenCalled();
+      expect(mockVideo.findOne).not.toHaveBeenCalled();
+      expect(mockChannelVideo.update).not.toHaveBeenCalled();
+      expect(mockChannelVideoReanchor.applyExactDateForVideo).not.toHaveBeenCalled();
+    });
+
+    test('records no members-only access and never asks the API', async () => {
+      const membersAccess = require('../membersAccess');
+      mockYoutubeApi.isAvailable.mockReturnValue(true);
+      mockYoutubeApi.getApiKey.mockReturnValue('api-key');
+      mockYtDlpRunner.run.mockRejectedValue(new Error('ERROR: Join this channel to get access to members-only content'));
+
+      await expect(videoMetadataModule.probeAvailableResolutions('abcdefghijk')).resolves.toBeNull();
+
+      expect(membersAccess.recordFetchOutcome).not.toHaveBeenCalled();
+      expect(mockYoutubeApi.client.getVideoMetadata).not.toHaveBeenCalled();
+      expect(mockChannelVideo.update).not.toHaveBeenCalled();
+    });
+
+    test.each([
+      ['yt-dlp fails', () => mockYtDlpRunner.run.mockRejectedValue(new Error('Sign in to confirm you are not a bot'))],
+      ['the output is not JSON', () => mockYtDlpRunner.run.mockResolvedValue('not json')],
+      ['no format has a video stream', () => mockYtDlpRunner.run.mockResolvedValue(JSON.stringify({ formats: [] }))],
+    ])('answers null without rejecting when %s', async (_label, arrange) => {
+      arrange();
+
+      await expect(videoMetadataModule.probeAvailableResolutions('abcdefghijk')).resolves.toBeNull();
+      expect(mockLogger.warn).not.toHaveBeenCalled();
+      expect(mockLogger.error).not.toHaveBeenCalled();
     });
   });
 

@@ -401,4 +401,64 @@ describe('videoSearchModule.searchVideos - API-first path', () => {
 
     expect(youtubeApi.client.searchVideos).not.toHaveBeenCalled();
   });
+
+  test('useApi false skips the API even with a key and searches with yt-dlp', async () => {
+    const ytDlpRunner = require('../ytDlpRunner');
+    const logger = require('../../logger');
+    ytDlpRunner.run.mockResolvedValueOnce(
+      JSON.stringify({ id: 'ytdlp-id', title: 'T', channel: 'C', upload_date: '20240101' }) + '\n'
+    );
+
+    const results = await videoSearchModule.searchVideos('q', 10, { useApi: false });
+
+    expect(youtubeApi.client.searchVideos).not.toHaveBeenCalled();
+    expect(ytDlpRunner.run).toHaveBeenCalledTimes(1);
+    expect(results[0].youtubeId).toBe('ytdlp-id');
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'yt-dlp' }),
+      'video search complete'
+    );
+  });
+
+  test('passes onApiUnits to the API client as onUnits', async () => {
+    const onApiUnits = jest.fn();
+    youtubeApi.client.searchVideos.mockImplementationOnce(async (key, q, n, opts) => {
+      opts.onUnits(100);
+      return [];
+    });
+
+    await videoSearchModule.searchVideos('q', 10, { onApiUnits });
+
+    expect(youtubeApi.client.searchVideos).toHaveBeenCalledWith(
+      'test-key', 'q', 10, expect.objectContaining({ onUnits: onApiUnits })
+    );
+    expect(onApiUnits).toHaveBeenCalledWith(100);
+  });
+
+  test('without an API key the bridge options change nothing', async () => {
+    const ytDlpRunner = require('../ytDlpRunner');
+    youtubeApi.isAvailable.mockReturnValue(false);
+    const line = JSON.stringify({ id: 'ytdlp-id', title: 'T', channel: 'C', upload_date: '20240101' }) + '\n';
+    ytDlpRunner.run.mockResolvedValue(line);
+    const onApiUnits = jest.fn();
+
+    const plain = await videoSearchModule.searchVideos('q', 10);
+    const withOptions = await videoSearchModule.searchVideos('q', 10, { useApi: true, onApiUnits });
+
+    expect(withOptions).toEqual(plain);
+    expect(ytDlpRunner.run).toHaveBeenCalledTimes(2);
+    expect(youtubeApi.client.searchVideos).not.toHaveBeenCalled();
+    expect(onApiUnits).not.toHaveBeenCalled();
+  });
+
+  test('never calls onApiUnits on the yt-dlp path', async () => {
+    const ytDlpRunner = require('../ytDlpRunner');
+    youtubeApi.isAvailable.mockReturnValue(false);
+    ytDlpRunner.run.mockResolvedValueOnce('');
+    const onApiUnits = jest.fn();
+
+    await videoSearchModule.searchVideos('q', 10, { onApiUnits });
+
+    expect(onApiUnits).not.toHaveBeenCalled();
+  });
 });

@@ -125,6 +125,7 @@ function normalizeVideoItem(item) {
     tags: Array.isArray(snippet.tags) ? snippet.tags : null,
     categories: snippet.categoryId ? [snippet.categoryId] : null,
     contentRating: contentDetails.contentRating || null,
+    definition: contentDetails.definition || null,
     availability: status.privacyStatus || 'public',
     liveBroadcastContent: snippet.liveBroadcastContent || null,
     thumbnailUrl: snippet.thumbnails?.maxres?.url
@@ -147,7 +148,7 @@ async function testKey(apiKey) {
   }
 }
 
-async function getVideoMetadata(apiKey, videoIds, { signal } = {}) {
+async function getVideoMetadata(apiKey, videoIds, { signal, onRequest } = {}) {
   if (!Array.isArray(videoIds) || videoIds.length === 0) return [];
 
   const parts = 'snippet,contentDetails,statistics,status';
@@ -164,6 +165,7 @@ async function getVideoMetadata(apiKey, videoIds, { signal } = {}) {
       },
       { signal }
     );
+    if (onRequest) onRequest();
     if (Array.isArray(data.items)) items.push(...data.items);
   }
 
@@ -237,7 +239,20 @@ async function getChannelInfo(apiKey, channelUrl, { signal } = {}) {
   };
 }
 
-async function searchVideos(apiKey, query, maxResults, { signal } = {}) {
+const SEARCH_LIST_UNITS = 100;
+const VIDEOS_LIST_UNITS = 1;
+
+async function searchVideos(apiKey, query, maxResults, { signal, onUnits } = {}) {
+  // The counter is an estimate: it only hears about requests that answered,
+  // and a throwing callback never affects the search.
+  const reportUnits = (units) => {
+    if (!onUnits) return;
+    try {
+      onUnits(units);
+    } catch (err) {
+      logger.debug({ err }, 'YouTube API onUnits callback threw');
+    }
+  };
   const baseResults = [];
   // YouTube's search.list can return the same videoId across pages when
   // paginated, so we dedupe defensively to avoid showing the same card twice.
@@ -258,6 +273,7 @@ async function searchVideos(apiKey, query, maxResults, { signal } = {}) {
     // eslint-disable-next-line no-await-in-loop
     const data = await apiGet(apiKey, ENDPOINTS.search, params, { signal });
     pagesFetched += 1;
+    reportUnits(SEARCH_LIST_UNITS);
 
     if (Array.isArray(data.items)) {
       for (const item of data.items) {
@@ -299,12 +315,15 @@ async function searchVideos(apiKey, query, maxResults, { signal } = {}) {
   // pre-enrichment results rather than failing the whole search.
   try {
     const videoIds = trimmed.map((r) => r.youtubeId);
-    const metadata = await getVideoMetadata(apiKey, videoIds, { signal });
+    const metadata = await getVideoMetadata(apiKey, videoIds, {
+      signal,
+      onRequest: () => reportUnits(VIDEOS_LIST_UNITS),
+    });
     const byId = new Map(metadata.map((m) => [m.id, m]));
     return trimmed.map((r) => {
       const m = byId.get(r.youtubeId);
       if (!m) return r;
-      return { ...r, duration: m.duration ?? null, viewCount: m.viewCount ?? null };
+      return { ...r, duration: m.duration ?? null, viewCount: m.viewCount ?? null, definition: m.definition ?? null };
     });
   } catch (err) {
     if (err && err.code === YoutubeApiErrorCode.CANCELED) {

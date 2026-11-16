@@ -1,19 +1,33 @@
 // Ties a search request to the user's own Sonarr series, episode or Radarr
-// movie, by name. Holds the lists it read for a few minutes, because one
+// movie. It builds the release name it would offer and asks the app what
+// that name is (/api/v3/parse), so a request resolves to what the app will
+// read the release as. Holds the answers for a few minutes, because one
 // search in Sonarr is one request per series alias. Never rejects: without a
-// connection, a single match or an answer from the app, it resolves to null
-// and the search goes on without metadata.
+// connection, a match or an answer from the app, it resolves to null and the
+// search goes on without metadata.
 const { ArrUnavailableError } = require('./arrClient');
 const { tokenize } = require('./candidateFilter');
+const { DEFAULT_GROUP, buildTvTitle, buildMovieTitle } = require('./releaseNaming');
 
 const CATALOG_TTL_MS = 10 * 60 * 1000;
-// Sonarr searches a series the moment it is added, so a name the cached
-// list lacks is worth one fresh read, but not one per unknown name.
-const MISS_REFRESH_MIN_AGE_MS = 30 * 1000;
+// A name the app does not know is asked again soon: the series may be added
+// in a moment, and the call costs milliseconds.
+const UNKNOWN_NAME_TTL_MS = 60 * 1000;
 // After a failed read the alias requests of a search must not each wait
 // for the timeout again.
 const FAILURE_BACKOFF_MS = 60 * 1000;
+// The series list only adds the names of related series, and a large
+// library's list is slow: no request waits long for it.
+const SIBLING_FIRST_WAIT_MS = 3000;
+const SIBLING_RETRY_MS = 60 * 60 * 1000;
+const MAX_CACHED_NAMES = 500;
 const MAX_CACHED_SERIES_EPISODES = 50;
+// The quality in the name asked about does not change what the app reads.
+const LOOKUP_RESOLUTION = 480;
+// A series request has no episode to ask about.
+const ANY_EPISODE = { season: 1, episode: 1 };
+// What a read answers when it failed, or was not made during the back-off.
+const UNAVAILABLE = Symbol('unavailable');
 const TRAILING_TAG = /\s*\([^()]*\)\s*$/;
 const UNTITLED_KEYS = new Set(['tba', 'tbd']);
 const GENERIC_EPISODE_KEY = /^(?:episode|ep|part|pt|chapter|volume|vol) \d+$/;
@@ -44,20 +58,6 @@ const allNames = (row) => [...new Set([row.title, ...row.titles])];
 const nameKeys = (row) => new Set(
   [...allNames(row), row.title.replace(TRAILING_TAG, '')].map(nameKey).filter(Boolean)
 );
-
-// Name -> the rows known by it.
-function buildIndex(rows) {
-  const index = new Map();
-  for (const row of rows) {
-    for (const key of nameKeys(row)) index.set(key, [...(index.get(key) ?? []), row]);
-  }
-  return index;
-}
-
-// The one row a name means, or null when it means none or several. A name
-// that is one series' title and another's alias stays unresolved: Sonarr
-// sends it for both, and reads a release under it as whichever it searches.
-const pickRow = (rows) => (rows?.length === 1 ? rows[0] : null);
 
 // Names of the library's other series that contain this series' name:
 // "Beyblade Burst" for "Beyblade". A video naming one is not this series.
@@ -111,6 +111,28 @@ function describeEpisode(series, rows, season, episode) {
   };
 }
 
+// What a log line may say about a failure: never the error object.
+function failureContext(error) {
+  const known = error instanceof ArrUnavailableError;
+  return {
+    reason: known ? error.reason : 'error',
+    status: known ? error.status : null,
+    code: known ? error.code : null,
+    detail: error?.message ?? null,
+  };
+}
+
+// Waits for a promise that never rejects, for at most ms.
+function waitAtMost(promise, ms) {
+  if (ms <= 0) return Promise.resolve();
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(resolve, ms);
+    timer.unref();
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 /**
  * @param {Object} deps
  * @param {Object} deps.client - arrClient
@@ -119,110 +141,132 @@ function describeEpisode(series, rows, season, episode) {
  * @param {Function} [deps.now] - () => milliseconds
  */
 function createArrCatalog({ client, getSettings, logger, now = Date.now }) {
-  const emptyCache = () => ({
-    identity: null, rows: [], index: null, fetchedAt: 0, inFlight: null, failedUntil: 0, episodes: new Map(),
+  const emptyCache = (identity) => ({
+    identity,
+    failedUntil: 0,
+    // Release name asked about -> series id, movie, or null for a name the
+    // app does not know.
+    names: new Map(),
+    series: new Map(),
+    episodes: new Map(),
+    siblings: { rows: null, fetchedAt: 0, startedAt: 0, inFlight: null, retryAt: 0 },
   });
-  const caches = { sonarr: emptyCache(), radarr: emptyCache() };
+  const caches = { sonarr: emptyCache(null), radarr: emptyCache(null) };
 
   function cacheFor(app, connection) {
     const identity = `${connection.url}\n${connection.apiKey}`;
-    if (caches[app].identity !== identity) caches[app] = { ...emptyCache(), identity };
+    if (caches[app].identity !== identity) caches[app] = emptyCache(identity);
     return caches[app];
   }
 
+  const backedOff = (cache) => cache.failedUntil > now();
+
+  // Starts the back-off. Reported once, however many requests shared the call.
   function reportFailure(app, cache, error) {
+    if (backedOff(cache)) return;
     cache.failedUntil = now() + FAILURE_BACKOFF_MS;
-    const known = error instanceof ArrUnavailableError;
     logger.warn(
-      {
-        app,
-        reason: known ? error.reason : 'error',
-        status: known ? error.status : null,
-        code: known ? error.code : null,
-        detail: error?.message ?? null,
-      },
+      { app, ...failureContext(error) },
       `Could not read from ${APPS[app].label}; searching without its ${APPS[app].data} data`
     );
   }
 
-  // Runs a read unless the app failed moments ago. A failure is reported
-  // once and answers null until the back-off has passed.
-  async function guarded(app, cache, read) {
-    if (cache.failedUntil > now()) return null;
-    try {
-      return await read();
-    } catch (error) {
-      if (cache.failedUntil <= now()) reportFailure(app, cache, error);
-      return null;
-    }
-  }
-
-  function loadIndex(app, connection, cache, { refresh = false } = {}) {
-    const fresh = cache.index && now() - cache.fetchedAt < CATALOG_TTL_MS;
-    if (fresh && !refresh) return Promise.resolve(cache.index);
-    if (!cache.inFlight) {
-      const fetchRows = app === 'sonarr' ? client.fetchSeries : client.fetchMovies;
-      cache.inFlight = guarded(app, cache, async () => {
-        cache.rows = await fetchRows(connection);
-        cache.index = buildIndex(cache.rows);
-        cache.fetchedAt = now();
-        return cache.index;
-      }).finally(() => {
-        cache.inFlight = null;
-      });
-    }
-    return cache.inFlight;
-  }
-
-  // The rows a name means, reading the list again once when the name is
-  // unknown and the list is not brand new.
-  async function lookUp(app, connection, cache, text) {
-    const key = nameKey(text);
-    if (!key) return null;
-    let index = await loadIndex(app, connection, cache);
-    if (!index) return null;
-    if (!index.has(key) && now() - cache.fetchedAt > MISS_REFRESH_MIN_AGE_MS) {
-      index = await loadIndex(app, connection, cache, { refresh: true });
-    }
-    return index?.get(key) ?? null;
-  }
-
-  function loadEpisodes(connection, cache, seriesId) {
-    const cached = cache.episodes.get(seriesId);
-    if (cached?.rows && now() - cached.fetchedAt < CATALOG_TTL_MS) return Promise.resolve(cached.rows);
+  // One call per key while its answer is fresh, shared by the requests that
+  // ask meanwhile. A null answer (unknown) stays fresh for a shorter time.
+  // During the back-off a fresh answer is still served, but no call starts;
+  // a failed one starts it and is not kept. Never rejects.
+  function cachedRead(app, cache, map, key, maxEntries, read) {
+    const cached = map.get(key);
     if (cached?.inFlight) return cached.inFlight;
-    const entry = { rows: null, fetchedAt: 0, inFlight: null };
-    entry.inFlight = guarded('sonarr', cache, async () => {
-      entry.rows = await client.fetchEpisodes(connection, seriesId);
-      entry.fetchedAt = now();
-      return entry.rows;
-    }).finally(() => {
-      entry.inFlight = null;
-      if (!entry.rows) cache.episodes.delete(seriesId);
-    });
-    cache.episodes.delete(seriesId);
-    cache.episodes.set(seriesId, entry);
-    while (cache.episodes.size > MAX_CACHED_SERIES_EPISODES) {
-      cache.episodes.delete(cache.episodes.keys().next().value);
-    }
+    if (cached && now() < cached.expiresAt) return Promise.resolve(cached.value);
+    if (backedOff(cache)) return Promise.resolve(UNAVAILABLE);
+    const entry = { value: null, expiresAt: 0, inFlight: null };
+    entry.inFlight = Promise.resolve().then(read).then(
+      (value) => {
+        const ttl = value === null ? UNKNOWN_NAME_TTL_MS : CATALOG_TTL_MS;
+        Object.assign(entry, { value, expiresAt: now() + ttl, inFlight: null });
+        return value;
+      },
+      (error) => {
+        if (map.get(key) === entry) map.delete(key);
+        reportFailure(app, cache, error);
+        return UNAVAILABLE;
+      }
+    );
+    map.delete(key);
+    map.set(key, entry);
+    while (map.size > maxEntries) map.delete(map.keys().next().value);
     return entry.inFlight;
   }
 
-  async function findSeries(text) {
+  function startSiblingRead(connection, state) {
+    state.startedAt = now();
+    state.inFlight = Promise.resolve()
+      .then(() => client.fetchSeries(connection))
+      .then(
+        (rows) => {
+          state.rows = rows;
+          state.fetchedAt = now();
+        },
+        (error) => {
+          state.retryAt = now() + SIBLING_RETRY_MS;
+          logger.warn(
+            { app: 'sonarr', ...failureContext(error) },
+            'Could not read the Sonarr series list; matching without the names of related series for an hour'
+          );
+        }
+      )
+      .finally(() => {
+        state.inFlight = null;
+      });
+  }
+
+  // The whole series list, only for the names of related series. A side
+  // read that never shares the lookups' back-off: an old list serves while
+  // a new one loads, and the first load is waited for at most 3 s after it
+  // started, then left to finish for later requests.
+  async function siblingRows(connection, cache) {
+    const state = cache.siblings;
+    const fresh = state.rows && now() - state.fetchedAt < CATALOG_TTL_MS;
+    if (!fresh && !state.inFlight && now() >= state.retryAt) startSiblingRead(connection, state);
+    if (state.rows) return state.rows;
+    if (state.inFlight) await waitAtMost(state.inFlight, state.startedAt + SIBLING_FIRST_WAIT_MS - now());
+    return state.rows ?? [];
+  }
+
+  // The series a request names, with its aliases: the one Sonarr reads the
+  // release name as, when the name is one of that series' own. Sonarr also
+  // reads an alias with a scene season as the series, under other numbers.
+  async function findSeries({ text, textSource, season, episode }) {
     const connection = getSettings().sonarr;
     if (!connection) return null;
+    const key = nameKey(text);
+    const naming = { text, textSource, resolution: LOOKUP_RESOLUTION, group: DEFAULT_GROUP };
+    const releaseTitle = key && buildTvTitle({ ...naming, season, episode });
+    // Keyed by the name as a release name, not by key: "Batman" and "The
+    // Batman" are one key but two names, which Sonarr reads as two series.
+    const nameTitle = key && buildTvTitle({ ...naming, ...ANY_EPISODE });
+    if (!releaseTitle || !nameTitle) return null;
     const cache = cacheFor('sonarr', connection);
-    const row = pickRow(await lookUp('sonarr', connection, cache, text));
-    return row ? { row, connection, cache } : null;
+    const seriesId = await cachedRead('sonarr', cache, cache.names, nameTitle, MAX_CACHED_NAMES,
+      async () => (await client.fetchParsedEpisode(connection, releaseTitle)).series?.id ?? null);
+    if (!Number.isInteger(seriesId)) return null;
+    // The app is a host the user chose: a row for another id is no row.
+    const row = await cachedRead('sonarr', cache, cache.series, seriesId, MAX_CACHED_NAMES, async () => {
+      const answer = await client.fetchSeriesById(connection, seriesId);
+      return answer?.id === seriesId ? answer : null;
+    });
+    if (!row || row === UNAVAILABLE || !nameKeys(row).has(key)) return null;
+    return { row, connection, cache };
   }
 
   /**
-   * @param {{text: string}} request
+   * @param {{text: string, textSource: 'title'|'q'|null}} request
    * @returns {Promise<{id: number, title: string, titles: string[], runtimeSeconds: number|null}|null>}
    */
-  async function resolveSeries({ text }) {
+  async function resolveSeries({ text, textSource }) {
     try {
-      const found = await findSeries(text);
+      const found = await findSeries({ text, textSource, ...ANY_EPISODE });
       if (!found) return null;
       const { row } = found;
       return { id: row.id, title: row.title, titles: allNames(row), runtimeSeconds: row.runtimeSeconds };
@@ -233,27 +277,32 @@ function createArrCatalog({ client, getSettings, logger, now = Date.now }) {
   }
 
   /**
-   * @param {{text: string, season: number, episode: number}} request
+   * @param {{text: string, textSource: 'title'|'q'|null, season: number, episode: number}} request
    * @returns {Promise<{seriesTitle: string, seriesTitles: string[], seriesYear: number|null,
    *   siblingTitles: string[], episodeTitle: string|null, otherEpisodeTitles: string[],
    *   runtimeSeconds: number|null, season: number, episode: number,
    *   absoluteNumber: number|null}|null>} episodeTitle is null when the title cannot identify
    *   the episode; the runtime is the episode's, else the series'.
    */
-  async function resolveEpisode({ text, season, episode }) {
+  async function resolveEpisode({ text, textSource, season, episode }) {
     try {
-      const found = await findSeries(text);
+      const found = await findSeries({ text, textSource, season, episode });
       if (!found) return null;
       const { row, connection, cache } = found;
-      // The numbers Sonarr sends for such a series may be scene numbers,
-      // which would name another episode.
-      const rows = row.sceneNumbering ? null : await loadEpisodes(connection, cache, row.id);
-      const described = rows ? describeEpisode(row, rows, season, episode) : null;
+      const [rows, library] = await Promise.all([
+        // The numbers Sonarr sends for such a series may be scene numbers,
+        // which would name another episode.
+        row.sceneNumbering ? null : cachedRead('sonarr', cache, cache.episodes, row.id, MAX_CACHED_SERIES_EPISODES,
+          () => client.fetchEpisodes(connection, row.id)),
+        siblingRows(connection, cache),
+      ]);
+      const described = Array.isArray(rows) ? describeEpisode(row, rows, season, episode) : null;
       return {
         seriesTitle: row.title,
         seriesTitles: allNames(row),
         seriesYear: row.year ?? null,
-        siblingTitles: siblingTitles(row, cache.rows),
+        // The list holds its own, possibly older, row of this series.
+        siblingTitles: siblingTitles(row, library.filter((other) => other.id !== row.id)),
         episodeTitle: described?.episodeTitle ?? null,
         otherEpisodeTitles: described?.otherEpisodeTitles ?? [],
         runtimeSeconds: described?.runtimeSeconds ?? row.runtimeSeconds,
@@ -275,10 +324,16 @@ function createArrCatalog({ client, getSettings, logger, now = Date.now }) {
     try {
       const connection = getSettings().radarr;
       if (!connection) return null;
+      const key = nameKey(text);
+      const releaseTitle = key && buildMovieTitle({
+        title: text, year, resolution: LOOKUP_RESOLUTION, group: DEFAULT_GROUP,
+      });
+      if (!releaseTitle) return null;
       const cache = cacheFor('radarr', connection);
-      const entries = await lookUp('radarr', connection, cache, text);
-      const row = pickRow((entries ?? []).filter((candidate) => candidate.years.includes(year)));
-      return row ? { title: row.title, titles: allNames(row), runtimeSeconds: row.runtimeSeconds } : null;
+      const movie = await cachedRead('radarr', cache, cache.names, releaseTitle, MAX_CACHED_NAMES,
+        () => client.fetchParsedMovie(connection, releaseTitle));
+      if (!movie || movie === UNAVAILABLE || !movie.years.includes(year)) return null;
+      return { title: movie.title, titles: [movie.title], runtimeSeconds: movie.runtimeSeconds };
     } catch (error) {
       logger.warn({ detail: error?.message }, 'Could not resolve a Radarr movie');
       return null;

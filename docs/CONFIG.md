@@ -797,7 +797,14 @@ Settings for the Sonarr/Radarr bridge, served under `/arr/`. See [Sonarr and Rad
 - **Type**: `string`
 - **Default**: `""` (use [`preferredResolution`](#preferred-resolution))
 - **Values**: `""`, `"2160"`, `"1080"`, `"720"`, `"480"`
-- **Description**: The resolution Youtarr labels its releases with and downloads grabs at. It is a ceiling: a video that only exists in a lower resolution downloads at that, and Sonarr or Radarr read the real resolution from the file on import. 1440p and 360p are not offered because Sonarr and Radarr have no quality for them. A video that is already in your Youtarr library is handed over as it is.
+- **Description**: The resolution Youtarr downloads grabs at, as set when the download starts. It is a ceiling: a video that only exists in a lower resolution downloads at that, and Sonarr or Radarr read the real resolution from the file on import. A release is labeled with the video's real resolution, never more than this one. 1440p and 360p are not offered because Sonarr and Radarr have no quality for them. A video that is already in your Youtarr library is handed over as it is. See [Resolution](SONARR_RADARR.md#resolution).
+
+### Label Limit for Sonarr and Radarr
+- **Config Key**: `arrBridgeLabelLimit`
+- **Type**: `string`
+- **Default**: `""` (no limit: a release is labeled with the video's real resolution)
+- **Values**: `""`, `"1080"`, `"720"`, `"480"`
+- **Description**: The highest resolution a release is labeled with. A lower label makes Sonarr and Radarr pick Youtarr only when nothing better is offered. It only changes the label: the video is still downloaded at [`arrBridgeResolution`](#resolution-for-sonarr-and-radarr), and Sonarr and Radarr read its real quality from the file when they import it. See [Using Youtarr beside other indexers](SONARR_RADARR.md#using-youtarr-beside-other-indexers).
 
 ### Remove After Import
 - **Config Key**: `arrBridgeRemoveAfterImport`

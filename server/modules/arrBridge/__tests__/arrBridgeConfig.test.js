@@ -33,6 +33,7 @@ describe('arrBridgeConfig', () => {
         stagingPath: null,
         retentionDays: 7,
         resolution: null,
+        labelLimit: null,
         removeAfterImport: false,
         sonarr: null,
         radarr: null,
@@ -116,6 +117,14 @@ describe('arrBridgeConfig', () => {
       expect(readSettings({ arrBridgeResolution: '' }).resolution).toBeNull();
       expect(readSettings({ arrBridgeResolution: '1440' }).resolution).toBeNull();
       expect(readSettings({ arrBridgeResolution: 1080 }).resolution).toBeNull();
+    });
+
+    test('reads the label limit as a number, and no limit for anything else', () => {
+      expect(readSettings({ arrBridgeLabelLimit: '720' }).labelLimit).toBe(720);
+      expect(readSettings({ arrBridgeLabelLimit: '480' }).labelLimit).toBe(480);
+      expect(readSettings({ arrBridgeLabelLimit: '' }).labelLimit).toBeNull();
+      expect(readSettings({ arrBridgeLabelLimit: '2160' }).labelLimit).toBeNull();
+      expect(readSettings({ arrBridgeLabelLimit: 720 }).labelLimit).toBeNull();
     });
 
     test('reports a stored key and ignores an empty one', () => {
@@ -245,11 +254,12 @@ describe('arrBridgeConfig', () => {
       arrBridgeStagingPath: '',
       arrBridgeStagingRetentionDays: 7,
       arrBridgeResolution: '',
+      arrBridgeLabelLimit: '',
       arrBridgeRemoveAfterImport: false,
     };
     const categories = (count) => Array.from({ length: count }, (_, index) => ({ name: `cat${index}`, subfolder: null }));
 
-    test('names the ten settings', () => {
+    test('names the eleven settings', () => {
       expect([...SETTING_KEYS].sort()).toEqual(Object.keys(DEFAULTS).sort());
     });
 
@@ -380,6 +390,20 @@ describe('arrBridgeConfig', () => {
       expect(correctStoredSettings({ arrBridgeResolution: '1440' }))
         .toEqual([{ key: 'arrBridgeResolution', previous: '1440', replacement: '' }]);
       expect(correctStoredSettings({ arrBridgeResolution: '720' })).toEqual([]);
+    });
+
+    test.each(['', '1080', '720', '480'])('accepts the label limit "%s"', (value) => {
+      expect(getSettingsError({ arrBridgeLabelLimit: value })).toBeNull();
+    });
+
+    test.each(['2160', '1440', 'best', 720, null])('refuses the label limit %p', (value) => {
+      expect(getSettingsError({ arrBridgeLabelLimit: value })).toMatch(/^Sonarr\/Radarr label limit/);
+    });
+
+    test('a hand-edited label limit that cannot be saved goes back to no limit', () => {
+      expect(correctStoredSettings({ arrBridgeLabelLimit: '2160' }))
+        .toEqual([{ key: 'arrBridgeLabelLimit', previous: '2160', replacement: '' }]);
+      expect(correctStoredSettings({ arrBridgeLabelLimit: '480' })).toEqual([]);
     });
 
     test('correctStoredSettings replaces hand-edited values that could not be saved', () => {

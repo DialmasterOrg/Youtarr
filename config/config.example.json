@@ -80,6 +80,7 @@
   "arrBridgeStagingPath": "",
   "arrBridgeStagingRetentionDays": 7,
   "arrBridgeResolution": "",
+  "arrBridgeLabelLimit": "",
   "arrBridgeRemoveAfterImport": false,
   "autoRemovalEnabled": false,
   "autoRemovalFreeSpaceThreshold": null,

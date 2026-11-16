@@ -3,6 +3,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const configModule = require('./configModule');
 const ytDlpRunner = require('./ytDlpRunner');
+const ytdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const logger = require('../logger');
 const youtubeApi = require('./youtubeApi');
 const ChannelVideo = require('../models/channelvideo');
@@ -37,6 +38,7 @@ const NULL_METADATA = {
 };
 
 const YTDLP_FETCH_TIMEOUT_MS = 60000;
+const PROBE_FETCH_TIMEOUT_MS = 30000;
 
 // Convert yt-dlp upload_date (YYYYMMDD) to the ISO string format used by
 // channelvideos.publishedAt. Returns null if unparseable.
@@ -271,6 +273,31 @@ class VideoMetadataModule {
         usedCookies: err.usedCookies === true,
       });
       return { membersAccess: state, checked: true };
+    }
+  }
+
+  /**
+   * The resolutions YouTube offers for a video, from one fresh yt-dlp fetch
+   * without cookies, for automated lookups. Unlike getVideoMetadata it reads
+   * and writes no .info.json, records no members-only access, never falls
+   * back to the API and updates no row.
+   *
+   * @param {string} youtubeId - YouTube video ID
+   * @param {Object} [options]
+   * @param {number} [options.timeoutMs]
+   * @returns {Promise<number[]|null>} Sorted tiers, or null when unknown. Never rejects.
+   */
+  async probeAvailableResolutions(youtubeId, { timeoutMs = PROBE_FETCH_TIMEOUT_MS } = {}) {
+    try {
+      const args = ytdlpCommandBuilder.buildMetadataFetchArgs(
+        `https://www.youtube.com/watch?v=${youtubeId}`,
+        { skipSleepRequests: true, cookiesEnabled: false }
+      );
+      const rawData = JSON.parse(await ytDlpRunner.run(args, { timeoutMs }));
+      return this._extractAvailableResolutions(rawData?.formats);
+    } catch (err) {
+      logger.debug({ err, youtubeId }, 'Resolution probe failed');
+      return null;
     }
   }
 

@@ -19,7 +19,7 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 - `/arr` skips `verifyToken` because Sonarr and Radarr cannot log in. Every request checks the bridge key, also with `AUTH_ENABLED=false`, and the namespace answers 404 while `arrBridgeEnabled` is off, so a login proxy exemption for `/arr/` stays safe.
 - The key travels as `?apikey=` because the protocols allow nothing else. `redactUrl` and `redactQuery` in `server.js` and the log scrubber hide it; never log `req.query` or a rendered feed, whose item links carry the key.
 - `arrBridgeApiKey` is server-owned like `downloadsFeedToken`: `/getconfig` omits it and `/updateconfig` restores it. It is created the first time the bridge is found enabled or Settings asks for it.
-- Ten `arrBridge*` settings are in `CONFIG_FIELDS`. `arrBridgeConfig` holds the one rule set `/updateconfig` rejects with and `configModule` corrects stored values with; `readSettings` still corrects on every read, so a category name can never become a path.
+- Eleven `arrBridge*` settings are in `CONFIG_FIELDS`. `arrBridgeConfig` holds the one rule set `/updateconfig` rejects with and `configModule` corrects stored values with; `readSettings` still corrects on every read, so a category name can never become a path.
 - `/updateconfig` keeps a bridge setting the client did not send: a tab loaded before the settings existed posts a config without them, and a save replaces the whole config, which would switch the bridge off.
 - SABnzbd answers are always HTTP 200, with `status: false` for errors, because anything else marks the whole client unavailable. `mode=version` needs no key, as in real SABnzbd.
 
@@ -29,12 +29,18 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 - tv-search advertises `title` because Sonarr removes a leading "The" from `q`. A `q`-only TV request (Prowlarr drops `title`) is named `<Q>.AKA.The.<Q>`, which Sonarr matches with or without the article.
 - Release titles come from the request, never the video's title: tokens such as `E05`, `720p` or `German` change the parsed episode, quality or language. The channel name is the release group, screened by a denylist.
 - One release title is the feed title, NZB name, SABnzbd history `name`, staging folder and staged file name, because the apps map the file from that name, never from their own grab history.
-- The label's resolution is `arrBridgeResolution`, else `preferredResolution`; one setting, not per category, because a search does not say which category asks. With it set, the grab downloads at the resolution in its release name.
+- Every release name carries `YT` before `WEB-DL`. The apps recognize an imported release by its name (users' custom formats match the marker), so the name format must not change after release; older names without it stay valid.
+- A label is the video's real resolution, capped by the download resolution (`arrBridgeResolution`, else `preferredResolution`) and `arrBridgeLabelLimit`, because the apps rank by label, and a 480p video labeled 1080p outranked real 720p releases. Unknown means the cap.
+- Real resolution sources, in order: the library file's stored size, which the grab hands over (0x0 or missing is unknown); the API's `definition` (`hd` settles only a cap of 720 or lower); a 6 hour cache; a yt-dlp probe.
+- A grab downloads at `arrBridgeResolution` as read at download time, never the resolution in its name, which is the real resolution or lower. One setting, not per category: a search does not say which category asks.
+- Probes are bounded so yt-dlp never holds a search past the 100 s wait: 2 at a time, 10 and 20 s per answer, 100 an hour, paused 15 minutes after 3 failures, none under a 480 cap.
+- The resolution probe (`videoMetadataModule.probeAvailableResolutions`) runs without cookies, reads and writes no info.json and records no members-access state, because it runs automatically on searches, not on a user's action.
 - The feed reports size 0: Sonarr rejects a realistic YouTube size as too small for the series runtime. The estimate rides in the NZB link only for the queue's size columns.
 - The no-query feed returns one placeholder item, because both apps' indexer Test fails on an empty feed. Its link answers 404.
 - Strict matching is the default (an episode marker for TV, the year for a movie): whatever is offered parses as exactly the wanted item, and automatic search may grab it. Season answers stay strict even with loose matching on.
 - Strict TV matching also rejects a title with several episodes, and one with other words between the series name and the marker: "Beyblade Metal Fusion S01E29" contains every word of "Beyblade" but is another series.
 - A search that cannot run is held up to 30 s, then answered with Newznab error 900: never 429, which disables the indexer for 5 to 15 minutes, and never an empty page, which reads as "nothing on YouTube".
+- Bridge searches use at most a fixed daily share (5,000 units) of the YouTube API quota, then yt-dlp. Daily-show requests are exempt because only the API gives exact dates. The count is in memory; a restart resets it.
 - The failed-grab guard (7 days) keys on `fail_message` and `completed_at`, not status: Sonarr deletes a failed history item within a minute, turning the row `removed` before it searches again.
 
 ## Sonarr/Radarr connection and episode-title matching
@@ -48,8 +54,12 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 - `checkSharedFolder` asks the app to list the staging root as it knows it and passes on only whether a category folder is there: read-only, nothing listed is echoed, and another folder at that path does not pass.
 - The connection card never loads a stored key, but keeps a typed one in its field while the page is open, so a mistyped address is corrected without typing the key again.
 - `arrClient` follows no redirect, because axios would send the key header on to the redirect's target. Its abort signal is the real time limit: axios's `timeout` only bounds the wait between bytes.
-- A read that fails or resolves nothing falls back to the episode-code matcher, never an error document: `arrCatalog` never rejects and asks a failed app again only after 60 s, so alias requests do not each wait.
-- A request is tied to a series by name (title, title without its tag, aliases), as caps advertise no ids. A name two series share resolves to nothing: Sonarr sends it for either and reads the release as its own.
+- A failed lookup falls back to the episode-code matcher, never an error document. The app is not asked again for 60 s after a failure, so requests do not each wait; remembered answers still serve.
+- Caps advertise no ids, so a search is tied to a series by asking the app to parse the release name offered. The name must still be one of the series' own names (title, title without its tag, aliases).
+- A name two series share resolves to the series the app itself picks for that release name, because that is the series the app will read the release as.
+- Name lookups are remembered per release name, so "Batman" and "The Batman" stay apart, for 10 minutes; "not known" for 60 s only, so a series added just after a miss resolves soon.
+- The list of all series serves only the similar-series check below. No search waits on it: 60 s limit, old list used while a new one loads, first load awaited 3 s, retry after 1 hour.
+- The connection Test also parses the placeholder name: an app can answer system/status yet fail lookups. Not knowing the placeholder passes; a failed call is `lookup-failed`.
 - Aliases with a scene season are dropped and scene-numbered series get no episode title: Sonarr sends scene numbers for them, which would look up another episode.
 - The title stage searches `<main series title> <episode title>` for every alias, so one Sonarr search costs one YouTube search. Releases are still named from the alias that was asked.
 - A title match needs the episode title as a whole phrase, the series name within the video title or within the channel name, no other episode's number or title, and a length inside the runtime window.

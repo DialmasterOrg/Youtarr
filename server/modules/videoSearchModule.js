@@ -16,7 +16,7 @@ class SearchTimeoutError extends Error {
 }
 
 class VideoSearchModule {
-  async searchVideos(query, count, { signal } = {}) {
+  async searchVideos(query, count, { signal, useApi = true, onApiUnits } = {}) {
     if (!ALLOWED_COUNTS.includes(count)) {
       throw new Error(`count must be one of ${ALLOWED_COUNTS.join(', ')}`);
     }
@@ -24,10 +24,13 @@ class VideoSearchModule {
     let results = null;
     let source = null;
 
-    if (youtubeApi.isAvailable()) {
+    if (useApi !== false && youtubeApi.isAvailable()) {
       try {
         const apiKey = youtubeApi.getApiKey();
-        const apiResults = await youtubeApi.client.searchVideos(apiKey, query, count, { signal });
+        const apiResults = await youtubeApi.client.searchVideos(apiKey, query, count, {
+          signal,
+          ...(onApiUnits ? { onUnits: onApiUnits } : {}),
+        });
         results = apiResults;
         source = 'youtube-api';
       } catch (apiErr) {

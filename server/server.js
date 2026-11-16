@@ -279,6 +279,7 @@ const initialize = async () => {
     const subscriptionImportModule = require('./modules/subscriptionImport');
     const videoSearchModule = require('./modules/videoSearchModule');
     const videoDeletionModule = require('./modules/videoDeletionModule');
+    const videoMetadataModule = require('./modules/videoMetadataModule');
     const channelSearchModule = require('./modules/channelSearchModule');
     const youtubeApi = require('./modules/youtubeApi');
     const ytdlpModule = require('./modules/ytdlpModule');
@@ -320,7 +321,7 @@ const initialize = async () => {
     const arrBridge = createArrBridgeService({
       configModule,
       models: require('./models'),
-      searchVideos: (query, count) => videoSearchModule.searchVideos(query, count),
+      searchVideos: (query, count, options) => videoSearchModule.searchVideos(query, count, options),
       isYoutubeApiAvailable: () => youtubeApi.isAvailable(),
       downloader: (jobData, options) => downloadModule.doSpecificDownloads(jobData, false, options),
       jobLookup: (jobId) => jobModule.getJob(jobId),
@@ -331,6 +332,11 @@ const initialize = async () => {
       removeVideo: async (youtubeId, removal) => {
         const result = await videoDeletionModule.deleteVideosByYoutubeIds([youtubeId], removal);
         return result.deleted.includes(youtubeId);
+      },
+      // The highest resolution yt-dlp lists, for the release label; null when unknown.
+      probeResolution: async (youtubeId) => {
+        const resolutions = await videoMetadataModule.probeAvailableResolutions(youtubeId);
+        return Array.isArray(resolutions) && resolutions.length > 0 ? Math.max(...resolutions) : null;
       },
       logger,
     });

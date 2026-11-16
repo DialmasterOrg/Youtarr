@@ -28,6 +28,11 @@ describe('nzbFile', () => {
       expect(validateGrabFields(raw())).toEqual(fields());
     });
 
+    test('accepts a title built before the YT marker existed', () => {
+      const title = 'Show.S01E05.1080p.WEB-DL-Chan';
+      expect(validateGrabFields(raw({ title }))).toEqual(fields({ releaseTitle: title }));
+    });
+
     test.each([
       ['a 12-character id', { id: 'abcdefghijkl' }],
       ['the placeholder id', { id: PLACEHOLDER_ID }],

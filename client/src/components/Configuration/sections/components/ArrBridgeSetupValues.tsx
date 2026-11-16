@@ -43,7 +43,7 @@ interface ArrBridgeSetupValuesProps {
   categories: ArrCategory[];
   /** Whether the saved config already has the bridge on. */
   saved: boolean;
-  /** The resolution releases are labeled with, which the quality profile must allow. */
+  /** The highest resolution a release is labeled with; the quality profile must allow up to it. */
   resolution: number;
   setSnackbar: React.Dispatch<React.SetStateAction<SnackbarState>>;
 }
@@ -230,8 +230,9 @@ export const ArrBridgeSetupValues: React.FC<ArrBridgeSetupValuesProps> = ({
 
           <Typography variant="body2">
             Leave the username and password empty, then press Test on both. In each app, the quality profile of a
-            series or movie must allow WEBDL-{resolution}p, the resolution Youtarr labels its releases with (see
-            Downloads below).
+            series or movie must allow WEBDL at the resolution a video really has, because Youtarr labels each release
+            with it. The highest label is currently {resolution}p: it follows <strong>Resolution</strong> and{' '}
+            <strong>Offer releases as</strong> under Downloads below.
           </Typography>
 
           <Typography variant="body2" color="text.secondary">

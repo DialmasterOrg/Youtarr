@@ -5,7 +5,7 @@ const { createArrBridgeSettings } = require('../arrBridgeSettings');
 const SONARR_KEY = '5p1ke0000000000000000000000000ab';
 const RADARR_KEY = 'r4d4rr00000000000000000000000000';
 
-function setup(config = {}, { status, folderNames } = {}) {
+function setup(config = {}, { status, folderNames, parse } = {}) {
   const configModule = {
     config,
     getConfig: () => configModule.config,
@@ -16,6 +16,8 @@ function setup(config = {}, { status, folderNames } = {}) {
   const client = {
     fetchStatus: jest.fn(status || (async () => ({ appName: 'Sonarr', version: '4.0.20.3014' }))),
     fetchFolderNames: jest.fn(folderNames || (async () => ['movies', 'tv'])),
+    fetchParsedEpisode: jest.fn(parse || (async () => ({ series: null, episodes: [] }))),
+    fetchParsedMovie: jest.fn(parse || (async () => null)),
   };
   const staging = {
     stagingRoot: () => '/data/.arr-staging',
@@ -25,6 +27,8 @@ function setup(config = {}, { status, folderNames } = {}) {
   const settings = createArrBridgeSettings({ configModule, client, staging, logger });
   return { settings, configModule, client, logger };
 }
+
+const { PLACEHOLDER_TITLES } = require('../searchService');
 
 const logged = (logger) => JSON.stringify(
   [logger.info, logger.warn, logger.error, logger.debug].map((method) => method.mock.calls)
@@ -229,6 +233,82 @@ describe('arrBridgeSettings', () => {
         const result = await settings.testStoredConnection('radarr');
 
         expect(result.message).toMatch(/^Youtarr could not find a server called "radarr"\./);
+      });
+    });
+
+    describe('the lookup', () => {
+      const failingParse = async () => {
+        throw new ArrUnavailableError('not-json');
+      };
+
+      test('asks Sonarr to parse the placeholder name and passes when it does not know it', async () => {
+        const { settings, client } = setup();
+
+        const result = await settings.saveConnection('sonarr', { url: 'http://sonarr:8989', apiKey: SONARR_KEY });
+
+        expect(client.fetchParsedEpisode).toHaveBeenCalledWith(
+          { url: 'http://sonarr:8989', apiKey: SONARR_KEY },
+          PLACEHOLDER_TITLES.tv
+        );
+        expect(client.fetchParsedMovie).not.toHaveBeenCalled();
+        expect(result).toMatchObject({ ok: true, appName: 'Sonarr' });
+      });
+
+      test('asks Radarr to parse the placeholder movie name', async () => {
+        const { settings, client } = setup({}, {
+          status: async () => ({ appName: 'Radarr', version: '6.4.4.10685' }),
+        });
+
+        const result = await settings.saveConnection('radarr', { url: 'http://radarr:7878', apiKey: RADARR_KEY });
+
+        expect(client.fetchParsedMovie).toHaveBeenCalledWith(
+          { url: 'http://radarr:7878', apiKey: RADARR_KEY },
+          PLACEHOLDER_TITLES.movie
+        );
+        expect(client.fetchParsedEpisode).not.toHaveBeenCalled();
+        expect(result).toMatchObject({ ok: true, appName: 'Radarr' });
+      });
+
+      test('fails with lookup-failed, saves nothing and echoes nothing of the failure', async () => {
+        const { settings, configModule, logger } = setup({}, { parse: failingParse });
+
+        const result = await settings.saveConnection('sonarr', { url: 'http://sonarr:8989', apiKey: SONARR_KEY });
+
+        expect(result).toEqual({
+          ok: false,
+          reason: 'lookup-failed',
+          message: 'Sonarr answered, but could not look up a title. Check that the address points at Sonarr itself and that its version is current.',
+        });
+        expect(configModule.updateConfig).not.toHaveBeenCalled();
+        expect(logged(logger)).not.toContain(SONARR_KEY);
+      });
+
+      test('names Radarr in both places for a Radarr whose lookup fails', async () => {
+        const { settings } = setup({
+          arrBridgeRadarrUrl: 'http://radarr:7878',
+          arrBridgeRadarrApiKey: RADARR_KEY,
+        }, {
+          status: async () => ({ appName: 'Radarr', version: '6.4.4.10685' }),
+          parse: failingParse,
+        });
+
+        const result = await settings.testStoredConnection('radarr');
+
+        expect(result.message).toBe('Radarr answered, but could not look up a title. Check that the address points at Radarr itself and that its version is current.');
+      });
+
+      test('is not asked when the status check already failed or named the other app', async () => {
+        const wrong = setup({}, { status: async () => ({ appName: 'Radarr', version: '6' }) });
+        await wrong.settings.testStoredConnection('sonarr');
+        const down = setup({ arrBridgeSonarrUrl: 'http://sonarr:8989', arrBridgeSonarrApiKey: SONARR_KEY }, {
+          status: async () => {
+            throw new ArrUnavailableError('unauthorized');
+          },
+        });
+        await down.settings.testStoredConnection('sonarr');
+
+        expect(wrong.client.fetchParsedEpisode).not.toHaveBeenCalled();
+        expect(down.client.fetchParsedEpisode).not.toHaveBeenCalled();
       });
     });
 

@@ -5,6 +5,8 @@
 const { sanitizeNameLikeYtDlp } = require('../filesystem/sanitizer');
 
 const DEFAULT_GROUP = 'YOUTARR';
+// Sonarr and Radarr remember imported releases by name; this marks ours.
+const SOURCE_TAG = 'YT';
 const MAX_SERIES_TOKEN_LENGTH = 60;
 const MAX_GROUP_LENGTH = 30;
 // The title is also a folder and a file name; this leaves room for an extension.
@@ -100,15 +102,22 @@ function resolutionLabel(preferredResolution) {
   return 480;
 }
 
-// The last one counts: a series can be named after a resolution.
-const TITLE_RESOLUTION = /^.*\.(480|720|1080|2160)p\.WEB-DL-/;
+const isPositiveNumber = (value) => typeof value === 'number' && Number.isFinite(value) && value > 0;
 
 /**
- * @param {unknown} releaseTitle - A title this module built
- * @returns {string|null} The resolution it was labeled with ('1080'), or null
+ * The resolution a release is labeled with: the video's real resolution,
+ * never above the download resolution or the label limit.
+ * @param {Object} options
+ * @param {number|null} options.realTier - The video's resolution, null when unknown
+ * @param {unknown} options.downloadResolution - arrBridgeResolution, else preferredResolution
+ * @param {number|null} options.labelLimit - From arrBridgeLabelLimit, null for no limit
+ * @returns {480|720|1080|2160}
  */
-function resolutionOfTitle(releaseTitle) {
-  return TITLE_RESOLUTION.exec(typeof releaseTitle === 'string' ? releaseTitle : '')?.[1] ?? null;
+function labelFor({ realTier, downloadResolution, labelLimit }) {
+  const download = resolutionLabel(downloadResolution);
+  const real = isPositiveNumber(realTier) ? realTier : download;
+  const limit = isPositiveNumber(labelLimit) ? labelLimit : Infinity;
+  return resolutionLabel(Math.min(real, download, limit));
 }
 
 const pad2 = (value) => String(value).padStart(2, '0');
@@ -131,19 +140,19 @@ const finish = (title) => (isValidReleaseTitle(title) ? title : null);
 function buildTvTitle({ text, textSource, season, episode, resolution, group }) {
   const name = tvSeriesName(text, textSource);
   if (!name) return null;
-  return finish(`${name}.S${pad2(season)}E${pad2(episode)}.${resolution}p.WEB-DL-${group}`);
+  return finish(`${name}.S${pad2(season)}E${pad2(episode)}.${resolution}p.${SOURCE_TAG}.WEB-DL-${group}`);
 }
 
 function buildDailyTitle({ text, textSource, year, month, day, resolution, group }) {
   const name = tvSeriesName(text, textSource);
   if (!name) return null;
-  return finish(`${name}.${year}.${pad2(month)}.${pad2(day)}.${resolution}p.WEB-DL-${group}`);
+  return finish(`${name}.${year}.${pad2(month)}.${pad2(day)}.${resolution}p.${SOURCE_TAG}.WEB-DL-${group}`);
 }
 
 function buildMovieTitle({ title, year, resolution, group }) {
   const name = seriesToken(title);
   if (!name) return null;
-  return finish(`${name}.${year}.${resolution}p.WEB-DL-${group}`);
+  return finish(`${name}.${year}.${resolution}p.${SOURCE_TAG}.WEB-DL-${group}`);
 }
 
 /**
@@ -160,11 +169,12 @@ function isValidReleaseTitle(title) {
 
 module.exports = {
   DEFAULT_GROUP,
+  SOURCE_TAG,
   foldLatinAccents,
   seriesToken,
   groupToken,
   resolutionLabel,
-  resolutionOfTitle,
+  labelFor,
   buildTvTitle,
   buildDailyTitle,
   buildMovieTitle,

@@ -63,7 +63,7 @@ describe('arrClient', () => {
       expect(url).not.toContain(KEY);
       expect(options).toEqual(expect.objectContaining({
         headers: { 'X-Api-Key': KEY },
-        timeout: 10000,
+        timeout: 60000,
         maxRedirects: 0,
         maxContentLength: 64 * 1024 * 1024,
       }));
@@ -139,6 +139,214 @@ describe('arrClient', () => {
     });
   });
 
+  describe('fetchParsedEpisode', () => {
+    const TITLE = 'Office.AKA.The.Office.S01E02.1080p.YT.WEB-DL-YOUTARR';
+    const parsed = (extra) => ({
+      title: TITLE,
+      parsedEpisodeInfo: { seriesTitle: 'Office AKA The Office' },
+      languages: [],
+      customFormats: [],
+      ...extra,
+    });
+
+    test('asks the app to parse the release name, with the title as a param and the caps set', async () => {
+      axios.get.mockResolvedValue({ data: parsed({ series: { id: 12, title: 'The Office (US)' }, episodes: [] }) });
+
+      await client.fetchParsedEpisode(SONARR, TITLE);
+
+      const [url, options] = axios.get.mock.calls[0];
+      expect(url).toBe('http://sonarr:8989/api/v3/parse');
+      expect(url).not.toContain(KEY);
+      expect(url).not.toContain('title');
+      expect(options).toEqual(expect.objectContaining({
+        headers: { 'X-Api-Key': KEY },
+        params: { title: TITLE },
+        timeout: 10000,
+        maxRedirects: 0,
+        maxContentLength: 4 * 1024 * 1024,
+      }));
+    });
+
+    test('maps the series and the episodes', async () => {
+      axios.get.mockResolvedValue({
+        data: parsed({
+          series: {
+            id: 12, title: 'The Office (US)', year: 2005, runtime: 24, useSceneNumbering: false, tvdbId: 1,
+          },
+          episodes: [{ ...EPISODE_ROW, seasonNumber: 1, episodeNumber: 2 }, { title: 'no numbers' }],
+        }),
+      });
+
+      await expect(client.fetchParsedEpisode(SONARR, TITLE)).resolves.toEqual({
+        series: {
+          id: 12, title: 'The Office (US)', titles: [], year: 2005, runtimeSeconds: 1440, sceneNumbering: false,
+        },
+        episodes: [{
+          season: 1, episode: 2, title: 'Play It Again, Dizzi!', runtimeSeconds: 1500, absoluteNumber: 29,
+        }],
+      });
+    });
+
+    test('a name the app does not know has no series and no episodes', async () => {
+      axios.get.mockResolvedValue({ data: parsed({ episodes: [] }) });
+
+      await expect(client.fetchParsedEpisode(SONARR, TITLE)).resolves.toEqual({ series: null, episodes: [] });
+    });
+
+    test('a known series with an episode that does not exist has no episodes', async () => {
+      axios.get.mockResolvedValue({ data: parsed({ series: { id: 12, title: 'The Office (US)' }, episodes: [] }) });
+
+      const answer = await client.fetchParsedEpisode(SONARR, TITLE);
+
+      expect(answer.series).toMatchObject({ id: 12 });
+      expect(answer.episodes).toEqual([]);
+    });
+
+    test('a series row that is not usable counts as no series', async () => {
+      axios.get.mockResolvedValue({ data: parsed({ series: { title: 'No id' }, episodes: 'text' }) });
+
+      await expect(client.fetchParsedEpisode(SONARR, TITLE)).resolves.toEqual({ series: null, episodes: [] });
+    });
+
+    test.each([
+      ['a login page', '<html><body>Sign in</body></html>'],
+      ['a list', []],
+      ['nothing', null],
+    ])('%s is not an answer', async (_label, data) => {
+      axios.get.mockResolvedValue({ data });
+
+      await expect(client.fetchParsedEpisode(SONARR, TITLE)).rejects.toMatchObject({ reason: 'not-json' });
+    });
+
+    test('an aborted read is a timeout', async () => {
+      axios.get.mockRejectedValue(axiosError({ code: 'ERR_CANCELED', message: 'canceled' }));
+
+      const error = await client.fetchParsedEpisode(SONARR, TITLE).catch((caught) => caught);
+
+      expect(error).toMatchObject({ reason: 'timeout' });
+      expect(error.cause).toBeUndefined();
+      expect(JSON.stringify({ ...error, message: error.message, stack: error.stack })).not.toContain(KEY);
+    });
+
+    test('an answer over the byte cap is too-large', async () => {
+      axios.get.mockRejectedValue(axiosError({
+        code: 'ERR_BAD_RESPONSE', message: 'maxContentLength size of 4194304 exceeded',
+      }));
+
+      await expect(client.fetchParsedEpisode(SONARR, TITLE)).rejects.toMatchObject({ reason: 'too-large' });
+    });
+  });
+
+  describe('fetchParsedMovie', () => {
+    const TITLE = 'Plan.9.from.Outer.Space.1957.1080p.YT.WEB-DL-YOUTARR';
+
+    test('asks the app to parse the release name, keeping the URL Base path', async () => {
+      axios.get.mockResolvedValue({ data: { title: TITLE, parsedMovieInfo: {} } });
+
+      await client.fetchParsedMovie(RADARR, TITLE);
+
+      const [url, options] = axios.get.mock.calls[0];
+      expect(url).toBe('http://radarr:7878/radarr/api/v3/parse');
+      expect(options).toEqual(expect.objectContaining({
+        headers: { 'X-Api-Key': KEY },
+        params: { title: TITLE },
+        timeout: 10000,
+        maxRedirects: 0,
+        maxContentLength: 4 * 1024 * 1024,
+      }));
+    });
+
+    test('maps the movie to its id, title, years and runtime', async () => {
+      axios.get.mockResolvedValue({
+        data: {
+          title: TITLE,
+          movie: {
+            id: 12, title: 'Plan 9 from Outer Space', originalTitle: 'Plan 9', year: 1957, secondaryYear: 1998, runtime: 78,
+          },
+        },
+      });
+
+      await expect(client.fetchParsedMovie(RADARR, TITLE)).resolves.toEqual({
+        id: 12, title: 'Plan 9 from Outer Space', years: [1957, 1998], runtimeSeconds: 4680,
+      });
+    });
+
+    test('a name or year the app does not know is null', async () => {
+      axios.get.mockResolvedValue({ data: { title: TITLE, parsedMovieInfo: {} } });
+
+      await expect(client.fetchParsedMovie(RADARR, TITLE)).resolves.toBeNull();
+    });
+
+    test.each([
+      ['a login page', '<html><body>Sign in</body></html>'],
+      ['a list', []],
+    ])('%s is not an answer', async (_label, data) => {
+      axios.get.mockResolvedValue({ data });
+
+      await expect(client.fetchParsedMovie(RADARR, TITLE)).rejects.toMatchObject({ reason: 'not-json' });
+    });
+
+    test('an aborted read is a timeout', async () => {
+      axios.get.mockRejectedValue(axiosError({ code: 'ERR_CANCELED' }));
+
+      await expect(client.fetchParsedMovie(RADARR, TITLE)).rejects.toMatchObject({ reason: 'timeout' });
+    });
+  });
+
+  describe('fetchSeriesById', () => {
+    test('asks for one series, with the caps set', async () => {
+      axios.get.mockResolvedValue({ data: OFFICE_ROW });
+
+      await client.fetchSeriesById({ url: 'http://sonarr:8989/sonarr', apiKey: KEY }, 12);
+
+      const [url, options] = axios.get.mock.calls[0];
+      expect(url).toBe('http://sonarr:8989/sonarr/api/v3/series/12');
+      expect(options).toEqual(expect.objectContaining({
+        headers: { 'X-Api-Key': KEY },
+        timeout: 10000,
+        maxRedirects: 0,
+        maxContentLength: 4 * 1024 * 1024,
+      }));
+    });
+
+    test('maps the row with its aliases and drops scene-season aliases', async () => {
+      axios.get.mockResolvedValue({
+        data: {
+          ...OFFICE_ROW,
+          alternateTitles: [
+            { title: 'The Office', seasonNumber: -1 },
+            { title: 'Dino Fury', seasonNumber: 28, sceneSeasonNumber: 1 },
+          ],
+        },
+      });
+
+      await expect(client.fetchSeriesById(SONARR, 12)).resolves.toEqual({
+        id: 12,
+        title: 'The Office (US)',
+        titles: ['The Office'],
+        year: null,
+        runtimeSeconds: 1440,
+        sceneNumbering: false,
+      });
+    });
+
+    test.each([
+      ['a login page', '<html><body>Sign in</body></html>'],
+      ['a list', []],
+      ['a row without an id', { title: 'No id' }],
+    ])('%s is not an answer', async (_label, data) => {
+      axios.get.mockResolvedValue({ data });
+
+      await expect(client.fetchSeriesById(SONARR, 12)).rejects.toMatchObject({ reason: 'not-json' });
+    });
+
+    test('a 404 is unreachable and keeps its status', async () => {
+      axios.get.mockRejectedValue(axiosError({ status: 404 }));
+
+      await expect(client.fetchSeriesById(SONARR, 12)).rejects.toMatchObject({ reason: 'unreachable', status: 404 });
+    });
+  });
+
   describe('fetchEpisodes', () => {
     test('asks for one series and keeps the URL Base path', async () => {
       axios.get.mockResolvedValue({ data: [] });
@@ -164,42 +372,6 @@ describe('arrClient', () => {
       await expect(client.fetchEpisodes(SONARR, 7)).resolves.toEqual([{
         season: 13, episode: 30, title: '', runtimeSeconds: null, absoluteNumber: null,
       }]);
-    });
-  });
-
-  describe('fetchMovies', () => {
-    test('maps a movie with its original and alternate titles', async () => {
-      axios.get.mockResolvedValue({
-        data: [{
-          id: 3,
-          title: 'Amélie',
-          originalTitle: 'Le Fabuleux Destin d\'Amélie Poulain',
-          alternateTitles: [{ title: 'The Fabulous Destiny of Amelie Poulain' }, { title: 'Ameri' }],
-          year: 2001,
-          runtime: 122,
-          overview: 'Text.',
-        }],
-      });
-
-      await expect(client.fetchMovies(RADARR)).resolves.toEqual([{
-        id: 3,
-        title: 'Amélie',
-        titles: ['Le Fabuleux Destin d\'Amélie Poulain', 'The Fabulous Destiny of Amelie Poulain', 'Ameri'],
-        years: [2001],
-        runtimeSeconds: 7320,
-      }]);
-      expect(axios.get.mock.calls[0][0]).toBe('http://radarr:7878/radarr/api/v3/movie');
-    });
-
-    test('keeps the secondary year beside the year', async () => {
-      axios.get.mockResolvedValue({
-        data: [{ id: 12, title: 'Plan 9 from Outer Space', year: 1957, secondaryYear: 1998, runtime: 78 }],
-      });
-
-      const [movie] = await client.fetchMovies(RADARR);
-
-      expect(movie.years).toEqual([1957, 1998]);
-      expect(movie.titles).toEqual([]);
     });
   });
 
@@ -397,14 +569,44 @@ describe('arrClient', () => {
     test('a JSON object where a list belongs is not an answer', async () => {
       axios.get.mockResolvedValue({ data: { error: 'Unauthorized' } });
 
-      await expect(client.fetchMovies(RADARR)).rejects.toMatchObject({ reason: 'not-json' });
+      await expect(client.fetchEpisodes(SONARR, 14)).rejects.toMatchObject({ reason: 'not-json' });
     });
 
-    test('a timeout is unreachable', async () => {
-      axios.get.mockRejectedValue(axiosError({ code: 'ECONNABORTED', message: 'timeout of 10000ms exceeded' }));
+    test.each(['ECONNABORTED', 'ETIMEDOUT', 'ERR_CANCELED'])('%s is a timeout', async (code) => {
+      axios.get.mockRejectedValue(axiosError({ code, message: 'timeout of 10000ms exceeded' }));
 
       await expect(client.fetchSeries(SONARR)).rejects.toMatchObject({
-        reason: 'unreachable', code: 'ECONNABORTED', status: null,
+        reason: 'timeout', code, status: null,
+      });
+    });
+
+    test('axios\'s maxContentLength failure is too-large', async () => {
+      axios.get.mockRejectedValue(axiosError({
+        code: 'ERR_BAD_RESPONSE', message: 'maxContentLength size of 67108864 exceeded',
+      }));
+
+      await expect(client.fetchSeries(SONARR)).rejects.toMatchObject({
+        reason: 'too-large', code: 'ERR_BAD_RESPONSE',
+      });
+    });
+
+    test('another bad response is still unreachable', async () => {
+      axios.get.mockRejectedValue(axiosError({ code: 'ERR_BAD_RESPONSE', message: 'Request failed with status code 500', status: 500 }));
+
+      await expect(client.fetchSeries(SONARR)).rejects.toMatchObject({ reason: 'unreachable', status: 500 });
+    });
+
+    test('a timeout and a too-large answer carry nothing of the request', async () => {
+      axios.get.mockRejectedValueOnce(axiosError({ code: 'ECONNABORTED' }));
+      axios.get.mockRejectedValueOnce(axiosError({ code: 'ERR_BAD_RESPONSE', message: 'maxContentLength size of 1 exceeded' }));
+
+      const timeout = await client.fetchSeries(SONARR).catch((caught) => caught);
+      const tooLarge = await client.fetchSeries(SONARR).catch((caught) => caught);
+
+      [timeout, tooLarge].forEach((error) => {
+        expect(error).toBeInstanceOf(ArrUnavailableError);
+        expect(error.cause).toBeUndefined();
+        expect(JSON.stringify({ ...error, message: error.message, stack: error.stack })).not.toContain(KEY);
       });
     });
 
@@ -457,13 +659,13 @@ describe('arrClient', () => {
         res.write('[');
         timers.push(setInterval(() => res.write(' '), 20));
       };
-      const realClient = createArrClient({ http: realAxios, timeoutMs: 150 });
+      const realClient = createArrClient({ http: realAxios, timeoutMs: 150, listTimeoutMs: 150 });
       const startedAt = Date.now();
 
       const error = await realClient.fetchSeries(connection).catch((caught) => caught);
       timers.forEach(clearInterval);
 
-      expect(error).toMatchObject({ name: 'ArrUnavailableError', reason: 'unreachable' });
+      expect(error).toMatchObject({ name: 'ArrUnavailableError', reason: 'timeout' });
       expect(Date.now() - startedAt).toBeLessThan(2000);
     });
 
