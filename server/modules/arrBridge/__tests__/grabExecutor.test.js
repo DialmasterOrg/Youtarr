@@ -2,6 +2,7 @@
 const { Op } = require('sequelize');
 const { createGrabExecutor } = require('../grabExecutor');
 const { ARR_BRIDGE_JOB_LABEL } = require('../../download/jobTypes');
+const jobOutputPrefixes = require('../../constants/jobOutputPrefixes');
 
 const NOW = new Date('2025-06-10T12:00:00.000Z');
 const GRAB_ID = '9b89e5bc-8c90-4e72-b245-270fed2eacc2';
@@ -337,6 +338,18 @@ describe('grabExecutor', () => {
     ])('waits when the job ended with "%s", before yt-dlp ran', async (output) => {
       const job = endedJob({}, 'Error');
       job.output = output;
+      const { executor, rows } = setup({ rows: [queued()], jobs: { [JOB_ID]: job } });
+
+      await executor.handleJobEnded({ jobId: JOB_ID });
+
+      expect(rows[0]).toMatchObject({ status: 'pending', fail_message: null });
+    });
+
+    // The writers (downloadExecutor, jobModule) build their messages from
+    // these same constants, so a reworded message is still recognized.
+    test.each(Object.entries(jobOutputPrefixes))('waits for a job output that begins with %s', async (name, prefix) => {
+      const job = endedJob({}, 'Error');
+      job.output = `${prefix}: any detail`;
       const { executor, rows } = setup({ rows: [queued()], jobs: { [JOB_ID]: job } });
 
       await executor.handleJobEnded({ jobId: JOB_ID });

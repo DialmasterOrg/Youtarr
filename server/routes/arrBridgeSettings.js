@@ -372,6 +372,113 @@ function createArrBridgeSettingsRoutes({ verifyToken, arrBridgeConnectionLimiter
     }
   });
 
+  /**
+   * @swagger
+   * /api/arr-bridge/searches:
+   *   get:
+   *     summary: List recent Sonarr/Radarr searches
+   *     description: The last 50 searches Sonarr and Radarr sent, newest first, with the YouTube searches each one ran and what became of every result. Kept in memory, so a restart empties the list. It never holds a key or a feed link.
+   *     tags: [Sonarr/Radarr bridge]
+   *     responses:
+   *       200:
+   *         description: The searches, newest first
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 searches:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id:
+   *                         type: integer
+   *                       at:
+   *                         type: string
+   *                         format: date-time
+   *                         description: When the request arrived; for a folded row, the latest one
+   *                       firstAt:
+   *                         type: string
+   *                         format: date-time
+   *                       count:
+   *                         type: integer
+   *                         description: Above 1 only for the no-query feed, whose requests share one row per kind
+   *                       kind:
+   *                         type: string
+   *                         nullable: true
+   *                         enum: [tv, movie]
+   *                       shape:
+   *                         type: string
+   *                         enum: [episode, season, daily, movie, rss, empty]
+   *                       asked:
+   *                         type: object
+   *                         description: What the request asked for (text, textSource, season, episode, year, month, day, limit)
+   *                       outcome:
+   *                         type: string
+   *                         enum: [offered, nothing, not-searched, failed]
+   *                       offered:
+   *                         type: integer
+   *                       note:
+   *                         type: string
+   *                         nullable: true
+   *                         description: Why nothing was searched, or why the search failed
+   *                       titleStageSkipped:
+   *                         type: string
+   *                         nullable: true
+   *                         enum: [no-connection, unknown-series, no-usable-title, no-runtime]
+   *                         description: Why an episode was not searched by its title
+   *                       stages:
+   *                         type: array
+   *                         items:
+   *                           type: object
+   *                           properties:
+   *                             matcher:
+   *                               type: string
+   *                               enum: [episode-title, episode-code, season, daily, movie]
+   *                             query:
+   *                               type: string
+   *                               description: What YouTube was searched for
+   *                             results:
+   *                               type: integer
+   *                             candidates:
+   *                               type: array
+   *                               items:
+   *                                 type: object
+   *                                 properties:
+   *                                   youtubeId:
+   *                                     type: string
+   *                                   title:
+   *                                     type: string
+   *                                   channelName:
+   *                                     type: string
+   *                                     nullable: true
+   *                                   duration:
+   *                                     type: number
+   *                                     nullable: true
+   *                                     description: Seconds
+   *                                   outcome:
+   *                                     type: string
+   *                                     enum: [offered, rejected]
+   *                                   releaseTitle:
+   *                                     type: string
+   *                                     nullable: true
+   *                                   reason:
+   *                                     type: string
+   *                                     nullable: true
+   *                                     description: A short code for why the video was not offered
+   *       500:
+   *         description: The searches could not be read
+   */
+  router.get('/api/arr-bridge/searches', verifyToken, (req, res) => {
+    try {
+      return res.json({ searches: arrBridge.listRecentSearches() });
+    } catch (err) {
+      req.log.error({ err }, 'Failed to read the Sonarr/Radarr searches');
+      return res.status(500).json({ error: 'Could not read the searches' });
+    }
+  });
+
   return router;
 }
 

@@ -8,6 +8,8 @@ paths:
   - "client/src/components/Configuration/sections/components/Arr*.tsx"
   - "client/src/components/Configuration/hooks/useArrBridge*.ts"
   - "client/src/components/Configuration/utils/arrBridgeSetup.ts"
+  - "client/src/components/Configuration/utils/arrBridgeSearches.ts"
+  - "server/modules/constants/jobOutputPrefixes.js"
 ---
 
 # Sonarr/Radarr bridge
@@ -42,6 +44,9 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 - A search that cannot run is held up to 30 s, then answered with Newznab error 900: never 429, which disables the indexer for 5 to 15 minutes, and never an empty page, which reads as "nothing on YouTube".
 - Bridge searches use at most a fixed daily share (5,000 units) of the YouTube API quota, then yt-dlp. Daily-show requests are exempt because only the API gives exact dates. The count is in memory; a restart resets it.
 - The failed-grab guard (7 days) keys on `fail_message` and `completed_at`, not status: Sonarr deletes a failed history item within a minute, turning the row `removed` before it searches again.
+- `recentSearches` keeps the last 50 Newznab requests in memory for Settings. It is handed request fields, results and release names only: never the origin, a feed link or a key, because item links carry the bridge key.
+- The filters tell `onReject` the first check a candidate fails, so the reason shown follows the check order. Reporting must never change which candidates pass; a new check needs a `REJECTION` code and a client label.
+- No-query requests (RSS sync, indexer Test) share one counted row per kind in `recentSearches`: both apps ask on every sync, which would push every real search out of the 50 rows.
 
 ## Sonarr/Radarr connection and episode-title matching
 
@@ -85,7 +90,7 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 - `grabExecutor` follows `externalRequestExecutor`, but each attempt gets a new job id stored on the grab: work on one grab is serialized, and every write names the status it expects, so a removed grab is never revived or staged.
 - A grab is failed only on evidence. A job a restart terminated, or one that never existed, queues the grab again at once; a file that cannot be checked waits.
 - A job that errored before trying the video, or a staging error, holds the grab 15 minutes and retries for a day, in memory. A failure makes the app blocklist the release and hides the video 7 days.
-- `endedBeforeTrying` names the three `Error` outputs written before yt-dlp runs (output folder check, process start, `failUnstartedJob`); rewording them in `downloadExecutor` or `jobModule` makes such grabs fail again. Any other `Error` job counts as tried, so a finalization error never re-downloads.
+- `endedBeforeTrying` matches a job's `Error` output against `constants/jobOutputPrefixes.js`, which `downloadExecutor` and `jobModule` also write from; a new failure before yt-dlp runs needs a prefix there. Any other `Error` job counts as tried, so a finalization error never re-downloads.
 - `grabService.grabState` derives what Settings shows. A removed grab that completed is `handed-off`, never "imported": the app sends the same history delete after an import and after a removal there.
 - A category's name cannot be edited in Settings, only removed and added: existing grabs carry the name and their staging folder is named after it.
 - `ARR_BRIDGE_JOB_LABEL` contains the manual download label on purpose, so job detection, per-video structure and members-only handling treat a grab as a manual download.

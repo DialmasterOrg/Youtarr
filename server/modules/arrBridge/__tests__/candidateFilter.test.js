@@ -448,4 +448,67 @@ describe('candidateFilter', () => {
       expect(filterMovie(candidates, { ...request, runtimeSeconds: 14 * 60 })).toHaveLength(1);
     });
   });
+
+  describe('the reason a candidate is left out (onReject)', () => {
+    // The reason reported for one candidate, or null when it is kept.
+    function reasonFor(filter, item, options) {
+      const reported = [];
+      const kept = filter([item], { ...options, onReject: (rejected, reason) => reported.push([rejected, reason]) });
+      expect(reported).toHaveLength(kept.length === 1 ? 0 : 1);
+      return reported.length === 1 ? reported[0][1] : null;
+    }
+
+    const office = (overrides = {}) => ({ text: 'The Office', season: 1, episode: 2, settings: settings(), ...overrides });
+
+    test.each([
+      ['excluded-word', candidate('The Office S01E02 Trailer'), office()],
+      ['unknown-length', candidate('The Office S01E02', { duration: undefined }), office()],
+      ['too-short', candidate('The Office S01E02', { duration: 5 * 60 }), office()],
+      ['outside-runtime', candidate('The Office S01E02', { duration: 50 * 60 }), office({ runtimeSeconds: 22 * 60 })],
+      ['name-missing', candidate('Parks and Recreation S01E02'), office()],
+      ['several-episodes', candidate('The Office S01E02-E03'), office()],
+      ['several-episodes', candidate('The Office S01E02 and S01E03'), office()],
+      ['wrong-episode', candidate('The Office S01E03'), office()],
+      ['another-series', candidate('The Office Australia S01E02'), office()],
+      ['no-episode-marker', candidate('The Office full episode'), office()],
+      ['no-episode-marker', candidate('The Office finale'), office({ settings: settings({ looseMatching: true }) })],
+      ['wrong-episode', candidate('The Office Episode 3'), office({ settings: settings({ looseMatching: true }) })],
+    ])('an episode: %s', (reason, item, options) => {
+      expect(reasonFor(filterTvEpisode, item, options)).toBe(reason);
+    });
+
+    test.each([
+      ['no-episode-marker', candidate('The Office best moments')],
+      ['several-episodes', candidate('The Office S01E01 S01E02')],
+      ['wrong-episode', candidate('The Office S02E01')],
+      ['another-series', candidate('The Office Australia S01E02')],
+    ])('a season: %s', (reason, item) => {
+      expect(reasonFor(filterTvSeason, item, { text: 'The Office', season: 1, settings: settings() })).toBe(reason);
+    });
+
+    test.each([
+      ['wrong-date', candidate('Last Week Tonight: Tariffs', { publishedAt: null })],
+      ['wrong-date', candidate('Last Week Tonight: Tariffs', { publishedAt: '2025-03-01T22:00:00.000Z' })],
+      ['name-missing', candidate('The Daily Show')],
+    ])('a daily episode: %s', (reason, item) => {
+      const options = { text: 'Last Week Tonight', date: new Date('2025-02-16T00:00:00.000Z'), settings: settings() };
+      expect(reasonFor(filterTvDaily, item, options)).toBe(reason);
+    });
+
+    test.each([
+      ['year-missing', candidate('The Matrix full movie', { duration: TWO_HOURS })],
+      ['too-short', candidate('The Matrix 1999', { duration: TWENTY_MINUTES })],
+    ])('a movie: %s', (reason, item) => {
+      expect(reasonFor(filterMovie, item, { title: 'The Matrix', year: 1999, settings: settings() })).toBe(reason);
+    });
+
+    test('a candidate that is kept is not reported', () => {
+      expect(reasonFor(filterTvEpisode, candidate('The Office S01E02'), office())).toBeNull();
+      expect(reasonFor(filterTvSeason, candidate('The Office S01E02'), office())).toBeNull();
+    });
+
+    test('request text with no usable word leaves every candidate out as name-missing', () => {
+      expect(reasonFor(filterTvEpisode, candidate('Anything S01E02'), office({ text: '&' }))).toBe('name-missing');
+    });
+  });
 });

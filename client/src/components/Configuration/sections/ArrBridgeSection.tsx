@@ -5,6 +5,7 @@ import { ConfigState, SnackbarState } from '../types';
 import { useArrBridgeKey } from '../hooks/useArrBridgeKey';
 import { useArrBridgeConnections } from '../hooks/useArrBridgeConnections';
 import { useArrBridgeGrabs } from '../hooks/useArrBridgeGrabs';
+import { useArrBridgeSearches } from '../hooks/useArrBridgeSearches';
 import { useArrBridgeFolderCheck } from '../hooks/useArrBridgeFolderCheck';
 import {
   ARR_APPS, ARR_DOCS_URL, releaseResolution, removeAfterImportWarning, stagingFolderOnHost,
@@ -16,6 +17,7 @@ import { ArrBridgeResolutionField } from './components/ArrBridgeResolutionField'
 import { ArrBridgeSharedFolder } from './components/ArrBridgeSharedFolder';
 import { ArrConnectionCard } from './components/ArrConnectionCard';
 import { ArrBridgeGrabList } from './components/ArrBridgeGrabList';
+import { ArrBridgeSearchList } from './components/ArrBridgeSearchList';
 
 interface ArrBridgeSectionProps {
   token: string | null;
@@ -44,6 +46,7 @@ export const ArrBridgeSection: React.FC<ArrBridgeSectionProps> = ({
   const { bridgeKey, loading, error, regenerating, regenerate } = useArrBridgeKey(token, enabled);
   const connections = useArrBridgeConnections(enabled ? token : null);
   const grabs = useArrBridgeGrabs(token, enabled);
+  const searches = useArrBridgeSearches(token, enabled);
   const status = connections.status;
   const connected = {
     sonarr: Boolean(status?.connections.sonarr.keySet),
@@ -236,6 +239,18 @@ export const ArrBridgeSection: React.FC<ArrBridgeSectionProps> = ({
               loading={grabs.loading}
               error={grabs.error}
               onRefresh={grabs.refresh}
+            />
+          </ConfigurationCard>
+
+          <ConfigurationCard
+            title="Recent searches"
+            subtitle="What Sonarr and Radarr asked for, what Youtarr found on YouTube, and why each video was or was not offered."
+          >
+            <ArrBridgeSearchList
+              searches={searches.searches}
+              loading={searches.loading}
+              error={searches.error}
+              onRefresh={searches.refresh}
             />
           </ConfigurationCard>
         </>

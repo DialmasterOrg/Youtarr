@@ -16,6 +16,7 @@ Youtarr can act as an indexer and a download client for Sonarr and Radarr. Sonar
 - [Keeping grabs apart from the rest of Youtarr](#keeping-grabs-apart-from-the-rest-of-youtarr)
 - [Categories and a second instance](#categories-and-a-second-instance)
 - [Recent grabs](#recent-grabs)
+- [Recent searches](#recent-searches)
 - [Login proxies](#login-proxies)
 - [Troubleshooting](#troubleshooting)
 
@@ -71,6 +72,14 @@ Leave the username and password empty. Press **Test** on both; both should pass.
 If Prowlarr manages your indexers, add Youtarr there instead of in each app: Indexers -> Add Indexer -> **Generic Newznab**, with the same URL, API Path and API Key as in the table above. Prowlarr then syncs it to Sonarr and Radarr as "Youtarr (Prowlarr)". Add the download client in Sonarr and Radarr as described above; Prowlarr does not sync download clients.
 
 Prowlarr does not pass a series' full name on, so episodes found through it are named like `Office.AKA.The.Office.S01E02.1080p.YT.WEB-DL-Channel`. Sonarr matches that name to the series with or without the leading "The". With renaming turned off in Sonarr, the imported file keeps that name.
+
+Prowlarr's own Search page gets results from Youtarr for an episode, a season or a movie, not for plain text:
+
+- **An episode:** under Query Options choose **TV Search**, and put the season and episode in the text: `Beverly Hillbillies {Season:1} {Episode:5}`. With `{Season:1}` alone you get that season's episodes.
+- **A movie:** choose a **Movies** category and end the text with the year: `Plan 9 from Outer Space 1957`. `{Year:1957}` does not work: Prowlarr does not pass it on.
+- **Anything else finds nothing**, for example a title alone, or `Beverly Hillbillies S01E05` typed as plain text.
+
+The [Recent searches](#recent-searches) list shows what Prowlarr sent and why a request was not searched.
 
 ## Step 3: Connect your Sonarr and Radarr (recommended)
 
@@ -273,7 +282,7 @@ A category is the name a Sonarr or Radarr instance gives its download client, an
 
 ## Recent grabs
 
-The bottom of the Settings page lists the newest grabs, ten at first:
+Near the bottom, the Settings page lists the newest grabs, ten at first:
 
 | State | Meaning |
 |---|---|
@@ -285,6 +294,51 @@ The bottom of the Settings page lists the newest grabs, ten at first:
 | Removed before it finished | The item was removed in the app before the download ended. The video still finishes downloading into Youtarr. |
 
 A staged file that nobody imports is removed after 7 days (**Remove files nobody imported after**, in step 4). Your library copy stays.
+
+## Recent searches
+
+Below the recent grabs, the Settings page lists the last 50 searches Sonarr and Radarr sent, ten at first. This is where to look when a search finds nothing, or offers a video you did not expect. Each row shows what was asked for, when, and the answer:
+
+| Answer | Meaning |
+|---|---|
+| 3 offered | Youtarr offered that many videos. What Sonarr or Radarr did with them shows in the app's own search results. |
+| Nothing offered | Youtarr searched YouTube, and no video passed. Open the row to see why. |
+| Not searched | The request is one Youtarr does not search for. The row says why: a TV search without a season, a movie without its year, a daily show without a YouTube API key, and so on. |
+| Could not search | The YouTube search failed or waited too long, and the app was told so. |
+
+**Show results** opens a row. It lists each YouTube search Youtarr ran for the request, with the text it searched for and how many videos came back. An episode can have two: by the episode's title (with a [connection](#step-3-connect-your-sonarr-and-radarr-recommended)), then by season and episode when the first offers nothing. When an episode was not searched by its title, the row says why.
+
+Under each search is every video YouTube returned, with its channel and length. An offered video shows the release name it was offered under. Every other video shows the first rule it failed:
+
+| Reason | Meaning |
+|---|---|
+| An excluded word is in the title | One of your excluded words (trailer, review and so on). |
+| Its length is not known | YouTube gave no length, and strict matching does not guess. |
+| Shorter than the shortest length allowed | Under the shortest episode or movie length. Applies when the app reports no runtime. |
+| Its length does not fit the runtime | Too short or too long for the runtime Sonarr or Radarr reports. |
+| The series or movie name is not in the title | A word of the name is missing. For a search by episode title, the name may also be in the channel's name. |
+| No season and episode in the title | Nothing like `S01E05`, `1x05` or `Season 1 Episode 5`. |
+| The title names another episode or season | It has a marker, for another episode. |
+| The title names several episodes | A range or a list, such as `S01E01-E03`. |
+| The title names another series | Other words sit between the name and the episode ("Beyblade Metal Fusion S01E29"), it names a similarly named series in your library, or it carries a year from before the series began. |
+| The episode's title is not in the title | For a search by episode title. |
+| The title also has another episode's title | Two episodes in one video. |
+| A one-word episode title also needs the episode number | A title like "Pilot" appears in unrelated videos. |
+| Not uploaded on the air date | For a daily show: the upload is more than a day from the air date. |
+| The movie's year is not in the title | Strict matching needs it. |
+| Its grab failed in the last 7 days | It is offered again after that. |
+| A channel closer to the series has this episode | Only the upload of the channel named after the series is offered. |
+| Another video already has this release name | Two videos from one channel would get the same name. The first is offered. |
+| Over the number of results the request asked for | The app asked for fewer results than passed. |
+| No release name could be built | The name asked for has nothing a release name can be made of. |
+
+Good to know:
+
+- Sonarr sends one request for each name of a series, so one search in Sonarr can be several rows.
+- Sonarr and Radarr also ask for "the newest releases" on every RSS sync and on the indexer Test. Youtarr answers those with a placeholder. They share one row for TV and one for movies, with a count.
+- Live and upcoming videos are dropped before the list is made, so they do not appear.
+- The list is kept in memory. A restart of Youtarr empties it, and it never holds your key.
+- The list does not update by itself. Press **Refresh** after a search.
 
 ## Login proxies
 
@@ -312,11 +366,11 @@ The bridge is off, or it was switched on but not saved yet: Youtarr answers "not
 
 Its title probably has no season and episode marker. Connect your Sonarr ([step 3](#step-3-connect-your-sonarr-and-radarr-recommended)), or turn on loose matching and search interactively.
 
-Youtarr's log has one line for every search, "Sonarr/Radarr search answered" or "Sonarr/Radarr search found no match", with the text it searched YouTube for and how many videos came back. See [Collecting Logs](TROUBLESHOOTING.md#collecting-logs) for where to find the log.
+To see what happened, open the search under [Recent searches](#recent-searches) on the Settings page: it shows the text Youtarr searched YouTube for, every video that came back, and why each one was not offered.
 
 **A search finds nothing for a movie you know is on YouTube**
 
-Strict matching needs the movie's year, as Radarr lists it, in the video's title. Many uploads carry no year or another one: Radarr lists Plan 9 from Outer Space as 1957, and many uploads say 1958 or 1959. YouTube also does not return the same videos for the same search every time, so a search that found the movie once can find nothing the next time. Search again later, or turn on loose matching and search interactively: it accepts a title without the year.
+Strict matching needs the movie's year, as Radarr lists it, in the video's title. Many uploads carry no year or another one: Radarr lists Plan 9 from Outer Space as 1957, and many uploads say 1958 or 1959. YouTube also does not return the same videos for the same search every time, so a search that found the movie once can find nothing the next time. Search again later, or turn on loose matching and search interactively: it accepts a title without the year. The [Recent searches](#recent-searches) list shows which videos came back and why each was not offered.
 
 **"Unknown Series" in Sonarr's log**
 

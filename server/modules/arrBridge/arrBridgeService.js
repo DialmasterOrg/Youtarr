@@ -10,6 +10,7 @@ const { createGrabExecutor } = require('./grabExecutor');
 const { createGrabService, grabState } = require('./grabService');
 const { createLibraryCopyRemover, libraryCopyView } = require('./libraryCopyRemover');
 const { createNewznabApi } = require('./newznabApi');
+const { createRecentSearches } = require('./recentSearches');
 const { createSabnzbdApi } = require('./sabnzbdApi');
 const { createSearchBudget } = require('./searchBudget');
 const { createSearchQueue } = require('./searchQueue');
@@ -153,6 +154,8 @@ function createArrBridgeService({
     useApi: needsApi === true || searchBudget.allowsApi(),
     onApiUnits: searchBudget.spend,
   });
+  // What the Settings page shows under "Recent searches"; lost on a restart.
+  const recentSearches = createRecentSearches();
   const searchService = createSearchService({
     searchVideos: budgetedSearchVideos,
     isYoutubeApiAvailable,
@@ -167,6 +170,7 @@ function createArrBridgeService({
       probe: probeResolution,
       logger,
     }),
+    recentSearches,
     logger,
   });
   const newznab = createNewznabApi({ getConfig, searchService, logger });
@@ -247,6 +251,7 @@ function createArrBridgeService({
     sabnzbd,
     settings,
     listRecentGrabs,
+    listRecentSearches: () => recentSearches.list(),
     isEnabled: () => isEnabled(getConfig()),
     isAuthorized: (candidate) => isAuthorized(getConfig(), candidate),
     start,

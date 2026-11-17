@@ -10,6 +10,7 @@ import { DEFAULT_CONFIG } from '../../../../config/configSchema';
 jest.mock('../../hooks/useArrBridgeKey', () => ({ useArrBridgeKey: jest.fn() }));
 jest.mock('../../hooks/useArrBridgeConnections', () => ({ useArrBridgeConnections: jest.fn() }));
 jest.mock('../../hooks/useArrBridgeGrabs', () => ({ useArrBridgeGrabs: jest.fn() }));
+jest.mock('../../hooks/useArrBridgeSearches', () => ({ useArrBridgeSearches: jest.fn() }));
 jest.mock('../../hooks/useArrBridgeFolderCheck', () => ({ useArrBridgeFolderCheck: jest.fn() }));
 jest.mock('../../../../hooks/useSubfolders', () => ({
   useSubfolders: () => ({ subfolders: [], loading: false, createSubfolder: jest.fn() }),
@@ -18,6 +19,7 @@ jest.mock('../../../../hooks/useSubfolders', () => ({
 const { useArrBridgeKey } = require('../../hooks/useArrBridgeKey');
 const { useArrBridgeConnections } = require('../../hooks/useArrBridgeConnections');
 const { useArrBridgeGrabs } = require('../../hooks/useArrBridgeGrabs');
+const { useArrBridgeSearches } = require('../../hooks/useArrBridgeSearches');
 const { useArrBridgeFolderCheck } = require('../../hooks/useArrBridgeFolderCheck');
 
 const KEY = 'a'.repeat(64);
@@ -80,6 +82,7 @@ describe('ArrBridgeSection', () => {
       bridgeKey: KEY, loading: false, error: null, regenerating: false, regenerate: jest.fn(),
     });
     useArrBridgeGrabs.mockReturnValue({ grabs: [], loading: false, error: null, refresh: jest.fn() });
+    useArrBridgeSearches.mockReturnValue({ searches: [], loading: false, error: null, refresh: jest.fn() });
     useArrBridgeFolderCheck.mockReturnValue({
       results: { sonarr: { ok: true, visible: true, path: IN_YOUTARR } }, checking: false, recheck: jest.fn(),
     });
@@ -95,7 +98,7 @@ describe('ArrBridgeSection', () => {
       expect(screen.getByRole('checkbox', { name: 'Enable the Sonarr / Radarr bridge' })).not.toBeChecked();
       expect(screen.getByText(/does not announce new uploads/)).toBeInTheDocument();
       expect(screen.queryByLabelText('API key')).not.toBeInTheDocument();
-      for (const heading of [...STEP_HEADINGS, 'Downloads', 'Matching', 'Recent grabs']) {
+      for (const heading of [...STEP_HEADINGS, 'Downloads', 'Matching', 'Recent grabs', 'Recent searches']) {
         expect(screen.queryByRole('heading', { name: heading })).not.toBeInTheDocument();
       }
     });
@@ -106,6 +109,7 @@ describe('ArrBridgeSection', () => {
       expect(useArrBridgeKey).toHaveBeenCalledWith('session', false);
       expect(useArrBridgeConnections).toHaveBeenCalledWith(null);
       expect(useArrBridgeGrabs).toHaveBeenCalledWith('session', false);
+      expect(useArrBridgeSearches).toHaveBeenCalledWith('session', false);
       expect(useArrBridgeFolderCheck.mock.calls[0][0]).toBeNull();
     });
 
@@ -122,10 +126,45 @@ describe('ArrBridgeSection', () => {
     setupSection();
 
     const headings = screen.getAllByRole('heading').map((heading) => heading.textContent);
-    const order = [...STEP_HEADINGS, 'Downloads', 'Matching', 'Recent grabs'].map((name) => headings.indexOf(name));
+    const order = [...STEP_HEADINGS, 'Downloads', 'Matching', 'Recent grabs', 'Recent searches'].map((name) => headings.indexOf(name));
     expect(order.every((index) => index >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(screen.getByText('Step 1: Turn it on and save')).toBeInTheDocument();
+  });
+
+  test('lists the recent searches, and Refresh asks for them again', () => {
+    const refresh = jest.fn();
+    useArrBridgeSearches.mockReturnValue({
+      searches: [{
+        id: 1,
+        at: '2025-06-10T10:00:00.000Z',
+        firstAt: '2025-06-10T10:00:00.000Z',
+        count: 1,
+        kind: 'tv',
+        shape: 'episode',
+        asked: {
+          text: 'Beyblade', textSource: 'title', season: 1, episode: 29, year: null, month: null, day: null, limit: 100,
+        },
+        outcome: 'nothing',
+        offered: 0,
+        note: null,
+        titleStageSkipped: null,
+        stages: [],
+      }],
+      loading: false,
+      error: null,
+      refresh,
+    });
+    setupSection();
+
+    const list = screen.getByRole('list', { name: 'Recent searches' });
+    expect(within(list).getByText('Beyblade S01E29')).toBeInTheDocument();
+    expect(within(list).getByText('Nothing offered')).toBeInTheDocument();
+    expect(useArrBridgeSearches).toHaveBeenCalledWith('session', true);
+
+    const refreshButtons = screen.getAllByRole('button', { name: 'Refresh' });
+    fireEvent.click(refreshButtons[refreshButtons.length - 1]);
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   test('shows every part of the page while the bridge is on', () => {

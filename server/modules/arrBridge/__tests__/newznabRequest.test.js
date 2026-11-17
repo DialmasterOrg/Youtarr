@@ -85,6 +85,24 @@ describe('parseNewznabRequest', () => {
     ])('%s', (_name, query) => {
       expect(parse(query).shape).toBe('empty');
     });
+
+    test.each([
+      ['movie-without-year', { t: 'search', cat: RADARR_CATS, q: 'Matrix' }],
+      ['no-text', { t: 'tvsearch', cat: SONARR_CATS, season: '1', ep: '1' }],
+      ['year-season', { t: 'tvsearch', cat: SONARR_CATS, title: 'Last Week Tonight', season: '2025' }],
+      ['no-season', { t: 'tvsearch', cat: SONARR_CATS, q: 'Bluey' }],
+      ['no-season', { t: 'search', cat: SONARR_CATS, q: 'Shogun 2024 Making of Shogun First Look' }],
+      ['unknown-kind', { t: 'search', q: 'anything' }],
+      ['later-page', { t: 'tvsearch', cat: SONARR_CATS, title: 'Bluey', season: '1', ep: '1', offset: '100' }],
+      ['invalid-date', { t: 'tvsearch', cat: SONARR_CATS, title: 'Show', season: '2025', ep: '13/40' }],
+    ])('says why: %s', (reason, query) => {
+      expect(parse(query).emptyReason).toBe(reason);
+    });
+
+    test('a request that is searched carries no reason', () => {
+      expect(parse({ t: 'tvsearch', cat: SONARR_CATS, title: 'Bluey', season: '1', ep: '1' }).emptyReason).toBeNull();
+      expect(parse({ t: 'tvsearch', cat: SONARR_CATS }).emptyReason).toBeNull();
+    });
   });
 
   test('a no-query request without categories is RSS with no kind (Prowlarr Test)', () => {

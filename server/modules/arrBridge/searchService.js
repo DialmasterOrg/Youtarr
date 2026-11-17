@@ -7,10 +7,13 @@ const { readSettings } = require('./arrBridgeConfig');
 const candidateFilter = require('./candidateFilter');
 const { filterByEpisodeTitle, canMatchByTitle, seriesChannelRank } = require('./episodeMatcher');
 const { PLACEHOLDER_ID, buildNzbLink } = require('./nzbFile');
+const { createRecentSearches, NOTE, TITLE_STAGE_SKIPPED } = require('./recentSearches');
 const {
   DEFAULT_GROUP, groupToken, labelFor, buildTvTitle, buildDailyTitle, buildMovieTitle,
 } = require('./releaseNaming');
 const { LOOKUP_BUDGET_MS } = require('./videoResolution');
+
+const { REJECTION } = candidateFilter;
 
 const EPISODE_SEARCH_COUNT = 25;
 // Sonarr and Radarr wait 100 s for an answer. The resolution lookup only
@@ -91,7 +94,8 @@ function placeholderItem(kind, origin) {
 
 // What to ask YouTube for, how to filter the answer, and how to name each
 // surviving candidate. Null when the request cannot be searched.
-// runtimeSeconds is what Sonarr or Radarr reports, or null.
+// runtimeSeconds is what Sonarr or Radarr reports, or null. A plan's select
+// takes the results and an onReject(candidate, code) for those it leaves out.
 function planSearch(request, { settings, isYoutubeApiAvailable, runtimeSeconds = null }) {
   const text = cleanQueryText(request.text);
   if (!text) return null;
@@ -102,8 +106,8 @@ function planSearch(request, { settings, isYoutubeApiAvailable, runtimeSeconds =
       matcher: 'episode-code',
       query: `${text} S${pad2(season)}E${pad2(episode)}`,
       count: EPISODE_SEARCH_COUNT,
-      select: (results) => candidateFilter
-        .filterTvEpisode(results, { text: request.text, season, episode, runtimeSeconds, settings })
+      select: (results, onReject) => candidateFilter
+        .filterTvEpisode(results, { text: request.text, season, episode, runtimeSeconds, settings, onReject })
         .map((candidate) => ({ candidate, name: { season, episode } })),
       title: (name, naming) => buildTvTitle({ text: request.text, textSource, ...name, ...naming }),
     };
@@ -113,8 +117,8 @@ function planSearch(request, { settings, isYoutubeApiAvailable, runtimeSeconds =
       matcher: 'season',
       query: `${text} season ${season}`,
       count: SEASON_SEARCH_COUNT,
-      select: (results) => candidateFilter
-        .filterTvSeason(results, { text: request.text, season, runtimeSeconds, settings })
+      select: (results, onReject) => candidateFilter
+        .filterTvSeason(results, { text: request.text, season, runtimeSeconds, settings, onReject })
         .map((match) => ({ candidate: match.candidate, name: { season, episode: match.episode } })),
       title: (name, naming) => buildTvTitle({ text: request.text, textSource, ...name, ...naming }),
     };
@@ -129,8 +133,8 @@ function planSearch(request, { settings, isYoutubeApiAvailable, runtimeSeconds =
       needsApi: true,
       query: `${text} ${MONTH_NAMES[month - 1]} ${day} ${year}`,
       count: EPISODE_SEARCH_COUNT,
-      select: (results) => candidateFilter
-        .filterTvDaily(results, { text: request.text, date, runtimeSeconds, settings })
+      select: (results, onReject) => candidateFilter
+        .filterTvDaily(results, { text: request.text, date, runtimeSeconds, settings, onReject })
         .map((candidate) => ({ candidate, name: { year, month, day } })),
       title: (name, naming) => buildDailyTitle({ text: request.text, textSource, ...name, ...naming }),
     };
@@ -140,8 +144,8 @@ function planSearch(request, { settings, isYoutubeApiAvailable, runtimeSeconds =
       matcher: 'movie',
       query: `${text} ${year}`,
       count: EPISODE_SEARCH_COUNT,
-      select: (results) => candidateFilter
-        .filterMovie(results, { title: request.text, year, runtimeSeconds, settings })
+      select: (results, onReject) => candidateFilter
+        .filterMovie(results, { title: request.text, year, runtimeSeconds, settings, onReject })
         .map((candidate) => ({ candidate, name: { year } })),
       title: (name, naming) => buildMovieTitle({ title: request.text, ...name, ...naming }),
     };
@@ -160,7 +164,7 @@ function planEpisodeTitleSearch(request, episode, settings) {
     matcher: 'episode-title',
     query,
     count: EPISODE_SEARCH_COUNT,
-    select: (results) => filterByEpisodeTitle(results, { episode, settings })
+    select: (results, onReject) => filterByEpisodeTitle(results, { episode, settings, onReject })
       .map((candidate) => ({ candidate, name, channelRank: seriesChannelRank(candidate, episode, settings) })),
     // Sonarr grabs the newer of two equal releases, whatever the feed's
     // order, and a re-upload is always newer than the show's own upload.
@@ -169,6 +173,24 @@ function planEpisodeTitleSearch(request, episode, settings) {
       text: request.text, textSource: request.textSource, ...titleName, ...naming,
     }),
   };
+}
+
+// Why an episode request is not searched by the episode's title: episode is
+// what the catalog resolved, or null.
+function titleStageSkipReason(episode, settings) {
+  if (!episode) return settings.sonarr ? TITLE_STAGE_SKIPPED.UNKNOWN_SERIES : TITLE_STAGE_SKIPPED.NO_CONNECTION;
+  // A title that could be matched, but leaves nothing to search for, is no title either.
+  if (!episode.episodeTitle || canMatchByTitle(episode, settings)) return TITLE_STAGE_SKIPPED.NO_USABLE_TITLE;
+  return TITLE_STAGE_SKIPPED.NO_RUNTIME;
+}
+
+// Why a request that planSearch has no plan for is not searched.
+function notSearchedReason(request, isYoutubeApiAvailable) {
+  if (request.shape === 'empty') return request.emptyReason ?? NOTE.NOT_SEARCHABLE;
+  if (request.shape === 'daily' && cleanQueryText(request.text) && !isYoutubeApiAvailable()) {
+    return NOTE.DAILY_NEEDS_API;
+  }
+  return NOTE.NO_SEARCH_TEXT;
 }
 
 /**
@@ -181,12 +203,14 @@ function planEpisodeTitleSearch(request, episode, settings) {
  * @param {Object} deps.queue - searchQueue
  * @param {Object} [deps.catalog] - arrCatalog; without it nothing is known about a request
  * @param {Object} [deps.videoResolution] - videoResolution; without it nothing is known about a video's resolution
+ * @param {Object} [deps.recentSearches] - recentSearches; every request is recorded in it
  * @param {Function} [deps.now]
  * @param {Object} deps.logger
  */
 function createSearchService({
   searchVideos, isYoutubeApiAvailable, getConfig, knownUploadDates, recentlyFailedIds, queue,
-  catalog = NO_CATALOG, videoResolution = NO_VIDEO_RESOLUTION, now = () => new Date(), logger,
+  catalog = NO_CATALOG, videoResolution = NO_VIDEO_RESOLUTION, recentSearches = createRecentSearches(),
+  now = () => new Date(), logger,
 }) {
   // The real resolution of each candidate that is known. Never rejects: a
   // failed lookup, or none for lack of time, leaves every label at the ceiling.
@@ -201,14 +225,16 @@ function createSearchService({
     }
   }
 
-  // One YouTube search, filtered and turned into feed items.
-  async function runPlan(plan, { request, origin, config, settings, startedAt }) {
+  // One YouTube search, filtered and turned into feed items. The record
+  // learns what became of every result.
+  async function runPlan(plan, { request, origin, config, settings, startedAt, record }) {
     const found = await queue.run(
       `${plan.count}:${plan.query.toLowerCase()}`,
       () => searchVideos(plan.query, plan.count, { needsApi: plan.needsApi === true })
     );
     const results = found.map(decodeResult);
-    const selected = plan.select(results);
+    const stage = record.stage(plan, results);
+    const selected = plan.select(results, stage.reject);
     if (selected.length === 0) {
       logger.info(
         {
@@ -228,24 +254,44 @@ function createSearchService({
     const ceiling = labelFor({ realTier: null, downloadResolution, labelLimit: settings.labelLimit });
     const usedTitles = new Set();
     const items = [];
-    let offerable = selected.filter(({ candidate }) => !failedIds.has(candidate.youtubeId));
+    // Keeps the selected candidates that pass, and records why the others do not.
+    const keepOr = (reason, passes) => (entry) => {
+      const kept = passes(entry);
+      if (!kept) stage.reject(entry.candidate, reason);
+      return kept;
+    };
+    let offerable = selected.filter(
+      keepOr(REJECTION.FAILED_RECENTLY, ({ candidate }) => !failedIds.has(candidate.youtubeId))
+    );
     // Re-uploads stay available for when the show's own upload fails a grab.
     const closest = plan.closestChannelOnly ? Math.max(0, ...offerable.map(({ channelRank }) => channelRank)) : 0;
-    if (closest > 0) offerable = offerable.filter(({ channelRank }) => channelRank === closest);
+    if (closest > 0) {
+      offerable = offerable.filter(
+        keepOr(REJECTION.NOT_CLOSEST_CHANNEL, ({ channelRank }) => channelRank === closest)
+      );
+    }
     const realTiers = await realResolutions(
       offerable.slice(0, request.limit).map(({ candidate }) => candidate),
       ceiling,
       startedAt
     );
     for (const { candidate, name } of offerable) {
+      if (items.length === request.limit) {
+        stage.reject(candidate, REJECTION.OVER_LIMIT);
+        continue;
+      }
       const resolution = labelFor({
         realTier: realTiers.get(candidate.youtubeId) ?? null, downloadResolution, labelLimit: settings.labelLimit,
       });
       const group = groupToken(candidate.channelName, request.kind);
       const title = plan.title(name, { resolution, group });
       // Two videos with one release title would share a staging folder.
-      if (!title || usedTitles.has(title)) continue;
+      if (!title || usedTitles.has(title)) {
+        stage.reject(candidate, title ? REJECTION.DUPLICATE_NAME : REJECTION.NO_RELEASE_NAME);
+        continue;
+      }
       usedTitles.add(title);
+      stage.offer(candidate, title);
       const pubDate = knownDates.get(candidate.youtubeId)
         || (candidate.publishedAt ? new Date(candidate.publishedAt) : now());
       items.push({
@@ -263,7 +309,6 @@ function createSearchService({
         kind: request.kind,
         youtubeId: candidate.youtubeId,
       });
-      if (items.length === request.limit) break;
     }
     logger.info(
       { matcher: plan.matcher, query: plan.query, results: results.length, offered: items.length },
@@ -282,24 +327,21 @@ function createSearchService({
     return series?.runtimeSeconds ?? null;
   }
 
-  /**
-   * @param {Object} request - From parseNewznabRequest (never the caps shape)
-   * @param {string} origin - Scheme and host the client used, for the links
-   * @returns {Promise<Array<Object>>} Feed items, best match first. Rejects
-   *   with SearchUnavailableError when YouTube could not be searched.
-   */
-  async function search(request, origin) {
-    if (request.shape === 'rss') return [placeholderItem(request.kind === 'movie' ? 'movie' : 'tv', origin)];
+  async function answer(request, origin, record, startedAt) {
+    if (request.shape === 'rss') {
+      record.notSearched(NOTE.NO_QUERY);
+      return [placeholderItem(request.kind === 'movie' ? 'movie' : 'tv', origin)];
+    }
 
-    const startedAt = now();
     const config = getConfig();
     const settings = readSettings(config);
-    const context = { request, origin, config, settings, startedAt };
+    const context = { request, origin, config, settings, startedAt, record };
     // Requests that cannot be searched at all never ask Sonarr or Radarr.
     if (!planSearch(request, { settings, isYoutubeApiAvailable })) {
       if (request.shape === 'daily' && !isYoutubeApiAvailable()) {
         logger.info({ shape: 'daily' }, 'Sonarr/Radarr daily search skipped: the YouTube API is not available');
       }
+      record.notSearched(notSearchedReason(request, isYoutubeApiAvailable));
       return [];
     }
 
@@ -315,11 +357,33 @@ function createSearchService({
     if (titlePlan) {
       const items = await runPlan(titlePlan, context);
       if (items.length > 0) return items;
+    } else {
+      record.skipTitleStage(titleStageSkipReason(episode, settings));
     }
     // Nothing by title (or its only match failed a grab lately): the search
     // by episode code still finds re-uploads named like releases.
     const runtimeSeconds = episode?.runtimeSeconds ?? null;
     return runPlan(planSearch(request, { settings, isYoutubeApiAvailable, runtimeSeconds }), context);
+  }
+
+  /**
+   * @param {Object} request - From parseNewznabRequest (never the caps shape)
+   * @param {string} origin - Scheme and host the client used, for the links
+   * @returns {Promise<Array<Object>>} Feed items, best match first. Rejects
+   *   with SearchUnavailableError when YouTube could not be searched.
+   */
+  async function search(request, origin) {
+    const startedAt = now();
+    const record = recentSearches.start(request, startedAt);
+    try {
+      const items = await answer(request, origin, record, startedAt);
+      // The placeholder is no offer.
+      record.answered(request.shape === 'rss' ? 0 : items.length);
+      return items;
+    } catch (error) {
+      record.failed(error?.reason === 'hold-timeout' ? NOTE.SEARCH_HELD_TOO_LONG : NOTE.SEARCH_FAILED);
+      throw error;
+    }
   }
 
   return { search };

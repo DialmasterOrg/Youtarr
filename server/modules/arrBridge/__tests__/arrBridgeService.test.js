@@ -394,6 +394,43 @@ describe('arrBridgeService', () => {
     });
   });
 
+  describe('listRecentSearches', () => {
+    const ORIGIN = 'http://youtarr:3011';
+    const episode = { t: 'tvsearch', cat: '5030,5040', title: 'Bluey', season: '1', ep: '1' };
+    const makeService = () => {
+      const noRows = { findAll: jest.fn().mockResolvedValue([]) };
+      return setup(
+        { arrBridgeEnabled: true, arrBridgeApiKey: KEY, preferredResolution: '1080' },
+        {
+          searchVideos: jest.fn().mockResolvedValue([]),
+          models: { ArrBridgeGrab: noRows, Video: noRows, ChannelVideo: noRows, Job: {} },
+        }
+      ).service;
+    };
+
+    test('lists the searches the indexer answered, newest first', async () => {
+      const service = makeService();
+      expect(service.listRecentSearches()).toEqual([]);
+
+      await service.newznab.handleApi({ ...episode, apikey: KEY }, ORIGIN);
+      await service.newznab.handleApi({ ...episode, title: 'Peppa', apikey: KEY }, ORIGIN);
+
+      expect(service.listRecentSearches()).toEqual([
+        expect.objectContaining({ shape: 'episode', outcome: 'nothing', asked: expect.objectContaining({ text: 'Peppa' }) }),
+        expect.objectContaining({ shape: 'episode', outcome: 'nothing', asked: expect.objectContaining({ text: 'Bluey' }) }),
+      ]);
+    });
+
+    test('a request with a wrong key, and a caps request, are not listed', async () => {
+      const service = makeService();
+
+      await service.newznab.handleApi({ ...episode, apikey: 'wrong' }, ORIGIN);
+      await service.newznab.handleApi({ t: 'caps', apikey: KEY }, ORIGIN);
+
+      expect(service.listRecentSearches()).toEqual([]);
+    });
+  });
+
   describe('createUploadDateLookup', () => {
     function lookup({ videos = [], channelVideos = [] }) {
       const Video = { findAll: jest.fn().mockResolvedValue(videos) };

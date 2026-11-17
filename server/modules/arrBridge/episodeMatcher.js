@@ -5,8 +5,8 @@
 // them. The release name still comes from the request; this only chooses
 // which videos may carry it.
 const {
-  tokenize, matchTerms, titleTokens, episodeMarkers, hasEpisodeRange, hasExcludedTerm,
-  runtimeWindow, passesDuration,
+  REJECTION, tokenize, matchTerms, titleTokens, episodeMarkers, hasEpisodeRange, hasExcludedTerm,
+  runtimeWindow, durationRejection,
 } = require('./candidateFilter');
 
 // "Part 2" is deliberately absent: it belongs to one episode's title.
@@ -41,15 +41,16 @@ function bareEpisodeNumbers(title) {
 
 // A second episode number, a range, a marker for another episode, or the
 // title of another episode of the series: the video is not (only) this one.
-function namesAnotherEpisode(candidate, titlePhrase, episode, otherPhrases) {
-  if (hasEpisodeRange(candidate.title)) return true;
+// Answers which of these it is, as a REJECTION code, or null.
+function anotherEpisodeRejection(candidate, titlePhrase, episode, otherPhrases) {
+  if (hasEpisodeRange(candidate.title)) return REJECTION.SEVERAL_EPISODES;
   const wrongMarker = episodeMarkers(candidate.title)
     .some((marker) => marker.season !== episode.season || marker.episode !== episode.episode);
-  if (wrongMarker) return true;
+  if (wrongMarker) return REJECTION.WRONG_EPISODE;
   // One differing number is not held against it: official channels count
   // episodes across seasons ("Episode 56" for S02E05).
-  if (bareEpisodeNumbers(candidate.title).length > 1) return true;
-  return otherPhrases.some((other) => titlePhrase.includes(other));
+  if (bareEpisodeNumbers(candidate.title).length > 1) return REJECTION.SEVERAL_EPISODES;
+  return otherPhrases.some((other) => titlePhrase.includes(other)) ? REJECTION.ANOTHER_EPISODE_TITLE : null;
 }
 
 function carriesEpisodeNumber(candidate, episode) {
@@ -142,14 +143,20 @@ function canMatchByTitle(episode, settings) {
  * @param {Object} options
  * @param {Object} options.episode - arrCatalog.resolveEpisode's result, with an episodeTitle
  * @param {Object} options.settings - readSettings() result
+ * @param {Function} [options.onReject] - (candidate, code) for each candidate
+ *   left out, with the REJECTION code of the first check it failed
  * @returns {Array<Object>} The candidates that are this episode, the closest
  *   channel (seriesChannelRank) first and otherwise in source order
  */
-function filterByEpisodeTitle(candidates, { episode, settings }) {
+function filterByEpisodeTitle(candidates, { episode, settings, onReject }) {
   const loose = settings.looseMatching;
-  if (!canMatchByTitle(episode, settings)) return [];
+  const rejectAll = () => {
+    if (onReject) candidates.forEach((candidate) => onReject(candidate, REJECTION.EPISODE_TITLE_MISSING));
+    return [];
+  };
+  if (!canMatchByTitle(episode, settings)) return rejectAll();
   const wanted = phrase(episode.episodeTitle);
-  if (wanted.trim() === '') return [];
+  if (wanted.trim() === '') return rejectAll();
   const otherPhrases = episode.otherEpisodeTitles.map(phrase).filter((other) => other.trim() !== '');
   const seriesTerms = seriesTermsOf(episode);
   const needsNumber = matchTerms(episode.episodeTitle).length < MIN_TITLE_WORDS_WITHOUT_NUMBER;
@@ -167,16 +174,23 @@ function filterByEpisodeTitle(candidates, { episode, settings }) {
     loose,
   };
 
-  const kept = candidates.filter((candidate) => {
-    if (hasExcludedTerm(candidate.title, settings.excludeTerms, ownText)) return false;
-    if (!passesDuration(candidate, limits)) return false;
+  const rejectionOf = (candidate) => {
+    if (hasExcludedTerm(candidate.title, settings.excludeTerms, ownText)) return REJECTION.EXCLUDED_WORD;
+    const length = durationRejection(candidate, limits);
+    if (length) return length;
     const titlePhrase = phrase(candidate.title);
-    if (!titlePhrase.includes(wanted)) return false;
-    if (namesAnotherEpisode(candidate, titlePhrase, episode, otherPhrases)) return false;
-    if (loose) return true;
-    if (!namesSeries(candidate, seriesTerms, exclusions)) return false;
-    if (namesAnotherSeries(candidate, titlePhrase, otherSeries)) return false;
-    return !needsNumber || carriesEpisodeNumber(candidate, episode);
+    if (!titlePhrase.includes(wanted)) return REJECTION.EPISODE_TITLE_MISSING;
+    const anotherEpisode = anotherEpisodeRejection(candidate, titlePhrase, episode, otherPhrases);
+    if (anotherEpisode) return anotherEpisode;
+    if (loose) return null;
+    if (!namesSeries(candidate, seriesTerms, exclusions)) return REJECTION.NAME_MISSING;
+    if (namesAnotherSeries(candidate, titlePhrase, otherSeries)) return REJECTION.ANOTHER_SERIES;
+    return !needsNumber || carriesEpisodeNumber(candidate, episode) ? null : REJECTION.EPISODE_NUMBER_MISSING;
+  };
+  const kept = candidates.filter((candidate) => {
+    const reason = rejectionOf(candidate);
+    if (reason && onReject) onReject(candidate, reason);
+    return !reason;
   });
   // YouTube ranks a re-upload titled "<episode> #<series>" above the show's
   // own upload; the show's own channel is the better match.

@@ -17,7 +17,9 @@ const STATUS = {
 const SAVED = { ok: true, appName: 'Sonarr', version: '4.0.20.3014', connection: { url: 'http://sonarr:8989', keySet: true } };
 const GRAB = { id: 'g1', releaseTitle: 'Beyblade.S01E29.1080p.WEB-DL-X', state: 'ready' };
 
-function makeApp({ settings = {}, verifyToken, limiter, listRecentGrabs } = {}) {
+const SEARCH = { id: 1, shape: 'episode', outcome: 'nothing', asked: { text: 'Beyblade' }, stages: [] };
+
+function makeApp({ settings = {}, verifyToken, limiter, listRecentGrabs, listRecentSearches } = {}) {
   const arrBridge = {
     settings: {
       isApp: (app) => app === 'sonarr' || app === 'radarr',
@@ -31,6 +33,7 @@ function makeApp({ settings = {}, verifyToken, limiter, listRecentGrabs } = {}) 
       ...settings,
     },
     listRecentGrabs: listRecentGrabs || jest.fn().mockResolvedValue([GRAB]),
+    listRecentSearches: listRecentSearches || jest.fn(() => [SEARCH]),
   };
   const log = { error: jest.fn(), info: jest.fn() };
   const app = express();
@@ -60,6 +63,7 @@ describe('the Sonarr/Radarr bridge settings routes', () => {
     ['delete', '/api/arr-bridge/connections/sonarr'],
     ['get', '/api/arr-bridge/connections/sonarr/shared-folder'],
     ['get', '/api/arr-bridge/grabs'],
+    ['get', '/api/arr-bridge/searches'],
   ])('%s %s needs a session', async (method, path) => {
     const { app, arrBridge } = makeApp({ verifyToken: refuseSession });
 
@@ -70,6 +74,7 @@ describe('the Sonarr/Radarr bridge settings routes', () => {
       if (jest.isMockFunction(call)) expect(call).not.toHaveBeenCalled();
     }
     expect(arrBridge.listRecentGrabs).not.toHaveBeenCalled();
+    expect(arrBridge.listRecentSearches).not.toHaveBeenCalled();
   });
 
   test('reads the status', async () => {
@@ -292,6 +297,31 @@ describe('the Sonarr/Radarr bridge settings routes', () => {
 
       expect(res.status).toBe(500);
       expect(res.body).toEqual({ error: 'Could not read the grabs' });
+      expect(log.error).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('GET /api/arr-bridge/searches', () => {
+    test('lists the recent searches', async () => {
+      const { app } = makeApp();
+
+      const res = await supertest(app).get('/api/arr-bridge/searches');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ searches: [SEARCH] });
+    });
+
+    test('a failure answers 500', async () => {
+      const { app, log } = makeApp({
+        listRecentSearches: jest.fn(() => {
+          throw new Error('broken');
+        }),
+      });
+
+      const res = await supertest(app).get('/api/arr-bridge/searches');
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: 'Could not read the searches' });
       expect(log.error).toHaveBeenCalledTimes(1);
     });
   });

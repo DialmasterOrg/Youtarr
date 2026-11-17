@@ -63,6 +63,13 @@ const video = (title, overrides = {}) => ({ ...candidate('abcdefghijk', title, '
 const passes = (title, episode, options = settings(), overrides = {}) => (
   filterByEpisodeTitle([video(title, overrides)], { episode, settings: options }).length === 1
 );
+// The reason reported for one candidate, or null when it is kept.
+function reasonFor(item, episode, options = settings()) {
+  const reported = [];
+  const kept = filterByEpisodeTitle([item], { episode, settings: options, onReject: (_rejected, reason) => reported.push(reason) });
+  expect(reported).toHaveLength(kept.length === 1 ? 0 : 1);
+  return reported[0] ?? null;
+}
 
 describe('episodeMatcher', () => {
   describe('Beyblade S01E29, "Play It Again, Dizzi!"', () => {
@@ -377,6 +384,54 @@ describe('episodeMatcher', () => {
       expect(passes('Some Show - The Big Interview', show('The Big Interview'))).toBe(true);
       const episode = show('Opening Night', { seriesTitle: 'The Review Show', seriesTitles: ['The Review Show'] });
       expect(passes('The Review Show - Opening Night', episode)).toBe(true);
+    });
+  });
+
+  describe('the reason a candidate is left out (onReject)', () => {
+    const office = show('Basketball', { seriesTitle: 'The Office (US)', seriesTitles: ['The Office (US)', 'The Office'] });
+
+    test.each([
+      ['excluded-word', video('Beyblade - Play it Again Dizzi review'), beyblade()],
+      ['unknown-length', video('Beyblade - Play it Again Dizzi', { duration: undefined }), beyblade()],
+      ['outside-runtime', CLIP, beyblade()],
+      ['episode-title-missing', video('BEYBLADE X | Meet the Bladers: THE DREAMS!'), beyblade()],
+      ['several-episodes', { ...DOUBLE, duration: 1400 }, beyblade({ otherEpisodeTitles: [] })],
+      ['several-episodes', video('Beyblade S01E29-E30 Play it Again Dizzi'), beyblade()],
+      ['wrong-episode', video('Beyblade S01E30 Play it Again Dizzi'), beyblade()],
+      ['another-episode-title', video('BEYBLADE | Play it Again Dizzi! | Cruising for a Bruising'), beyblade()],
+      ['name-missing', video('Play it Again Dizzi'), beyblade()],
+      [
+        'another-series',
+        video('Beyblade Burst Episode 29: Play it Again Dizzi'),
+        beyblade({ siblingTitles: ['Beyblade Burst'] }),
+      ],
+      ['episode-number-missing', video('The Office - Basketball'), office],
+    ])('%s', (reason, item, episode) => {
+      expect(reasonFor(item, episode)).toBe(reason);
+    });
+
+    test('too-short, when no runtime is known and matching is loose', () => {
+      const short = video('Beyblade - Play it Again Dizzi', { duration: 300 });
+
+      expect(reasonFor(short, beyblade({ runtimeSeconds: null }), LOOSE)).toBe('too-short');
+    });
+
+    test('a candidate that is kept is not reported', () => {
+      expect(reasonFor(OFFICIAL, beyblade())).toBeNull();
+    });
+
+    test('reports each candidate left out once, and keeps the ones it kept', () => {
+      const reported = [];
+      const kept = filterByEpisodeTitle(SEARCH_RESULTS, {
+        episode: beyblade(), settings: settings(), onReject: (rejected, reason) => reported.push([rejected.youtubeId, reason]),
+      });
+
+      expect(ids(kept)).toEqual(['g7VYYfoNaf0', 'avUFb3DESfw']);
+      expect(reported).toEqual([
+        ['Ema1nx3zz4g', 'outside-runtime'],
+        ['b9Xi2xAKqi4', 'outside-runtime'],
+        ['WMfoWbXSSBQ', 'outside-runtime'],
+      ]);
     });
   });
 

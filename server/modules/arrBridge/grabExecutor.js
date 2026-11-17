@@ -11,6 +11,9 @@ const { Op } = require('sequelize');
 const { ARR_BRIDGE_JOB_LABEL, AUTO_RETRY_LABEL_PREFIX } = require('../download/jobTypes');
 const { MAX_AUTO_RETRY_COUNT } = require('../download/transient403RetryPlanner');
 const { parseAuxData } = require('../jobAuxData');
+const {
+  OUTPUT_DIR_UNAVAILABLE, DOWNLOAD_PROCESS_ERROR, JOB_NOT_STARTED,
+} = require('../constants/jobOutputPrefixes');
 const { LIBRARY_COPY } = require('./libraryCopyRemover');
 
 const SWEEP_INTERVAL_MS = 60 * 1000;
@@ -28,7 +31,7 @@ const STOPPED_JOB_STATUSES = new Set(['Terminated', 'Killed']);
 // jobModule terminates running and pending jobs when the server starts and
 // says so in their output. Such a job did not fail: the video was never tried.
 const RESTART_OUTPUT_PATTERN = /server restart/i;
-const UNTRIED_OUTPUT_PATTERN = /^(?:Output directory is not accessible|Download process error|Job could not be started)\b/;
+const UNTRIED_OUTPUT_PREFIXES = [OUTPUT_DIR_UNAVAILABLE, DOWNLOAD_PROCESS_ERROR, JOB_NOT_STARTED];
 // A file is only gone when the filesystem says so; any other error (a
 // network share hiccup) is no verdict.
 const ABSENT_CODES = new Set(['ENOENT', 'ENOTDIR']);
@@ -79,7 +82,8 @@ function wasInterrupted({ job, failure }) {
 // output, so any other Error job counts as having tried the video: a
 // finalization error comes after yt-dlp ran, and retrying it downloads again.
 function endedBeforeTrying({ job, failure }) {
-  return job.status === 'Error' && !failure && UNTRIED_OUTPUT_PATTERN.test(job.output || '');
+  const output = job.output || '';
+  return job.status === 'Error' && !failure && UNTRIED_OUTPUT_PREFIXES.some((prefix) => output.startsWith(prefix));
 }
 
 /**

@@ -13,3 +13,4 @@ export { useDownloadsFeedToken } from './useDownloadsFeedToken';
 export { useArrBridgeKey } from './useArrBridgeKey';
 export { useArrBridgeConnections } from './useArrBridgeConnections';
 export { useArrBridgeGrabs } from './useArrBridgeGrabs';
+export { useArrBridgeSearches } from './useArrBridgeSearches';

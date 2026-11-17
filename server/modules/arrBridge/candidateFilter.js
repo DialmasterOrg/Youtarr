@@ -59,6 +59,29 @@ const LOOSE_EPISODE_PATTERNS = [
   /\b(?:episode|ep\.?|e|part|pt\.?)\s*#?\s*(\d{1,3})\b/gi,
   /#(\d{1,3})\b/g,
 ];
+// Why a search result was not offered, as the Recent searches list shows it.
+// A filter reports the first check that fails, in the order it runs them.
+const REJECTION = Object.freeze({
+  EXCLUDED_WORD: 'excluded-word',
+  UNKNOWN_LENGTH: 'unknown-length',
+  TOO_SHORT: 'too-short',
+  OUTSIDE_RUNTIME: 'outside-runtime',
+  NAME_MISSING: 'name-missing',
+  NO_EPISODE_MARKER: 'no-episode-marker',
+  WRONG_EPISODE: 'wrong-episode',
+  SEVERAL_EPISODES: 'several-episodes',
+  ANOTHER_SERIES: 'another-series',
+  EPISODE_TITLE_MISSING: 'episode-title-missing',
+  ANOTHER_EPISODE_TITLE: 'another-episode-title',
+  EPISODE_NUMBER_MISSING: 'episode-number-missing',
+  WRONG_DATE: 'wrong-date',
+  YEAR_MISSING: 'year-missing',
+  FAILED_RECENTLY: 'failed-recently',
+  NOT_CLOSEST_CHANNEL: 'not-closest-channel',
+  NO_RELEASE_NAME: 'no-release-name',
+  DUPLICATE_NAME: 'duplicate-name',
+  OVER_LIMIT: 'over-limit',
+});
 
 function tokenize(text) {
   return foldLatinAccents(text)
@@ -190,21 +213,49 @@ function runtimeWindow(runtimeSeconds, kind) {
  * @param {number} limits.minSeconds - The fixed minimum, used without a window
  * @param {{minSeconds: number, maxSeconds: number}|null} [limits.window] - From runtimeWindow
  * @param {boolean} limits.loose - Whether an unknown length passes
+ * @returns {string|null} A REJECTION code, or null when the length passes
+ */
+function durationRejection(candidate, { minSeconds, window = null, loose }) {
+  if (typeof candidate.duration !== 'number') return loose ? null : REJECTION.UNKNOWN_LENGTH;
+  if (window) {
+    const inside = candidate.duration >= window.minSeconds && candidate.duration <= window.maxSeconds;
+    return inside ? null : REJECTION.OUTSIDE_RUNTIME;
+  }
+  return candidate.duration >= minSeconds ? null : REJECTION.TOO_SHORT;
+}
+
+/**
+ * @param {Object} candidate
+ * @param {Object} limits - As for durationRejection
  * @returns {boolean}
  */
-function passesDuration(candidate, { minSeconds, window = null, loose }) {
-  if (typeof candidate.duration !== 'number') return loose;
-  if (window) return candidate.duration >= window.minSeconds && candidate.duration <= window.maxSeconds;
-  return candidate.duration >= minSeconds;
+function passesDuration(candidate, limits) {
+  return durationRejection(candidate, limits) === null;
 }
 
 // The checks every request shares: exclude terms, length, and every
 // significant word of the request text.
-function passesCommon(candidate, { terms, requestText, minSeconds, window, settings }) {
-  if (hasExcludedTerm(candidate.title, settings.excludeTerms, requestText)) return false;
-  if (!passesDuration(candidate, { minSeconds, window, loose: settings.looseMatching })) return false;
+function commonRejection(candidate, { terms, requestText, minSeconds, window, settings }) {
+  if (hasExcludedTerm(candidate.title, settings.excludeTerms, requestText)) return REJECTION.EXCLUDED_WORD;
+  const length = durationRejection(candidate, { minSeconds, window, loose: settings.looseMatching });
+  if (length) return length;
   const tokens = titleTokens(candidate.title);
-  return terms.every((term) => tokens.has(term));
+  return terms.every((term) => tokens.has(term)) ? null : REJECTION.NAME_MISSING;
+}
+
+// Keeps the candidates rejectionOf has nothing against, and tells onReject
+// about the others.
+function keepUnrejected(candidates, rejectionOf, onReject) {
+  return candidates.filter((candidate) => {
+    const reason = rejectionOf(candidate);
+    if (reason && onReject) onReject(candidate, reason);
+    return !reason;
+  });
+}
+
+function rejectAll(candidates, reason, onReject) {
+  if (onReject) candidates.forEach((candidate) => onReject(candidate, reason));
+  return [];
 }
 
 function tvContext(text, settings, runtimeSeconds) {
@@ -247,24 +298,30 @@ function namesAnotherSeries(title, context) {
 /**
  * Every filter takes an optional runtimeSeconds (from Sonarr or Radarr):
  * with it, a video must be inside runtimeWindow instead of over the fixed
- * minimum.
+ * minimum. Every filter also takes an optional onReject(candidate, code),
+ * called with a REJECTION code for each candidate it leaves out.
  * @returns {Array<Object>} Candidates for one episode, in source order
  */
-function filterTvEpisode(candidates, { text, season, episode, runtimeSeconds, settings }) {
+function filterTvEpisode(candidates, { text, season, episode, runtimeSeconds, settings, onReject }) {
   const context = tvContext(text, settings, runtimeSeconds);
-  if (context.terms.length === 0) return [];
-  return candidates.filter((candidate) => {
-    if (!passesCommon(candidate, context) || hasEpisodeRange(candidate.title)) return false;
+  if (context.terms.length === 0) return rejectAll(candidates, REJECTION.NAME_MISSING, onReject);
+  return keepUnrejected(candidates, (candidate) => {
+    const common = commonRejection(candidate, context);
+    if (common) return common;
+    if (hasEpisodeRange(candidate.title)) return REJECTION.SEVERAL_EPISODES;
     const markers = episodeMarkers(candidate.title);
     // Exactly one marker: a title naming several episodes is a compilation.
     if (markers.length === 1) {
-      if (markers[0].season !== season || markers[0].episode !== episode) return false;
-      return settings.looseMatching || !namesAnotherSeries(candidate.title, context);
+      if (markers[0].season !== season || markers[0].episode !== episode) return REJECTION.WRONG_EPISODE;
+      const another = !settings.looseMatching && namesAnotherSeries(candidate.title, context);
+      return another ? REJECTION.ANOTHER_SERIES : null;
     }
-    // A marker for another episode is never overruled by a bare number.
-    if (!settings.looseMatching || markers.length > 0) return false;
-    return looseEpisodeNumbers(candidate.title).includes(episode);
-  });
+    if (markers.length > 1) return REJECTION.SEVERAL_EPISODES;
+    if (!settings.looseMatching) return REJECTION.NO_EPISODE_MARKER;
+    const numbers = looseEpisodeNumbers(candidate.title);
+    if (numbers.includes(episode)) return null;
+    return numbers.length > 0 ? REJECTION.WRONG_EPISODE : REJECTION.NO_EPISODE_MARKER;
+  }, onReject);
 }
 
 /**
@@ -272,18 +329,19 @@ function filterTvEpisode(candidates, { text, season, episode, runtimeSeconds, se
  * Always strict: a season answer may be grabbed by a bulk search.
  * @returns {Array<{candidate: Object, episode: number}>}
  */
-function filterTvSeason(candidates, { text, season, runtimeSeconds, settings }) {
+function filterTvSeason(candidates, { text, season, runtimeSeconds, settings, onReject }) {
   const context = tvContext(text, { ...settings, looseMatching: false }, runtimeSeconds);
-  if (context.terms.length === 0) return [];
-  const matches = [];
-  for (const candidate of candidates) {
-    if (!passesCommon(candidate, context) || hasEpisodeRange(candidate.title)) continue;
+  if (context.terms.length === 0) return rejectAll(candidates, REJECTION.NAME_MISSING, onReject);
+  return keepUnrejected(candidates, (candidate) => {
+    const common = commonRejection(candidate, context);
+    if (common) return common;
+    if (hasEpisodeRange(candidate.title)) return REJECTION.SEVERAL_EPISODES;
     const markers = episodeMarkers(candidate.title);
-    if (markers.length !== 1 || markers[0].season !== season) continue;
-    if (namesAnotherSeries(candidate.title, context)) continue;
-    matches.push({ candidate, episode: markers[0].episode });
-  }
-  return matches;
+    if (markers.length === 0) return REJECTION.NO_EPISODE_MARKER;
+    if (markers.length > 1) return REJECTION.SEVERAL_EPISODES;
+    if (markers[0].season !== season) return REJECTION.WRONG_EPISODE;
+    return namesAnotherSeries(candidate.title, context) ? REJECTION.ANOTHER_SERIES : null;
+  }, onReject).map((candidate) => ({ candidate, episode: episodeMarkers(candidate.title)[0].episode }));
 }
 
 const utcDay = (date) => Math.floor(new Date(date).getTime() / DAY_MS);
@@ -293,21 +351,24 @@ const utcDay = (date) => Math.floor(new Date(date).getTime() / DAY_MS);
  * @param {Date} options.date - The air date, at UTC midnight
  * @returns {Array<Object>} Candidates published on or next to the air date
  */
-function filterTvDaily(candidates, { text, date, runtimeSeconds, settings }) {
+function filterTvDaily(candidates, { text, date, runtimeSeconds, settings, onReject }) {
   const context = tvContext(text, settings, runtimeSeconds);
-  if (context.terms.length === 0) return [];
+  if (context.terms.length === 0) return rejectAll(candidates, REJECTION.NAME_MISSING, onReject);
   const airDay = utcDay(date);
-  return candidates.filter((candidate) => {
-    if (!candidate.publishedAt || !passesCommon(candidate, context)) return false;
+  return keepUnrejected(candidates, (candidate) => {
+    if (!candidate.publishedAt) return REJECTION.WRONG_DATE;
+    const common = commonRejection(candidate, context);
+    if (common) return common;
     const publishedDay = utcDay(candidate.publishedAt);
-    return Number.isFinite(publishedDay) && Math.abs(publishedDay - airDay) <= DAILY_TOLERANCE_DAYS;
-  });
+    const onAirDate = Number.isFinite(publishedDay) && Math.abs(publishedDay - airDay) <= DAILY_TOLERANCE_DAYS;
+    return onAirDate ? null : REJECTION.WRONG_DATE;
+  }, onReject);
 }
 
 /**
  * @returns {Array<Object>} Candidates for a movie, in source order
  */
-function filterMovie(candidates, { title, year, runtimeSeconds, settings }) {
+function filterMovie(candidates, { title, year, runtimeSeconds, settings, onReject }) {
   const context = {
     terms: matchTerms(title),
     requestText: title,
@@ -315,14 +376,17 @@ function filterMovie(candidates, { title, year, runtimeSeconds, settings }) {
     window: runtimeWindow(runtimeSeconds, 'movie'),
     settings,
   };
-  if (context.terms.length === 0) return [];
-  return candidates.filter((candidate) => {
-    if (!passesCommon(candidate, context)) return false;
-    return settings.looseMatching || titleTokens(candidate.title).has(String(year));
-  });
+  if (context.terms.length === 0) return rejectAll(candidates, REJECTION.NAME_MISSING, onReject);
+  return keepUnrejected(candidates, (candidate) => {
+    const common = commonRejection(candidate, context);
+    if (common) return common;
+    const hasYear = settings.looseMatching || titleTokens(candidate.title).has(String(year));
+    return hasYear ? null : REJECTION.YEAR_MISSING;
+  }, onReject);
 }
 
 module.exports = {
+  REJECTION,
   tokenize,
   matchTerms,
   titleTokens,
@@ -335,5 +399,6 @@ module.exports = {
   filterTvDaily,
   filterMovie,
   runtimeWindow,
+  durationRejection,
   passesDuration,
 };

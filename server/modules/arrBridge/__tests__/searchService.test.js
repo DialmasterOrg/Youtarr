@@ -1,6 +1,7 @@
 /* eslint-env jest */
 const { createSearchService, estimateBytes, decodeHtmlEntities } = require('../searchService');
 const { createSearchQueue, SearchUnavailableError } = require('../searchQueue');
+const { createRecentSearches } = require('../recentSearches');
 const { parseNewznabRequest } = require('../newznabRequest');
 const { parseNzbLink } = require('../nzbFile');
 const { renderSearch } = require('../newznabXml');
@@ -943,6 +944,226 @@ describe('searchService', () => {
         expect.objectContaining({ matcher: 'episode-code', offered: 1 }),
         'Sonarr/Radarr search answered'
       );
+    });
+  });
+
+  describe('the Recent searches list', () => {
+    const SONARR = { arrBridgeSonarrUrl: 'http://sonarr:8989', arrBridgeSonarrApiKey: 'a'.repeat(32) };
+    const beybladeQuery = { t: 'tvsearch', cat: SONARR_CATS, title: 'Beyblade', season: '1', ep: '29' };
+    const beybladeEpisode = (overrides = {}) => ({
+      seriesTitle: 'Beyblade',
+      seriesTitles: ['Beyblade'],
+      episodeTitle: 'Play It Again, Dizzi!',
+      otherEpisodeTitles: [],
+      runtimeSeconds: 1500,
+      season: 1,
+      episode: 29,
+      absoluteNumber: 29,
+      ...overrides,
+    });
+    const resolving = (episode) => ({
+      resolveEpisode: jest.fn().mockResolvedValue(episode),
+      resolveSeries: jest.fn().mockResolvedValue(null),
+      resolveMovie: jest.fn().mockResolvedValue(null),
+    });
+
+    function recorded(options = {}, extraDeps = {}) {
+      const recentSearches = createRecentSearches();
+      const { deps } = setup(options);
+      return { service: createSearchService({ ...deps, ...extraDeps, recentSearches }), recentSearches };
+    }
+
+    const outcomes = (stage) => stage.candidates.map(({ title, outcome, reason, releaseTitle }) => (
+      { title, outcome, reason, releaseTitle }
+    ));
+
+    test('records the search that ran and what became of every result', async () => {
+      const results = [
+        video('The Office US S01E02'),
+        video('The Office US S01E03'),
+        video('The Office US S01E02 Trailer'),
+      ];
+      const { service, recentSearches } = recorded({ results });
+
+      await service.search(request(episodeQuery()), ORIGIN);
+
+      const [entry] = recentSearches.list();
+      expect(entry).toMatchObject({
+        kind: 'tv',
+        shape: 'episode',
+        asked: { text: 'The Office (US)', textSource: 'title', season: 1, episode: 2 },
+        outcome: 'offered',
+        offered: 1,
+        note: null,
+        titleStageSkipped: 'no-connection',
+      });
+      expect(entry.stages).toHaveLength(1);
+      expect(entry.stages[0]).toMatchObject({ matcher: 'episode-code', query: 'The Office US S01E02', results: 3 });
+      expect(outcomes(entry.stages[0])).toEqual([
+        {
+          title: 'The Office US S01E02', outcome: 'offered', reason: null,
+          releaseTitle: 'The.Office.US.S01E02.1080p.YT.WEB-DL-NBC',
+        },
+        { title: 'The Office US S01E03', outcome: 'rejected', reason: 'wrong-episode', releaseTitle: null },
+        { title: 'The Office US S01E02 Trailer', outcome: 'rejected', reason: 'excluded-word', releaseTitle: null },
+      ]);
+    });
+
+    test('lists both stages when the search by episode title offers nothing', async () => {
+      const results = {
+        'Beyblade Play It Again Dizzi': [video('Episode 29: Play It Again Dizzi!', { duration: 6 })],
+        'Beyblade S01E29': [video('Beyblade S01E29', { channelName: 'Uploads', duration: 1320 })],
+      };
+      const { service, recentSearches } = recorded({ results, catalog: resolving(beybladeEpisode()) });
+
+      await service.search(request(beybladeQuery), ORIGIN);
+
+      const [entry] = recentSearches.list();
+      expect(entry).toMatchObject({ outcome: 'offered', offered: 1, titleStageSkipped: null });
+      expect(entry.stages.map(({ matcher, query, results: count }) => ({ matcher, query, count }))).toEqual([
+        { matcher: 'episode-title', query: 'Beyblade Play It Again Dizzi', count: 1 },
+        { matcher: 'episode-code', query: 'Beyblade S01E29', count: 1 },
+      ]);
+      expect(outcomes(entry.stages[0])).toEqual([
+        { title: 'Episode 29: Play It Again Dizzi!', outcome: 'rejected', reason: 'outside-runtime', releaseTitle: null },
+      ]);
+      expect(outcomes(entry.stages[1])).toEqual([
+        {
+          title: 'Beyblade S01E29', outcome: 'offered', reason: null,
+          releaseTitle: 'Beyblade.S01E29.1080p.YT.WEB-DL-Uploads',
+        },
+      ]);
+    });
+
+    test('a video whose grab failed lately is listed with that reason', async () => {
+      const failed = video('The Office US S01E02');
+      const { service, recentSearches } = recorded({ results: [failed], failedIds: [failed.youtubeId] });
+
+      await service.search(request(episodeQuery()), ORIGIN);
+
+      const [entry] = recentSearches.list();
+      expect(entry).toMatchObject({ outcome: 'nothing', offered: 0 });
+      expect(entry.stages[0].candidates[0]).toMatchObject({ outcome: 'rejected', reason: 'failed-recently' });
+    });
+
+    test('a re-upload beside the series\' own channel is listed as not the closest channel', async () => {
+      const results = [
+        video('Beyblade Episode 29: Play it Again Dizzi!', { channelName: 'Some Uploader', duration: 1318 }),
+        video('Episode 29: Play it Again Dizzi!', { channelName: 'Beyblade', duration: 1318 }),
+      ];
+      const { service, recentSearches } = recorded({ results, catalog: resolving(beybladeEpisode()) });
+
+      await service.search(request(beybladeQuery), ORIGIN);
+
+      const reasons = recentSearches.list()[0].stages[0].candidates.map(({ channelName, outcome, reason }) => (
+        { channelName, outcome, reason }
+      ));
+      expect(reasons).toEqual([
+        { channelName: 'Some Uploader', outcome: 'rejected', reason: 'not-closest-channel' },
+        { channelName: 'Beyblade', outcome: 'offered', reason: null },
+      ]);
+    });
+
+    test('a second video with the same release name is listed as a duplicate', async () => {
+      const results = [video('The Office US S01E02'), video('The Office US S01E02 HD')];
+      const { service, recentSearches } = recorded({ results });
+
+      await service.search(request(episodeQuery()), ORIGIN);
+
+      expect(outcomes(recentSearches.list()[0].stages[0]).map(({ outcome, reason }) => ({ outcome, reason }))).toEqual([
+        { outcome: 'offered', reason: null },
+        { outcome: 'rejected', reason: 'duplicate-name' },
+      ]);
+    });
+
+    test('videos past the request\'s limit are listed as over the limit', async () => {
+      const results = [
+        video('The Office US S01E02', { channelName: 'First' }),
+        video('The Office US S01E02', { channelName: 'Second' }),
+        video('The Office US S01E02', { channelName: 'Third' }),
+      ];
+      const { service, recentSearches } = recorded({ results });
+
+      const items = await service.search(request(episodeQuery({ limit: '1' })), ORIGIN);
+
+      expect(items).toHaveLength(1);
+      expect(recentSearches.list()[0].offered).toBe(1);
+      expect(recentSearches.list()[0].stages[0].candidates.map(({ reason }) => reason)).toEqual([
+        null, 'over-limit', 'over-limit',
+      ]);
+    });
+
+    test.each([
+      ['the no-query feed', { t: 'tvsearch', cat: SONARR_CATS }, {}, 'no-query'],
+      ['a TV text search without a season', { t: 'tvsearch', cat: SONARR_CATS, q: 'Bluey' }, {}, 'no-season'],
+      [
+        'a daily search without the API',
+        { t: 'tvsearch', cat: SONARR_CATS, title: 'Last Week Tonight', season: '2025', ep: '02/16' },
+        { apiAvailable: false },
+        'daily-needs-api',
+      ],
+      ['text with nothing usable', episodeQuery({ title: '!!!' }), {}, 'no-search-text'],
+    ])('%s is listed as not searched, with the reason', async (_name, query, options, note) => {
+      const { service, recentSearches } = recorded(options);
+
+      await service.search(request(query), ORIGIN);
+
+      expect(recentSearches.list()).toHaveLength(1);
+      expect(recentSearches.list()[0]).toMatchObject({ outcome: 'not-searched', offered: 0, note, stages: [] });
+    });
+
+    test.each([
+      ['hold-timeout', 'search-held-too-long'],
+      ['search-failed', 'search-failed'],
+    ])('a search that could not run (%s) is listed as failed', async (reason, note) => {
+      const queue = { run: jest.fn().mockRejectedValue(new SearchUnavailableError(reason)) };
+      const { service, recentSearches } = recorded({}, { queue });
+
+      await expect(service.search(request(episodeQuery()), ORIGIN)).rejects.toBeInstanceOf(SearchUnavailableError);
+
+      expect(recentSearches.list()).toHaveLength(1);
+      expect(recentSearches.list()[0]).toMatchObject({ outcome: 'failed', offered: 0, note, stages: [] });
+    });
+
+    test.each([
+      ['no-connection', {}, undefined],
+      ['unknown-series', SONARR, null],
+      ['no-usable-title', SONARR, beybladeEpisode({ episodeTitle: null })],
+      ['no-runtime', SONARR, beybladeEpisode({ runtimeSeconds: null })],
+    ])('says why an episode was not searched by its title: %s', async (reason, config, episode) => {
+      const catalog = episode === undefined ? undefined : resolving(episode);
+      const { service, recentSearches } = recorded({ config, catalog });
+
+      await service.search(request(beybladeQuery), ORIGIN);
+
+      const [entry] = recentSearches.list();
+      expect(entry.titleStageSkipped).toBe(reason);
+      expect(entry.stages.map(({ matcher }) => matcher)).toEqual(['episode-code']);
+    });
+
+    test('a season, daily or movie request carries no title-stage reason', async () => {
+      const { service, recentSearches } = recorded();
+
+      await service.search(request({ t: 'search', cat: RADARR_CATS, q: 'Matrix 1999' }), ORIGIN);
+
+      expect(recentSearches.list()[0]).toMatchObject({
+        kind: 'movie', shape: 'movie', asked: { text: 'Matrix', year: 1999 }, titleStageSkipped: null,
+      });
+      expect(recentSearches.list()[0].stages[0]).toMatchObject({ matcher: 'movie', query: 'Matrix 1999' });
+    });
+
+    test('never holds the bridge key, a feed link or the address Sonarr used', async () => {
+      const { service, recentSearches } = recorded({ results: [video('The Office US S01E02')] });
+
+      const items = await service.search(request(episodeQuery()), ORIGIN);
+      await service.search(request({ t: 'tvsearch', cat: SONARR_CATS }), ORIGIN);
+
+      expect(items[0].link).toContain(KEY);
+      const stored = JSON.stringify(recentSearches.list());
+      expect(stored).not.toContain(KEY);
+      expect(stored).not.toContain('apikey');
+      expect(stored).not.toContain(ORIGIN);
+      expect(stored).not.toContain('/arr/newznab');
     });
   });
 
