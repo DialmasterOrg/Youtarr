@@ -212,6 +212,8 @@ YouTube answers "The playlist does not exist" for a private playlist when the re
 
 **Note:** Watch Later and Liked videos belong to one account, so they need that account's cookies. YouTube can restrict accounts it sees used with tools like yt-dlp, which is why Youtarr otherwise recommends a throwaway account for cookies. Using your main account is your call.
 
+Cookies from an account you keep using in a browser can stop working very quickly: YouTube rotates the session as the browser uses it, which leaves the exported copy stale. Export them from a private window that you close right after exporting, and expect to re-export from time to time. See [Test Cookies Says Not Signed In](TROUBLESHOOTING.md#test-cookies-says-not-signed-in).
+
 ### Where the videos are saved
 
 Playlists don't get their own folder. Each video is saved under the channel that uploaded it, so a playlist that pulls from five channels lands in five channel folders.
