@@ -1,5 +1,26 @@
 # Changelog
 
+## [v1.93.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.93.0) - 2026-11-17
+
+### Features
+
+* add Sonarr/Radarr bridge backend ([f589472](https://github.com/DialmasterOrg/Youtarr/commit/f589472b0fc5b684a456d2ed98b998f83f157307)), closes [#760](https://github.com/DialmasterOrg/Youtarr/issues/760)
+* add Sonarr/Radarr bridge settings page ([4c96d1d](https://github.com/DialmasterOrg/Youtarr/commit/4c96d1dbcfb0bde76e4b9ab82db5b13deb1878d1)), closes [#760](https://github.com/DialmasterOrg/Youtarr/issues/760)
+* guide Sonarr/Radarr setup, add resolution ([d81833c](https://github.com/DialmasterOrg/Youtarr/commit/d81833cb91370306a685feb1c2afad153e407c9b)), closes [#760](https://github.com/DialmasterOrg/Youtarr/issues/760)
+* hide Sonarr/Radarr grabs in history ([4d29191](https://github.com/DialmasterOrg/Youtarr/commit/4d29191dec5c64ade2c3e4441703e020f24f4408)), closes [#760](https://github.com/DialmasterOrg/Youtarr/issues/760)
+* honest release labels for Sonarr/Radarr ([6730ee3](https://github.com/DialmasterOrg/Youtarr/commit/6730ee30ed4470f61513b0a8555934afefec669c)), closes [#760](https://github.com/DialmasterOrg/Youtarr/issues/760)
+* list recent Sonarr/Radarr searches ([2e7e600](https://github.com/DialmasterOrg/Youtarr/commit/2e7e600311e96f810afb8fba45eeb6d7b2530f75)), closes [#760](https://github.com/DialmasterOrg/Youtarr/issues/760)
+* match Sonarr searches by episode title ([520ebab](https://github.com/DialmasterOrg/Youtarr/commit/520ebabf9dd4b85ca2ca45357d3b89c8f95bdb1d)), closes [#39](https://github.com/DialmasterOrg/Youtarr/issues/39) [#760](https://github.com/DialmasterOrg/Youtarr/issues/760)
+* remove grabbed videos after import ([c324f93](https://github.com/DialmasterOrg/Youtarr/commit/c324f93faf71bfcf5fc4ebb0f9d0895eba737b58)), closes [#760](https://github.com/DialmasterOrg/Youtarr/issues/760)
+* support Sonarr/Radarr outside Docker ([43ea038](https://github.com/DialmasterOrg/Youtarr/commit/43ea038b8467440671467257d692fc4eadf2a78c)), closes [#760](https://github.com/DialmasterOrg/Youtarr/issues/760)
+
+
+### Documentation
+
+* update CHANGELOG for v1.92.0 [skip ci] ([95dba27](https://github.com/DialmasterOrg/Youtarr/commit/95dba271bb0f95567d0a96122815cb6f4b3819c2))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.92.0...v1.93.0
+
 ## [v1.92.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.92.0) - 2026-11-14
 
 ### Features
