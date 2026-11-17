@@ -2593,6 +2593,21 @@ describe('VideoDeletionModule', () => {
       expect(mockFilesystem.cleanupEmptyParents).toHaveBeenCalledWith('/test/output/__Kids', '/test/output');
     });
 
+    test('leaves the Sonarr/Radarr staging folder alone, which is not a channel folder', async () => {
+      mockFilesystem.listSubdirectories.mockResolvedValue([
+        '/test/output/.arr-staging',
+        '/test/output/Empty Channel'
+      ]);
+      mockFilesystem.cleanupEmptyChannelDirectory.mockResolvedValue(true);
+
+      const result = await VideoDeletionModule.cleanupOrphanDirectories();
+
+      expect(result.removed).toEqual(['/test/output/Empty Channel']);
+      expect(mockFilesystem.cleanupEmptyChannelDirectory).not.toHaveBeenCalledWith(
+        '/test/output/.arr-staging', expect.anything(), expect.anything()
+      );
+    });
+
     test('should clean up root-level empty channel directories', async () => {
       mockFilesystem.listSubdirectories.mockResolvedValue([
         '/test/output/Empty Channel',

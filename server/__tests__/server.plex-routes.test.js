@@ -65,6 +65,7 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
   const configModuleMock = {
     directoryPath: '/downloads',
     getConfig: jest.fn(() => fakeConfig),
+    onConfigChange: jest.fn(),
     updateConfig: jest.fn((nextConfig) => Object.assign(fakeConfig, nextConfig)),
     getImagePath: jest.fn(() => '/images'),
     getCookiesStatus: jest.fn(() => ({ cookiesEnabled: false })),

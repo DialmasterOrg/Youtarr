@@ -205,6 +205,7 @@ const createServerModule = ({
         const configModuleMock = {
           directoryPath: '/downloads',
           getConfig: jest.fn(() => configState),
+          onConfigChange: jest.fn(),
           updateConfig: jest.fn((patch) => Object.assign(configState, patch)),
           getImagePath: jest.fn(() => '/images'),
           getCookiesStatus: jest.fn(() => ({

@@ -33,8 +33,8 @@ For multi-part requests (e.g., "review this PR AND explain WebSocket handling"),
 ### Backend (`server/`)
 
 - `server.js` is the Express entry point, `db.js` the Sequelize setup, `logger.js` the Pino logger (request correlation; file transport and log scrubber in `logging/`).
-- `routes/`: one file per API area (auth, channels, videos, videoDetail, videoSearch, videoTrash, channelSearch, config, jobs, plex, setup, subscriptions, apikeys, ytdlpOptions, health, maintenance, playlists, playlistSubscribeSettings, mediaServers, subfolders, schedules, logs, feeds, youtubeApiKey, externalApi, externalRequests; `runNowResponse` and `overrideSettingsValidator` are helpers). Every file is a dependency-injection factory wired in `routes/index.js`; `middleware/` holds the External API auth.
-- `models/`: Sequelize models (apikey, apikeychannelgrant, channel, channelvideo, externalapiusagebucket, externalrequest, job, jobvideo, jobvideodownload, mediaserveruser, playlist, playlistsyncstate, playlistvideo, scheduledtaskrun, session, subfolder, video, videowatchstatus, watchstatussynccursor).
+- `routes/`: one file per API area (auth, channels, videos, videoDetail, videoSearch, videoTrash, channelSearch, config, jobs, plex, setup, subscriptions, apikeys, ytdlpOptions, health, maintenance, playlists, playlistSubscribeSettings, mediaServers, subfolders, schedules, logs, feeds, arrBridge, arrBridgeSettings, youtubeApiKey, externalApi, externalRequests; `runNowResponse` and `overrideSettingsValidator` are helpers). Every file is a dependency-injection factory wired in `routes/index.js`; `middleware/` holds the External API auth.
+- `models/`: Sequelize models (apikey, apikeychannelgrant, arrbridgegrab, channel, channelvideo, externalapiusagebucket, externalrequest, job, jobvideo, jobvideodownload, mediaserveruser, playlist, playlistsyncstate, playlistvideo, scheduledtaskrun, session, subfolder, video, videowatchstatus, watchstatussynccursor).
 - `modules/`: class-based singletons holding the business logic, by area:
   - Downloads: `downloadModule`, `jobModule`, `modules/download/` (yt-dlp command builder, executor, progress monitor, finalizer, run tracker, retry and diagnosis helpers), `ytdlpModule`, cookie handling, `membersAccess` + `membersAccessState` (members-only access per cookie file), `storageGuard`, `archiveModule`, `modules/filenamePreview/` (filename template preview), `modules/constants/` (shared constants).
   - Channels: `channelModule` (facade) over `modules/channel/`, `channelSettingsModule`, `channelDownloadAllModule`, `channelSearchModule`, `titleFilterRegex`, `modules/subscriptionImport/`.
@@ -46,6 +46,7 @@ For multi-part requests (e.g., "review this PR AND explain WebSocket handling"),
   - Notifications: `notificationModule`, `modules/notifications/` (service registry, formatters, senders).
   - RSS feeds: `modules/feeds/` (RSS writer, download feed, settings limits).
   - External API: `modules/externalApi/` (catalog, requests, executor, permissions).
+  - Sonarr/Radarr bridge: `modules/arrBridge/` (Newznab indexer, SABnzbd client, release naming, grab executor, staging, Sonarr/Radarr metadata client and episode matcher).
   - YouTube Data API: `modules/youtubeApi/` (client, quota tracker, error classifier), the optional API path for channel and video search, playlists, metadata and tab counts.
 - `modules/__mocks__/`: Jest manual mocks (`membersAccess`) for tests that mock the database.
 - `utils/`: Python helpers (`validate-cookies.py` runs yt-dlp's cookie parser; `title-filter-regex.py` evaluates Python `re` for channel title filters).
@@ -88,6 +89,7 @@ Each file loads on its own when you Read, Edit or Write a matching file. A diff 
 - `notifications.md`: Apprise services, formatters, link template.
 - `feeds.md`: the token-protected `/feeds` RSS namespace.
 - `external-api.md`: the opt-in `/external-api/v1` surface.
+- `arr-bridge.md`: the opt-in `/arr` Newznab and SABnzbd surface for Sonarr and Radarr.
 - `database.md`: migrations, collation history, models.
 - `docs.md`: `docs/` and the published docs site.
 - `backend.md`, `frontend.md`, `testing.md`: coding standards for server, client and test files.

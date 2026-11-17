@@ -8,6 +8,7 @@ const { isExternalApiEnabled } = require('../modules/externalApi/externalApiConf
 const { isValidLevelSetting } = require('../logging/logLevel');
 const { getLinkTemplateError } = require('../modules/notifications/utils');
 const { getItemLimitError, getMediaTypesError } = require('../modules/feeds/feedSettings');
+const arrBridgeConfig = require('../modules/arrBridge/arrBridgeConfig');
 
 // Summarize the allowlist check of a saved custom-args string for the client,
 // without the resolved args (which may carry secret values). Returns null when
@@ -175,6 +176,13 @@ module.exports = function createConfigRoutes({
     delete safeConfig.passwordHash;
     delete safeConfig.username;
     delete safeConfig.downloadsFeedToken;
+    delete safeConfig.arrBridgeApiKey;
+    // The Settings page reads the Sonarr and Radarr connections from
+    // /api/arr-bridge/status: a hand-edited URL may hold credentials.
+    for (const { url, apiKey } of Object.values(arrBridgeConfig.CONNECTION_KEYS)) {
+      delete safeConfig[url];
+      delete safeConfig[apiKey];
+    }
 
     safeConfig.isPlatformManaged = {
       youtubeOutputDirectory: !!process.env.DATA_PATH,
@@ -390,6 +398,25 @@ module.exports = function createConfigRoutes({
       }
     }
 
+    // Sonarr/Radarr bridge settings. A tab loaded before they existed posts a
+    // config without them, and a save replaces the whole config, so a setting
+    // the client did not send keeps its stored value instead of being dropped.
+    const arrBridgeError = arrBridgeConfig.getSettingsError(updateData);
+    if (arrBridgeError) {
+      return res.status(400).json({ error: arrBridgeError });
+    }
+    Object.assign(updateData, arrBridgeConfig.cleanSettings(updateData));
+    const keptArrBridgeSettings = {};
+    for (const key of arrBridgeConfig.SETTING_KEYS) {
+      if (updateData[key] === undefined && currentConfig[key] !== undefined) {
+        keptArrBridgeSettings[key] = currentConfig[key];
+      }
+    }
+    for (const { key, replacement } of arrBridgeConfig.correctStoredSettings(keptArrBridgeSettings)) {
+      keptArrBridgeSettings[key] = replacement;
+    }
+    Object.assign(updateData, keptArrBridgeSettings);
+
     // Video filename template prefix validation
     if (Object.prototype.hasOwnProperty.call(updateData, 'videoFilenamePrefix')) {
       const basic = basicValidatePrefix(updateData.videoFilenamePrefix);
@@ -428,6 +455,15 @@ module.exports = function createConfigRoutes({
     updateData.username = currentConfig.username;
     // Server-owned: /getconfig never sends it, and a save must not undo a new URL.
     updateData.downloadsFeedToken = currentConfig.downloadsFeedToken;
+    // Server-owned for the same reason: the Sonarr/Radarr bridge key.
+    updateData.arrBridgeApiKey = currentConfig.arrBridgeApiKey;
+    // And the connections to the user's own Sonarr and Radarr. /getconfig
+    // omits the keys, and the URLs are kept with them: the stored key is
+    // sent to whatever URL is saved, so a client must not be able to move it.
+    updateData.arrBridgeSonarrUrl = currentConfig.arrBridgeSonarrUrl;
+    updateData.arrBridgeSonarrApiKey = currentConfig.arrBridgeSonarrApiKey;
+    updateData.arrBridgeRadarrUrl = currentConfig.arrBridgeRadarrUrl;
+    updateData.arrBridgeRadarrApiKey = currentConfig.arrBridgeRadarrApiKey;
     updateData.ytdlpLastChecked = currentConfig.ytdlpLastChecked;
     updateData.ytdlpLastUpdated = currentConfig.ytdlpLastUpdated;
     updateData.ytdlpLastResult = currentConfig.ytdlpLastResult;

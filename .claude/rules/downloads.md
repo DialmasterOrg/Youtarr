@@ -4,6 +4,7 @@ paths:
   - "server/modules/downloadModule.js"
   - "server/modules/jobModule.js"
   - "server/modules/jobAuxData.js"
+  - "server/modules/constants/jobOutputPrefixes.js"
   - "server/modules/ytdlpModule.js"
   - "server/modules/ytdlpProcess.js"
   - "server/modules/ytDlpRunner.js"

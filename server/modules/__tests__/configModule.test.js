@@ -279,6 +279,46 @@ describe('ConfigModule', () => {
       });
     });
 
+    describe('Sonarr/Radarr bridge settings on load', () => {
+      const loadWith = (overrides) => {
+        const existingConfig = { ...defaultTemplate, ...overrides };
+        fs.existsSync.mockReturnValue(true);
+        fs.readFileSync.mockImplementation((path) => JSON.stringify(
+          path.includes('config.json') && !path.includes('example') ? existingConfig : defaultTemplate
+        ));
+        ConfigModule = require('../configModule');
+        return ConfigModule.getConfig();
+      };
+
+      test('replaces a hand-edited minimum length that is not a number', () => {
+        expect(loadWith({ arrBridgeMinTvMinutes: 'ten' }).arrBridgeMinTvMinutes).toBe(10);
+      });
+
+      test('replaces a category that could become a path with the defaults', () => {
+        expect(loadWith({ arrBridgeCategories: [{ name: '../x' }] }).arrBridgeCategories).toEqual([
+          { name: 'tv', subfolder: null },
+          { name: 'movies', subfolder: null },
+        ]);
+      });
+
+      test('warns and saves when a value is corrected', () => {
+        loadWith({ arrBridgeStagingRetentionDays: 0 });
+
+        expect(logger.warn).toHaveBeenCalledWith(
+          { key: 'arrBridgeStagingRetentionDays', previous: 0, replacement: 7 },
+          'Corrected an invalid Sonarr/Radarr bridge setting'
+        );
+        expect(fs.writeFileSync).toHaveBeenCalled();
+      });
+
+      test('does not save when the values are already valid', () => {
+        loadWith({ arrBridgeEnabled: true, arrBridgeCategories: [{ name: 'tv', subfolder: null }] });
+
+        expect(logger.warn).not.toHaveBeenCalled();
+        expect(fs.writeFileSync).not.toHaveBeenCalled();
+      });
+    });
+
     describe('log level setting on load', () => {
       const loadWith = (overrides) => {
         const existingConfig = { ...defaultTemplate, ...overrides };
@@ -900,6 +940,26 @@ describe('ConfigModule', () => {
 
       ConfigModule.on('change', () => {
         expect(ConfigModule.getConfig().logLevel).toBe('');
+        done();
+      });
+
+      watchCallback('change');
+      jest.runAllTimers();
+    });
+
+    test('corrects a Sonarr/Radarr bridge setting from a hand edit picked up while running', (done) => {
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockReturnValue(JSON.stringify(defaultTemplate));
+      let watchCallback;
+      fs.watch.mockImplementation((path, callback) => {
+        watchCallback = callback;
+        return { close: jest.fn(), on: jest.fn() };
+      });
+      ConfigModule = require('../configModule');
+      fs.readFileSync.mockReturnValue(JSON.stringify({ ...defaultTemplate, arrBridgeStagingRetentionDays: 0 }));
+
+      ConfigModule.on('change', () => {
+        expect(ConfigModule.getConfig().arrBridgeStagingRetentionDays).toBe(7);
         done();
       });
 

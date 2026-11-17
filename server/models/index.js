@@ -19,6 +19,7 @@ const ApiKeyChannelGrant = require('./apikeychannelgrant');
 const ExternalRequest = require('./externalrequest');
 const ExternalApiUsageBucket = require('./externalapiusagebucket');
 const VideoMembersAccess = require('./videomembersaccess');
+const ArrBridgeGrab = require('./arrbridgegrab');
 
 Job.hasMany(JobVideo, { foreignKey: 'job_id', as: 'jobVideos' });
 Job.hasMany(JobVideoDownload, { foreignKey: 'job_id', as: 'jobVideoDownloads' });
@@ -73,4 +74,5 @@ module.exports = {
   ExternalRequest,
   ExternalApiUsageBucket,
   VideoMembersAccess,
+  ArrBridgeGrab,
 };

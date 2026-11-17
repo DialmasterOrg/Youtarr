@@ -85,6 +85,28 @@ const options = {
         },
       },
       schemas: {
+        ArrBridgeConnection: {
+          type: 'object',
+          description: 'A saved Sonarr or Radarr connection. The API key is never returned.',
+          properties: {
+            url: { type: 'string', nullable: true },
+            keySet: { type: 'boolean' },
+          },
+        },
+        ArrBridgeConnectionResult: {
+          type: 'object',
+          properties: {
+            ok: { type: 'boolean' },
+            appName: { type: 'string' },
+            version: { type: 'string' },
+            reason: {
+              type: 'string',
+              enum: ['unauthorized', 'redirect', 'not-json', 'unreachable', 'wrong-app', 'not-configured'],
+            },
+            message: { type: 'string' },
+            connection: { $ref: '#/components/schemas/ArrBridgeConnection' },
+          },
+        },
         ExternalError: {
           type: 'object',
           required: ['error'],
@@ -228,6 +250,10 @@ const options = {
       {
         name: 'Feeds',
         description: 'RSS feeds for feed readers, protected by a token in the URL',
+      },
+      {
+        name: 'Sonarr/Radarr bridge',
+        description: 'Settings endpoints of the Sonarr/Radarr bridge; the /arr protocol endpoints are described in the docs',
       },
     ],
   },

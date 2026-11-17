@@ -72,6 +72,7 @@ You'll need Docker, Docker Compose, Git, and a Bash shell (Git Bash on Windows).
 ### Setup & Configuration
 - [Installation Guide](docs/INSTALLATION.md) - Install methods, initial setup, and updating
 - [Usage Guide](docs/USAGE_GUIDE.md) - Step-by-step tutorials for common tasks
+- [Sonarr and Radarr](docs/SONARR_RADARR.md) - Use Youtarr as an indexer and download client for Sonarr and Radarr
 - [Configuration Reference](docs/CONFIG.md) - All configuration options
 - [Environment Variables](docs/ENVIRONMENT_VARIABLES.md) - Docker environment settings
 - [Authentication Setup](docs/AUTHENTICATION.md) - Security and access control

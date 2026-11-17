@@ -31,6 +31,11 @@ const AUTO_RETRY_LABEL_PREFIX = 'Auto-retry: ';
 // Downloads approved through the External API. Unlike the owner's own manual
 // downloads, these never use the owner's membership.
 const EXTERNAL_REQUEST_JOB_LABEL = `${MANUAL_DOWNLOAD_LABEL} (external request)`;
+// Downloads grabbed by Sonarr or Radarr through the bridge. It contains
+// MANUAL_DOWNLOAD_LABEL on purpose: a grab is handled exactly like a manual
+// download (URL-list detection, per-video structure, the owner's membership).
+const ARR_BRIDGE_LABEL_SUFFIX = '(Sonarr/Radarr grab)';
+const ARR_BRIDGE_JOB_LABEL = `${MANUAL_DOWNLOAD_LABEL} ${ARR_BRIDGE_LABEL_SUFFIX}`;
 // Synthetic status-marker jobType for an idle playlist auto-download sweep
 // (>=1 auto-enabled playlist checked, nothing enqueued, no errors). NOT a
 // download job: it must stay un-matched by every detection helper below.
@@ -71,10 +76,19 @@ function channelDownloadAllJobLabel(channel) {
   return `${CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX}${channel.title || channel.channel_id}`;
 }
 
-// Build the activity-view job label for an auto-retry job.
-function autoRetryJobLabel(videoCount, { anonymous = false } = {}) {
-  const suffix = anonymous ? ' (no cookies)' : '';
+// Build the activity-view job label for an auto-retry job. The retry of a
+// Sonarr/Radarr grab keeps the grab's suffix: the job type is all Download
+// History has to tell such a job from any other retry.
+function autoRetryJobLabel(videoCount, { anonymous = false, arrBridge = false } = {}) {
+  const suffix = `${anonymous ? ' (no cookies)' : ''}${arrBridge ? ` ${ARR_BRIDGE_LABEL_SUFFIX}` : ''}`;
   return `${AUTO_RETRY_LABEL_PREFIX}${videoCount} video${videoCount !== 1 ? 's' : ''}${suffix}`;
+}
+
+// True for a download grabbed by Sonarr or Radarr, and for an auto-retry of one.
+function isArrBridgeJob(jobType) {
+  if (!jobType) return false;
+  return jobType === ARR_BRIDGE_JOB_LABEL
+    || (jobType.startsWith(AUTO_RETRY_LABEL_PREFIX) && jobType.endsWith(ARR_BRIDGE_LABEL_SUFFIX));
 }
 
 // True for a channel download-all job. These jobs are exempt from the
@@ -92,9 +106,11 @@ module.exports = {
   CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX,
   AUTO_RETRY_LABEL_PREFIX,
   EXTERNAL_REQUEST_JOB_LABEL,
+  ARR_BRIDGE_JOB_LABEL,
   PLAYLIST_SWEEP_LABEL,
   isSpecificUrlDownloadJob,
   isDownloadJob,
+  isArrBridgeJob,
   playlistJobLabel,
   playlistRetryJobLabel,
   channelDownloadAllJobLabel,

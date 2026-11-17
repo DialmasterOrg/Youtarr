@@ -19,6 +19,39 @@ describe('createLogScrubber', () => {
       .toBe('GET /feeds/downloads.xml?token=[REDACTED]');
   });
 
+  test('hides the Sonarr/Radarr bridge key wherever it appears', () => {
+    const bridgeKey = 'b'.repeat(64);
+    const scrub = createLogScrubber({ arrBridgeApiKey: bridgeKey });
+
+    expect(scrub(`link: http://youtarr/arr/newznab/nzb/Show.S01E01.nzb?id=abc&k=${bridgeKey}`))
+      .toBe('link: http://youtarr/arr/newznab/nzb/Show.S01E01.nzb?id=abc&k=[REDACTED]');
+  });
+
+  test('hides the keys of the connected Sonarr and Radarr', () => {
+    const sonarrKey = '5'.repeat(32);
+    const radarrKey = '7'.repeat(32);
+    const scrub = createLogScrubber({ arrBridgeSonarrApiKey: sonarrKey, arrBridgeRadarrApiKey: radarrKey });
+
+    expect(scrub(`headers: {"X-Api-Key":"${sonarrKey}"} then {"X-Api-Key":"${radarrKey}"}`))
+      .toBe('headers: {"X-Api-Key":"[REDACTED]"} then {"X-Api-Key":"[REDACTED]"}');
+  });
+
+  test('hides a key that was hand-edited with spaces around it, in the trimmed form that is sent', () => {
+    const sonarrKey = '5'.repeat(32);
+    const scrub = createLogScrubber({ arrBridgeSonarrApiKey: `  ${sonarrKey} ` });
+
+    expect(scrub(`headers: {"X-Api-Key":"${sonarrKey}"}`)).toBe('headers: {"X-Api-Key":"[REDACTED]"}');
+  });
+
+  test('hides an apikey query value even when it is not the configured key', () => {
+    const scrub = createLogScrubber({});
+
+    expect(scrub('GET /arr/newznab/api?apikey=abc123def456&t=caps 200'))
+      .toBe('GET /arr/newznab/api?apikey=[REDACTED]&t=caps 200');
+    expect(scrub('GET /arr/sabnzbd/api?mode=queue&apikey=abc123def456 200'))
+      .toBe('GET /arr/sabnzbd/api?mode=queue&apikey=[REDACTED] 200');
+  });
+
   test('hides configured notification URLs, which carry webhook and bot tokens', () => {
     const scrub = createLogScrubber({
       appriseUrls: [{ url: 'discord://123456/webhookToken', name: 'Discord' }, 'tgram://botToken123/chatId'],
