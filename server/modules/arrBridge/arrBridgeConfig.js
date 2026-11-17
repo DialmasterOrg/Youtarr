@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { isDeepStrictEqual } = require('util');
 const { ARR_STAGING_DIR_NAME } = require('../filesystem/constants');
 const { validateSubFolderName } = require('../filesystem/subfolderValidation');
+const { normalizeStagingPath } = require('./clientPaths');
 
 // Sonarr and Radarr require a SABnzbd version of at least 0.7.0 in x.y.z form.
 const SAB_VERSION = '4.3.0';
@@ -22,7 +23,6 @@ const DEFAULT_MIN_MOVIE_MINUTES = 60;
 const MAX_MIN_DURATION_MINUTES = 600;
 const DEFAULT_RETENTION_DAYS = 7;
 const MAX_RETENTION_DAYS = 365;
-const MAX_STAGING_PATH_LENGTH = 500;
 // The resolutions Sonarr and Radarr have a quality for. An empty setting
 // follows preferredResolution.
 const RESOLUTIONS = Object.freeze(['2160', '1080', '720', '480']);
@@ -119,15 +119,6 @@ function normalizeExcludeTerms(value) {
     .map((term) => term.trim().toLowerCase())
     .filter((term) => term.length > 0 && term.length <= MAX_EXCLUDE_TERM_LENGTH);
   return [...new Set(terms)].slice(0, MAX_EXCLUDE_TERMS);
-}
-
-function normalizeStagingPath(value) {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  if (!trimmed.startsWith('/') || trimmed.length > MAX_STAGING_PATH_LENGTH) return null;
-  if (trimmed.split('/').includes('..')) return null;
-  // Slashes and the spaces between them together, so the result is final.
-  return trimmed.replace(/[\s/]+$/, '') || null;
 }
 
 function normalizeRetentionDays(value) {

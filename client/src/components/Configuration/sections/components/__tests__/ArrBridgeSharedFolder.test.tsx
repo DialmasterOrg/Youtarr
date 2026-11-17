@@ -53,21 +53,78 @@ describe('ArrBridgeSharedFolder', () => {
     expect(screen.queryByText(/volumes/)).not.toBeInTheDocument();
   });
 
+  test('says when an app sees the folder through its own Remote Path Mapping', () => {
+    setup({ checks: { sonarr: { ...SEEN, via: 'mapping' }, radarr: SEEN } });
+
+    expect(checkOf('Sonarr').getByText('Sonarr can see the folder, through its Remote Path Mapping.')).toBeInTheDocument();
+    expect(checkOf('Radarr').getByText('Radarr can see the folder.')).toBeInTheDocument();
+  });
+
   describe('an app that cannot see the folder', () => {
     test('is told apart from the one that can, with the path that was asked about', () => {
       setup({ checks: { sonarr: NOT_SEEN, radarr: SEEN } });
 
       expect(checkOf('Sonarr').getByText(/Sonarr cannot see the folder/)).toBeInTheDocument();
-      expect(checkOf('Sonarr').getByText(IN_YOUTARR)).toBeInTheDocument();
+      // Once as the path that was asked about, once as the Remote Path of a mapping.
+      expect(checkOf('Sonarr').getAllByText(IN_YOUTARR)).toHaveLength(2);
       expect(checkOf('Radarr').getByText('Radarr can see the folder.')).toBeInTheDocument();
     });
 
-    test('gets both ways to fix it, the volume to add and the other path to enter', () => {
+    test('gets every way to fix it when it does not say where it runs', () => {
       setup({ checks: { sonarr: NOT_SEEN, radarr: SEEN } });
 
       expect(checkOf('Sonarr').getByText(`/mnt/media/youtube/.arr-staging:${IN_YOUTARR}`)).toBeInTheDocument();
       expect(checkOf('Sonarr').getByText(/already sees that folder under another path/)).toBeInTheDocument();
-      expect(checkOf('Sonarr').getByText(/does not follow a Remote Path Mapping/)).toBeInTheDocument();
+      expect(checkOf('Sonarr').getByText(/A Remote Path Mapping in Sonarr works too/)).toBeInTheDocument();
+    });
+
+    test('in Docker, gets the volume to add and the other path to enter', () => {
+      setup({ checks: { sonarr: { ...NOT_SEEN, runsIn: 'docker' }, radarr: SEEN } });
+
+      expect(checkOf('Sonarr').getByText(`/mnt/media/youtube/.arr-staging:${IN_YOUTARR}`)).toBeInTheDocument();
+      expect(checkOf('Sonarr').getByText(/already sees that folder under another path/)).toBeInTheDocument();
+      expect(checkOf('Sonarr').queryByText(/Remote Path Mapping/)).not.toBeInTheDocument();
+    });
+
+    test.each([
+      ['windows', 'E:\\Youtube\\.arr-staging'],
+      ['other', '/mnt/media/youtube/.arr-staging'],
+    ] as const)('outside Docker (%s), is told to enter the folder as it sees it, never to add a volume', (runsIn, example) => {
+      setup({ hostFolder: '/e/Youtube16TB/.arr-staging', checks: { sonarr: { ...NOT_SEEN, runsIn }, radarr: SEEN } });
+
+      expect(checkOf('Sonarr').getByText(/Enter the folder as Sonarr sees it below and save/)).toBeInTheDocument();
+      expect(checkOf('Sonarr').getByText(example)).toBeInTheDocument();
+      expect(checkOf('Sonarr').getByText(/A Remote Path Mapping in Sonarr works too/)).toBeInTheDocument();
+      expect(checkOf('Sonarr').queryByText(/volumes/)).not.toBeInTheDocument();
+    });
+
+    describe('that sees it under a path Youtarr found', () => {
+      const FOUND = 'E:\\Youtube16TB\\.arr-staging';
+      const found = { ...NOT_SEEN, runsIn: 'windows' as const, suggestedPath: FOUND };
+
+      test('is shown that path, with a button that puts it in the field', () => {
+        const props = setup({ checks: { sonarr: found, radarr: SEEN } });
+
+        expect(checkOf('Sonarr').getByText(/Sonarr does see it at/)).toBeInTheDocument();
+        expect(checkOf('Sonarr').getByText(FOUND)).toBeInTheDocument();
+        fireEvent.click(checkOf('Sonarr').getByRole('button', { name: 'Use this path' }));
+
+        expect(props.onStagingPathChange).toHaveBeenCalledWith(FOUND);
+      });
+
+      test('gets no other advice', () => {
+        setup({ checks: { sonarr: found, radarr: SEEN } });
+
+        expect(checkOf('Sonarr').queryByText(/volumes|Remote Path Mapping|Enter the folder/)).not.toBeInTheDocument();
+      });
+
+      test('is told to save once the path is in the field', () => {
+        setup({ checks: { sonarr: found, radarr: SEEN }, stagingPath: FOUND, stagingPathSaved: false });
+
+        expect(checkOf('Sonarr').getByText('That path is in the field below. Save to use it.')).toBeInTheDocument();
+        expect(checkOf('Sonarr').queryByRole('button', { name: 'Use this path' })).not.toBeInTheDocument();
+        expect(screen.getByLabelText(PATH_FIELD)).toHaveValue(FOUND);
+      });
     });
 
     test('says that a volume of its own makes the import a copy', () => {

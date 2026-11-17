@@ -248,7 +248,7 @@ function createArrBridgeSettingsRoutes({ verifyToken, arrBridgeConnectionLimiter
    * /api/arr-bridge/connections/{app}/shared-folder:
    *   get:
    *     summary: Check that Sonarr or Radarr can see the staging folder
-   *     description: Asks the saved Sonarr or Radarr whether it sees the staging folder under the path it is told to import from. Read-only, and nothing of what the app lists is returned.
+   *     description: Asks the saved Sonarr or Radarr whether it sees the staging folder under the path it is told to import from. When it does not, the app is also asked whether one of its Remote Path Mappings leads to the folder, where it runs, and whether it sees the folder where the host has it. Read-only, and nothing the app lists or names is returned.
    *     tags: [Sonarr/Radarr bridge]
    *     parameters:
    *       - in: path
@@ -271,6 +271,18 @@ function createArrBridgeSettingsRoutes({ verifyToken, arrBridgeConnectionLimiter
    *                   type: boolean
    *                 path:
    *                   type: string
+   *                   description: The path the app is told, which is the one that was asked about
+   *                 via:
+   *                   type: string
+   *                   enum: [mapping]
+   *                   description: Set when the app sees the folder through a Remote Path Mapping of its own
+   *                 runsIn:
+   *                   type: string
+   *                   enum: [docker, windows, other]
+   *                   description: Where the app says it runs, when it does not see the folder
+   *                 suggestedPath:
+   *                   type: string
+   *                   description: A path the app does see the folder under, built from Youtarr's own settings
    *                 reason:
    *                   type: string
    *                 message:

@@ -338,6 +338,9 @@ const initialize = async () => {
         const resolutions = await videoMetadataModule.probeAvailableResolutions(youtubeId);
         return Array.isArray(resolutions) && resolutions.length > 0 ? Math.max(...resolutions) : null;
       },
+      // The downloads folder as the host knows it, as /getconfig reports it:
+      // where a Sonarr or Radarr outside Docker may see the staging folder.
+      getHostDownloadsFolder: () => process.env.YOUTUBE_OUTPUT_DIR || process.env.DATA_PATH || null,
       logger,
     });
     jobModule.onJobEnded((event) => arrBridge.handleJobEnded(event));

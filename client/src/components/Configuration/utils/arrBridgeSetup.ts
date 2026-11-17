@@ -178,7 +178,14 @@ export function stagingFolderOnHost(downloadsFolder: string | null | undefined):
 export interface ArrFolderCheck {
   ok: boolean;
   visible?: boolean;
+  /** The path the app is told, which is the one that was asked about. */
   path?: string;
+  /** Set when the app sees the folder through a Remote Path Mapping of its own. */
+  via?: 'mapping';
+  /** Where the app says it runs, when it does not see the folder. */
+  runsIn?: 'docker' | 'windows' | 'other';
+  /** A path the app does see the folder under. */
+  suggestedPath?: string;
   reason?: string;
   message?: string;
 }
@@ -220,12 +227,38 @@ export function getCategoriesError(categories: ArrCategory[]): string | null {
   return refused ? `The subfolder chosen for "${refused.name}" cannot be used for a category. Pick another one.` : null;
 }
 
-// The server's rule for the staging path: empty, or an absolute path without
-// "..", which is still a path once trailing slashes are removed.
+const WINDOWS_DRIVE_PATH = /^[A-Za-z]:[\\/]/;
+const WINDOWS_SHARE_PREFIX = '\\\\';
+const FIRST_PRINTABLE_CODE = 0x20;
+const DELETE_CODE = 0x7f;
+
+function hasControlCharacter(text: string): boolean {
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    if (code < FIRST_PRINTABLE_CODE || code === DELETE_CODE) return true;
+  }
+  return false;
+}
+
+// A drive needs a folder on it; a share needs its server and its name.
+function isWindowsStagingPath(path: string): boolean {
+  const share = path.startsWith(WINDOWS_SHARE_PREFIX);
+  const segments = path
+    .slice(share ? WINDOWS_SHARE_PREFIX.length : 0)
+    .replace(/[\s\\/]+$/, '')
+    .split(/[\\/]+/);
+  return segments.length >= 2 && segments.every((segment) => segment !== '' && segment !== '..');
+}
+
+// The server's rule for the staging path (modules/arrBridge/clientPaths.js):
+// empty, or an absolute path without "..", on Linux or macOS ("/data/x"), on
+// a Windows drive ("E:\x") or on a Windows share ("\\nas\x").
 function isStagingPath(value: string): boolean {
   const path = value.trim();
   if (path === '') return true;
-  if (!path.startsWith('/') || path.length > MAX_STAGING_PATH_LENGTH || path.split('/').includes('..')) return false;
+  if (path.length > MAX_STAGING_PATH_LENGTH || hasControlCharacter(path)) return false;
+  if (WINDOWS_DRIVE_PATH.test(path) || path.startsWith(WINDOWS_SHARE_PREFIX)) return isWindowsStagingPath(path);
+  if (!path.startsWith('/') || path.split('/').includes('..')) return false;
   return path.replace(/[\s/]+$/, '') !== '';
 }
 
@@ -254,7 +287,7 @@ export function getArrBridgeSettingsError(settings: ArrBridgeSavedSettings): str
     return `Sonarr / Radarr: remove files nobody imported after 1 to ${MAX_RETENTION_DAYS} days`;
   }
   if (!isStagingPath(settings.arrBridgeStagingPath)) {
-    return "Sonarr / Radarr: the folder's path inside Sonarr and Radarr must be an absolute path, like /downloads/.arr-staging";
+    return "Sonarr / Radarr: the folder's path inside Sonarr and Radarr must be an absolute path, like /downloads/.arr-staging or E:\\Youtube\\.arr-staging";
   }
   return null;
 }

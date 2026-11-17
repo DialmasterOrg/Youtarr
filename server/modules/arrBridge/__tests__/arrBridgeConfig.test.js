@@ -332,6 +332,24 @@ describe('arrBridgeConfig', () => {
       expect(getSettingsError({ arrBridgeStagingPath: '/downloads/.arr-staging/' })).toBeNull();
     });
 
+    // Sonarr and Radarr on Windows know the folder by a drive or a share.
+    test.each([
+      ['E:\\Youtube16TB\\.arr-staging\\', 'E:\\Youtube16TB\\.arr-staging'],
+      ['E:/Youtube16TB/.arr-staging', 'E:\\Youtube16TB\\.arr-staging'],
+      ['\\\\nas\\videos\\.arr-staging', '\\\\nas\\videos\\.arr-staging'],
+    ])('accepts the Windows staging path %p, and its saved form needs no correction', (value, savedForm) => {
+      expect(getSettingsError({ arrBridgeStagingPath: value })).toBeNull();
+      const saved = cleanSettings({ arrBridgeStagingPath: value });
+
+      expect(saved.arrBridgeStagingPath).toBe(savedForm);
+      expect(correctStoredSettings(saved)).toEqual([]);
+      expect(readSettings(saved).stagingPath).toBe(savedForm);
+    });
+
+    test.each(['E:\\', 'E:\\Videos\\..\\Windows', '\\\\nas'])('rejects the Windows staging path %p', (value) => {
+      expect(getSettingsError({ arrBridgeStagingPath: value })).toMatch(/^Sonarr\/Radarr staging path/);
+    });
+
     test.each(['yes', 1, null])('rejects %p for a switch', (value) => {
       expect(getSettingsError({ arrBridgeEnabled: value })).toMatch(/^Sonarr\/Radarr/);
       expect(getSettingsError({ arrBridgeLooseMatching: value })).toMatch(/^Sonarr\/Radarr/);

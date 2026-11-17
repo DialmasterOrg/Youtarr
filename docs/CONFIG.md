@@ -783,7 +783,7 @@ Settings for the Sonarr/Radarr bridge, served under `/arr/`. See [Sonarr and Rad
 - **Config Key**: `arrBridgeStagingPath`
 - **Type**: `string`
 - **Default**: `""`
-- **Description**: The staging folder (`.arr-staging` in your downloads folder) as Sonarr and Radarr see it. Leave it empty when it's mounted at the same path as in Youtarr. An absolute path.
+- **Description**: The staging folder (`.arr-staging` in your downloads folder) as Sonarr and Radarr see it. Leave it empty when it's mounted at the same path as in Youtarr. An absolute path: a Linux or macOS path (`/data/youtube/.arr-staging`), a Windows drive path (`E:\Youtube\.arr-staging`) or a Windows share path (`\\nas\youtube\.arr-staging`).
 
 ### Staged File Retention
 - **Config Key**: `arrBridgeStagingRetentionDays`

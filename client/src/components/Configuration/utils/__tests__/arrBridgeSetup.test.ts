@@ -193,6 +193,26 @@ describe('getArrBridgeSettingsError', () => {
       /must be an absolute path/
     );
   });
+
+  // The same forms the server accepts (modules/arrBridge/clientPaths.js).
+  test.each([
+    'E:\\Youtube16TB\\.arr-staging',
+    'E:\\Youtube16TB\\.arr-staging\\ ',
+    'e:/Youtube16TB/.arr-staging',
+    '\\\\nas\\videos\\.arr-staging',
+    '\\\\nas\\arr-staging',
+  ])('accepts the Windows staging path %p', (stagingPath) => {
+    expect(getArrBridgeSettingsError({ ...valid, arrBridgeStagingPath: stagingPath })).toBeNull();
+  });
+
+  test.each(['E:\\', 'E:', 'E:Videos', 'E:\\Videos\\..\\Windows', '\\\\nas', '/data/.arr-staging\n/etc'])(
+    'refuses the staging path %p',
+    (stagingPath) => {
+      expect(getArrBridgeSettingsError({ ...valid, arrBridgeStagingPath: stagingPath })).toMatch(
+        /must be an absolute path/
+      );
+    }
+  );
 });
 
 describe('describeMatching', () => {
