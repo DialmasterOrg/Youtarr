@@ -1504,6 +1504,13 @@ describe('YtdlpCommandBuilder', () => {
       expect(args).toEqual(expect.arrayContaining(['--dump-json', '--lazy-playlist']));
       expect(args).not.toContain('--dump-single-json');
     });
+
+    test('buildMetadataFetchArgs prints one JSON line per entry without lazy mode when entryPerLine is set', () => {
+      const args = YtdlpCommandBuilder.buildMetadataFetchArgs('https://x/y', { flatPlaylist: true, entryPerLine: true });
+      expect(args).toContain('--dump-json');
+      expect(args).not.toContain('--lazy-playlist');
+      expect(args).not.toContain('--dump-single-json');
+    });
   });
 
   describe('cookie player clients', () => {

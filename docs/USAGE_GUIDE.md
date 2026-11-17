@@ -204,6 +204,16 @@ Subscribe to a YouTube playlist and Youtarr tracks its videos, downloads them, a
 
 > Click the **?** icon on the Playlists tab for an in-app summary of how playlists work.
 
+### Private playlists
+
+Public and unlisted playlists need no setup. A private playlist, including **Watch Later** (`https://www.youtube.com/playlist?list=WL`) and **Liked videos**, only works with [cookies](CONFIG.md#cookie-config) from the YouTube account that owns it. With cookies enabled, Youtarr sends them on every playlist refresh, the same way it does for channel listings.
+
+YouTube answers "The playlist does not exist" for a private playlist when the request is signed out, and also once the cookies expire. If a private playlist that used to refresh starts failing with that message, run **Test cookies** in Settings and upload fresh cookies if the test fails.
+
+**Note:** Watch Later and Liked videos belong to one account, so they need that account's cookies. YouTube can restrict accounts it sees used with tools like yt-dlp, which is why Youtarr otherwise recommends a throwaway account for cookies. Using your main account is your call.
+
+Cookies from an account you keep using in a browser can stop working very quickly: YouTube rotates the session as the browser uses it, which leaves the exported copy stale. Export them from a private window that you close right after exporting, and expect to re-export from time to time. See [Test Cookies Says Not Signed In](TROUBLESHOOTING.md#test-cookies-says-not-signed-in).
+
 ### Where the videos are saved
 
 Playlists don't get their own folder. Each video is saved under the channel that uploaded it, so a playlist that pulls from five channels lands in five channel folders.
