@@ -3,6 +3,7 @@ const { normalizeUrlToVideoId } = require('./youtubeUrlParser');
 const configModule = require('./configModule');
 const jobModule = require('./jobModule');
 const plexModule = require('./plexModule');
+const libraryRefresh = require('./mediaServers/libraryRefresh');
 const DownloadExecutor = require('./download/downloadExecutor');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const tempPathManager = require('./download/tempPathManager');
@@ -672,14 +673,23 @@ class DownloadModule {
       }
     }
 
-    // Refresh each distinct Plex library mapped to the downloaded subfolders.
-    // Pre-condition: g.subFolder must already be a resolved effective subfolder
-    // (clean name, no __ prefix, no ##USE_GLOBAL_DEFAULT## sentinel) as produced
-    // by channelDownloadGrouper. null means root (no subfolder).
-    // Defensive: refreshLibrary currently swallows errors internally
-    plexModule.refreshLibrariesForSubfolders(groups.map(g => g.subFolder ?? null)).catch(err => {
-      logger.error({ err }, 'Failed to refresh Plex libraries after grouped download');
-    });
+    // Refresh media servers once for the whole job, and only when a group
+    // downloaded something (most scheduled checks find nothing new).
+    if ((completedJob?.data?.videos?.length || 0) > 0) {
+      // Each distinct Plex library mapped to the groups' subfolders.
+      // Pre-condition: g.subFolder must already be a resolved effective subfolder
+      // (clean name, no __ prefix, no ##USE_GLOBAL_DEFAULT## sentinel) as produced
+      // by channelDownloadGrouper. null means root (no subfolder).
+      // Defensive: refreshLibrary currently swallows errors internally
+      plexModule.refreshLibrariesForSubfolders(groups.map(g => g.subFolder ?? null)).catch(err => {
+        logger.error({ err }, 'Failed to refresh Plex libraries after grouped download');
+      });
+
+      // Jellyfin and Emby; also swallows its own errors.
+      libraryRefresh.refreshAfterDownload().catch(err => {
+        logger.error({ err }, 'Failed to refresh Jellyfin/Emby libraries after grouped download');
+      });
+    }
 
     // Now start the next job in the queue
     await jobModule.startNextJob();

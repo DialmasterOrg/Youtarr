@@ -247,10 +247,11 @@ export const MediaServerPlaylistSection: React.FC<MediaServerPlaylistSectionProp
       chipColor={chipColor}
     >
       <Alert severity="info" className="mb-4">
-        <AlertTitle>For native playlist support</AlertTitle>
+        <AlertTitle>Optional connection</AlertTitle>
         <Typography variant="body2">
-          Connecting {label} is required for Youtarr-managed YouTube playlists to appear as native
-          playlists in {label} and Watch Status syncing. All downloads still work without this connection.
+          Connecting {label} lets Youtarr refresh your {label} libraries after each download, show
+          Youtarr-managed YouTube playlists as native playlists in {label}, and sync Watch Status.
+          All downloads still work without this connection.
         </Typography>
       </Alert>
 
@@ -400,7 +401,7 @@ export const MediaServerPlaylistSection: React.FC<MediaServerPlaylistSectionProp
             placeholder="comma,separated,library,ids"
             value={libraryIds.join(', ')}
             onChange={handleLibraryIdsChange}
-            helperText={`${label} library IDs that contain your Youtarr videos. Optional; used to narrow playlist item resolution.`}
+            helperText={`Optional. ${label} library IDs that contain your Youtarr videos, so only those libraries are refreshed after a download. Leave blank to refresh every library.`}
           />
         </Grid>
 

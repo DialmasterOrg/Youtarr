@@ -16,6 +16,7 @@ Plex, Jellyfin and Emby: library refresh, native playlist sync, and watch status
 - Plex login uses OAuth and must be the server admin; an unclaimed server has no accounts and runs anonymously. A library scan is triggered after downloads.
 - "Other Videos" with the "Personal Media" agent is the documented baseline, not an enforced requirement: `plexAdapter` also lists TV-type sections for video and Music sections for audio playlists.
 - Jellyfin 12.1 and Emby 4.10.1 (tested 2026-10-03) leave a library empty when its folder sits inside another library's folder, so a root library breaks per-subfolder ones. Jellyfin logs `Found duplicate path`; Plex shows the files in both.
+- `libraryRefresh.refreshAfterDownload` scans Jellyfin and Emby once per job that downloaded videos: the `*VideoLibraryIds` libraries when set, else all. It never rejects, and requires `serverRegistry` directly, since downloadModule's tests cannot load the models index.
 - `serverRegistry` + `adapters/` (`plexAdapter`, `jellyfinAdapter`, `embyAdapter`, `baseAdapter`) wrap each server's REST API; `mediaServerSync` decides which adapters apply to a playlist and updates `playlist_sync_state`.
 
 ## Playlist sync
@@ -26,6 +27,7 @@ Plex, Jellyfin and Emby: library refresh, native playlist sync, and watch status
 - `replacePlaylistItems` never creates an empty playlist: Jellyfin/Emby (replace = delete + recreate) delete it and return `{ id: null }`, which clears `playlist_sync_state.server_playlist_id` so the next sync with items creates a fresh one.
 - Plex empties in place when the stored id is visible in its current scope. Otherwise it deletes the stranded copy, then adopts a same-named playlist or, with no items, returns `{ id: null }`.
 - Audio syncs trigger a scan of Plex's music sections before resolving; video sections rely on the post-download refresh; Jellyfin/Emby refresh all libraries in one call.
+- Playlist sync keeps that all-library refresh even when video library ids are set, because audio playlists live in music libraries those ids leave out.
 
 ## Watch status sync
 

@@ -46,7 +46,7 @@ Two things to know:
 
 1. In Jellyfin, go to **Dashboard -> API Keys** and create a new API key for Youtarr.
 2. Find your User ID under **Dashboard -> Users** (it is a GUID in the URL when editing a user), or open the **Jellyfin User** dropdown in Youtarr's Jellyfin settings to load the accounts from your server and pick yours.
-3. (Optional) Leave **Video Library IDs** blank. You can enter a comma-separated list of library IDs that hold your Youtarr videos, but Youtarr already matches downloaded videos to Jellyfin items across all your libraries, so this is rarely needed.
+3. (Optional) Leave **Video Library IDs** blank. Playlist sync does not use it: Youtarr matches downloaded videos to Jellyfin items across all your libraries. The field only limits which libraries are refreshed after a download; see the [Jellyfin guide](media-servers/jellyfin.md#step-2-connect-jellyfin-in-youtarr).
 4. Click **Test Connection** to verify reachability.
 5. Toggle **Enable Jellyfin integration** on.
 
@@ -58,7 +58,7 @@ The Emby flow mirrors Jellyfin. The two API surfaces share lineage but differ en
 
 1. In Emby, go to **Settings -> Advanced -> API Keys** and create a key.
 2. Find your User ID via the user-edit URL, or open the **Emby User** dropdown in Settings to load the accounts from your server and pick yours.
-3. (Optional) Leave **Video Library IDs** blank; Youtarr matches videos across all your libraries.
+3. (Optional) Leave **Video Library IDs** blank; playlist sync matches videos across all your libraries. The field only limits which libraries are refreshed after a download; see the [Emby guide](media-servers/emby.md#step-2-connect-emby-in-youtarr).
 4. **Test Connection**, then toggle **Enable Emby integration**.
 
 Note: Emby's `POST /Playlists` accepts query params with comma-separated `Ids`; Jellyfin's accepts a JSON body with an array. Youtarr's adapter handles both, so you don't have to do anything special.
