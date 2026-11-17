@@ -4,6 +4,7 @@
 const {
   CONNECTION_KEYS, generateKey, normalizeArrUrl, parseConnectionInput, readSettings,
 } = require('./arrBridgeConfig');
+const { applyMapping, hostPathCandidates } = require('./clientPaths');
 const { PLACEHOLDER_TITLES } = require('./searchService');
 
 const APP_NAMES = Object.freeze({ sonarr: 'Sonarr', radarr: 'Radarr' });
@@ -11,6 +12,9 @@ const APP_NAMES = Object.freeze({ sonarr: 'Sonarr', radarr: 'Radarr' });
 // cannot be used to read a page the server can reach and the caller cannot.
 const VERSION_PATTERN = /^[0-9][0-9.]{0,30}$/;
 const UNREACHABLE = 'unreachable';
+// The shared folder check asks the app about a few paths besides the one it
+// is told: at most this many through its mappings, and as many guesses.
+const MAX_EXTRA_PATHS = 3;
 
 const isApp = (value) => typeof value === 'string' && Object.prototype.hasOwnProperty.call(APP_NAMES, value);
 
@@ -63,14 +67,26 @@ function failure(reason, appName, details) {
   return { ok: false, reason: known, message: FAILURE_MESSAGES[known](appName, details) };
 }
 
+// Where the app says it runs, which decides what advice fits: a volume only
+// helps an app in Docker. Null when it did not say.
+function whereAppRuns(status) {
+  if (typeof status?.isDocker !== 'boolean' || typeof status?.isWindows !== 'boolean') return null;
+  if (status.isDocker) return 'docker';
+  return status.isWindows ? 'windows' : 'other';
+}
+
 /**
  * @param {Object} deps
  * @param {Object} deps.configModule
  * @param {Object} deps.client - arrClient
  * @param {Object} deps.staging
+ * @param {Function} [deps.getHostDownloadsFolder] - () => the downloads folder as the
+ *   host knows it, or null; an app outside Docker may see the staging folder inside it
  * @param {Object} deps.logger
  */
-function createArrBridgeSettings({ configModule, client, staging, logger }) {
+function createArrBridgeSettings({
+  configModule, client, staging, getHostDownloadsFolder = () => null, logger,
+}) {
   const getConfig = () => configModule.getConfig();
   // updateConfig replaces the whole config.
   const save = (changes) => configModule.updateConfig({ ...getConfig(), ...changes });
@@ -191,19 +207,27 @@ function createArrBridgeSettings({ configModule, client, staging, logger }) {
   /**
    * Whether the app sees the staging folder under the path it is told. The
    * proof is one of the category folders Youtarr keeps there, so another
-   * folder that happens to exist at that path does not pass. Only that
-   * verdict leaves this function, never what the app listed.
+   * folder that happens to exist at that path does not pass. When it does
+   * not, the app is asked a little more: whether a Remote Path Mapping of
+   * its own leads to the folder, where it runs, and whether it sees the
+   * folder where the host has it. Nothing the app listed or named leaves
+   * this function, only verdicts and a path Youtarr built itself.
    * @param {'sonarr'|'radarr'} app
-   * @returns {Promise<{ok: false, reason: string, message: string}|{ok: true, visible: boolean, path: string}>}
+   * @returns {Promise<{ok: false, reason: string, message: string}|
+   *   {ok: true, visible: boolean, path: string, via?: 'mapping',
+   *   runsIn?: 'docker'|'windows'|'other', suggestedPath?: string}>}
    */
   async function checkSharedFolder(app) {
     const appName = APP_NAMES[app];
     const { [app]: stored, categories } = readSettings(getConfig());
     if (!stored) return failure('not-configured', appName);
     const folderPath = staging.clientPath(staging.stagingRoot());
-    let names;
+    const sees = async (candidatePath) => {
+      const names = await client.fetchFolderNames(stored, candidatePath);
+      return categories.some((category) => names.includes(category.name));
+    };
     try {
-      names = await client.fetchFolderNames(stored, folderPath);
+      if (await sees(folderPath)) return { ok: true, visible: true, path: folderPath };
     } catch (error) {
       const reason = typeof error?.reason === 'string' ? error.reason : UNREACHABLE;
       const code = typeof error?.code === 'string' ? error.code : null;
@@ -211,8 +235,62 @@ function createArrBridgeSettings({ configModule, client, staging, logger }) {
       logger.info({ app, reason, code }, 'Sonarr/Radarr shared folder check failed');
       return failure(reason, appName, { code, url: stored.url });
     }
-    const visible = categories.some((category) => names.includes(category.name));
-    return { ok: true, visible, path: folderPath };
+
+    // The app answered and does not see the folder there. What follows only
+    // adds to that answer, so a question that fails ends the asking and is
+    // no failed check.
+    let stillAsking = true;
+    const ask = async (question, fallback) => {
+      if (!stillAsking) return fallback;
+      try {
+        return await question();
+      } catch (error) {
+        stillAsking = false;
+        const reason = typeof error?.reason === 'string' ? error.reason : UNREACHABLE;
+        logger.info({ app, reason }, 'Sonarr/Radarr shared folder check could not ask further');
+        return fallback;
+      }
+    };
+
+    const seenThroughMapping = await ask(async () => {
+      const hosts = (await client.fetchBridgeClientHosts(stored)).map((host) => host.toLowerCase());
+      if (hosts.length === 0) return false;
+      const mappedPaths = (await client.fetchRemotePathMappings(stored))
+        .filter((mapping) => hosts.includes(mapping.host.trim().toLowerCase()))
+        .map((mapping) => applyMapping(folderPath, mapping))
+        .filter(Boolean)
+        .slice(0, MAX_EXTRA_PATHS);
+      for (const mappedPath of mappedPaths) {
+        if (await sees(mappedPath)) return true;
+      }
+      return false;
+    }, false);
+    // Only that it passed: the mapped path is the app's own answer.
+    if (seenThroughMapping) return { ok: true, visible: true, path: folderPath, via: 'mapping' };
+
+    const status = await ask(() => client.fetchStatus(stored), null);
+    const runsIn = whereAppRuns(status);
+    const suggestedPath = await ask(async () => {
+      const guesses = [
+        ...hostPathCandidates(getHostDownloadsFolder(), { windows: runsIn === 'windows' }),
+        // With a path of its own entered, the app may still see Youtarr's.
+        ...(runsIn === 'windows' ? [] : [staging.stagingRoot()]),
+      ];
+      const untried = [...new Set(guesses)].filter((guess) => guess !== folderPath).slice(0, MAX_EXTRA_PATHS);
+      for (const guess of untried) {
+        if (await sees(guess)) return guess;
+      }
+      return null;
+    }, null);
+
+    return {
+      ok: true,
+      visible: false,
+      path: folderPath,
+      ...(runsIn ? { runsIn } : {}),
+      // A path Youtarr built from its own settings, never one the app named.
+      ...(suggestedPath ? { suggestedPath } : {}),
+    };
   }
 
   function removeConnection(app) {

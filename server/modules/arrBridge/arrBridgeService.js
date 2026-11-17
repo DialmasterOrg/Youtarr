@@ -111,13 +111,14 @@ function createLibraryResolutionLookup({ Video }) {
  * @param {Function} deps.getActivity - () => the current download activity snapshot
  * @param {Function} deps.removeVideo - (youtubeId, removal) => Promise<boolean>; deletes a library video
  * @param {Function} deps.probeResolution - (youtubeId) => Promise<number|null>; the highest resolution yt-dlp lists
+ * @param {Function} [deps.getHostDownloadsFolder] - () => the downloads folder as the host knows it, or null
  * @param {Object} deps.logger
  * @param {Function} [deps.createExecutor] - Test seam; defaults to createGrabExecutor
  * @param {Function} [deps.createClient] - Test seam; defaults to createArrClient
  */
 function createArrBridgeService({
   configModule, models, searchVideos, isYoutubeApiAvailable, downloader, jobLookup, storageGuard,
-  isArchived, getActivity, removeVideo, probeResolution, logger,
+  isArchived, getActivity, removeVideo, probeResolution, getHostDownloadsFolder, logger,
   createExecutor = createGrabExecutor, createClient = createArrClient,
 }) {
   const getConfig = () => configModule.getConfig();
@@ -145,7 +146,9 @@ function createArrBridgeService({
   const grabService = createGrabService({
     models, getSettings, staging, wakeExecutor: () => executor.wake(), onHandedOff: libraryCopies.request, logger,
   });
-  const settings = createArrBridgeSettings({ configModule, client: arrClient, staging, logger });
+  const settings = createArrBridgeSettings({
+    configModule, client: arrClient, staging, getHostDownloadsFolder, logger,
+  });
   // Bridge searches share the YouTube API quota with the rest of Youtarr: past
   // their daily share they use yt-dlp, except daily-show searches, which need
   // the API's exact dates.

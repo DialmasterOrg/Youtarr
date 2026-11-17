@@ -1,8 +1,11 @@
-// Read-only calls to the user's own Sonarr and Radarr: who the app is, what it
-// makes of a release name, one series with its aliases, a series' episodes, the
-// series list, the folders it sees at a path, and whether a download was
-// imported. It returns slim rows, because a full answer runs to tens of MB.
+// Read-only calls to the user's own Sonarr and Radarr: who the app is and
+// where it runs, what it makes of a release name, one series with its aliases,
+// a series' episodes, the series list, the folders it sees at a path, its
+// Remote Path Mappings, the host it has for Youtarr as a download client, and
+// whether a download was imported. It returns slim rows, because a full
+// answer runs to tens of MB.
 const axios = require('axios');
+const { withTrailingSeparator } = require('./clientPaths');
 
 const ARR_REQUEST_TIMEOUT_MS = 10000;
 // The whole series list of a large library is slow to answer.
@@ -14,6 +17,12 @@ const ARR_MAX_PARSE_BYTES = 4 * 1024 * 1024;
 const ARR_MAX_STATUS_BYTES = 256 * 1024;
 // The staging folder holds a folder per category and one per waiting grab.
 const ARR_MAX_FOLDER_LIST_BYTES = 4 * 1024 * 1024;
+// The app's download clients and Remote Path Mappings are short lists.
+const ARR_MAX_SETTINGS_BYTES = 4 * 1024 * 1024;
+// How the apps name the SABnzbd download client, and the URL Base the
+// bridge is added under (routes/arrBridge.js serves /arr/sabnzbd).
+const SABNZBD_IMPLEMENTATION = 'Sabnzbd';
+const BRIDGE_URL_BASE = 'arr/sabnzbd';
 // "The download folder was imported", as a history filter and as a record
 // reads it, in Sonarr and in Radarr.
 const IMPORTED_EVENT_TYPE = 3;
@@ -159,14 +168,20 @@ function createArrClient({
   }
 
   /**
-   * Who answers at this address. Used by the Settings page's connection test.
+   * Who answers at this address, and where it runs. Used by the Settings
+   * page's connection test and its shared folder check.
    * @param {{url: string, apiKey: string}} connection
-   * @returns {Promise<{appName: string, version: string}>}
+   * @returns {Promise<{appName: string, version: string, isDocker: boolean, isWindows: boolean}>}
    */
   async function fetchStatus(connection) {
     const data = await get(connection, '/api/v3/system/status', { maxBytes: ARR_MAX_STATUS_BYTES });
     if (!isRow(data) || typeof data.appName !== 'string') throw new ArrUnavailableError('not-json');
-    return { appName: data.appName, version: typeof data.version === 'string' ? data.version : '' };
+    return {
+      appName: data.appName,
+      version: typeof data.version === 'string' ? data.version : '',
+      isDocker: data.isDocker === true,
+      isWindows: data.isWindows === true,
+    };
   }
 
   /**
@@ -177,13 +192,48 @@ function createArrClient({
    * @returns {Promise<string[]>} Folder names
    */
   async function fetchFolderNames(connection, folderPath) {
-    // Without the trailing slash the app lists the parent, filtered by name.
+    // Without the trailing separator the app lists the parent, filtered by name.
     const data = await get(connection, '/api/v3/filesystem', {
-      params: { path: `${String(folderPath).replace(/\/+$/, '')}/`, includeFiles: false },
+      params: { path: withTrailingSeparator(folderPath), includeFiles: false },
       maxBytes: ARR_MAX_FOLDER_LIST_BYTES,
     });
     if (!isRow(data) || !Array.isArray(data.directories)) throw new ArrUnavailableError('not-json');
     return data.directories.map((entry) => entry?.name).filter((name) => typeof name === 'string');
+  }
+
+  /**
+   * The Remote Path Mappings set up in the app: how it translates a path a
+   * download client reports into one it can open.
+   * @param {{url: string, apiKey: string}} connection
+   * @returns {Promise<Array<{host: string, remotePath: string, localPath: string}>>}
+   */
+  async function fetchRemotePathMappings(connection) {
+    const rows = await getList(connection, '/api/v3/remotepathmapping', undefined, { maxBytes: ARR_MAX_SETTINGS_BYTES });
+    return rows
+      .filter((row) => isRow(row)
+        && typeof row.host === 'string' && typeof row.remotePath === 'string' && typeof row.localPath === 'string')
+      .map(({ host, remotePath, localPath }) => ({ host, remotePath, localPath }));
+  }
+
+  /**
+   * The Host the app has for Youtarr as a download client: a Remote Path
+   * Mapping only applies to the download client whose Host it names.
+   * @param {{url: string, apiKey: string}} connection
+   * @returns {Promise<string[]>} One host per SABnzbd client that points at the bridge
+   */
+  async function fetchBridgeClientHosts(connection) {
+    const rows = await getList(connection, '/api/v3/downloadclient', undefined, { maxBytes: ARR_MAX_SETTINGS_BYTES });
+    const fieldOf = (row, name) => (Array.isArray(row.fields) ? row.fields : [])
+      .find((field) => isRow(field) && field.name === name)?.value;
+    return rows
+      .filter((row) => isRow(row) && row.implementation === SABNZBD_IMPLEMENTATION)
+      .filter((row) => {
+        const urlBase = fieldOf(row, 'urlBase');
+        return typeof urlBase === 'string' && urlBase.replace(/^\/+|\/+$/g, '').toLowerCase() === BRIDGE_URL_BASE;
+      })
+      .map((row) => fieldOf(row, 'host'))
+      .filter((host) => typeof host === 'string' && host.trim() !== '')
+      .map((host) => host.trim());
   }
 
   /**
@@ -290,6 +340,8 @@ function createArrClient({
     fetchEpisodes,
     fetchStatus,
     fetchFolderNames,
+    fetchRemotePathMappings,
+    fetchBridgeClientHosts,
     fetchImported,
   };
 }

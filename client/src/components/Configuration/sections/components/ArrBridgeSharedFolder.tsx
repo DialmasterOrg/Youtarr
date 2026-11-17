@@ -24,11 +24,91 @@ interface FolderCheckRowProps {
   check: ArrFolderCheck | undefined;
   checking: boolean;
   hostFolder: string | null;
+  /** The path in the field, saved or not. */
+  stagingPath: string;
+  onUsePath: (path: string) => void;
 }
+
+const PATH_EXAMPLES = { windows: 'E:\\Youtube\\.arr-staging', other: '/mnt/media/youtube/.arr-staging' };
+
+interface FolderNotVisibleProps {
+  name: string;
+  check: ArrFolderCheck;
+  hostFolder: string | null;
+  stagingPath: string;
+  onUsePath: (path: string) => void;
+}
+
+// What to do about an app that cannot see the folder. An app that sees it
+// under a path Youtarr found only needs that path; otherwise the advice
+// follows where the app runs: a volume only helps an app in Docker.
+const FolderNotVisible: React.FC<FolderNotVisibleProps> = ({ name, check, hostFolder, stagingPath, onUsePath }) => {
+  const { suggestedPath, runsIn } = check;
+  const outsideDocker = runsIn === 'windows' || runsIn === 'other';
+
+  return (
+    <Alert severity="warning">
+      <Typography variant="body2">
+        {name} cannot see the folder at <code className="break-all">{check.path}</code>, so it will not be able to
+        import a finished grab.
+      </Typography>
+      {suggestedPath ? (
+        <Box className="mt-2 flex flex-col items-start gap-2">
+          <Typography variant="body2">
+            {name} does see it at <code className="break-all">{suggestedPath}</code>.
+          </Typography>
+          {stagingPath.trim() === suggestedPath ? (
+            <Typography variant="body2">That path is in the field below. Save to use it.</Typography>
+          ) : (
+            <Button variant="outlined" onClick={() => onUsePath(suggestedPath)}>
+              Use this path
+            </Button>
+          )}
+        </Box>
+      ) : (
+        <ul className="m-0 mt-2 list-disc pl-5 text-sm">
+          {!outsideDocker && (
+            <li>
+              If {name} runs in Docker,{' '}
+              {hostFolder ? (
+                <>
+                  add this to its volumes: <code className="break-all">{`${hostFolder}:${check.path}`}</code>
+                </>
+              ) : (
+                <>
+                  mount that folder into {name} at <code className="break-all">{check.path}</code>.
+                </>
+              )}{' '}
+              With the folder as a volume of its own, {name} copies the file at import instead of linking it, so the
+              video takes its space twice while Youtarr keeps its copy.
+            </li>
+          )}
+          {outsideDocker ? (
+            <li>
+              Enter the folder as {name} sees it below and save, for example{' '}
+              <code className="break-all">{PATH_EXAMPLES[runsIn]}</code>.
+            </li>
+          ) : (
+            <li>If {name} already sees that folder under another path, enter that path below and save.</li>
+          )}
+          {runsIn !== 'docker' && (
+            <li>
+              A Remote Path Mapping in {name} works too, in its Download Clients settings: the Host of its Youtarr
+              download client, Remote Path <code className="break-all">{check.path}</code>, and as Local Path the
+              folder as {name} sees it.
+            </li>
+          )}
+        </ul>
+      )}
+    </Alert>
+  );
+};
 
 // What one app answered. A fix is only spelled out for an app that cannot
 // see the folder: most setups already share it and need to change nothing.
-const FolderCheckRow: React.FC<FolderCheckRowProps> = ({ app, connected, check, checking, hostFolder }) => {
+const FolderCheckRow: React.FC<FolderCheckRowProps> = ({
+  app, connected, check, checking, hostFolder, stagingPath, onUsePath,
+}) => {
   const name = ARR_APP_NAMES[app];
   let content: React.ReactNode;
 
@@ -51,35 +131,22 @@ const FolderCheckRow: React.FC<FolderCheckRowProps> = ({ app, connected, check, 
       </Alert>
     );
   } else if (check.visible) {
-    content = <Alert severity="success">{name} can see the folder.</Alert>;
+    content = (
+      <Alert severity="success">
+        {check.via === 'mapping'
+          ? `${name} can see the folder, through its Remote Path Mapping.`
+          : `${name} can see the folder.`}
+      </Alert>
+    );
   } else {
     content = (
-      <Alert severity="warning">
-        <Typography variant="body2">
-          {name} cannot see the folder at <code className="break-all">{check.path}</code>, so it will not be able
-          to import a finished grab.
-        </Typography>
-        <ul className="m-0 mt-2 list-disc pl-5 text-sm">
-          <li>
-            If {name} runs in Docker,{' '}
-            {hostFolder ? (
-              <>
-                add this to its volumes: <code className="break-all">{`${hostFolder}:${check.path}`}</code>
-              </>
-            ) : (
-              <>
-                mount that folder into {name} at <code className="break-all">{check.path}</code>.
-              </>
-            )}{' '}
-            With the folder as a volume of its own, {name} copies the file at import instead of linking it, so the
-            video takes its space twice while Youtarr keeps its copy.
-          </li>
-          <li>If {name} already sees that folder under another path, enter that path below and save.</li>
-        </ul>
-        <Typography variant="body2" className="mt-2">
-          This check does not follow a Remote Path Mapping set up in {name}.
-        </Typography>
-      </Alert>
+      <FolderNotVisible
+        name={name}
+        check={check}
+        hostFolder={hostFolder}
+        stagingPath={stagingPath}
+        onUsePath={onUsePath}
+      />
     );
   }
 
@@ -134,6 +201,8 @@ export const ArrBridgeSharedFolder: React.FC<ArrBridgeSharedFolderProps> = ({
               check={checks[app]}
               checking={checking}
               hostFolder={hostFolder}
+              stagingPath={stagingPath}
+              onUsePath={onStagingPathChange}
             />
           ))}
         </ul>
@@ -165,8 +234,8 @@ export const ArrBridgeSharedFolder: React.FC<ArrBridgeSharedFolderProps> = ({
               onChange={(event: ChangeEvent<HTMLInputElement>) => onStagingPathChange(event.target.value)}
               helperText={
                 stagingPathSaved
-                  ? 'An absolute path. Leave it empty when they see the folder under the same path as Youtarr.'
-                  : 'An absolute path. Save to check this path.'
+                  ? 'An absolute path, such as /downloads/.arr-staging or E:\\Youtube\\.arr-staging. Leave it empty when they see the folder under the same path as Youtarr.'
+                  : 'An absolute path, such as /downloads/.arr-staging or E:\\Youtube\\.arr-staging. Save to check this path.'
               }
             />
           </Box>

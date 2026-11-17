@@ -57,6 +57,9 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 - `/getconfig` omits the connection URLs too, because a hand-edited one may hold credentials. Settings reads normalized URLs from `/api/arr-bridge/status`, which never returns a key.
 - The connection test passes on only the app's name, matched against Sonarr and Radarr, and a digits-and-dots version: the server calls a host the caller chose, so nothing else of its answer may be echoed.
 - `checkSharedFolder` asks the app to list the staging root as it knows it and passes on only whether a category folder is there: read-only, nothing listed is echoed, and another folder at that path does not pass.
+- When the app does not see the folder, the check also tries the app's Remote Path Mappings and the host's downloads folder. It returns verdicts and a path built from Youtarr's own settings, never a mapping's Local Path, which the app named.
+- A Remote Path Mapping counts only when its Host is the one the app has for its `/arr/sabnzbd` download client, which is the app's own rule; another client's mapping must not pass the check.
+- `arrBridgeStagingPath` may be a Windows drive or share path (`clientPaths.js`): an app outside Docker knows the folder that way. Paths reported to the apps are joined with that path's own separator, never Youtarr's.
 - The connection card never loads a stored key, but keeps a typed one in its field while the page is open, so a mistyped address is corrected without typing the key again.
 - `arrClient` follows no redirect, because axios would send the key header on to the redirect's target. Its abort signal is the real time limit: axios's `timeout` only bounds the wait between bytes.
 - A failed lookup falls back to the episode-code matcher, never an error document. The app is not asked again for 60 s after a failure, so requests do not each wait; remembered answers still serve.

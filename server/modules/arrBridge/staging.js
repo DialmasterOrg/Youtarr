@@ -5,6 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const { ARR_STAGING_DIR_NAME, isValidCategoryName } = require('./arrBridgeConfig');
+const { joinClientPath } = require('./clientPaths');
 const { isValidReleaseTitle } = require('./releaseNaming');
 
 // A hardlink cannot cross filesystems, and some network shares refuse links.
@@ -98,7 +99,8 @@ function createStaging({ fsp = fs.promises, getOutputRoot, getSettings, logger }
     if (!stagingPath) return localPath;
     if (localPath === root) return stagingPath;
     if (!localPath.startsWith(`${root}${path.sep}`)) return localPath;
-    return `${stagingPath}/${localPath.slice(root.length + 1).split(path.sep).join('/')}`;
+    // The app's path may be a Windows one, which is written with backslashes.
+    return joinClientPath(stagingPath, localPath.slice(root.length + 1).split(path.sep));
   }
 
   return { stagingRoot, ensureCategoryFolders, stage, remove, clientPath };

@@ -147,6 +147,17 @@ describe('staging', () => {
       settings.stagingPath = '/downloads/staging';
       expect(staging().clientPath(sourcePath)).toBe(sourcePath);
     });
+
+    test('writes a path on a Windows drive with backslashes', () => {
+      settings.stagingPath = 'E:\\Youtube16TB\\.arr-staging';
+      expect(staging().clientPath(staged())).toBe(`E:\\Youtube16TB\\.arr-staging\\tv\\${TITLE}\\${TITLE}.mkv`);
+      expect(staging().clientPath(staging().stagingRoot())).toBe('E:\\Youtube16TB\\.arr-staging');
+    });
+
+    test('writes a path on a Windows share with backslashes', () => {
+      settings.stagingPath = '\\\\nas\\videos\\.arr-staging';
+      expect(staging().clientPath(staged())).toBe(`\\\\nas\\videos\\.arr-staging\\tv\\${TITLE}\\${TITLE}.mkv`);
+    });
   });
 
   describe('ensureCategoryFolders', () => {

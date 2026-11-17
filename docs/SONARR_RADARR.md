@@ -120,22 +120,41 @@ They must be able to see that folder and delete inside it, the same way they see
 
 **The Settings page checks this for you.** With a connection from step 3, Youtarr asks Sonarr and Radarr whether they see the folder, and step 4 on the page shows the answer for each app. If an app can see it, there is nothing to do.
 
-If an app cannot see it, there are two ways to fix it:
+If an app cannot see it, the page says what to do for that app. When Youtarr finds the path the app does see the folder under, it shows that path with a **Use this path** button: press it and save. Otherwise, what to do depends on where Sonarr or Radarr runs:
 
-- **Sonarr or Radarr already has your downloads folder mounted, under another path.** This is common when one media folder is shared with every container. Open **Sonarr and Radarr see this folder under a different path** on the page, enter the folder's path inside Sonarr and Radarr (for example `/data/youtube/.arr-staging`) and save. A Remote Path Mapping in Sonarr and Radarr works too, but the page's check cannot follow one.
-- **Sonarr or Radarr cannot reach your downloads folder at all.** Add the staging folder to their volumes, at the same path Youtarr uses:
+| Sonarr or Radarr runs | What to do |
+|---|---|
+| In Docker, with the folder mounted at the same path as in Youtarr (`/usr/src/app/data/.arr-staging`) | Nothing. |
+| In Docker, with your downloads folder mounted under another path | Open **Sonarr and Radarr see this folder under a different path**, enter the folder's path inside Sonarr and Radarr (for example `/data/youtube/.arr-staging`) and save. This is common when one media folder is shared with every container. |
+| In Docker, without your downloads folder | Add the staging folder to their volumes, at the same path Youtarr uses (see below). |
+| On Windows, or anywhere else outside Docker | Enter the folder as Sonarr and Radarr see it, for example `E:\Youtube\.arr-staging`, and save. |
+| On another machine, over a network share | Enter the folder as they see it there, for example `\\nas\youtube\.arr-staging` or `/mnt/youtube/.arr-staging`, and save. |
 
-  ```yaml
-  volumes:
-    - /path/to/your/youtube/downloads/.arr-staging:/usr/src/app/data/.arr-staging
-  ```
+The volume for an app in Docker that cannot reach your downloads folder:
+
+```yaml
+volumes:
+  - /path/to/your/youtube/downloads/.arr-staging:/usr/src/app/data/.arr-staging
+```
+
+**One path serves Sonarr and Radarr.** If the two see the folder under different paths, enter the path of one, and give the other a Remote Path Mapping.
+
+**A Remote Path Mapping works too.** If you would rather set this up in Sonarr or Radarr, as for any other download client that runs somewhere else, add a mapping there under Settings -> Download Clients -> Remote Path Mappings:
+
+| Field | Value |
+|---|---|
+| Host | the Host of the Youtarr download client in that app |
+| Remote Path | `/usr/src/app/data/.arr-staging/` |
+| Local Path | the folder as the app sees it, for example `E:\Youtube\.arr-staging\` |
+
+Youtarr reads the app's mappings when it checks, so the page then says "Sonarr can see the folder, through its Remote Path Mapping".
 
 Also:
 
 - **Give Sonarr and Radarr write access.** Youtarr creates the staged folders as its own user, writable by its group. Run Sonarr and Radarr with the same user or group (`YOUTARR_UID` / `YOUTARR_GID` in Youtarr, `PUID` / `PGID` in most Sonarr and Radarr images).
 - **Keep it out of your library folders.** The staging folder must not sit inside a Sonarr or Radarr root folder.
 
-**Note:** Sonarr and Radarr move the staged file into their library. The video takes no extra space only when the staging folder and their library are inside one volume of their container, for example one media folder that is mounted as a whole and holds both. With the staging folder as a volume of its own, as in the example above, or with the library on another disk, the move becomes a copy, and the video takes its space twice for as long as Youtarr keeps its copy. That is how Docker works, also when both folders are on the same disk. [Removing Youtarr's copy after the import](#removing-youtarrs-copy-after-the-import) frees that space.
+**Note:** Sonarr and Radarr move the staged file into their library. The video takes no extra space only when the staging folder and their library are inside one volume of their container, for example one media folder that is mounted as a whole and holds both. With the staging folder as a volume of its own, as in the volume example above, or with the library on another disk, the move becomes a copy, and the video takes its space twice for as long as Youtarr keeps its copy. That is how Docker works, also when both folders are on the same disk. [Removing Youtarr's copy after the import](#removing-youtarrs-copy-after-the-import) frees that space.
 
 Youtarr puts `.ignore` and `.plexignore` files in the staging folder, so Plex, Jellyfin and Emby skip it when they index your downloads folder.
 
@@ -390,7 +409,7 @@ The video is shorter than Sonarr's or Radarr's minimum for that series or movie.
 
 **A health error about a missing download folder**
 
-The app cannot see the staging folder. Step 4 on the Settings page shows which app, and [Step 4: The shared folder](#step-4-the-shared-folder) has the two ways to fix it.
+The app cannot see the staging folder under the path Youtarr reports. On Windows the app may say instead that the download client's folder is not a valid path. Step 4 on the Settings page shows which app and what to do, and [Step 4: The shared folder](#step-4-the-shared-folder) lists the fix for each way of running Sonarr and Radarr.
 
 **The import fails with a permission error, or the staged folder is left behind**
 

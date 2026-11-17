@@ -5,7 +5,9 @@ const { createArrBridgeSettings } = require('../arrBridgeSettings');
 const SONARR_KEY = '5p1ke0000000000000000000000000ab';
 const RADARR_KEY = 'r4d4rr00000000000000000000000000';
 
-function setup(config = {}, { status, folderNames, parse } = {}) {
+function setup(config = {}, {
+  status, folderNames, parse, mappings, clientHosts, hostDownloadsFolder = null,
+} = {}) {
   const configModule = {
     config,
     getConfig: () => configModule.config,
@@ -16,6 +18,8 @@ function setup(config = {}, { status, folderNames, parse } = {}) {
   const client = {
     fetchStatus: jest.fn(status || (async () => ({ appName: 'Sonarr', version: '4.0.20.3014' }))),
     fetchFolderNames: jest.fn(folderNames || (async () => ['movies', 'tv'])),
+    fetchRemotePathMappings: jest.fn(mappings || (async () => [])),
+    fetchBridgeClientHosts: jest.fn(clientHosts || (async () => ['youtarr'])),
     fetchParsedEpisode: jest.fn(parse || (async () => ({ series: null, episodes: [] }))),
     fetchParsedMovie: jest.fn(parse || (async () => null)),
   };
@@ -24,7 +28,9 @@ function setup(config = {}, { status, folderNames, parse } = {}) {
     clientPath: (localPath) => (configModule.config.arrBridgeStagingPath || localPath),
   };
   const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
-  const settings = createArrBridgeSettings({ configModule, client, staging, logger });
+  const settings = createArrBridgeSettings({
+    configModule, client, staging, getHostDownloadsFolder: () => hostDownloadsFolder, logger,
+  });
   return { settings, configModule, client, logger };
 }
 
@@ -468,6 +474,171 @@ describe('arrBridgeSettings', () => {
       await settings.checkSharedFolder('sonarr');
 
       expect(logged(logger)).not.toContain(SONARR_KEY);
+    });
+
+    test('asks nothing more of an app that sees the folder', async () => {
+      const { settings, client } = setup(SONARR);
+
+      await settings.checkSharedFolder('sonarr');
+
+      expect(client.fetchFolderNames).toHaveBeenCalledTimes(1);
+      expect(client.fetchStatus).not.toHaveBeenCalled();
+      expect(client.fetchRemotePathMappings).not.toHaveBeenCalled();
+      expect(client.fetchBridgeClientHosts).not.toHaveBeenCalled();
+    });
+
+    describe('an app that does not see the folder under the path it is told', () => {
+      const WINDOWS_PATH = 'E:\\Youtube16TB\\.arr-staging';
+      const onWindows = async () => ({ appName: 'Sonarr', version: '4.0.20.3014', isDocker: false, isWindows: true });
+      const inDocker = async () => ({ appName: 'Sonarr', version: '4.0.20.3014', isDocker: true, isWindows: false });
+      // The app lists the category folders only at these paths.
+      const seesAt = (...paths) => async (_connection, folderPath) => (paths.includes(folderPath) ? ['movies', 'tv'] : []);
+      const mapping = (overrides = {}) => ({
+        host: 'youtarr', remotePath: '/data/.arr-staging/', localPath: `${WINDOWS_PATH}\\`, ...overrides,
+      });
+
+      describe('with a Remote Path Mapping', () => {
+        test('passes when the mapping leads to the folder, and says so', async () => {
+          const { settings, client } = setup(SONARR, {
+            folderNames: seesAt(WINDOWS_PATH), mappings: async () => [mapping()], status: onWindows,
+          });
+
+          expect(await settings.checkSharedFolder('sonarr'))
+            .toEqual({ ok: true, visible: true, path: '/data/.arr-staging', via: 'mapping' });
+          expect(client.fetchFolderNames.mock.calls.map((call) => call[1])).toEqual(['/data/.arr-staging', WINDOWS_PATH]);
+        });
+
+        test('matches the download client\'s host without case', async () => {
+          const { settings } = setup(SONARR, {
+            folderNames: seesAt(WINDOWS_PATH), mappings: async () => [mapping({ host: 'YOUTARR' })],
+          });
+
+          expect((await settings.checkSharedFolder('sonarr')).via).toBe('mapping');
+        });
+
+        test('never passes on the mapping\'s Local Path, which the app named', async () => {
+          const { settings } = setup(SONARR, {
+            folderNames: seesAt('Z:\\secret\\place'),
+            mappings: async () => [mapping({ localPath: 'Z:\\secret\\place\\' })],
+          });
+
+          const result = await settings.checkSharedFolder('sonarr');
+
+          expect(result.visible).toBe(true);
+          expect(JSON.stringify(result)).not.toContain('secret');
+        });
+
+        test.each([
+          ['made for another download client', { mappings: async () => [mapping({ host: 'real-sabnzbd' })] }],
+          ['for another folder', { mappings: async () => [mapping({ remotePath: '/downloads/' })] }],
+          ['that leads to a folder without the category folders', { mappings: async () => [mapping({ localPath: 'D:\\other\\' })] }],
+          ['when the app has no download client for the bridge', { mappings: async () => [mapping()], clientHosts: async () => [] }],
+        ])('does not pass through a mapping %s', async (_name, overrides) => {
+          const { settings } = setup(SONARR, { folderNames: seesAt(WINDOWS_PATH), ...overrides });
+
+          expect(await settings.checkSharedFolder('sonarr')).toMatchObject({ ok: true, visible: false });
+        });
+
+        test('mappings that cannot be read are no mapping, and no failed check', async () => {
+          const { settings, logger } = setup(SONARR, {
+            folderNames: seesAt(),
+            mappings: async () => {
+              throw new ArrUnavailableError('timeout', { code: 'ETIMEDOUT' });
+            },
+          });
+
+          expect(await settings.checkSharedFolder('sonarr'))
+            .toEqual({ ok: true, visible: false, path: '/data/.arr-staging' });
+          expect(logged(logger)).not.toContain(SONARR_KEY);
+        });
+
+        test('stops asking after a question fails, so a slow app is not asked again and again', async () => {
+          const { settings, client } = setup(SONARR, {
+            folderNames: seesAt(),
+            hostDownloadsFolder: '/mnt/user/youtube',
+            clientHosts: async () => {
+              throw new ArrUnavailableError('timeout', { code: 'ETIMEDOUT' });
+            },
+          });
+
+          await settings.checkSharedFolder('sonarr');
+
+          expect(client.fetchRemotePathMappings).not.toHaveBeenCalled();
+          expect(client.fetchStatus).not.toHaveBeenCalled();
+          expect(client.fetchFolderNames).toHaveBeenCalledTimes(1);
+        });
+      });
+
+      describe('where the app runs', () => {
+        test.each([
+          ['docker', inDocker],
+          ['windows', onWindows],
+          ['other', async () => ({ appName: 'Sonarr', version: '4.0.20.3014', isDocker: false, isWindows: false })],
+        ])('says %s', async (runsIn, status) => {
+          const { settings } = setup(SONARR, { folderNames: seesAt(), status });
+
+          expect(await settings.checkSharedFolder('sonarr'))
+            .toEqual({ ok: true, visible: false, path: '/data/.arr-staging', runsIn });
+        });
+
+        test('says nothing when the app does not tell', async () => {
+          const { settings } = setup(SONARR, { folderNames: seesAt() });
+
+          expect(await settings.checkSharedFolder('sonarr')).not.toHaveProperty('runsIn');
+        });
+      });
+
+      describe('a path the app does see the folder under', () => {
+        test('an app on Windows: the downloads folder of the host, as a drive path', async () => {
+          const { settings, client } = setup(SONARR, {
+            folderNames: seesAt(WINDOWS_PATH), status: onWindows, hostDownloadsFolder: '/e/Youtube16TB',
+          });
+
+          expect(await settings.checkSharedFolder('sonarr')).toEqual({
+            ok: true, visible: false, path: '/data/.arr-staging', runsIn: 'windows', suggestedPath: WINDOWS_PATH,
+          });
+          expect(client.fetchFolderNames.mock.calls.map((call) => call[1])).toEqual(['/data/.arr-staging', WINDOWS_PATH]);
+        });
+
+        test('an app in Docker that mounts the folder where the host has it', async () => {
+          const { settings } = setup(SONARR, {
+            folderNames: seesAt('/mnt/user/youtube/.arr-staging'), status: inDocker, hostDownloadsFolder: '/mnt/user/youtube',
+          });
+
+          expect(await settings.checkSharedFolder('sonarr')).toMatchObject({
+            visible: false, runsIn: 'docker', suggestedPath: '/mnt/user/youtube/.arr-staging',
+          });
+        });
+
+        test('Youtarr\'s own path, when the path entered is the wrong one', async () => {
+          const { settings } = setup(
+            { ...SONARR, arrBridgeStagingPath: '/wrong/.arr-staging' },
+            { folderNames: seesAt('/data/.arr-staging'), status: inDocker }
+          );
+
+          expect(await settings.checkSharedFolder('sonarr')).toMatchObject({
+            visible: false, path: '/wrong/.arr-staging', suggestedPath: '/data/.arr-staging',
+          });
+        });
+
+        test('none, when the app sees the folder at no path Youtarr can tell', async () => {
+          const { settings } = setup(SONARR, {
+            folderNames: seesAt('/somewhere/else'), status: onWindows, hostDownloadsFolder: '/e/Youtube16TB',
+          });
+
+          expect(await settings.checkSharedFolder('sonarr')).not.toHaveProperty('suggestedPath');
+        });
+
+        test('a same-named folder without the category folders is not the folder', async () => {
+          const { settings } = setup(SONARR, {
+            folderNames: async (_connection, folderPath) => (folderPath === WINDOWS_PATH ? ['Season 1'] : []),
+            status: onWindows,
+            hostDownloadsFolder: '/e/Youtube16TB',
+          });
+
+          expect(await settings.checkSharedFolder('sonarr')).not.toHaveProperty('suggestedPath');
+        });
+      });
     });
   });
 

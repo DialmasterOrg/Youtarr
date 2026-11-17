@@ -381,7 +381,7 @@ describe('arrClient', () => {
 
       const status = await client.fetchStatus(SONARR);
 
-      expect(status).toEqual({ appName: 'Sonarr', version: '4.0.20.3014' });
+      expect(status).toEqual({ appName: 'Sonarr', version: '4.0.20.3014', isDocker: false, isWindows: false });
       const [url, options] = axios.get.mock.calls[0];
       expect(url).toBe('http://sonarr:8989/api/v3/system/status');
       expect(url).not.toContain(KEY);
@@ -404,7 +404,18 @@ describe('arrClient', () => {
     test('a version that is missing or not text reads as empty', async () => {
       axios.get.mockResolvedValue({ data: { appName: 'Sonarr', version: 4 } });
 
-      expect(await client.fetchStatus(SONARR)).toEqual({ appName: 'Sonarr', version: '' });
+      expect(await client.fetchStatus(SONARR)).toMatchObject({ appName: 'Sonarr', version: '' });
+    });
+
+    // As Sonarr 4.0.20 and Radarr 6.4.4 answer: isDocker, isWindows, isLinux, isOsx.
+    test.each([
+      ['in Docker', { isDocker: true, isWindows: false }, { isDocker: true, isWindows: false }],
+      ['on Windows', { isDocker: false, isWindows: true }, { isDocker: false, isWindows: true }],
+      ['anything but true reads as false', { isDocker: 'yes', isWindows: 1 }, { isDocker: false, isWindows: false }],
+    ])('says where the app runs: %s', async (_label, answer, expected) => {
+      axios.get.mockResolvedValue({ data: { appName: 'Sonarr', version: '4.0.20.3014', ...answer } });
+
+      expect(await client.fetchStatus(SONARR)).toMatchObject(expected);
     });
 
     test.each([
@@ -521,6 +532,18 @@ describe('arrClient', () => {
       expect(axios.get.mock.calls[0][1].params.path).toBe('/downloads/staging/');
     });
 
+    test.each([
+      ['E:\\Youtube16TB\\.arr-staging', 'E:\\Youtube16TB\\.arr-staging\\'],
+      ['E:\\Youtube16TB\\.arr-staging\\', 'E:\\Youtube16TB\\.arr-staging\\'],
+      ['\\\\nas\\videos\\.arr-staging', '\\\\nas\\videos\\.arr-staging\\'],
+    ])('ends a Windows path with a backslash: %s', async (folderPath, asked) => {
+      axios.get.mockResolvedValue({ data: listing([]) });
+
+      await client.fetchFolderNames(SONARR, folderPath);
+
+      expect(axios.get.mock.calls[0][1].params.path).toBe(asked);
+    });
+
     test('a folder the app cannot see lists nothing', async () => {
       axios.get.mockResolvedValue({ data: { parent: '/nope/', directories: [], files: [] } });
 
@@ -542,6 +565,70 @@ describe('arrClient', () => {
       axios.get.mockResolvedValue({ data });
 
       await expect(client.fetchFolderNames(SONARR, '/data')).rejects.toMatchObject({ reason: 'not-json' });
+    });
+  });
+
+  describe('fetchRemotePathMappings', () => {
+    // As Sonarr 4.0.20 answers /api/v3/remotepathmapping.
+    const mapping = {
+      id: 1, host: 'youtarr', remotePath: '/usr/src/app/data/.arr-staging/', localPath: 'E:\\Youtube16TB\\.arr-staging\\',
+    };
+
+    test('reads the mappings, slimmed to host and the two paths', async () => {
+      axios.get.mockResolvedValue({ data: [mapping] });
+
+      expect(await client.fetchRemotePathMappings(SONARR)).toEqual([{
+        host: 'youtarr', remotePath: '/usr/src/app/data/.arr-staging/', localPath: 'E:\\Youtube16TB\\.arr-staging\\',
+      }]);
+      const [url, options] = axios.get.mock.calls[0];
+      expect(url).toBe('http://sonarr:8989/api/v3/remotepathmapping');
+      expect(options).toEqual(expect.objectContaining({ headers: { 'X-Api-Key': KEY }, maxRedirects: 0 }));
+    });
+
+    test('skips rows that are not mappings', async () => {
+      axios.get.mockResolvedValue({ data: [null, { host: 'youtarr' }, { ...mapping, localPath: 7 }, mapping] });
+
+      expect(await client.fetchRemotePathMappings(SONARR)).toHaveLength(1);
+    });
+
+    test('an answer that is not a list is not the app', async () => {
+      axios.get.mockResolvedValue({ data: '<html><body>Sign in</body></html>' });
+
+      await expect(client.fetchRemotePathMappings(SONARR)).rejects.toMatchObject({ reason: 'not-json' });
+    });
+  });
+
+  describe('fetchBridgeClientHosts', () => {
+    // As Sonarr 4.0.20 answers /api/v3/downloadclient.
+    const downloadClient = (implementation, fields) => ({
+      id: 1, name: 'Any name', implementation, fields: Object.entries(fields).map(([name, value]) => ({ name, value })),
+    });
+
+    test('finds the host of the SABnzbd client that points at the bridge', async () => {
+      axios.get.mockResolvedValue({
+        data: [
+          downloadClient('QBittorrent', { host: 'qbittorrent', urlBase: '' }),
+          downloadClient('Sabnzbd', { host: 'real-sabnzbd', urlBase: '/sabnzbd' }),
+          downloadClient('Sabnzbd', { host: ' Youtarr-Dev ', port: 3011, urlBase: '/arr/sabnzbd' }),
+        ],
+      });
+
+      expect(await client.fetchBridgeClientHosts(SONARR)).toEqual(['Youtarr-Dev']);
+      expect(axios.get.mock.calls[0][0]).toBe('http://sonarr:8989/api/v3/downloadclient');
+    });
+
+    test.each(['arr/sabnzbd', '/arr/sabnzbd/', '/ARR/SABnzbd'])('accepts the URL Base written as %s', async (urlBase) => {
+      axios.get.mockResolvedValue({ data: [downloadClient('Sabnzbd', { host: 'youtarr', urlBase })] });
+
+      expect(await client.fetchBridgeClientHosts(SONARR)).toEqual(['youtarr']);
+    });
+
+    test('an app without the bridge as a download client has no host', async () => {
+      axios.get.mockResolvedValue({
+        data: [null, { implementation: 'Sabnzbd' }, downloadClient('Sabnzbd', { host: '', urlBase: '/arr/sabnzbd' })],
+      });
+
+      expect(await client.fetchBridgeClientHosts(SONARR)).toEqual([]);
     });
   });
 
