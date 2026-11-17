@@ -73,7 +73,8 @@ yt-dlp runs, the job queue, the download archive, storage limits, and the activi
 
 ## Finalizer, retries, diagnoses
 
-- `downloadJobFinalizer` persists the terminal status, broadcasts the final state, reports to the run tracker and dispatches notifications; `downloadCompletionEffects` owns the side effects after completion (temp cleanup, poster backfill, playlist hooks, Plex refresh, next-job kickoff).
+- `downloadJobFinalizer` persists the terminal status, broadcasts the final state, reports to the run tracker and dispatches notifications; `downloadCompletionEffects` owns the side effects after completion (temp cleanup, poster backfill, playlist hooks, media server refresh, next-job kickoff).
+- Media servers are refreshed once per job: by `downloadCompletionEffects` for single jobs and by `doGroupedChannelDownloads`' wrap-up for grouped ones (intermediate groups skip it). A job that downloaded nothing refreshes no server.
 - `transient403RetryPlanner` (pure) picks failures to auto-retry: transient mid-stream 403s and cookie-specific `Video unavailable`. The finalizer enqueues an "Auto-retry" URL-list job through a callback injected from downloadModule, capped by `downloadAutoRetryCount`.
 - Handed-off failures are tagged `autoRetryQueued` so run summaries report the post-retry outcome instead of the first failure.
 - `failureAdvisor` (pure) maps known failure signatures (temp space, 403 with or without cookies, bot check) to plain-language diagnoses; the finalizer stamps `diagnosisKey` on failed videos and emits a deduped `diagnoses` list.

@@ -3,6 +3,8 @@ const BaseAdapter = require('./baseAdapter');
 const {
   extractBasename,
   normalizeBaseUrl,
+  normalizeLibraryIds,
+  LIBRARY_SCAN_PARAMS,
   REQUEST_TIMEOUT_MS,
   isServerUnavailableError,
   describeHttpError,
@@ -24,6 +26,7 @@ class JellyfinAdapter extends BaseAdapter {
     this.apiKey = String(config.jellyfinApiKey || '').trim();
     this.userId = String(config.jellyfinUserId || '').trim() || undefined;
     this.allUsers = config.jellyfinWatchStatusAllUsers !== false;
+    this.videoLibraryIds = normalizeLibraryIds(config.jellyfinVideoLibraryIds);
   }
 
   // Jellyfin 12.0 disables the legacy X-Emby-Token header by default; the
@@ -56,6 +59,32 @@ class JellyfinAdapter extends BaseAdapter {
       await axios.post(`${this.url}/Library/Refresh`, null, { headers: this._headers(), timeout: REQUEST_TIMEOUT_MS });
     } catch (err) {
       logger.warn({ ...describeHttpError(err) }, 'jellyfin: library refresh request failed');
+    }
+  }
+
+  // Only the libraries listed in "Video Library IDs" when any are set, so a
+  // download does not rescan unrelated libraries; every library otherwise.
+  async refreshAfterDownload() {
+    if (this.videoLibraryIds.length === 0) {
+      logger.info('jellyfin: refreshing all libraries after download');
+      return this.triggerLibraryScan();
+    }
+    logger.info({ libraryIds: this.videoLibraryIds }, 'jellyfin: refreshing video libraries after download');
+    await Promise.all(this.videoLibraryIds.map((libraryId) => this._scanLibrary(libraryId)));
+  }
+
+  async _scanLibrary(libraryId) {
+    try {
+      await axios.post(`${this.url}/Items/${encodeURIComponent(libraryId)}/Refresh`, null, {
+        headers: this._headers(),
+        params: LIBRARY_SCAN_PARAMS,
+        timeout: REQUEST_TIMEOUT_MS,
+      });
+    } catch (err) {
+      logger.warn(
+        { ...describeHttpError(err), libraryId },
+        'jellyfin: refresh request for a library in Video Library IDs failed'
+      );
     }
   }
 

@@ -99,7 +99,7 @@ Youtarr provides:
 
 ## Native Playlist Sync
 
-The library and metadata setup above is all you need for downloaded videos to show up in Jellyfin. Playlist sync is separate: connect it only if you want your subscribed YouTube playlists to appear as native Jellyfin playlists.
+The library and metadata setup above is all you need for downloaded videos to show up in Jellyfin. Connecting Jellyfin in Youtarr is separate and optional: do it if you want your subscribed YouTube playlists to appear as native Jellyfin playlists, your libraries refreshed right after each download, or watch status synced into Youtarr.
 
 ### Step 1: Create a Jellyfin API key
 
@@ -111,10 +111,12 @@ The library and metadata setup above is all you need for downloaded videos to sh
 1. In Youtarr, open **Settings -> Jellyfin Integration**
 2. Enter the **Jellyfin URL** (e.g., `http://192.168.1.100:8096`) and the **API key** from Step 1
 3. Open the **Jellyfin User** dropdown and pick the account that should own the playlists. (Youtarr loads the user list from your server; you can also enter the user ID by hand.)
-4. (Optional) Leave **Video Library IDs** blank. Youtarr matches downloaded videos to Jellyfin items across all your libraries.
+4. (Optional) Enter **Video Library IDs**, separated by commas, to limit the refresh after each download to the libraries that hold your Youtarr videos. To find an ID, open the library from Jellyfin's home screen and copy the value after `topParentId=` in the address bar. Leave the field blank and Youtarr asks Jellyfin to refresh every library.
 5. Click **Test Connection**, then turn on **Enable Jellyfin integration**
 
 Once connected, open a playlist in Youtarr and turn on its Jellyfin sync chip. See [Media Server Playlists](../MEDIA_SERVER_PLAYLISTS.md) for how syncing, ordering, and updates work.
+
+Connecting Jellyfin also makes new downloads show up sooner: whenever a download job adds videos, Youtarr asks Jellyfin to refresh its libraries (once per job), so you don't have to wait for real-time monitoring or the next scheduled scan. Real-time monitoring often misses changes on network shares and Docker bind mounts. A failed refresh is only logged as a warning; the download itself is unaffected.
 
 Connecting Jellyfin also enables watch status sync: Youtarr periodically pulls per-video watch state (played, percent watched, last watched) for every user on the server and shows it as Watched chips and filters on its listing pages. It's one-way; Youtarr never marks anything watched on Jellyfin. Jellyfin decides when a video counts as played: **Maximum resume percentage** under Server -> Playback -> Resume. Settings live under **Settings -> Watch Status**; see [Track Watch Status from Media Servers](../USAGE_GUIDE.md#track-watch-status-from-media-servers).
 

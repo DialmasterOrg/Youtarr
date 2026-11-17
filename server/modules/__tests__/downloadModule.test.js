@@ -29,6 +29,9 @@ jest.mock('../jobModule', () => ({
   startNextJob: jest.fn().mockResolvedValue()
 }));
 
+jest.mock('../mediaServers/libraryRefresh', () => ({
+  refreshAfterDownload: jest.fn().mockResolvedValue()
+}));
 jest.mock('../download/downloadExecutor');
 jest.mock('../download/ytdlpCommandBuilder');
 jest.mock('../channelModule', () => ({
@@ -1138,6 +1141,7 @@ describe('DownloadModule', () => {
       ];
       const plexModuleMock = require('../plexModule');
       plexModuleMock.refreshLibrariesForSubfolders = jest.fn().mockReturnValue(Promise.resolve());
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress', data: { videos: [{ youtubeId: 'vid00000001' }] } });
 
       await downloadModule.doGroupedChannelDownloads({}, groups);
 
@@ -1152,10 +1156,46 @@ describe('DownloadModule', () => {
       ];
       const plexModuleMock = require('../plexModule');
       plexModuleMock.refreshLibrariesForSubfolders = jest.fn().mockReturnValue(Promise.resolve());
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress', data: { videos: [{ youtubeId: 'vid00000001' }] } });
 
       await downloadModule.doGroupedChannelDownloads({}, groups);
 
+      expect(plexModuleMock.refreshLibrariesForSubfolders).toHaveBeenCalledTimes(1);
       expect(plexModuleMock.refreshLibrariesForSubfolders).toHaveBeenCalledWith(['kids', 'music']);
+    });
+
+    it('refreshes Jellyfin and Emby once after all groups when the job downloaded videos', async () => {
+      const groups = [
+        { quality: '1080', subFolder: 'kids', channels: [{ channel_id: 'UC1' }] },
+        { quality: '720', subFolder: 'music', channels: [{ channel_id: 'UC2' }] },
+      ];
+      jest.spyOn(downloadModule, 'executeGroupDownload').mockResolvedValue();
+      jobModuleMock.getJob.mockReturnValue({
+        status: 'In Progress',
+        data: { videos: [{ youtubeId: 'vid00000001' }, { youtubeId: 'vid00000002' }] }
+      });
+      const libraryRefresh = require('../mediaServers/libraryRefresh');
+
+      await downloadModule.doGroupedChannelDownloads({}, groups);
+
+      expect(libraryRefresh.refreshAfterDownload).toHaveBeenCalledTimes(1);
+    });
+
+    it('skips every media server refresh when no group downloaded anything', async () => {
+      const groups = [
+        { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1' }] }
+      ];
+      jest.spyOn(downloadModule, 'executeGroupDownload').mockResolvedValue();
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress', data: { videos: [] } });
+      const libraryRefresh = require('../mediaServers/libraryRefresh');
+      const plexModuleMock = require('../plexModule');
+      plexModuleMock.refreshLibrariesForSubfolders = jest.fn().mockReturnValue(Promise.resolve());
+
+      await downloadModule.doGroupedChannelDownloads({}, groups);
+
+      expect(plexModuleMock.refreshLibrariesForSubfolders).not.toHaveBeenCalled();
+      expect(libraryRefresh.refreshAfterDownload).not.toHaveBeenCalled();
+      expect(jobModuleMock.startNextJob).toHaveBeenCalled();
     });
 
     it('should hand accumulated diagnoses to the run tracker on completion', async () => {

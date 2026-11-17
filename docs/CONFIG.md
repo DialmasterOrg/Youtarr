@@ -278,7 +278,7 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
 
 ## Jellyfin Integration
 
-These fields are required only when you want Youtarr to mirror playlists to Jellyfin as native playlists. Channel downloads work without them.
+These fields are required only when you want Youtarr to refresh your Jellyfin libraries after downloads, mirror playlists to Jellyfin as native playlists, or sync watch status. Channel downloads work without them.
 
 ### Enable Jellyfin
 - **Config Key**: `jellyfinEnabled`
@@ -307,19 +307,19 @@ These fields are required only when you want Youtarr to mirror playlists to Jell
 - **Config Key**: `jellyfinVideoLibraryIds`
 - **Type**: `array<string>`
 - **Default**: `[]`
-- **Description**: Library IDs that contain your Youtarr videos. Optional and safe to leave blank; Youtarr matches downloaded videos to Jellyfin items across all of your libraries.
+- **Description**: Library IDs that contain your Youtarr videos. Optional. When set, Youtarr refreshes only these libraries after a download job adds videos; when blank, it asks Jellyfin to refresh every library. To find an ID, open the library from Jellyfin's home screen and copy the `topParentId` value from the address bar. Playlist and watch status sync ignore this field and match videos across all of your libraries.
 
 ## Emby Integration
 
-These fields work like the Jellyfin fields above, with `emby*` names. They're required only when you want Youtarr to mirror playlists to Emby as native playlists; channel downloads work without them. See [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md) for setup details.
+These fields work like the Jellyfin fields above, with `emby*` names. They're required only when you want Youtarr to refresh your Emby libraries after downloads, mirror playlists to Emby as native playlists, or sync watch status; channel downloads work without them. See [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md) for setup details.
 
 | Config Key | Type | Default | Description |
 | :--------- | :--- | :------ | :---------- |
-| `embyEnabled` | `boolean` | `false` | Turn Emby playlist sync on or off. |
+| `embyEnabled` | `boolean` | `false` | Turn the Emby connection (library refresh after downloads, playlist sync, watch status sync) on or off. |
 | `embyUrl` | `string` | `""` | Base URL of your Emby server (e.g., `http://192.168.1.100:8096`). |
 | `embyApiKey` | `string` | `""` | Created in Emby under **Settings -> Advanced -> API Keys**. Redacted in logs. |
 | `embyUserId` | `string` | `""` | User account that will own Youtarr-managed playlists. Open the **Emby User** dropdown in the UI to load accounts from your server and pick one. |
-| `embyVideoLibraryIds` | `array<string>` | `[]` | Library IDs that contain your Youtarr videos. Optional and safe to leave blank; Youtarr matches videos across all of your libraries. |
+| `embyVideoLibraryIds` | `array<string>` | `[]` | Library IDs that contain your Youtarr videos. Optional. When set, Youtarr refreshes only these libraries after a download job adds videos; when blank, it asks Emby to refresh every library. To find an ID, open the library from Emby's home screen and copy the `parentId` value from the address bar (a short number, not the longer `serverId`). Playlist and watch status sync ignore this field. |
 
 ## Watch Status Sync
 

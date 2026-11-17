@@ -1,11 +1,12 @@
 // Post-completion side effects for a download job: temp-file cleanup,
-// JobVideoDownload cleanup, channel poster backfill, playlist hooks, Plex
-// refresh, and next-job kickoff. Deliberately fire-and-forget except poster
+// JobVideoDownload cleanup, channel poster backfill, playlist hooks, media
+// server refresh, and next-job kickoff. Deliberately fire-and-forget except poster
 // backfill.
 const fsPromises = require('fs').promises;
 const logger = require('../../logger');
 const configModule = require('../configModule');
 const plexModule = require('../plexModule');
+const libraryRefresh = require('../mediaServers/libraryRefresh');
 const jobModule = require('../jobModule');
 const filesystem = require('../filesystem');
 const subfolderModule = require('../subfolderModule');
@@ -118,12 +119,17 @@ async function runCompletionSideEffects({
     });
   }
 
-  // Only refresh Plex and start next job if not processing multiple groups
+  // Only refresh media servers and start next job if not processing multiple groups
   if (!skipJobTransition) {
     if (subfoldersInUse.size > 0) {
       // Defensive: refreshLibrary currently swallows errors internally
       plexModule.refreshLibrariesForSubfolders([...subfoldersInUse]).catch(err => {
         logger.error({ err }, 'Failed to refresh Plex libraries');
+      });
+
+      // Jellyfin and Emby; also swallows its own errors.
+      libraryRefresh.refreshAfterDownload().catch(err => {
+        logger.error({ err }, 'Failed to refresh Jellyfin/Emby libraries');
       });
     }
 

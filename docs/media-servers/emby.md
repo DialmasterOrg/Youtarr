@@ -108,7 +108,7 @@ MP4 files include:
 
 ## Native Playlist Sync
 
-The library and metadata setup above is all you need for downloaded videos to show up in Emby. Playlist sync is separate: connect it only if you want your subscribed YouTube playlists to appear as native Emby playlists.
+The library and metadata setup above is all you need for downloaded videos to show up in Emby. Connecting Emby in Youtarr is separate and optional: do it if you want your subscribed YouTube playlists to appear as native Emby playlists, your libraries refreshed right after each download, or watch status synced into Youtarr.
 
 ### Step 1: Create an Emby API key
 
@@ -120,10 +120,12 @@ The library and metadata setup above is all you need for downloaded videos to sh
 1. In Youtarr, open **Settings -> Emby Integration**
 2. Enter the **Emby URL** and the **API key** from Step 1
 3. Open the **Emby User** dropdown and pick the account that should own the playlists. (Youtarr loads the user list from your server; you can also enter the user ID by hand.)
-4. (Optional) Leave **Video Library IDs** blank. Youtarr matches downloaded videos to Emby items across all your libraries.
+4. (Optional) Enter **Video Library IDs**, separated by commas, to limit the refresh after each download to the libraries that hold your Youtarr videos. To find an ID, open the library from Emby's home screen and copy the value after `parentId=` in the address bar (a short number, not the longer `serverId`). Leave the field blank and Youtarr asks Emby to refresh every library.
 5. Click **Test Connection**, then turn on **Enable Emby integration**
 
 Once connected, open a playlist in Youtarr and turn on its Emby sync chip. See [Media Server Playlists](../MEDIA_SERVER_PLAYLISTS.md) for how syncing, ordering, and updates work.
+
+Connecting Emby also makes new downloads show up sooner: whenever a download job adds videos, Youtarr asks Emby to refresh its libraries (once per job), so you don't have to wait for real-time monitoring or the next scheduled scan. Real-time monitoring often misses changes on network shares and Docker bind mounts. A failed refresh is only logged as a warning; the download itself is unaffected.
 
 Connecting Emby also enables watch status sync: Youtarr periodically pulls per-video watch state (played, percent watched, last watched) for every user on the server and shows it as Watched chips and filters on its listing pages. It's one-way; Youtarr never marks anything watched on Emby. Emby decides when a video counts as played: edit the library and set **Max resume percentage**; stop after that point and the title counts as fully played. Settings live under **Settings -> Watch Status**; see [Track Watch Status from Media Servers](../USAGE_GUIDE.md#track-watch-status-from-media-servers).
 
