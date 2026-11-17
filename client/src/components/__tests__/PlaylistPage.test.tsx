@@ -13,6 +13,7 @@ const mockRefetchMeta = jest.fn();
 const mockIgnoreVideo = jest.fn();
 const mockUnignoreVideo = jest.fn();
 const mockDeleteVideosByYoutubeIds = jest.fn();
+const mockRefresh = jest.fn();
 let mockLocationState: unknown = null;
 
 const mockVideo: PlaylistVideo = {
@@ -80,7 +81,11 @@ const mockPlaylist = {
   auto_download_baseline_at: null as string | null,
 };
 
-jest.mock('axios', () => ({ get: jest.fn(), post: jest.fn(), isAxiosError: () => false }));
+jest.mock('axios', () => ({
+  get: jest.fn(),
+  post: jest.fn(),
+  isAxiosError: (err: unknown) => (err as { isAxiosError?: boolean } | null)?.isAxiosError === true,
+}));
 const http = require('axios');
 
 jest.mock('react-router-dom', () => ({
@@ -151,7 +156,7 @@ jest.mock('../../hooks/usePlaylistDetail', () => ({
     refetchMeta: (...args: unknown[]) => mockRefetchMeta(...args),
     markVideoIgnored: jest.fn(),
     markVideoDeleted: (...args: unknown[]) => mockMarkVideoDeleted(...args),
-    refresh: jest.fn(),
+    refresh: (...args: unknown[]) => mockRefresh(...args),
     sync: jest.fn(),
     regenerateM3U: jest.fn(),
     triggerDownload: (...args: unknown[]) => mockTriggerDownload(...args),
@@ -564,6 +569,35 @@ describe('PlaylistPage video list notices', () => {
     expect(
       screen.getByText(/fewer videos here than YouTube reports/i)
     ).toBeInTheDocument();
+  });
+});
+
+describe('PlaylistPage action errors', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('shows the server explanation when a refresh is refused', async () => {
+    const user = userEvent.setup();
+    mockRefresh.mockRejectedValue(Object.assign(new Error('Request failed with status code 404'), {
+      isAxiosError: true,
+      response: { status: 404, data: { error: 'YouTube says this playlist does not exist.' } },
+    }));
+
+    renderWithProviders(<PlaylistPage token="t" />);
+    await user.click(screen.getByRole('button', { name: 'Refresh from YouTube' }));
+
+    expect(await screen.findByText('YouTube says this playlist does not exist.')).toBeInTheDocument();
+  });
+
+  test('falls back to the error message when the server sent no explanation', async () => {
+    const user = userEvent.setup();
+    mockRefresh.mockRejectedValue(Object.assign(new Error('Network Error'), { isAxiosError: true }));
+
+    renderWithProviders(<PlaylistPage token="t" />);
+    await user.click(screen.getByRole('button', { name: 'Refresh from YouTube' }));
+
+    expect(await screen.findByText('Network Error')).toBeInTheDocument();
   });
 });
 

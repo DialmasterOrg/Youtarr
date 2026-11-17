@@ -47,7 +47,7 @@ Legend: ✅ supported, ❌ not supported, ⚠️ partial/caveat, "unclear" = not
 |---|---|---|---|
 | **Subscriptions & sources** | | | |
 | Channel subscriptions + auto-download | ✅ Per-tab controls (videos/shorts/streams); one-click Download All for the back catalog; terminated channels get flagged automatically | ✅ "Sources", the core model | ✅ Subscriptions page; separate "add to queue" for back-catalog |
-| Playlist as first-class source | ✅ Subscribe to public/unlisted playlists; auto-download + native sync to Plex/Jellyfin/Emby + `.m3u`; optional reverse ordering (no private playlists yet) | ✅ Yes (also user-created) | ✅ Yes, including reverse sort |
+| Playlist as first-class source | ✅ Subscribe to public/unlisted playlists; auto-download + native sync to Plex/Jellyfin/Emby + `.m3u`; optional reverse ordering; private playlists such as Watch Later with cookies | ✅ Yes (also user-created) | ✅ Yes, including reverse sort |
 | Individual/one-off downloads | ✅ Pre-validated URL preview; bulk video-URL import; bulk channel import from Takeout CSV or one-time cookies | ⚠️ Supported but not the design goal; docs suggest the "unlisted playlist" workaround | ✅ Accepts video/channel/playlist URLs |
 | Integrated YouTube search inside the UI | ✅ "Find Channels on YouTube" and "Find Videos on YouTube" pages; video results show "already downloaded" state | ❌ | ⚠️ Search operates on archived library; browser extension adds YouTube-side one-click archive |
 | Cron/scheduled fetching | ✅ Cron-based download scheduling | ✅ Per-source `index_frequency_minutes`; daily retention/update checks | ✅ Full cron UI at /settings/scheduling/ |

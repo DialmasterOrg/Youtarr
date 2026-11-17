@@ -13,7 +13,7 @@ When you subscribe to a YouTube playlist:
 
 What Youtarr does **not** do for playlists:
 
-- Does not deliver private YouTube playlists. Public and unlisted only (cookies-based auth for private playlists is out of scope for now).
+- Does not reach private YouTube playlists (Watch Later included) without cookies from the account that owns them. Public and unlisted playlists need none. See [Private playlists](USAGE_GUIDE.md#private-playlists).
 - Does not rename or move existing channel folders when a video is added to a tracked playlist.
 - Uses a single configured account per Jellyfin/Emby server. A playlist is either private to that account or public to everyone on the server (set the **Public on media servers** toggle); Youtarr can't target a playlist to a specific subset of other users.
 

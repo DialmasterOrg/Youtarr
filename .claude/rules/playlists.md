@@ -21,6 +21,8 @@ YouTube playlist following, playlist downloads, and the `.m3u` files.
 ## Following and refresh
 
 - Every playlist fetch uses yt-dlp's default webpage path, capped at 5000 entries, with an InnerTube fallback on failure or a short result; a separate metadata-only request verifies the total.
+- Both playlist yt-dlp calls go through `buildMetadataFetchArgs` and `spawnYtDlp` (cookies, proxy, custom args). With cookies configured the InnerTube fallback adds `skip=authcheck`, which yt-dlp requires for an authenticated jar.
+- YouTube reports a private playlist as nonexistent when signed out or when cookies expired, so `PLAYLIST_NOT_FOUND` carries `usedCookies` for the route's wording and skips the InnerTube retry.
 - Missing or conflicting totals and partial snapshots cannot initialize or reset following, or prune tracked rows.
 - Following setup above 5000 entries returns 422, an unverifiable snapshot 503, and a concurrent refresh 409 (shared text and limits in `playlistConstants.js`).
 - First enable follows future discoveries only; an older auto-enabled playlist without a cutoff initializes the same way on its first successful sweep, without seeding a batch. Existing cutoffs survive upgrades.

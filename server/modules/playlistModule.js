@@ -1,4 +1,3 @@
-const { spawn } = require('child_process');
 const { Op } = require('sequelize');
 const logger = require('../logger');
 const { sequelize } = require('../db');
@@ -6,6 +5,8 @@ const { Playlist, PlaylistVideo, Channel, Video, Job, JobVideo } = require('../m
 const youtubeApi = require('./youtubeApi');
 const { MAX_PLAYLIST_VIDEOS } = require('./playlistConstants');
 const storageGuard = require('./storageGuard');
+const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
+const { spawnYtDlp } = require('./ytdlpProcess');
 
 // yt-dlp's flat-playlist listing still returns private/deleted/members-only
 // videos but strips their metadata: the title comes back null (current yt-dlp)
@@ -21,6 +22,21 @@ const REPORTED_COUNT_SLACK = 5;
 // downloaded_at round-trips through a DATETIME column (second precision), so an
 // exact millisecond comparison would flag every already-correct row as stale.
 const DOWNLOAD_TIME_TOLERANCE_MS = 1000;
+
+// Routes word the failure by whether cookies really reached yt-dlp: a private
+// playlist reads as nonexistent both signed out and with expired cookies.
+function fetchError(code, child) {
+  const err = new Error(code);
+  err.usedCookies = child.cookiesPassed === true;
+  return err;
+}
+
+// An authenticated cookie jar makes yt-dlp reject skip=webpage unless
+// skip=authcheck is also passed.
+function innertubeExtractorArgs() {
+  const cookiesConfigured = YtdlpCommandBuilder.buildCookiesArgs().length > 0;
+  return cookiesConfigured ? 'youtubetab:skip=webpage,authcheck' : 'youtubetab:skip=webpage';
+}
 
 function reportedCount(value) {
   if (!['number', 'string'].includes(typeof value) || String(value).trim() === '') return null;
@@ -55,15 +71,13 @@ class PlaylistModule {
 
   async _getPlaylistMetadata(url, { skipWebpage = false } = {}) {
     return new Promise((resolve, reject) => {
-      const args = [
-        '--skip-download',
-        '--dump-single-json',
-        '--flat-playlist',
-        '--playlist-items', '0',
-      ];
-      if (skipWebpage) args.push('--extractor-args', 'youtubetab:skip=webpage');
-      args.push(url);
-      const child = spawn('yt-dlp', args);
+      const args = YtdlpCommandBuilder.buildMetadataFetchArgs(url, {
+        flatPlaylist: true,
+        playlistItems: 0,
+        skipSleepRequests: true,
+        extractorArgs: skipWebpage ? innertubeExtractorArgs() : null,
+      });
+      const child = spawnYtDlp(args);
       let stdout = '';
       let stderr = '';
 
@@ -73,10 +87,10 @@ class PlaylistModule {
       child.on('close', (code) => {
         if (code !== 0) {
           if (/does not exist|Unable to find/i.test(stderr)) {
-            return reject(new Error('PLAYLIST_NOT_FOUND'));
+            return reject(fetchError('PLAYLIST_NOT_FOUND', child));
           }
           if (/confirm you.re not a bot|sign in|cookies/i.test(stderr)) {
-            return reject(new Error('COOKIES_REQUIRED'));
+            return reject(fetchError('COOKIES_REQUIRED', child));
           }
           logger.error({ stderr, code }, 'getPlaylistInfo failed');
           return reject(new Error('NETWORK_ERROR'));
@@ -359,6 +373,9 @@ class PlaylistModule {
     try {
       entries = await this._spawnFlatPlaylist(playlist.url, { playlistEnd: MAX_PLAYLIST_VIDEOS });
     } catch (err) {
+      // YouTube answered. The InnerTube path is weaker at auth, and its error
+      // would replace this one.
+      if (err.message === 'PLAYLIST_NOT_FOUND') throw err;
       logger.warn({ err, playlist_id: playlist.playlist_id }, 'Default playlist fetch failed; retrying via InnerTube');
       entries = await this._spawnFlatPlaylist(playlist.url, innertubeOpts);
       usedInnertube = true;
@@ -472,20 +489,16 @@ class PlaylistModule {
   // Default (webpage) extraction paginates fully on yt-dlp >= 2026.07.04.
   // skipWebpage (InnerTube-only) is the fallback used by _fetchPlaylistVideos
   // when the default path fails or under-delivers; it stops at ~200 entries
-  // for playlist views as of 2026-07. If cookies are ever added here, an
-  // authenticated jar makes yt-dlp reject skip=webpage unless skip=authcheck
-  // is also passed.
+  // for playlist views as of 2026-07.
   _spawnFlatPlaylist(url, { playlistEnd, skipWebpage = false } = {}) {
     return new Promise((resolve, reject) => {
-      const args = ['--flat-playlist', '--dump-json'];
-      if (playlistEnd != null) {
-        args.push('--playlist-end', String(playlistEnd));
-      }
-      if (skipWebpage) {
-        args.push('--extractor-args', 'youtubetab:skip=webpage');
-      }
-      args.push(url);
-      const child = spawn('yt-dlp', args);
+      const args = YtdlpCommandBuilder.buildMetadataFetchArgs(url, {
+        flatPlaylist: true,
+        entryPerLine: true,
+        playlistEnd,
+        extractorArgs: skipWebpage ? innertubeExtractorArgs() : null,
+      });
+      const child = spawnYtDlp(args);
       let stdout = '';
       let stderr = '';
       child.stdout.on('data', (d) => { stdout += d.toString(); });
@@ -493,6 +506,9 @@ class PlaylistModule {
       child.on('close', (code) => {
         if (code !== 0) {
           logger.error({ stderr, code }, '_spawnFlatPlaylist failed');
+          if (/does not exist/i.test(stderr)) {
+            return reject(fetchError('PLAYLIST_NOT_FOUND', child));
+          }
           return reject(new Error('NETWORK_ERROR'));
         }
         try {

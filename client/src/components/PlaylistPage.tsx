@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import axios from 'axios';
 import { useVideoActivity } from '../providers/VideoActivityProvider';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -165,8 +166,9 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         showSnackbar(successMessage ?? `${label} succeeded`);
         return true;
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : `${label} failed`;
-        showSnackbar(msg, 'error');
+        const serverMessage: unknown = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
+        const fallback = err instanceof Error ? err.message : `${label} failed`;
+        showSnackbar(typeof serverMessage === 'string' && serverMessage ? serverMessage : fallback, 'error');
         return false;
       } finally {
         setRunningAction(null);
