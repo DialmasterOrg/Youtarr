@@ -20,6 +20,7 @@ import { SponsorBlockSection } from '../Configuration/sections/SponsorBlockSecti
 import { CookieConfigSection } from '../Configuration/sections/CookieConfigSection';
 import { NotificationsSection } from '../Configuration/sections/NotificationsSection';
 import { RssFeedsSection } from '../Configuration/sections/RssFeedsSection';
+import { ArrBridgeSection } from '../Configuration/sections/ArrBridgeSection';
 import { DownloadPerformanceSection } from '../Configuration/sections/DownloadPerformanceSection';
 import { YtdlpOptionsSection } from '../Configuration/sections/YtdlpOptionsSection';
 import { YtdlpUpdateSection } from '../Configuration/sections/YtdlpUpdateSection';
@@ -420,6 +421,18 @@ export function Settings({ token }: SettingsProps) {
             path="rss-feeds"
             element={
               <RssFeedsSection
+                token={token}
+                config={config}
+                savedConfig={initialConfig}
+                onConfigChange={handleConfigChange}
+                setSnackbar={setSnackbar}
+              />
+            }
+          />
+          <Route
+            path="sonarr-radarr"
+            element={
+              <ArrBridgeSection
                 token={token}
                 config={config}
                 savedConfig={initialConfig}

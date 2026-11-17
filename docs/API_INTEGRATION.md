@@ -386,6 +386,8 @@ The `/api/videos/download` endpoint is still protected by Youtarr's API key auth
 
 Configure your proxy to skip authentication for the `/api/videos/download` path. The exact configuration varies by proxy - consult your proxy's documentation for path-based bypass rules.
 
+The Sonarr/Radarr bridge needs the same kind of bypass for the `/arr/` path, because Sonarr and Radarr can't log in either. See [Sonarr and Radarr](SONARR_RADARR.md#login-proxies).
+
 
 ### Live video status
 

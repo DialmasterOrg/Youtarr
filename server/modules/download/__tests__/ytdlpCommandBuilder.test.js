@@ -1573,6 +1573,18 @@ describe('YtdlpCommandBuilder', () => {
       expect(args).toContain(MANAGED_TOKEN);
     });
 
+    test('buildMetadataFetchArgs with cookiesEnabled false sends neither the cookies nor their player clients', () => {
+      configModule.getCookiesPath.mockReturnValue('/path/to/cookies.txt');
+      const url = 'https://www.youtube.com/watch?v=abc';
+
+      const cookieless = YtdlpCommandBuilder.buildMetadataFetchArgs(url, { cookiesEnabled: false });
+      const byDefault = YtdlpCommandBuilder.buildMetadataFetchArgs(url);
+
+      expect(cookieless).not.toContain('--cookies');
+      expect(youtubeTokens(cookieless)).toEqual([]);
+      expect(byDefault).toEqual(expect.arrayContaining(['--cookies', '/path/to/cookies.txt', MANAGED_TOKEN]));
+    });
+
     test('buildMetadataFetchArgs skips the player clients for flat playlist listings', () => {
       configModule.getCookiesPath.mockReturnValue('/path/to/cookies.txt');
       const args = YtdlpCommandBuilder.buildMetadataFetchArgs('https://www.youtube.com/@chan/videos', {

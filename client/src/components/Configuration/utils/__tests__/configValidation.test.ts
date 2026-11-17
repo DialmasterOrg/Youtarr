@@ -29,6 +29,20 @@ describe('validateProxyUrl', () => {
 });
 
 describe('validateConfig', () => {
+  test('explains a Sonarr / Radarr category name that is used twice', () => {
+    const config = createConfig({
+      arrBridgeCategories: [{ name: 'tv', subfolder: null }, { name: 'TV', subfolder: null }],
+    });
+
+    expect(validateConfig(config)).toBe('Cannot save: Sonarr / Radarr: Each category needs a different name.');
+  });
+
+  test('explains a staged file retention outside its range', () => {
+    expect(validateConfig(createConfig({ arrBridgeStagingRetentionDays: 0 }))).toBe(
+      'Cannot save: Sonarr / Radarr: remove files nobody imported after 1 to 365 days'
+    );
+  });
+
   test('requires at least one automatic removal threshold when the feature is enabled', () => {
     const config = createConfig({
       autoRemovalEnabled: true,

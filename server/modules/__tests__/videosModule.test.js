@@ -1086,6 +1086,25 @@ describe('VideosModule', () => {
       expect(duplicates.size).toBe(0);
     });
 
+    test('never walks the Sonarr/Radarr staging folder, whose hardlinks are not library files', async () => {
+      mockFs.readdir.mockImplementation(async (dir) => {
+        if (dir === '/test/dir') {
+          return [
+            { name: '.arr-staging', isDirectory: () => true, isFile: () => false },
+            { name: 'Channel1', isDirectory: () => true, isFile: () => false },
+          ];
+        }
+        return [{ name: 'video [abc123].mp4', isDirectory: () => false, isFile: () => true }];
+      });
+      mockFs.stat.mockResolvedValue({ size: 2000 });
+
+      const { fileMap, duplicates } = await VideosModule.scanForVideoFiles('/test/dir');
+
+      expect(mockFs.readdir).not.toHaveBeenCalledWith('/test/dir/.arr-staging', expect.anything());
+      expect(fileMap.get('abc123').videoFilePath).toBe('/test/dir/Channel1/video [abc123].mp4');
+      expect(duplicates.size).toBe(0);
+    });
+
     test('should handle duplicate files and keep larger one', async () => {
       mockFs.readdir.mockResolvedValueOnce([
         { name: 'video1 [abc123].mp4', isDirectory: () => false, isFile: () => true },

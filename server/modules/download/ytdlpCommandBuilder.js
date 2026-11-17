@@ -388,7 +388,7 @@ class YtdlpCommandBuilder {
     // Flat listings don't make player requests, so they skip the cookie clients.
     args.push(...(options.flatPlaylist
       ? this.buildCustomArgs(config)
-      : this.buildVideoExtractionCustomArgs(config)));
+      : this.buildVideoExtractionCustomArgs(config, { cookiesEnabled: options.cookiesEnabled })));
 
     args.push(url);
     return args;

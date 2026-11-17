@@ -46,7 +46,7 @@ function classifyYoutubeApiError(err) {
     }
 
     if (status === 403) {
-      if (reason === 'quotaExceeded') return YoutubeApiErrorCode.QUOTA_EXCEEDED;
+      if (reason === 'quotaExceeded' || reason === 'dailyLimitExceeded') return YoutubeApiErrorCode.QUOTA_EXCEEDED;
       if (reason === 'rateLimitExceeded' || reason === 'userRateLimitExceeded') {
         return YoutubeApiErrorCode.RATE_LIMITED;
       }

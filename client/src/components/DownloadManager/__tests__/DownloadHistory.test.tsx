@@ -540,6 +540,35 @@ describe('DownloadHistory', () => {
       expect(cellTexts.some(text => text === 'Manual Videos')).toBe(true);
     });
 
+    test('displays "Sonarr/Radarr" for a download grabbed through the Sonarr/Radarr bridge', () => {
+      const grabJob: Job[] = [{
+        id: 'grab-job',
+        jobType: 'Manually Added Urls (Sonarr/Radarr grab)',
+        status: 'Completed',
+        output: '',
+        timeCreated: Date.now(),
+        timeInitiated: Date.now(),
+        data: {
+          videos: [{
+            id: 1,
+            youtubeId: 'v1',
+            youTubeChannelName: 'Test',
+            youTubeVideoName: 'Grabbed Video',
+            duration: 100,
+            timeCreated: new Date().toISOString(),
+            originalDate: null,
+            description: null,
+          } as VideoData],
+        },
+      }];
+
+      render(<DownloadHistory {...defaultProps} jobs={grabJob} />);
+
+      const cellTexts = screen.getAllByRole('cell').map(cell => cell.textContent || '');
+      expect(cellTexts.some(text => text === 'Sonarr/Radarr')).toBe(true);
+      expect(cellTexts.some(text => text === 'Manual Videos')).toBe(false);
+    });
+
     test('displays "API: KeyName" for API-triggered downloads', () => {
       const apiJob: Job[] = [{
         id: 'api-job',
@@ -720,6 +749,85 @@ describe('DownloadHistory', () => {
       const tableCells = screen.getAllByRole('cell');
       const cellTexts = tableCells.map(cell => cell.textContent || '');
       expect(cellTexts.some(text => text === 'API: iPhone Shortcut #1')).toBe(true);
+    });
+  });
+
+  describe('Hiding Sonarr/Radarr grabs', () => {
+    const HIDE_LABEL = 'Hide Sonarr/Radarr grabs';
+    const jobOfType = (id: string, jobType: string): Job => ({
+      ...makeMultiVideoJob(id, [makeVideo({ youtubeId: id })]),
+      jobType,
+    });
+    const jobsWithGrabs: Job[] = [
+      jobOfType('channel-job', 'Channel Downloads'),
+      jobOfType('grab-job', 'Manually Added Urls (Sonarr/Radarr grab)'),
+      jobOfType('retry-job', 'Auto-retry: 1 video (Sonarr/Radarr grab)'),
+    ];
+    const cellTexts = () => screen.getAllByRole('cell').map((cell) => cell.textContent || '');
+
+    beforeEach(() => {
+      localStorage.clear();
+    });
+
+    test('offers no checkbox when no job came from Sonarr or Radarr', () => {
+      render(<DownloadHistory {...defaultProps} jobs={sampleJobs} />);
+
+      expect(screen.queryByRole('checkbox', { name: HIDE_LABEL })).not.toBeInTheDocument();
+    });
+
+    test('shows grabs until the box is checked, then hides them and their automatic retries', async () => {
+      const user = userEvent.setup();
+      render(<DownloadHistory {...defaultProps} jobs={jobsWithGrabs} />);
+
+      expect(screen.getByRole('checkbox', { name: HIDE_LABEL })).not.toBeChecked();
+      expect(cellTexts()).toEqual(expect.arrayContaining(['Sonarr/Radarr', 'Auto-retry']));
+
+      await user.click(screen.getByRole('checkbox', { name: HIDE_LABEL }));
+
+      expect(cellTexts()).not.toContain('Sonarr/Radarr');
+      expect(cellTexts()).not.toContain('Auto-retry');
+      expect(screen.getAllByRole('row')).toHaveLength(2);
+    });
+
+    test('keeps the automatic retry of any other download', async () => {
+      const user = userEvent.setup();
+      render(
+        <DownloadHistory
+          {...defaultProps}
+          jobs={[jobOfType('grab-job', 'Manually Added Urls (Sonarr/Radarr grab)'), jobOfType('retry', 'Auto-retry: 1 video')]}
+        />
+      );
+
+      await user.click(screen.getByRole('checkbox', { name: HIDE_LABEL }));
+
+      expect(cellTexts()).toContain('Auto-retry');
+    });
+
+    test('remembers the choice in this browser', async () => {
+      const user = userEvent.setup();
+      const { unmount } = render(<DownloadHistory {...defaultProps} jobs={jobsWithGrabs} />);
+      await user.click(screen.getByRole('checkbox', { name: HIDE_LABEL }));
+      unmount();
+
+      render(<DownloadHistory {...defaultProps} jobs={jobsWithGrabs} />);
+
+      expect(screen.getByRole('checkbox', { name: HIDE_LABEL })).toBeChecked();
+      expect(cellTexts()).not.toContain('Sonarr/Radarr');
+    });
+
+    test('hides grabs on the phone layout too', async () => {
+      const user = userEvent.setup();
+      const grabbed: Job = {
+        ...makeMultiVideoJob('grab-job', [makeVideo({ youtubeId: 'grabbed', youTubeVideoName: 'Grabbed Episode' })]),
+        jobType: 'Manually Added Urls (Sonarr/Radarr grab)',
+      };
+      render(<DownloadHistory {...defaultProps} jobs={[jobsWithGrabs[0], grabbed]} isMobile />);
+      expect(screen.getByRole('button', { name: 'Grabbed Episode' })).toBeInTheDocument();
+
+      await user.click(screen.getByRole('checkbox', { name: HIDE_LABEL }));
+
+      expect(screen.queryByRole('button', { name: 'Grabbed Episode' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Test Video 1' })).toBeInTheDocument();
     });
   });
 

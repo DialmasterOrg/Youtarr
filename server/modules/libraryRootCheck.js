@@ -7,7 +7,9 @@ const { Op } = require('sequelize');
 // pathBuilder, not the filesystem index: the index loads fileOperations, which
 // binds child_process at require time, and this check needs neither.
 const { isSubfolderDirectory } = require('./filesystem/pathBuilder');
-const { LOCAL_TEMP_DIR_NAME, M3U_FOLDER_NAME, HEALTHCHECK_FILE_PREFIX } = require('./filesystem/constants');
+const {
+  LOCAL_TEMP_DIR_NAME, M3U_FOLDER_NAME, HEALTHCHECK_FILE_PREFIX, ARR_STAGING_DIR_NAME,
+} = require('./filesystem/constants');
 
 const LIBRARY_CHECK_REASONS = {
   MISSING: 'missing',
@@ -81,7 +83,8 @@ function subfolderFailure(failures) {
 // Entries Youtarr creates itself, possibly on a bare mount point while the
 // share is down, so they say nothing about whether the library is there.
 function isYoutarrManagedEntry(name) {
-  return name === LOCAL_TEMP_DIR_NAME || name === M3U_FOLDER_NAME || name.startsWith(HEALTHCHECK_FILE_PREFIX);
+  return name === LOCAL_TEMP_DIR_NAME || name === M3U_FOLDER_NAME || name === ARR_STAGING_DIR_NAME
+    || name.startsWith(HEALTHCHECK_FILE_PREFIX);
 }
 
 /**

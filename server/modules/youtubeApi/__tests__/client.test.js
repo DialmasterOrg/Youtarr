@@ -123,6 +123,17 @@ describe('youtubeApi/client', () => {
       });
     });
 
+    test('reads the definition from contentDetails', async () => {
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: { items: [{ id: 'abc12345678', contentDetails: { duration: 'PT1M', definition: 'hd' } }] },
+      });
+
+      const [meta] = await client.getVideoMetadata('api-key', ['abc12345678']);
+
+      expect(meta.definition).toBe('hd');
+    });
+
     test('batches ids 50 at a time', async () => {
       const ids = Array.from({ length: 120 }, (_, i) => `id${String(i).padStart(8, '0')}`);
       axios.get.mockResolvedValue({ status: 200, data: { items: [] } });
@@ -447,6 +458,34 @@ describe('youtubeApi/client', () => {
         duration: 332,
         viewCount: 4242,
       });
+    });
+
+    test('carries the definition videos.list reports, or null when it reports none', async () => {
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          items: [
+            { id: { kind: 'youtube#video', videoId: 'sdvideo0001' }, snippet: { title: 'Old upload' } },
+            { id: { kind: 'youtube#video', videoId: 'nodefined01' }, snippet: { title: 'No definition' } },
+          ],
+        },
+      });
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          items: [
+            { id: 'sdvideo0001', contentDetails: { duration: 'PT5M', definition: 'sd' }, statistics: { viewCount: '1' } },
+            { id: 'nodefined01', contentDetails: { duration: 'PT5M' }, statistics: { viewCount: '1' } },
+          ],
+        },
+      });
+
+      const results = await client.searchVideos('api-key', 'q', 10);
+
+      expect(results.map((result) => [result.youtubeId, result.definition])).toEqual([
+        ['sdvideo0001', 'sd'],
+        ['nodefined01', null],
+      ]);
     });
 
     test('returns search-only results when videos.list enrichment fails', async () => {
@@ -787,6 +826,77 @@ describe('youtubeApi/client', () => {
         'https://www.googleapis.com/youtube/v3/search',
         expect.objectContaining({ signal: controller.signal })
       );
+    });
+
+    describe('onUnits', () => {
+      const searchItem = (id) => ({
+        id: { kind: 'youtube#video', videoId: id },
+        snippet: { title: id, publishedAt: '2024-01-01T00:00:00Z' },
+      });
+      const metaItem = (id) => ({
+        id, contentDetails: { duration: 'PT5M' }, statistics: { viewCount: '10' },
+      });
+
+      test('reports 100 for the search page then 1 for the enrichment', async () => {
+        axios.get.mockResolvedValueOnce({ status: 200, data: { items: [searchItem('unitsvid001')] } });
+        axios.get.mockResolvedValueOnce({ status: 200, data: { items: [metaItem('unitsvid001')] } });
+        const onUnits = jest.fn();
+
+        await client.searchVideos('api-key', 'q', 10, { onUnits });
+
+        expect(onUnits.mock.calls).toEqual([[100], [1]]);
+      });
+
+      test('reports 100 for each search page, then 1 for the enrichment', async () => {
+        const first = Array.from({ length: 50 }, (_, i) => searchItem(`pageone${String(i).padStart(4, '0')}`));
+        const second = Array.from({ length: 10 }, (_, i) => searchItem(`pagetwo${String(i).padStart(4, '0')}`));
+        axios.get.mockResolvedValueOnce({ status: 200, data: { items: first, nextPageToken: 'T2' } });
+        axios.get.mockResolvedValueOnce({ status: 200, data: { items: second } });
+        axios.get.mockResolvedValueOnce({
+          status: 200, data: { items: [...first, ...second].map((it) => metaItem(it.id.videoId)) },
+        });
+        // 60 ids fit in two videos.list batches (50 + 10)
+        axios.get.mockResolvedValueOnce({ status: 200, data: { items: [] } });
+        const onUnits = jest.fn();
+
+        await client.searchVideos('api-key', 'q', 100, { onUnits });
+
+        expect(onUnits.mock.calls).toEqual([[100], [100], [1], [1]]);
+      });
+
+      test('does not report the enrichment when there are no results', async () => {
+        axios.get.mockResolvedValueOnce({ status: 200, data: { items: [] } });
+        const onUnits = jest.fn();
+
+        await client.searchVideos('api-key', 'q', 10, { onUnits });
+
+        expect(onUnits.mock.calls).toEqual([[100]]);
+      });
+
+      test('does not count a failed search page or a failed enrichment', async () => {
+        axios.get.mockResolvedValueOnce({ status: 200, data: { items: [searchItem('failenrich01')] } });
+        axios.get.mockRejectedValueOnce({
+          response: { status: 500, data: { error: { errors: [{ reason: 'backendError' }] } } },
+        });
+        const onUnits = jest.fn();
+
+        const results = await client.searchVideos('api-key', 'q', 10, { onUnits });
+
+        expect(results).toHaveLength(1);
+        expect(onUnits.mock.calls).toEqual([[100]]);
+      });
+
+      test('ignores an onUnits that throws', async () => {
+        axios.get.mockResolvedValueOnce({ status: 200, data: { items: [searchItem('throwsvid01')] } });
+        axios.get.mockResolvedValueOnce({ status: 200, data: { items: [metaItem('throwsvid01')] } });
+        const onUnits = jest.fn(() => { throw new Error('counter broke'); });
+
+        const results = await client.searchVideos('api-key', 'q', 10, { onUnits });
+
+        expect(results).toHaveLength(1);
+        expect(results[0].duration).toBe(300);
+        expect(onUnits).toHaveBeenCalledTimes(2);
+      });
     });
   });
 
