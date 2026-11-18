@@ -21,6 +21,30 @@ describe('external API key policies', () => {
     expect(ApiKey.create.mock.calls[0][0].role).toBeUndefined();
   });
 
+  test('creates a read-only status key when asked for the status role', async () => {
+    ApiKey.count.mockResolvedValue(0);
+    ApiKey.create.mockResolvedValue({ id: 2, name: 'Dashboard' });
+    const created = await apiKeyModule.createApiKey('Dashboard', undefined, { role: 'status_read' });
+    expect(created).toMatchObject({ id: 2, name: 'Dashboard' });
+    expect(ApiKey.create.mock.calls[0][0].role).toBe('status_read');
+  });
+
+  test('refuses any other role, or a status role combined with a policy', async () => {
+    await expect(apiKeyModule.createApiKey('Admin', undefined, { role: 'admin' }))
+      .rejects.toThrow('Invalid API key role');
+    await expect(apiKeyModule.createApiKey('Mixed', { role: 'view' }, { role: 'status_read' }))
+      .rejects.toThrow('Invalid API key role');
+    expect(ApiKey.create).not.toHaveBeenCalled();
+  });
+
+  test('does not convert a status key into an external key', async () => {
+    ApiKey.findByPk.mockResolvedValue({
+      id: 3, role: 'status_read', is_active: true, revoked_at: null,
+    });
+    await expect(apiKeyModule.updateApiKey(3, { role: 'view' }))
+      .rejects.toThrow('cannot be converted');
+  });
+
   test('strictly validates policy fields and defaults', async () => {
     expect(() => apiKeyModule.validatePolicy({ role: 'view', unsupported: true })).toThrow('Unsupported');
     expect(() => apiKeyModule.validatePolicy({ role: 'view', maxRatingLevel: 5 })).toThrow('maxRatingLevel');

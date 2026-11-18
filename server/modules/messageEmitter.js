@@ -7,6 +7,14 @@ let lastDownloadState = null;
 // shows this instead of its own empty summary, so the hourly sweep doesn't hide
 // what the last real job did.
 let lastResultSummary = null;
+// How the run behind lastResultSummary ended. A later check that found nothing
+// new shows that summary again, and it must keep that run's outcome, not the
+// clean check's.
+let lastResultEnding = null;
+// The last final summary and how its run ended. Unlike lastDownloadState it is
+// not cleared when the next download starts, so "the last finished run" stays
+// readable while a new one is in progress.
+let lastFinishedRun = null;
 
 const RESULT_COUNT_FIELDS = [
   'totalDownloaded',
@@ -25,15 +33,22 @@ function hasResult(summary) {
   return RESULT_COUNT_FIELDS.some((field) => summary[field] > 0) || hasFailureStop(summary);
 }
 
-function resolveSummaryToShow({ finalSummary, error, warning }) {
+// The run to show for a final summary, as { finalSummary, error, warning }:
+// its own, or the last one with a result when this one has none.
+function resolveRunToShow({ finalSummary, error, warning }) {
+  const ending = { error: Boolean(error), warning: Boolean(warning) };
   if (hasResult(finalSummary)) {
     lastResultSummary = finalSummary;
-    return finalSummary;
+    lastResultEnding = ending;
+    return { finalSummary, ...ending };
   }
   // A job that failed or was stopped did not finish looking, so it can't say
   // when Youtarr last checked.
-  if (error || warning || !lastResultSummary) return finalSummary;
-  return { ...lastResultSummary, lastCheckedAt: finalSummary.completedAt };
+  if (error || warning || !lastResultSummary) return { finalSummary, ...ending };
+  return {
+    finalSummary: { ...lastResultSummary, lastCheckedAt: finalSummary.completedAt },
+    ...lastResultEnding,
+  };
 }
 
 module.exports = {
@@ -42,7 +57,8 @@ module.exports = {
     payload.dateTimeStamp = new Date().getTime();
     // A copy, because callers still read their own summary (notifications do).
     if (destination === 'broadcast' && type === 'downloadProgress' && payload.finalSummary) {
-      payload = { ...payload, finalSummary: resolveSummaryToShow(payload) };
+      lastFinishedRun = resolveRunToShow(payload);
+      payload = { ...payload, finalSummary: lastFinishedRun.finalSummary };
     }
     const message = {
       destination: destination,
@@ -95,4 +111,7 @@ module.exports = {
   getLastFinalActivity: () => {
     return lastDownloadState ? lastDownloadState.payload : null;
   },
+  // { finalSummary, error, warning } of the last run that produced a final
+  // summary, or null until one finishes after startup.
+  getLastFinishedRun: () => lastFinishedRun,
 };

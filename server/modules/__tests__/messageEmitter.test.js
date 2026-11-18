@@ -126,6 +126,93 @@ describe('messageEmitter', () => {
     });
   });
 
+  describe('getLastFinishedRun', () => {
+    const finishRun = (extra = {}) => MessageEmitter.emitMessage('broadcast', null, 'downloader', 'downloadProgress', {
+      finalSummary: { totalDownloaded: 2, totalFailed: 0, completedAt: '2026-11-18T17:00:00.000Z' },
+      ...extra,
+    });
+
+    test('is null until a run finishes', () => {
+      expect(MessageEmitter.getLastFinishedRun()).toBeNull();
+    });
+
+    test('reports the final summary and that the run ended cleanly', () => {
+      finishRun();
+
+      expect(MessageEmitter.getLastFinishedRun()).toEqual({
+        finalSummary: expect.objectContaining({ totalDownloaded: 2, totalFailed: 0 }),
+        error: false,
+        warning: false,
+      });
+    });
+
+    test.each(['error', 'warning'])('reports a run that ended with %s', (flag) => {
+      finishRun({ [flag]: true });
+
+      expect(MessageEmitter.getLastFinishedRun()[flag]).toBe(true);
+    });
+
+    test('stays readable while the next download is starting and running', () => {
+      finishRun();
+
+      MessageEmitter.emitMessage('broadcast', null, 'downloader', 'downloadProgress', {
+        progress: { state: 'initiating' }
+      });
+      MessageEmitter.emitMessage('broadcast', null, 'downloader', 'downloadProgress', {
+        progress: { state: 'downloading' }
+      });
+
+      expect(MessageEmitter.getLastFinalActivity()).toBeNull();
+      expect(MessageEmitter.getLastFinishedRun().finalSummary.totalDownloaded).toBe(2);
+    });
+
+    test.each(['error', 'warning'])(
+      'keeps the %s of the run it reports when a later clean check found nothing new',
+      (flag) => {
+        finishRun({ [flag]: true });
+
+        MessageEmitter.emitMessage('broadcast', null, 'downloader', 'downloadProgress', {
+          finalSummary: { totalDownloaded: 0, totalFailed: 0, completedAt: '2026-11-18T18:00:00.000Z' },
+        });
+
+        expect(MessageEmitter.getLastFinishedRun()).toEqual({
+          finalSummary: expect.objectContaining({
+            totalDownloaded: 2,
+            completedAt: '2026-11-18T17:00:00.000Z',
+            lastCheckedAt: '2026-11-18T18:00:00.000Z',
+          }),
+          error: flag === 'error',
+          warning: flag === 'warning',
+        });
+      }
+    );
+
+    test('reports a failed check that found nothing as its own run, not the earlier result', () => {
+      finishRun();
+
+      MessageEmitter.emitMessage('broadcast', null, 'downloader', 'downloadProgress', {
+        error: true,
+        finalSummary: { totalDownloaded: 0, totalFailed: 0, completedAt: '2026-11-18T18:00:00.000Z' },
+      });
+
+      expect(MessageEmitter.getLastFinishedRun()).toEqual({
+        finalSummary: expect.objectContaining({ totalDownloaded: 0, completedAt: '2026-11-18T18:00:00.000Z' }),
+        error: true,
+        warning: false,
+      });
+    });
+
+    test('is not replaced by a completion message that carries no summary', () => {
+      finishRun();
+
+      MessageEmitter.emitMessage('broadcast', null, 'downloader', 'downloadProgress', {
+        progress: { state: 'complete' }
+      });
+
+      expect(MessageEmitter.getLastFinishedRun().finalSummary.totalDownloaded).toBe(2);
+    });
+  });
+
   describe('keeping the last real result', () => {
     const emit = (payload) => MessageEmitter.emitMessage('broadcast', null, 'download', 'downloadProgress', payload);
     const lastBroadcastSummary = () => {

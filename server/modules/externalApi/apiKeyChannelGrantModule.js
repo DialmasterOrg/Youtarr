@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const { sequelize } = require('../../db');
 const { ApiKey, ApiKeyChannelGrant, Channel } = require('../../models');
+const { STATUS_READ_ROLE } = require('../constants/apiKeyRoles');
 
 class ChannelGrantValidationError extends Error {
   constructor(message) {
@@ -21,7 +22,7 @@ function normalizeChannelIds(channelIds) {
 async function requireExternalKey(keyId, transaction) {
   const key = await ApiKey.findByPk(keyId, { transaction, ...(transaction ? { lock: transaction.LOCK.UPDATE } : {}) });
   if (!key) return null;
-  if (!key.is_active || key.revoked_at || key.role === 'legacy_download') {
+  if (!key.is_active || key.revoked_at || key.role === 'legacy_download' || key.role === STATUS_READ_ROLE) {
     throw new ChannelGrantValidationError('Only active external API keys can receive channel grants');
   }
   return key;
