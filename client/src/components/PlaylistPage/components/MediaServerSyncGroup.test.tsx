@@ -65,6 +65,18 @@ describe('MediaServerSyncGroup', () => {
     expect(screen.getByRole('button', { name: /Sync now/i })).toBeDisabled();
   });
 
+  test('shows the last sync result for the servers the playlist syncs to', () => {
+    renderGroup({
+      syncStatus: {
+        syncing: false,
+        servers: { plex: { last_synced_at: null, last_error: 'No downloaded items to sync yet.' } },
+      },
+    });
+    expect(screen.getByRole('list', { name: 'Sync status' })).toHaveTextContent(
+      'No downloaded items to sync yet.'
+    );
+  });
+
   test('shows how many downloads lack a video file on a video-type playlist', () => {
     renderGroup({ unsyncableCount: 3 });
     expect(
