@@ -7,6 +7,7 @@ const createVideoRoutes = require('./videos');
 const createJobRoutes = require('./jobs');
 const createPlexRoutes = require('./plex');
 const createApiKeyRoutes = require('./apikeys');
+const createStatusRoutes = require('./status');
 const createSubscriptionRoutes = require('./subscriptions');
 const createVideoDetailRoutes = require('./videoDetail');
 const createVideoSearchRoutes = require('./videoSearch');
@@ -52,6 +53,7 @@ const scheduleConfig = require('../modules/scheduleConfig');
 const rescanRunSummary = require('../modules/rescanRunSummary');
 const ytdlpUpdateRunSummary = require('../modules/ytdlpUpdateRunSummary');
 const storageGuard = require('../modules/storageGuard');
+const statusSummaryModule = require('../modules/statusSummaryModule');
 const cookieDetails = require('../modules/cookieDetails');
 const cookieTest = require('../modules/cookieTest');
 const logger = require('../logger');
@@ -159,6 +161,9 @@ function registerRoutes(app, deps) {
 
   // API Key routes
   app.use(createApiKeyRoutes({ verifyToken }));
+
+  // Read-only status summary for dashboards (session or status API key)
+  app.use(createStatusRoutes({ verifyToken, statusSummaryModule, getCachedYtDlpVersion, serverVersion }));
 
   // Session-authenticated administrator review of external requests
   app.use(createExternalRequestReviewRoutes({

@@ -146,6 +146,49 @@ describe('API key channel grant management', () => {
   });
 });
 
+describe('POST /api/keys status keys', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('creates a read-only status key', async () => {
+    apiKeyModule.createApiKey.mockResolvedValue({
+      id: 5, name: 'Dashboard', key: 'one-time-secret', prefix: '12345678',
+    });
+
+    const response = await request(createApp()).post('/api/keys')
+      .send({ name: 'Dashboard', role: 'status_read' }).expect(200);
+
+    expect(response.body).toEqual(expect.objectContaining({ id: 5, key: 'one-time-secret' }));
+    expect(apiKeyModule.createApiKey).toHaveBeenCalledWith('Dashboard', undefined, { role: 'status_read' });
+  });
+
+  test('keeps creating a download key when no role is sent', async () => {
+    apiKeyModule.createApiKey.mockResolvedValue({
+      id: 6, name: 'Bookmarklet', key: 'one-time-secret', prefix: '12345678',
+    });
+
+    await request(createApp()).post('/api/keys').send({ name: 'Bookmarklet' }).expect(200);
+
+    expect(apiKeyModule.createApiKey).toHaveBeenCalledWith('Bookmarklet');
+  });
+
+  test('rejects any role other than the status role', async () => {
+    await request(createApp()).post('/api/keys').send({ name: 'Admin', role: 'admin' })
+      .expect(400, { error: 'Invalid API key role' });
+    expect(apiKeyModule.createApiKey).not.toHaveBeenCalled();
+  });
+
+  test('rejects a status key combined with an external policy or channel grants', async () => {
+    const error = 'A status key cannot have an external policy or channel grants';
+    await request(createApp()).post('/api/keys')
+      .send({ name: 'Mixed', role: 'status_read', policy: { role: 'view' } })
+      .expect(400, { error });
+    await request(createApp()).post('/api/keys')
+      .send({ name: 'Mixed', role: 'status_read', channelIds: [1] })
+      .expect(400, { error });
+    expect(apiKeyModule.createApiKey).not.toHaveBeenCalled();
+  });
+});
+
 describe('transactional external access management', () => {
   beforeEach(() => jest.clearAllMocks());
 

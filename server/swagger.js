@@ -75,7 +75,7 @@ const options = {
           type: 'apiKey',
           in: 'header',
           name: 'x-api-key',
-          description: 'API key sent to legacy download endpoints or the versioned external API.',
+          description: 'API key: a download key for the download endpoint, a status key for the status summary, or an external key for the versioned external API.',
         },
         ExternalApiKeyAuth: {
           type: 'apiKey',

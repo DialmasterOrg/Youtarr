@@ -18,6 +18,7 @@ const STARTUP_TAB_COUNT_REFRESH_DELAY_MS = 2 * 60 * 1000;
 const { createExternalApiAuth } = require('./middleware/externalApiAuth');
 const { sendExternalError } = require('./modules/externalApi/externalApiResponse');
 const { isExternalApiEnabled, isExternalApiPath } = require('./modules/externalApi/externalApiConfig');
+const { STATUS_READ_ROLE, STATUS_SUMMARY_PATH } = require('./modules/constants/apiKeyRoles');
 const app = express();
 app.set('trust proxy', parseTrustProxySetting(process.env.TRUST_PROXY));
 if (process.env.TRUST_PROXY === undefined || process.env.TRUST_PROXY === '') {
@@ -524,10 +525,13 @@ const initialize = async () => {
         const apiKeyModule = require('./modules/apiKeyModule');
         const validKey = await apiKeyModule.validateApiKey(apiKey);
         if (validKey) {
-          // API keys can ONLY access specific endpoints
-          const allowedApiKeyEndpoints = [
-            { method: 'POST', path: '/api/videos/download' },
-          ];
+          // API keys can ONLY access specific endpoints. A status key reads
+          // the status summary and nothing else, so the key a dashboard
+          // stores can never start a download.
+          const isStatusKey = validKey.role === STATUS_READ_ROLE;
+          const allowedApiKeyEndpoints = isStatusKey
+            ? [{ method: 'GET', path: STATUS_SUMMARY_PATH }]
+            : [{ method: 'POST', path: '/api/videos/download' }];
 
           const isAllowed = allowedApiKeyEndpoints.some(
             e => req.method === e.method && req.path === e.path
@@ -543,14 +547,16 @@ const initialize = async () => {
               path: req.path
             }, 'API key attempted to access unauthorized endpoint');
             return res.status(403).json({
-              error: 'API keys can only access the download endpoint'
+              error: isStatusKey
+                ? 'Status API keys can only access the status summary endpoint'
+                : 'API keys can only access the download endpoint'
             });
           }
 
           // External API roles are deliberately not accepted by the legacy
           // download endpoint. Missing role keeps pre-migration records and
           // older test doubles compatible.
-          if (validKey.role !== undefined && validKey.role !== 'legacy_download') {
+          if (!isStatusKey && validKey.role !== undefined && validKey.role !== 'legacy_download') {
             req.log.warn({
               event: 'api_key_legacy_access_denied', keyId: validKey.id,
               keyPrefix: validKey.key_prefix, role: validKey.role,
@@ -558,7 +564,9 @@ const initialize = async () => {
             return res.status(403).json({ error: 'External API keys cannot access the download endpoint' });
           }
 
-          req.log.info({
+          // Dashboards poll with status keys, so their successes stay out of
+          // the info log; a download key's use is still recorded there.
+          req.log[isStatusKey ? 'debug' : 'info']({
             event: 'api_key_auth_success',
             keyId: validKey.id,
             keyName: validKey.name,
