@@ -89,7 +89,8 @@ describe('VideoDeletionModule', () => {
       cleanupEmptyParents: jest.fn().mockResolvedValue(),
       isSubfolderDir: jest.fn((name) => name.startsWith('__')),
       listSubdirectories: jest.fn().mockResolvedValue([]),
-      removeDirectoryResilient: jest.fn().mockResolvedValue()
+      removeDirectoryResilient: jest.fn().mockResolvedValue(),
+      removeEmptyVideoDirectory: jest.fn().mockResolvedValue(false)
     };
 
     // Mock the models
@@ -592,6 +593,39 @@ describe('VideoDeletionModule', () => {
 
         expect(mockFilesystem.removeDirectoryResilient).not.toHaveBeenCalled();
       });
+
+      describe.each([
+        ['outside the downloads folder', '/old/output/Channel/Channel - Song - dQw4w9WgXcQ'],
+        ['one level deeper than a channel folder', '/test/output/youtube/Channel/Channel - Song - dQw4w9WgXcQ']
+      ])('with a video folder %s', (_label, videoDir) => {
+        beforeEach(() => {
+          mockVideo.findByPk.mockResolvedValue({
+            id: 1,
+            youtubeId: 'dQw4w9WgXcQ',
+            filePath: `${videoDir}/Song [dQw4w9WgXcQ].mp4`,
+            removed: false,
+            update: jest.fn().mockResolvedValue()
+          });
+          mockFs.readdir.mockResolvedValue(['Song [dQw4w9WgXcQ].mp4', 'Song [dQw4w9WgXcQ].nfo']);
+        });
+
+        test('removes the folder once the video\'s files are deleted, if nothing else is in it', async () => {
+          await VideoDeletionModule.deleteVideoById(1);
+
+          expect(mockFs.unlink).toHaveBeenCalledTimes(2);
+          expect(mockFilesystem.removeEmptyVideoDirectory).toHaveBeenCalledWith(videoDir, 'dQw4w9WgXcQ');
+        });
+
+        test('keeps the folder when one of the video\'s files could not be deleted', async () => {
+          const permissionError = new Error('EACCES');
+          permissionError.code = 'EACCES';
+          mockFs.unlink.mockRejectedValueOnce(permissionError);
+
+          await VideoDeletionModule.deleteVideoById(1);
+
+          expect(mockFilesystem.removeEmptyVideoDirectory).not.toHaveBeenCalled();
+        });
+      });
     });
   });
 
@@ -612,7 +646,7 @@ describe('VideoDeletionModule', () => {
       expect(mockFilesystem.cleanupEmptyChannelDirectory).toHaveBeenCalledWith(
         '/test/output/Channel Name',
         '/test/output',
-        { includeIgnorableFiles: true }
+        { includeIgnorableFiles: true, anyDepth: false }
       );
     });
 
@@ -633,8 +667,39 @@ describe('VideoDeletionModule', () => {
       expect(mockFilesystem.cleanupEmptyChannelDirectory).toHaveBeenCalledWith(
         '/test/output/Channel Name',
         '/test/output',
-        { includeIgnorableFiles: true }
+        { includeIgnorableFiles: true, anyDepth: false }
       );
+    });
+
+    describe('after removing a video folder that sits deeper than a channel folder', () => {
+      beforeEach(() => {
+        mockVideo.findByPk.mockResolvedValue({
+          id: 1,
+          youtubeId: 'abc123',
+          filePath: '/test/output/youtube/Channel Name/Channel Name - Video Title - abc123/Video Title [abc123].mp4',
+          removed: false,
+          update: jest.fn().mockResolvedValue()
+        });
+        mockFilesystem.removeEmptyVideoDirectory.mockResolvedValue(true);
+      });
+
+      test('cleans up the folder that held it, whatever its depth', async () => {
+        await VideoDeletionModule.deleteVideoById(1);
+
+        expect(mockFilesystem.cleanupEmptyChannelDirectory).toHaveBeenCalledWith(
+          '/test/output/youtube/Channel Name',
+          '/test/output',
+          { includeIgnorableFiles: true, anyDepth: true }
+        );
+      });
+
+      test('leaves the folders above it alone', async () => {
+        mockFilesystem.cleanupEmptyChannelDirectory.mockResolvedValueOnce(true);
+
+        await VideoDeletionModule.deleteVideoById(1);
+
+        expect(mockFilesystem.cleanupEmptyParents).not.toHaveBeenCalled();
+      });
     });
 
     test('should NOT call cleanup when video has no filePath', async () => {
