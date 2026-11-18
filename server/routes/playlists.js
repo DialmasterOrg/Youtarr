@@ -137,7 +137,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    * /api/playlists/{playlistId}:
    *   get:
    *     summary: Get a playlist with download and sync counts
-   *     description: Includes downloaded_count (videos with a file on disk now; downloaded and later deleted videos are not counted), not_downloaded_count, unsyncable_count, following_existing_count (older eligible entries needing explicit selection), and following_requested_count (eligible saved selections not yet downloaded) alongside the playlist row.
+   *     description: Includes downloaded_count (videos with a file on disk now; downloaded and later deleted videos are not counted), not_downloaded_count, unsyncable_count, following_existing_count (older eligible entries needing explicit selection), and following_requested_count (eligible saved selections not yet downloaded) alongside the playlist row. sync_status holds syncing (a media server sync is running now) and servers, keyed by plex, jellyfin or emby, each with last_synced_at and last_error (why the last sync changed nothing on that server, null after a successful one). A server that never synced has no entry.
    *     tags: [Playlists]
    *     parameters:
    *       - in: path
@@ -160,7 +160,8 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
 
       const counts = await playlistDownloadModule.getCounts(p, downloadDeps);
-      res.json({ playlist: p, ...counts });
+      const syncStatus = await mediaServers.mediaServerSync.getSyncStatus(p);
+      res.json({ playlist: p, ...counts, sync_status: syncStatus });
     } catch (err) {
       req.log.error({ err }, 'GET /api/playlists/:playlistId failed');
       res.status(500).json({ error: 'Failed to fetch playlist' });

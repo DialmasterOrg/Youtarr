@@ -20,6 +20,8 @@ interface SubscriptionSettingsFieldsProps {
   subfolderHelperText: string;
   /** Extra helper text appended when MP3 Only is chosen. */
   mp3OnlyHint?: string;
+  /** Extra helper text appended when Video + MP3 is chosen. */
+  videoMp3Hint?: string;
   disabled?: boolean;
 }
 
@@ -35,6 +37,7 @@ const SubscriptionSettingsFields: React.FC<SubscriptionSettingsFieldsProps> = ({
   subfolderLabel,
   subfolderHelperText,
   mp3OnlyHint = '',
+  videoMp3Hint = '',
   disabled = false,
 }) => {
   const { subfolders, loading: subfoldersLoading, createSubfolder } = useSubfolders(token);
@@ -52,7 +55,7 @@ const SubscriptionSettingsFields: React.FC<SubscriptionSettingsFieldsProps> = ({
         value={values.audio_format}
         onChange={(value) => onChange({ audio_format: value })}
         helperText={values.audio_format
-          ? MP3_HELPER_TEXT + (values.audio_format === 'mp3_only' ? mp3OnlyHint : '')
+          ? MP3_HELPER_TEXT + (values.audio_format === 'mp3_only' ? mp3OnlyHint : videoMp3Hint)
           : undefined}
         disabled={disabled}
       />

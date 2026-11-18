@@ -61,6 +61,7 @@ const buildDeps = (overrides = {}) => ({
   mediaServers: {
     mediaServerSync: {
       syncPlaylist: jest.fn().mockResolvedValue(undefined),
+      getSyncStatus: jest.fn().mockResolvedValue({ syncing: false, servers: {} }),
     },
     watchStatusQueries: {
       getWatchedByMap: jest.fn().mockResolvedValue(new Map()),
@@ -226,6 +227,26 @@ describe('GET /api/playlists/:playlistId', () => {
       where: { playlist_id: 'PLtest123', enabled: true },
     });
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ playlist }));
+  });
+
+  test('returns the media server sync status for the playlist', async () => {
+    const syncStatus = {
+      syncing: false,
+      servers: { jellyfin: { last_synced_at: null, last_error: 'No downloaded items to sync yet.' } },
+    };
+    const deps = buildDeps();
+    deps.mediaServers.mediaServerSync.getSyncStatus.mockResolvedValue(syncStatus);
+    const playlist = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(playlist);
+
+    const handler = getHandler('get', '/api/playlists/:playlistId', deps);
+    const req = { params: { playlistId: 'PLtest123' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.mediaServers.mediaServerSync.getSyncStatus).toHaveBeenCalledWith(playlist);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ sync_status: syncStatus }));
   });
 
   test('is not found when the playlist is soft-deleted', async () => {

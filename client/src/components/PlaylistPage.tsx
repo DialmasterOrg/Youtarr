@@ -37,6 +37,7 @@ import PlaylistFollowingDialog, { FollowingDialogMode } from './PlaylistPage/com
 import PlaylistSettingsDialog from './PlaylistPage/components/PlaylistSettingsDialog';
 import { isDeletable, isDownloadable, toModalData } from './PlaylistPage/components/playlistVideoHelpers';
 import { usePlaylistVideoDeletion } from './PlaylistPage/hooks/usePlaylistVideoDeletion';
+import { usePlaylistSyncUpdates } from './PlaylistPage/hooks/usePlaylistSyncUpdates';
 import DeleteVideosDialog from './shared/DeleteVideosDialog';
 import DownloadSettingsDialog from './DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from './DownloadManager/ManualDownload/types';
@@ -71,6 +72,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     followingExistingCount,
     followingRequestedCount,
     unsyncableCount,
+    syncStatus,
     loading,
     loadingMore,
     hasMore,
@@ -107,6 +109,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
   );
 
   useDownloadListingsRefresh(refetch);
+  usePlaylistSyncUpdates(playlist?.id ?? null, refetchMeta);
 
   const {
     status: serverStatus,
@@ -450,6 +453,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         followingRequestedCount={followingRequestedCount}
         onChooseExisting={() => setFollowingMode('batch')}
         unsyncableCount={unsyncableCount}
+        syncStatus={syncStatus}
         togglePending={pending}
         actionRunning={actionRunning}
         refreshing={runningAction === 'Refresh'}

@@ -209,6 +209,57 @@ describe('usePlaylistDetail.notDownloadedCount', () => {
   });
 });
 
+describe('usePlaylistDetail.syncStatus', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const respondWith = (detail: Record<string, unknown>) => {
+    axios.get.mockImplementation((url: string) => {
+      if (url.endsWith('/videos')) {
+        return Promise.resolve({ data: { total: 0, videos: [] } });
+      }
+      return Promise.resolve({ data: { playlist: { playlist_id: 'PL1' }, ...detail } });
+    });
+  };
+
+  test('exposes the sync status from the playlist response and updates it on refetchMeta', async () => {
+    const syncing = { syncing: true, servers: {} };
+    const synced = {
+      syncing: false,
+      servers: { plex: { last_synced_at: '2026-11-18T12:00:00Z', last_error: null } },
+    };
+    respondWith({ sync_status: syncing });
+
+    const { result } = renderHook(() =>
+      usePlaylistDetail({ token: 't', playlistId: 'PL1' })
+    );
+    await waitFor(() => {
+      expect(result.current.syncStatus).toEqual(syncing);
+    });
+
+    respondWith({ sync_status: synced });
+    await act(async () => {
+      await result.current.refetchMeta();
+    });
+
+    expect(result.current.syncStatus).toEqual(synced);
+  });
+
+  test('is null when the response carries no sync status', async () => {
+    respondWith({});
+
+    const { result } = renderHook(() =>
+      usePlaylistDetail({ token: 't', playlistId: 'PL1' })
+    );
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.syncStatus).toBeNull();
+  });
+});
+
 const makeVideo = (id: number, overrides = {}) => ({
   id,
   playlist_id: 'PL1',

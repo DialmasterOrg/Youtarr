@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import PlaylistPage from '../PlaylistPage';
-import { renderWithProviders } from '../../test-utils';
+import { createMockWebSocketContext, renderWithProviders } from '../../test-utils';
 import { PlaylistVideo } from '../../types/playlist';
 
 const mockTriggerDownload = jest.fn();
@@ -70,6 +70,7 @@ const mockExcludedVideo: PlaylistVideo = {
 };
 
 const mockPlaylist = {
+  id: 42,
   playlist_id: 'PL1',
   title: 'My Playlist',
   uploader: 'Owner',
@@ -628,6 +629,24 @@ describe('PlaylistPage restored-subscription notice', () => {
     expect(
       screen.queryByText('Playlist restored with its previous settings')
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('PlaylistPage media server sync updates', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('re-reads the playlist meta when a sync of this playlist starts or ends', () => {
+    const websocketValue = createMockWebSocketContext();
+    renderWithProviders(<PlaylistPage token="t" />, { websocketValue });
+
+    const syncUpdated = { destination: 'broadcast', type: 'playlistSyncUpdated', payload: { playlistDbId: 42 } };
+    const listeners = websocketValue.subscribe.mock.calls.filter(([filter]) => filter(syncUpdated));
+    expect(listeners).toHaveLength(1);
+    listeners[0][1](syncUpdated);
+
+    expect(mockRefetchMeta).toHaveBeenCalledTimes(1);
   });
 });
 
