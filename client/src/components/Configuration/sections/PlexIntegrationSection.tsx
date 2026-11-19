@@ -1,4 +1,6 @@
 import React, { ChangeEvent, useEffect, useState } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
+import { LIBRARY_FOLDERS_PATH } from '../../../utils/libraryLayouts';
 import {
   TextField,
   Grid,
@@ -14,7 +16,6 @@ import {
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { ConfigState, PlatformManagedState, PlexConnectionStatus } from '../types';
-import { PlexSubfolderMappings } from './PlexSubfolderMappings';
 import { PlexLibrary } from '../../../utils/plexLibraries';
 import { DefaultPlexLibraryDisplay } from './components/DefaultPlexLibraryDisplay';
 import { PlexPlaylistScopeControl } from './components/PlexPlaylistScopeControl';
@@ -31,7 +32,6 @@ interface PlexIntegrationSectionProps {
   onOpenLibrarySelector: () => void;
   onOpenPlexAuthDialog: () => void;
   onMobileTooltipClick?: (text: string) => void;
-  token?: string | null;
 }
 
 export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
@@ -46,7 +46,6 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
   onOpenLibrarySelector,
   onOpenPlexAuthDialog,
   onMobileTooltipClick,
-  token = null,
 }) => {
   // Auto-expand the playlist-scope disclosure when a test reveals an unclaimed
   // server, since those users must change the scope for playlists to appear.
@@ -313,13 +312,10 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
         </Grid>
 
         <Grid item xs={12}>
-          <PlexSubfolderMappings
-            mappings={config.plexSubfolderLibraryMappings ?? []}
-            onMappingsChange={(mappings) => onConfigChange({ plexSubfolderLibraryMappings: mappings })}
-            token={token}
-            plexConnectionStatus={plexConnectionStatus}
-            plexLibraries={plexLibraries}
-          />
+          <p className="text-sm text-muted-foreground">
+            Each library folder&apos;s refresh library is set on its page in Library folders.{' '}
+            <RouterLink to={LIBRARY_FOLDERS_PATH} className="text-primary underline max-md:inline-flex max-md:min-h-[44px] max-md:items-center">Open Library folders</RouterLink>
+          </p>
         </Grid>
 
         <Grid item xs={12}>

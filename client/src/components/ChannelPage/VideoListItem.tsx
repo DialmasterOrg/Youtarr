@@ -23,6 +23,7 @@ import ProtectionShieldButton from '../shared/ProtectionShieldButton';
 import RatingBadge from '../shared/RatingBadge';
 import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
 import WatchedChip from '../shared/WatchedChip';
+import EpisodeChip from '../shared/EpisodeChip';
 interface VideoListItemProps {
   video: ChannelVideo;
   checkedBoxes: string[];
@@ -375,6 +376,7 @@ function VideoListItem({
               showNA
               style={{ ...SHARED_STATUS_CHIP_SMALL_STYLE }}
             />
+            <EpisodeChip episode={video.episode ?? video.plannedEpisode} planned={!video.episode && Boolean(video.plannedEpisode)} />
             <WatchedChip watchedBy={video.watchedBy || []} />
             <Tooltip
               title={isRemovedStatus(status) ? <RemovalDescription row={video} /> : ''}

@@ -1,3 +1,5 @@
+import React from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { SubfolderAutocomplete } from '../SubfolderAutocomplete';
@@ -5,6 +7,7 @@ import { SubfolderAutocomplete } from '../SubfolderAutocomplete';
 const meta: Meta<typeof SubfolderAutocomplete> = {
   title: 'Atomic/Shared/SubfolderAutocomplete',
   component: SubfolderAutocomplete,
+  decorators: [(Story) => <MemoryRouter><Story /></MemoryRouter>],
   args: {
     value: null,
     onChange: fn(),

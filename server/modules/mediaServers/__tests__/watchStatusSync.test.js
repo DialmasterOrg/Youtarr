@@ -18,6 +18,12 @@ describe('watchStatusSync', () => {
     }));
     jest.doMock('../../configModule', () => ({ getConfig: jest.fn(() => ({})) }));
     jest.doMock('../serverRegistry', () => ({ getEnabledAdapters: jest.fn() }));
+    jest.doMock('../watchStatusHolds', () => ({
+      applyHolds: jest.fn(async (serverType, matches) => matches),
+      expireHolds: jest.fn().mockResolvedValue(0),
+    }));
+    jest.doMock('../watchStatusPushBack', () => ({ pushPendingHolds: jest.fn().mockResolvedValue({}) }));
+    jest.doMock('../libraryLocator', () => ({ scopeFor: jest.fn().mockResolvedValue(null) }));
     jest.doMock('../../../models', () => ({
       Video: { findAll: jest.fn(), findOne: jest.fn() },
       VideoWatchStatus: {
@@ -38,6 +44,33 @@ describe('watchStatusSync', () => {
     ({ Video, VideoWatchStatus, MediaServerUser, WatchStatusSyncCursor } = require('../../../models'));
 
     configModule.getConfig.mockReturnValue({ jellyfinUserId: 'JF_USER' });
+  });
+
+  test('writes only the matches the watch-state holds let through', async () => {
+    const watchStatusHolds = require('../watchStatusHolds');
+    watchStatusHolds.applyHolds.mockResolvedValue([]);
+    serverRegistry.getEnabledAdapters.mockReturnValue([fakeAdapter('plex', resolvedFetch([{
+      path: '/media/Chan/Video A [id1].mp4', serverUserId: '1', played: false, playCount: 0,
+      positionMs: 0, percentWatched: 0, lastWatchedAt: null,
+    }]))]);
+    Video.findAll.mockResolvedValue([{ id: 7, youtubeId: 'id1', filePath: '/data/Chan/Video A [id1].mp4' }]);
+
+    await watchStatusSync.syncAll();
+
+    expect(watchStatusHolds.applyHolds).toHaveBeenCalledWith('plex', [expect.objectContaining({ video: expect.objectContaining({ id: 7 }) })]);
+    expect(VideoWatchStatus.bulkCreate).not.toHaveBeenCalled();
+  });
+
+  test('expires old holds and pushes pending ones after reading the servers', async () => {
+    const watchStatusHolds = require('../watchStatusHolds');
+    const watchStatusPushBack = require('../watchStatusPushBack');
+    serverRegistry.getEnabledAdapters.mockReturnValue([fakeAdapter('plex', resolvedFetch([]))]);
+    Video.findAll.mockResolvedValue([]);
+
+    await watchStatusSync.syncAll();
+
+    expect(watchStatusHolds.expireHolds).toHaveBeenCalled();
+    expect(watchStatusPushBack.pushPendingHolds).toHaveBeenCalled();
   });
 
   test('skips when no media servers are configured', async () => {
@@ -232,8 +265,21 @@ describe('watchStatusSync', () => {
     expect(plex.fetchWatchStates).toHaveBeenCalledWith({
       since: new Date(stored.getTime() - 60_000),
       knownUserIds: ['55'],
+      libraryIds: null,
     });
     expect(jellyfin.fetchWatchStates).toHaveBeenCalledWith({});
+  });
+
+  test('limits plex\'s listings to the libraries that hold Youtarr\'s folders', async () => {
+    const scope = new Set(['37', '41']);
+    require('../libraryLocator').scopeFor.mockResolvedValue(scope);
+    const plex = fakeAdapter('plex', resolvedFetch([]));
+    serverRegistry.getEnabledAdapters.mockReturnValue([plex]);
+    Video.findAll.mockResolvedValue([]);
+
+    await watchStatusSync.syncAll();
+
+    expect(plex.fetchWatchStates).toHaveBeenCalledWith(expect.objectContaining({ libraryIds: scope }));
   });
 
   test('persists the history cursor the adapter reports after rows are written', async () => {

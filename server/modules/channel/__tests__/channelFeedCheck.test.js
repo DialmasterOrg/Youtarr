@@ -12,6 +12,7 @@ jest.mock('../../youtubeApi', () => mockFactories.mockYoutubeApi());
 jest.mock('../../youtubeExistenceCheck', () => ({ lookup: jest.fn() }));
 jest.mock('../../ytDlpRunner', () => ({ run: jest.fn() }));
 jest.mock('../../download/ytdlpCommandBuilder', () => ({ buildMetadataFetchArgs: jest.fn() }));
+jest.mock('../../tvShows/titleShowSaver', () => ({ classifyNew: jest.fn() }));
 
 const { Op } = require('sequelize');
 

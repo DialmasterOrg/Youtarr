@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link as RouterLink, useLocation } from 'react-router-dom';
+import { LIBRARY_FOLDERS_PATH } from '../../../utils/libraryLayouts';
 import { Chip, MenuItem, Select, SelectChangeEvent, Switch } from '../../ui';
-import { Info } from '../../../lib/icons';
+import { Film, Info } from '../../../lib/icons';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import { cn } from '../../../lib/cn';
 import SubtitleLanguageSelector from '../SubtitleLanguageSelector';
 import { SettingsSection } from '../common/SettingsSection';
 import { SettingRow, settingDescriptionId } from '../common/SettingRow';
 import { SettingNote } from '../common/SettingNote';
-import { CoreFoldersSection } from './components/CoreFoldersSection';
+import { LibraryFoldersCard } from './components/LibraryFoldersCard';
 import { FlatStructureDialog } from './components/FlatStructureDialog';
 import { ScheduleSummary } from './components/ScheduleSummary';
 import { VideoFilenameTemplate } from './components/VideoFilenameTemplate';
@@ -32,13 +33,14 @@ const PHONE_QUERY = '(max-width: 767px)';
 const RESOLUTIONS = [['2160', '4K (2160p)'], ['1440', '1440p'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['360', '360p']];
 const CODECS = [['default', 'Default (no preference)'], ['h264', 'H.264/AVC (best compatibility)'], ['h265', 'H.265/HEVC (balanced)']];
 const MEDIA_FILES: Array<{ key: 'writeVideoNfoFiles' | 'writeChannelPosters' | 'writeVideoFanart' | 'writeBackdropImages'; label: string; description: string }> = [
-  { key: 'writeVideoNfoFiles', label: 'Video .nfo files', description: 'Metadata for Kodi, Jellyfin and Emby.' },
+  { key: 'writeVideoNfoFiles', label: 'Video .nfo files', description: 'Metadata for Kodi, Jellyfin and Emby. Episodes in TV shows folders always get one.' },
   { key: 'writeChannelPosters', label: 'Channel poster.jpg', description: 'Copies the channel thumbnail into each channel folder.' },
   { key: 'writeVideoFanart', label: 'Video fanart', description: 'A -fanart.jpg per video. Some Plex clients (NVIDIA Shield) use it as the background.' },
   { key: 'writeBackdropImages', label: 'Backdrop images', description: 'A backdrop.jpg in video and channel folders, for Jellyfin and Emby.' },
 ];
+const NAMING_TV_NOTE = 'TV shows folders always use Season folders, SxxEyy file names and plain episode titles.';
 
-/** Settings > Core: folders, downloads, media server files, naming, interface, advanced. */
+/** Settings > Core: downloads, media server files, naming, interface, advanced (Core spec). */
 export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
   config, deploymentEnvironment, isPlatformManaged, onConfigChange, onMobileTooltipClick, token,
   filenameTemplateSaveRequirement, onFilenameTemplatePreviewSuccess,
@@ -64,8 +66,8 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
     <div className="flex flex-col">
       <p className="text-sm text-muted-foreground">How Youtarr downloads videos, and the files it writes next to them.</p>
       <div className="mt-6 flex flex-col gap-8 lg:gap-12">
-        <CoreFoldersSection token={token} config={config} deploymentEnvironment={deploymentEnvironment}
-          onConfigChange={onConfigChange} />
+        <LibraryFoldersCard token={token} config={config} isPlatformManaged={isPlatformManaged}
+          deploymentEnvironment={deploymentEnvironment} onMobileTooltipClick={onMobileTooltipClick} />
 
         <SettingsSection id="downloads" title="Downloads" description="What Youtarr downloads, and when.">
           <SettingRow controlId="channelAutoDownload" label="Automatic downloads"
@@ -136,14 +138,22 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
           <div className={cn('flex items-start gap-2 bg-muted/30 text-[13px] text-muted-foreground', phone ? 'px-4 py-3.5' : 'px-5 py-4')}>
             <Info size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-info" />
             <span>
-              For Jellyfin, Kodi and Emby: add your download library as Content Type <strong className="text-foreground">Movies</strong>,
-              do not enable the Nfo saver (.nfo files are read automatically), and uncheck all metadata downloaders, since
-              Youtarr provides the metadata through .nfo files.
+              Which library type a folder needs depends on its layout: <strong className="text-foreground">Movies</strong> or{' '}
+              <strong className="text-foreground">Other Videos</strong> for Videos folders, <strong className="text-foreground">TV Shows</strong> or{' '}
+              <strong className="text-foreground">Shows</strong> for TV shows folders.{phone ? '' : ' Library folders shows the setup for every folder and checks your servers.'}{' '}
+              <RouterLink to={LIBRARY_FOLDERS_PATH} className="text-primary underline max-md:inline-flex max-md:min-h-[44px] max-md:items-center">Open Library folders</RouterLink>
             </span>
           </div>
         </SettingsSection>
 
-        <SettingsSection id="naming" title="Naming" description="How files are named and organized.">
+        <SettingsSection id="naming" title="Naming"
+          description={phone ? `How files in Videos folders are named. ${NAMING_TV_NOTE}` : 'How files in Videos folders are named and organized.'}
+          aside={phone ? undefined : (
+            <>
+              <Chip icon={<Film size={12} aria-hidden="true" />} label="Videos folders only" size="small" variant="outlined" />
+              <p className="mt-2.5 text-[13px] text-muted-foreground">{NAMING_TV_NOTE}</p>
+            </>
+          )}>
           <SettingRow controlId="defaultSkipVideoFolder" label="Flat file structure by default"
             description="Save new downloads directly in the channel folder instead of a folder per video. Channels can override this."
             control={(

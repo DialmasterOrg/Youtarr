@@ -17,6 +17,7 @@ import VideoMetadata from './components/VideoMetadata';
 import VideoActions from './components/VideoActions';
 import VideoTechnical from './components/VideoTechnical';
 import VideoWatchStatusSection from './components/VideoWatchStatusSection';
+import VideoEpisodeSection from './components/VideoEpisodeSection';
 import { useVideoMetadata } from './hooks/useVideoMetadata';
 import { useWatchStatus } from './hooks/useWatchStatus';
 import { useMembersAccessCheck } from './hooks/useMembersAccessCheck';
@@ -45,6 +46,7 @@ function VideoModal({
   onRatingChanged,
   onAvailabilityDetected,
   onPublishedDateDetected,
+  onEpisodeChanged,
   allowIgnore,
 }: VideoModalProps) {
   const isMobile = useMediaQuery('(max-width: 599px)');
@@ -335,6 +337,13 @@ function VideoModal({
               metadata={metadata}
               loading={metadataLoading}
               onAddChannel={canAddChannel ? () => setAddChannelOpen(true) : undefined}
+            />
+            <VideoEpisodeSection
+              open={open}
+              token={token}
+              youtubeId={video.youtubeId}
+              title={displayVideo.title}
+              onChanged={onEpisodeChanged}
             />
             <VideoWatchStatusSection statuses={watchStatuses} />
             <VideoTechnical

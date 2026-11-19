@@ -24,6 +24,7 @@ import { MEDIA_SERVER_LABELS } from '../../../utils/mediaServerLabels';
 import { formatDateTime } from '../../../utils/formatters';
 import { useMediaServerStatus } from '../../../hooks/useMediaServerStatus';
 import { useWatchStatusSync, WatchStatusSyncRun } from '../hooks/useWatchStatusSync';
+import { WatchStateRestores } from './components/WatchStateRestores';
 
 type ServerKey = 'plex' | 'jellyfin' | 'emby';
 
@@ -252,6 +253,10 @@ export function WatchStatusSection({ config, token, onConfigChange }: WatchStatu
               <SyncRunSummary run={syncState.lastRun} />
             </Box>
           )}
+        </Grid>
+
+        <Grid item xs={12}>
+          <WatchStateRestores token={token} />
         </Grid>
       </Grid>
     </ConfigurationCard>

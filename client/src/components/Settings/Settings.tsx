@@ -46,7 +46,9 @@ import { ConfigState, SnackbarState } from '../Configuration/types';
 import { validateConfig } from '../Configuration/utils/configValidation';
 import { FILENAME_PRESETS } from '../../utils/filenameTemplate/presets';
 import { validatePrefix } from '../../utils/filenameTemplate/validate';
-import { SETTINGS_PAGES, SettingsIndex } from './SettingsIndex';
+import { SettingsIndex } from './SettingsIndex';
+import { settingsHeading } from './settingsHeading';
+import LibraryFolders from '../LibraryFolders';
 import { MaintenanceSection } from './MaintenanceSection';
 import { AboutSection } from './AboutSection';
 import { SchedulingSection } from '../Configuration/sections/SchedulingSection';
@@ -262,13 +264,7 @@ export function Settings({ token }: SettingsProps) {
     setHasUnsavedChanges(changed);
   }, [config, initialConfig]);
 
-  // null on the index itself
-  const subPageTitle = useMemo(() => {
-    if (location.pathname === '/settings') return null;
-    const suffix = location.pathname.replace('/settings/', '');
-    const page = SETTINGS_PAGES.find((entry) => entry.key === suffix);
-    return page?.title || suffix;
-  }, [location.pathname]);
+  const heading = useMemo(() => settingsHeading(location.pathname), [location.pathname]);
 
   return (
     <div>
@@ -295,21 +291,23 @@ export function Settings({ token }: SettingsProps) {
         onClose={() => setChannelApplyTarget(null)}
       />
 
-      <div style={{ marginBottom: 16 }}>
-        <Typography variant="h5" style={{ fontWeight: 800 }}>
-          {subPageTitle === null ? 'Settings' : (
-            <>
-              <RouterLink to="/settings" className="hover:underline">Settings</RouterLink> / {subPageTitle}
-            </>
-          )}
-        </Typography>
-      </div>
+      {heading !== null && (
+        <div style={{ marginBottom: 16 }}>
+          <Typography variant="h5" style={{ fontWeight: 800 }}>
+            {heading.subPage === null ? 'Settings' : (
+              <>
+                <RouterLink to="/settings" className="hover:underline">Settings</RouterLink> / {heading.subPage}
+              </>
+            )}
+          </Typography>
+        </div>
+      )}
 
       {isLoading ? (
         <ConfigurationSkeleton compact />
       ) : (
         <Routes>
-          <Route index element={<SettingsIndex />} />
+          <Route index element={<SettingsIndex token={token} />} />
           <Route
             path="core"
             element={
@@ -322,6 +320,20 @@ export function Settings({ token }: SettingsProps) {
                 token={token}
                 filenameTemplateSaveRequirement={filenameTemplateSaveRequirement}
                 onFilenameTemplatePreviewSuccess={handleFilenameTemplatePreviewSuccess}
+              />
+            }
+          />
+          <Route
+            path="library/*"
+            element={
+              <LibraryFolders
+                token={token}
+                config={config}
+                isPlatformManaged={isPlatformManaged}
+                deploymentEnvironment={deploymentEnvironment}
+                plexLibraries={plexLibraries}
+                plexConnectionStatus={plexConnectionStatus}
+                setSnackbar={setSnackbar}
               />
             }
           />
@@ -353,7 +365,6 @@ export function Settings({ token }: SettingsProps) {
                 onOpenLibrarySelector={openLibrarySelector}
                 onOpenPlexAuthDialog={() => setOpenPlexAuthDialog(true)}
                 onMobileTooltipClick={setMobileTooltip}
-                token={token}
               />
             }
           />

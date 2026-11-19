@@ -9,9 +9,9 @@ import type { ConfigState, DeploymentEnvironment, PlatformManagedState } from '.
 
 jest.mock('axios', () => ({ get: jest.fn() }));
 const axios = require('axios');
-jest.mock('../components/CoreFoldersSection', () => ({ CoreFoldersSection: () => {
+jest.mock('../components/LibraryFoldersCard', () => ({ LibraryFoldersCard: () => {
   const React = require('react');
-  return React.createElement('section', { id: 'folders', 'aria-label': 'Folders' });
+  return React.createElement('section', { 'aria-label': 'Library folders card' });
 } }));
 jest.mock('../../hooks/useFilenamePreview', () => ({
   useFilenamePreview: () => ({ run: jest.fn(), loading: false, error: null, data: null, isStale: () => false }),
@@ -40,17 +40,24 @@ describe('CoreSettingsSection', () => {
   test('renders the sections in order with their anchors', () => {
     renderCore();
     expect(screen.getAllByRole('region').map((region) => region.id).filter(Boolean)).toEqual(
-      ['folders', 'downloads', 'media-server-files', 'naming', 'interface', 'advanced']
+      ['downloads', 'media-server-files', 'naming', 'interface', 'advanced']
     );
   });
 
-  test('the flat structure switch only changes after confirming', async () => {
+  test('no longer edits the default folder or lists library folders', () => {
+    renderCore();
+    expect(screen.queryByLabelText(/Default Subfolder/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Manage Subfolders/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Jellyfin / Kodi / Emby Setting Information')).not.toBeInTheDocument();
+  });
+
+  test('the flat structure switch only changes after confirming, and names TV folders', async () => {
     mockFlatCount({ count: 2, channelNames: ['A', 'B'] });
     const onConfigChange = jest.fn();
     renderCore({ onConfigChange });
     await userEvent.click(screen.getByRole('checkbox', { name: 'Flat file structure by default' }));
     expect(onConfigChange).not.toHaveBeenCalled();
-    expect(await screen.findByText('2 tracked channels follow the global setting and will be affected.')).toBeInTheDocument();
+    expect(await screen.findByText("Channels in TV shows folders aren't affected: their episodes always go straight into Season folders.")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm' })).toBeEnabled());
     await userEvent.click(screen.getByRole('button', { name: 'Confirm' }));
     expect(onConfigChange).toHaveBeenCalledWith({ defaultSkipVideoFolder: true });
@@ -80,11 +87,6 @@ describe('CoreSettingsSection', () => {
     renderCore({ config: { writeVideoNfoFiles: false }, onConfigChange });
     await userEvent.click(screen.getByRole('checkbox', { name: 'Video .nfo files' }));
     expect(onConfigChange).toHaveBeenCalledWith({ writeVideoNfoFiles: true });
-  });
-
-  test('explains the Jellyfin, Kodi and Emby library setup', () => {
-    renderCore();
-    expect(screen.getByText(/do not enable the Nfo saver/)).toBeInTheDocument();
   });
 
   test('turning off the channel name in the embedded title writes its config key', async () => {

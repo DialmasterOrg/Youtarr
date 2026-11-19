@@ -237,6 +237,17 @@ describe('useChannelVideos', () => {
       expect(result.current.videos.map((v) => v.youtube_id)).toEqual(['fresh1']);
     });
 
+    test('asks for one title show\'s episodes', async () => {
+      mockFetch.mockResolvedValue({ ok: true, json: jest.fn().mockResolvedValue(mockResponse) });
+
+      renderHook(() => useChannelVideos({ ...defaultParams, showId: 7 }));
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+      });
+      expect(mockFetch.mock.calls[0][0]).toContain('showId=7');
+    });
+
     test('sends watchedFilter when mode is active and omits it when off', async () => {
       mockFetch.mockResolvedValue({
         ok: true,

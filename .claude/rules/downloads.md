@@ -51,7 +51,12 @@ yt-dlp runs, the job queue, the download archive, storage limits, and the activi
 - `jobAuxData` persists job.data minus videos (failed downloads, diagnoses, skip counts) in `Jobs.aux_data` at save and merges it back on startup load, so Download History detail survives restarts; failedVideos are capped at 1000.
 - `Channel Download All: <title>` jobs are exempt from the 6-hour absolute runtime cap, since large channels take days; the 30-minute activity timeout remains the hang guard.
 - `manualDownloadGrouper` buckets pasted URLs by resolved per-channel resolution and audio format. Attribution prefers the channelId captured at URL validation (server cache over the client echo), then `videos.channel_id`, then channelvideos listers, gated to tracked, enabled channels.
+- It downgrades MP3 to video for URLs whose predicted folder has the TV layout, since TV folders are video-only (`.claude/rules/tv-shows.md`).
 - Multi-bucket pastes share one `downloadRunTracker` run labeled 'Manual downloads'. `youtubeUrlParser` is the one YouTube URL to video-id parser, shared with `videoValidationModule`.
+- Download jobs stay Pending while a reorganize holds its lock (`addOrUpdateJob` and `_startNextJob`), and the queue restarts on release (`.claude/rules/reorganize.md`).
+- `jobModule.onBeforeNextJob` callbacks are awaited before any job starts, queued or new; title shows use it for deferred `complete.list` writes, because a channel job counts archive lines from its start.
+- In a TV-layout folder the post-processor places the video as an episode (`tvShows/episodePlacement`) instead of resolving flat-vs-subfolder.
+- `filesystem/sanitizer.sanitizeFilenameLikeYtDlp` ports yt-dlp's title-field sanitization, then cuts to a byte limit; its fixtures come from the image's yt-dlp (`scripts/generate-sanitizer-fixtures.js`).
 - `jobModule.onJobEnded` fires for every final status and `onJobAbandoned` for `failUnstartedJob`; server.js wires both to the run tracker, so jobModule never requires it.
 - `jobModule.backfillFromCompleteList` (library repair) follows the rescan rules in `.claude/rules/videos.md`: read the row first, write file details and `removed: false` only for a file actually found, and recreate unmatched rows as missing even after a partial walk.
 

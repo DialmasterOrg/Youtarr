@@ -1,11 +1,15 @@
 import React, { ChangeEvent, useMemo } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
+import { LIBRARY_FOLDERS_PATH } from '../../../../utils/libraryLayouts';
 import {
   Box,
   TextField,
   Typography,
   Button,
   CircularProgress,
+  Tooltip,
 } from '../../../ui';
+import { Info as InfoIcon, Tv } from '../../../../lib/icons';
 import { cn } from '../../../../lib/cn';
 import { useMediaQuery } from '../../../../hooks/useMediaQuery';
 import { settingDescriptionId } from '../../common/SettingRow';
@@ -42,6 +46,9 @@ const SEVERITY_TEXT: Record<'warn' | 'danger', string> = {
   danger:
     "Filename is very long. Downloads are likely to fail on Windows and SMB-mounted NAS shares (260-char path limit). Pure CJK or emoji content can also exceed Linux/macOS' 255-byte per-filename limit.",
 };
+
+const TV_SHOW_HINT =
+  'For TV-style channels, use a TV shows folder instead. Episodes then get Season folders, SxxEyy names and .nfo files.';
 
 export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
   value,
@@ -98,20 +105,49 @@ export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
       />
 
       <Box className="flex flex-wrap gap-2">
-        {FILENAME_PRESETS.map((preset) => (
-          <Button
-            key={preset.label}
-            variant="outlined"
-            size="small"
-            aria-pressed={value === preset.prefix}
-            className={cn(value === preset.prefix && 'border-primary bg-primary/10', phone ? 'min-h-[44px]' : 'h-[30px]')}
-            onClick={() => onChange(preset.prefix)}
-            title={preset.description}
-          >
-            {preset.label}
-          </Button>
-        ))}
+        {FILENAME_PRESETS.map((preset) => {
+          const presetButton = (
+            <Button
+              key={preset.label}
+              variant="outlined"
+              size="small"
+              aria-pressed={value === preset.prefix}
+              className={cn(value === preset.prefix && 'border-primary bg-primary/10', phone ? 'min-h-[44px]' : 'h-[30px]')}
+              onClick={() => onChange(preset.prefix)}
+              title={preset.description}
+            >
+              {preset.label}
+            </Button>
+          );
+          if (preset.prefix !== PLEX_TV_SERIES_PRESET_PREFIX) return presetButton;
+          return (
+            <Box key={preset.label} className="inline-flex items-center gap-1">
+              {presetButton}
+              <Tooltip title={TV_SHOW_HINT} placement="top">
+                <button
+                  type="button"
+                  aria-label="About saving channels as TV shows"
+                  className="inline-flex items-center justify-center rounded-full p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-[44px] max-md:min-w-[44px]"
+                >
+                  <InfoIcon size={16} aria-hidden />
+                </button>
+              </Tooltip>
+            </Box>
+          );
+        })}
       </Box>
+
+      {value === PLEX_TV_SERIES_PRESET_PREFIX && (
+        <p data-testid="tv-series-tip" className="flex items-start gap-2 rounded-ui bg-muted p-2 text-[13px] text-muted-foreground">
+          <Tv size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-info" />
+          <span>
+            Want channels as real TV shows? Download them to a TV shows folder instead: episodes get Season folders, SxxEyy names and
+            .nfo files, and this template doesn&apos;t apply there. This preset doesn&apos;t convert anything: switching a folder to TV
+            shows is a separate step you review first.{' '}
+            <RouterLink to={LIBRARY_FOLDERS_PATH} className="text-primary underline max-md:inline-flex max-md:min-h-[44px] max-md:items-center">Library folders</RouterLink>
+          </span>
+        </p>
+      )}
 
       {showTvSeriesPrefixTip && (
         <p data-testid="tv-series-channel-prefix-tip" className="rounded-ui bg-muted p-2 text-[13px] text-muted-foreground">

@@ -70,6 +70,8 @@ Listing, the filesystem rescan, library repair, deleted vs. missing videos, the 
 - Manual deletes (`deleteVideos`, `deleteVideosByYoutubeIds`) refuse each covered video with the message rather than stamping a row whose file may sit on an unmounted share: one check per batch, fail-open if the check itself throws.
 - Job recovery likewise leaves the removal columns alone when it cannot find the file.
 - Deletes remove a folder recursively only at the exact per-video position under the downloads root. Elsewhere they unlink the video's own files, then remove the folder only if it is named for that video and empty (#941).
+- In a TV-layout library folder a delete, and the orphan sweep, clean up emptied season and show folders (`filesystem/showFolderCleanup`) instead of the channel folder; the layout is read per library folder.
+- Deletes are refused with 409 only in `DELETE /api/videos` while a reorganize covers the videos; `videoDeletionModule` itself does not check the reorganize lock.
 - `/getVideos` filters: `missingFilter` is strictly missing; `deletedFilter` (default `off`; the Videos page sends `exclude`, remembered in localStorage) hides or isolates deleted rows and returns `hiddenDeletedCount` while excluding. The channel listing takes the same `deletedFilter`.
 
 ## Trash (`videoTrashModule`)
@@ -94,7 +96,7 @@ Listing, the filesystem rescan, library repair, deleted vs. missing videos, the 
 - The watched strategy honors `watchStatusWatchedRule`, treats never-synced videos as unwatched, and is skipped with a warning when watch status sync is disabled.
 - `autoRemovalQueries` is read-only: candidate queries LEFT JOIN enabled channels to exclude `auto_removal_protected` ones; watched eligibility SQL comes from `watchStatusQueries.buildWatchedEligibilitySql`.
 - Every delete path (manual by id or YouTube id, and each automatic strategy) calls `playlistOutputRefresh` in the background afterwards, so no playlist keeps listing a deleted file.
-- `subfolderModule.getAll` is the union of the `subfolders` table, the config default and the Plex-mapping subfolders; `register` idempotently upserts a name; `delete` guards removal against non-empty disk paths and active references.
+- `subfolderModule.getAll` is the union of the `subfolders` table, the config default and the Plex-mapping subfolders; `register` idempotently upserts a name; `delete` guards removal through `subfolderDeletion` (`.claude/rules/library-folders.md`).
 
 - `youtubeExistenceCheck` answers `exists`/`removed`/`unknown`; on `unknown` leave `youtube_removed_checked_at` alone, because it is an outage, not a verdict, and the check must run again later (`.claude/rules/server-runtime.md`).
 

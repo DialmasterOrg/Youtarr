@@ -3,6 +3,12 @@ import { ConfigState, PlatformManagedState, DeploymentEnvironment, LoggingStatus
 import { DEFAULT_CONFIG } from '../config/configSchema';
 
 export const CONFIG_UPDATED_EVENT = 'config-updated';
+/**
+ * A field the server saved outside the Settings form (detail: the saved
+ * fields), taken into both the draft and the saved copy. Only untracked
+ * fields are patched, so the form never turns dirty.
+ */
+export const CONFIG_PATCHED_EVENT = 'config-patched';
 
 interface UseConfigResult {
   config: ConfigState;
@@ -132,10 +138,19 @@ export function useConfig(token: string | null): UseConfigResult {
       }
     };
 
+    const handleConfigPatched = (event: Event) => {
+      const patch = (event as CustomEvent<Partial<ConfigState> | undefined>).detail;
+      if (!patch) return;
+      setConfig((prev) => ({ ...prev, ...patch }));
+      setInitialConfig((prev) => (prev ? { ...prev, ...patch } : prev));
+    };
+
     window.addEventListener(CONFIG_UPDATED_EVENT, handleConfigUpdated);
+    window.addEventListener(CONFIG_PATCHED_EVENT, handleConfigPatched);
 
     return () => {
       window.removeEventListener(CONFIG_UPDATED_EVENT, handleConfigUpdated);
+      window.removeEventListener(CONFIG_PATCHED_EVENT, handleConfigPatched);
     };
   }, [fetchConfig]);
 

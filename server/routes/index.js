@@ -21,6 +21,9 @@ const createSubfolderRoutes = require('./subfolders');
 const createSupportPromptRoutes = require('./supportPrompt');
 const createSchedulesRoutes = require('./schedules');
 const createLogRoutes = require('./logs');
+const createTvShowRoutes = require('./tvShows');
+const createTvReorganizeRoutes = require('./tvReorganize');
+const createTvTitleShowRoutes = require('./tvTitleShows');
 const createVideoTrashRoutes = require('./videoTrash');
 const createFeedRoutes = require('./feeds');
 const createArrBridgeRoutes = require('./arrBridge');
@@ -58,6 +61,16 @@ const cookieDetails = require('../modules/cookieDetails');
 const cookieTest = require('../modules/cookieTest');
 const logger = require('../logger');
 const logFilesModule = require('../modules/logFilesModule');
+const libraryFolders = require('../modules/tvShows/libraryFolders');
+const folderDetail = require('../modules/tvShows/folderDetail');
+const plexRefreshMappings = require('../modules/mediaServers/plexRefreshMappings');
+const channelLayout = require('../modules/tvShows/channelLayout');
+const layoutGuards = require('../modules/tvShows/layoutGuards');
+const titleShowService = require('../modules/tvShows/titleShowService');
+const reorganize = require('../modules/reorganize');
+const watchStatusHolds = require('../modules/mediaServers/watchStatusHolds');
+const watchStatusPushBack = require('../modules/mediaServers/watchStatusPushBack');
+const libraryCheck = require('../modules/mediaServers/libraryCheck');
 const externalCatalogService = require('../modules/externalApi/externalCatalogService');
 const externalThumbnailProxy = require('../modules/externalApi/externalThumbnailProxy');
 const { sharedExternalWorkLimiter } = require('../modules/externalApi/externalWorkLimiter');
@@ -130,11 +143,12 @@ function registerRoutes(app, deps) {
   }));
 
   // Channel routes
-  app.use(createChannelRoutes({ verifyToken, channelModule, archiveModule, channelDownloadAllModule, ratingMapper, storageGuard }));
+  app.use(createChannelRoutes({ verifyToken, channelModule, archiveModule, channelDownloadAllModule, ratingMapper, storageGuard, jobModule, layoutGuards }));
 
   // Video routes
   app.use(createVideoRoutes({
     verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard, scheduledTaskManager, ratingMapper,
+    layoutGuards, reorganizeLock: reorganize.lock,
     youtubeUrlParser,
   }));
 
@@ -179,7 +193,7 @@ function registerRoutes(app, deps) {
   app.use(createVideoDetailRoutes({ verifyToken, videosModule, videoMetadataModule, mediaServers }));
 
   // Playlist routes
-  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard, membersAccess }));
+  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard, layoutGuards, membersAccess }));
 
   // Media server routes
   app.use(createMediaServerRoutes({ verifyToken, configModule, mediaServers, scheduledTaskManager }));
@@ -190,7 +204,7 @@ function registerRoutes(app, deps) {
   }));
 
   // Subfolder registry routes
-  app.use(createSubfolderRoutes({ verifyToken, subfolderModule }));
+  app.use(createSubfolderRoutes({ verifyToken, subfolderModule, libraryFolders, layoutGuards, jobModule }));
 
   // One-time support prompt routes
   app.use(createSupportPromptRoutes({ verifyToken, supportPromptModule }));
@@ -200,6 +214,18 @@ function registerRoutes(app, deps) {
 
   // Log file download
   app.use(createLogRoutes({ verifyToken, logFilesModule, configModule }));
+
+  // TV show layouts (library folders and channel layouts)
+  app.use(createTvShowRoutes({
+    verifyToken, libraryFolders, channelLayout, layoutGuards, reorganize, channelSettingsModule, jobModule, models,
+    libraryCheck, folderDetail, plexRefreshMappings,
+  }));
+
+  // Title shows (shows defined on a channel by title patterns) and episode assignment
+  app.use(createTvTitleShowRoutes({ verifyToken, titleShowService, models, layoutGuards }));
+
+  // Reorganize (moving downloads between the Videos and TV layouts) and watch-state restores
+  app.use(createTvReorganizeRoutes({ verifyToken, reorganize, watchStatusHolds, watchStatusPushBack, layoutGuards }));
 
   // RSS feeds. The feed itself takes a token in its URL, not a session.
   app.use(createFeedRoutes({ verifyToken, feedLimiter, downloadsFeed }));

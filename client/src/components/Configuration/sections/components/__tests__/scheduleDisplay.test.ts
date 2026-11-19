@@ -124,6 +124,12 @@ describe('describeRunNowBlockBrief', () => {
     }))).toBe('Run now unavailable: downloads are paused');
   });
 
+  test('says when downloads are being moved', () => {
+    expect(describeRunNowBlockBrief(status({
+      runNow: { available: false, reason: 'reorganizing', message: 'Waiting for the reorganize.', availableAt: null },
+    }))).toBe('Run now unavailable: downloads are being moved');
+  });
+
   test('leaves out reasons the row already shows', () => {
     expect(describeRunNowBlockBrief(status({
       runNow: { available: false, reason: 'disabled', message: null, availableAt: null },

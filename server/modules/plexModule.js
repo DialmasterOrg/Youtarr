@@ -1,6 +1,7 @@
 const axios = require('axios');
 const configModule = require('./configModule');
 const logger = require('../logger');
+const { readMappings, findEntry } = require('./mediaServers/plexMappingEntries');
 
 // Plex HTTP request timeout in milliseconds.
 // Any call to the local Plex server should complete within a few seconds on
@@ -46,14 +47,10 @@ class PlexModule {
    */
   getLibraryIdForSubfolder(subfolder) {
     const config = configModule.getConfig();
-    const raw = config.plexSubfolderLibraryMappings;
-    const mappings = Array.isArray(raw) ? raw : [];
-
-    const normalizedSubfolder = subfolder || null;
-    const match = mappings
-      .filter((m) => m && typeof m === 'object')
-      .find((m) => (m.subfolder || null) === normalizedSubfolder);
-    return (match && match.libraryId) || config.plexYoutubeLibraryId || '';
+    // Folder names compare ignoring case, like the library check; an explicit
+    // default entry (libraryId null) falls back to the default library.
+    const entry = findEntry(readMappings(config), subfolder || '');
+    return (entry && entry.libraryId) || config.plexYoutubeLibraryId || '';
   }
 
   /**
@@ -137,6 +134,7 @@ class PlexModule {
         (directory) => ({
           id: directory.key,
           title: directory.title,
+          type: directory.type,
           locations: directory.Location.map((location) => ({
             // map the Location array
             id: location.id,

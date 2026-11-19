@@ -13,6 +13,11 @@ interface UseConfigSaveParams {
   checkPlexConnection: () => void;
 }
 
+interface SaveFailure {
+  error: string;
+  fieldErrors: ScheduleFieldErrors;
+}
+
 // The server's allowlist check of the custom yt-dlp args it just saved. Returns
 // undefined when the body can't be read, so the caller keeps what it has.
 async function getSavedCustomArgsCheck(response: Response): Promise<CustomArgsCheck | null | undefined> {
@@ -24,7 +29,7 @@ async function getSavedCustomArgsCheck(response: Response): Promise<CustomArgsCh
   }
 }
 
-async function getSaveError(response: Response): Promise<{ error: string; fieldErrors: ScheduleFieldErrors }> {
+async function getSaveError(response: Response): Promise<SaveFailure> {
   try {
     const body = await response.json();
     const fieldErrors: ScheduleFieldErrors = {};

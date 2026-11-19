@@ -22,6 +22,8 @@ Plex, Jellyfin and Emby: library refresh, native playlist sync, and watch status
 ## Playlist sync
 
 - Playlists are media-typed by the Download Type SETTING, not by what is on disk: an MP3 Only playlist syncs as audio using `Video.audioFilePath` (Plex resolves tracks by listing artist sections with type=10); others sync `Video.filePath` in the saved `sort_order`.
+- Plex resolves TV episodes by listing show sections with type=4, only when a file in the batch is named SxxEyy.
+- Playlist syncs are put off while a reorganize holds its lock and replayed on release (`.claude/rules/reorganize.md`).
 - Items lacking a file of the playlist's type are left out (`unsyncable_count` on the detail route, shown only while the playlist syncs to a server), as are deleted rows; missing rows still sync, since their file may come back.
 - With zero resolved items the sync defers instead of creating or emptying a server playlist, except a deliberately emptied playlist (every video ignored, or none with a file left) with an existing server playlist, which is emptied.
 - A deferral writes its reason to `playlist_sync_state.last_error` and leaves `server_playlist_id` and `last_synced_at` alone. The playlist page shows `last_error` as is (#994), so every recorded message must be a user-readable sentence, never raw error text.
@@ -44,4 +46,6 @@ Plex, Jellyfin and Emby: library refresh, native playlist sync, and watch status
 - Per-server all-users toggles (`plexWatchStatusAllUsers`, `jellyfinWatchStatusAllUsers`, `embyWatchStatusAllUsers`) default on. Video files only.
 - `watchStatusQueries` is the stateless read side: `getWatchedByMap()` honors `watchStatusWatchedRule` ('any' default, 'primary' = owner plus configured user); `buildWatchedExistsSql()` is the same rule as a raw-SQL EXISTS fragment for videosModule's paginated listing; `getStatusesForVideo()` shapes the modal rows.
 - `buildWatchedEligibilitySql` feeds auto-removal's watched strategy; a qualifying played row with a NULL `last_watched_at` blocks days-since-watched removal. Listing filters (`watchedFilter` off/only/exclude; the playlist route's `watchedState`) always count unknown and never-synced videos as unwatched.
+- Every server's matches pass through `watchStatusHolds.applyHolds`, which drops downgrades of rows a reorganize is protecting, and push-back runs at the end of every sync (`.claude/rules/reorganize.md`).
+- Plex watch and playlist lookups and Jellyfin/Emby push-back lookups are limited to the libraries that may hold Youtarr's files (`{ libraryIds }` from `libraryLocator.scopeFor`; `.claude/rules/library-folders.md`).
 - `watchStatusScheduler` is a config-driven cron (`watchStatusSyncEnabled`, `watchStatusSyncFrequency`, default every 4 hours) that reschedules on config change.

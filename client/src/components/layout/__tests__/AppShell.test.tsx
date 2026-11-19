@@ -208,6 +208,19 @@ describe('AppShell', () => {
     expect(navItem('downloads').hideSubItemsOnMobile).toBeUndefined();
   });
 
+  it('keeps the Library settings sub-item, labelled by its nav label, active on a folder page', () => {
+    renderShell('playful');
+
+    expect(navSubItem('library').label).toBe('Library');
+    expect(isNavSubItemActive('/settings/library/Kids', navSubItem('library'))).toBe(true);
+  });
+
+  it('labels settings sub-items without a nav label by their title', () => {
+    renderShell('playful');
+
+    expect(navSubItem('core').label).toBe('Core');
+  });
+
   it('matches the Channels and Videos sub-items exactly', () => {
     renderShell('playful');
 

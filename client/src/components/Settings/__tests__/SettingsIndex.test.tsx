@@ -2,11 +2,16 @@ import React from 'react';
 import { screen, within } from '@testing-library/react';
 import { renderWithProviders } from '../../../test-utils';
 import { SETTINGS_GROUPS, SETTINGS_PAGES, SettingsIndex } from '../SettingsIndex';
+import { useLibraryFolders } from '../../../hooks/useLibraryFolders';
 import { useContainerWidth } from '../../../hooks/useContainerWidth';
 
+jest.mock('../../../hooks/useLibraryFolders', () => ({ useLibraryFolders: jest.fn() }));
 jest.mock('../../../hooks/useContainerWidth', () => ({ useContainerWidth: jest.fn() }));
 
-const HEADINGS = ['Downloads & library', 'Media servers', 'Automation & storage', 'Integrations', 'System'];
+const f = (name: string, layout = 'videos') => ({ name, layout, isDefault: false, hasFiles: false, channels: 0 });
+const loadedState = (folders: ReturnType<typeof f>[]) => ({ folders, loading: false, loaded: true, error: null });
+
+const HEADINGS = ['Downloads & library', 'Media servers', 'Automation & storage', 'Integrations', 'System', 'Setting up your library'];
 
 function headingOrder(): string[] {
   return screen
@@ -23,17 +28,18 @@ function groupLinks(name: string): Array<string | null> {
 describe('SettingsIndex', () => {
   beforeEach(() => {
     (useContainerWidth as jest.Mock).mockReturnValue([jest.fn(), 900]);
+    (useLibraryFolders as jest.Mock).mockReturnValue(loadedState([]));
   });
 
   test('groups pages, keeping their order inside each group', () => {
-    renderWithProviders(<SettingsIndex />);
+    renderWithProviders(<SettingsIndex token="t" />);
     expect(groupLinks('Downloads & library')).toEqual([
-      '/settings/core', '/settings/downloading', '/settings/cookies', '/settings/sponsorblock', '/settings/youtube-api',
+      '/settings/core', '/settings/library', '/settings/downloading', '/settings/cookies', '/settings/sponsorblock', '/settings/youtube-api',
     ]);
   });
 
   test('lists the tools that connect to Youtarr under Integrations', () => {
-    renderWithProviders(<SettingsIndex />);
+    renderWithProviders(<SettingsIndex token="t" />);
     expect(groupLinks('Integrations')).toEqual([
       '/settings/api-keys', '/settings/notifications', '/settings/rss-feeds', '/settings/sonarr-radarr',
     ]);
@@ -51,26 +57,58 @@ describe('SettingsIndex', () => {
     );
   });
 
-  test('links every page exactly once', () => {
-    renderWithProviders(<SettingsIndex />);
-    const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
+  test('links every page exactly once from its group', () => {
+    renderWithProviders(<SettingsIndex token="t" />);
+    const hrefs = SETTINGS_GROUPS.flatMap((group) => groupLinks(group.title));
     expect([...hrefs].sort()).toEqual(SETTINGS_PAGES.map((page) => `/settings/${page.key}`).sort());
   });
 
   test('shows each page title with its description', () => {
-    renderWithProviders(<SettingsIndex />);
+    renderWithProviders(<SettingsIndex token="t" />);
     const link = screen.getByRole('link', { name: /Storage Limits/ });
     expect(link).toHaveTextContent('Pause downloads when storage is full or over a size limit.');
   });
 
+  test('the Library folders row counts folders by layout', () => {
+    (useLibraryFolders as jest.Mock).mockReturnValue(loadedState([f(''), f('Kids'), f('TV', 'tv')]));
+    renderWithProviders(<SettingsIndex token="t" />);
+    expect(screen.getByText('3 folders')).toBeInTheDocument();
+    expect(screen.getByText('2 Videos folders')).toBeInTheDocument();
+    expect(screen.getByText('1 TV folder')).toBeInTheDocument();
+  });
+
+  test('main folder only', () => {
+    (useLibraryFolders as jest.Mock).mockReturnValue(loadedState([f('')]));
+    renderWithProviders(<SettingsIndex token="t" />);
+    expect(screen.getByText('Main folder only')).toBeInTheDocument();
+  });
+
+  test('the Library folders row shows no counts before the folders have loaded', () => {
+    (useLibraryFolders as jest.Mock).mockReturnValue({ folders: [], loading: false, loaded: false, error: null });
+    renderWithProviders(<SettingsIndex token="t" />);
+    expect(screen.queryByText(/^\d+ (Videos |TV )?folders?$/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Main folder only')).not.toBeInTheDocument();
+  });
+
   test('puts the groups in two columns at 720px and wider', () => {
-    renderWithProviders(<SettingsIndex />);
-    expect(headingOrder()).toEqual(['Downloads & library', 'Automation & storage', 'Media servers', 'Integrations', 'System']);
+    renderWithProviders(<SettingsIndex token="t" />);
+    expect(headingOrder()).toEqual([
+      'Downloads & library', 'Automation & storage', 'Media servers', 'Integrations', 'System', 'Setting up your library',
+    ]);
   });
 
   test('stacks the groups in one column below 720px', () => {
     (useContainerWidth as jest.Mock).mockReturnValue([jest.fn(), 600]);
-    renderWithProviders(<SettingsIndex />);
-    expect(headingOrder()).toEqual(['Downloads & library', 'Media servers', 'Automation & storage', 'Integrations', 'System']);
+    renderWithProviders(<SettingsIndex token="t" />);
+    expect(headingOrder()).toEqual([
+      'Downloads & library', 'Media servers', 'Automation & storage', 'Integrations', 'System', 'Setting up your library',
+    ]);
+  });
+
+  test('the help card links to the Library folders page with a phone-sized target', () => {
+    renderWithProviders(<SettingsIndex token="t" />);
+    const link = screen.getByRole('link', { name: /Open Library folders/ });
+    expect(link).toHaveAttribute('href', '/settings/library');
+    expect(link).toHaveClass('max-md:min-h-[44px]');
   });
 });

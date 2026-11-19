@@ -10,10 +10,12 @@ Apply these when creating or substantially rewriting client code. Scope Discipli
 ## Layout of `client/src/`
 
 - Any `fetch()` or axios call gets the database error overlay for free through `App.tsx`; its `fetch()` override is the one intentional `fetch`.
-- Complex features pair `FeatureName.tsx` with a `FeatureName/` directory holding `components/`, `hooks/` and `__tests__/` (`Subscriptions.tsx` + `Subscriptions/`, `ChannelPage.tsx` + `ChannelPage/`, `PlaylistPage.tsx` + `PlaylistPage/`). Newer features put the main component at `FeatureName/index.tsx` (`SubscriptionImport/`, `VideosPage/`). Either layout is fine.
+- Complex features pair `FeatureName.tsx` with a `FeatureName/` directory holding `components/`, `hooks/` and `__tests__/` (`Subscriptions.tsx` + `Subscriptions/`, `ChannelPage.tsx` + `ChannelPage/`, `PlaylistPage.tsx` + `PlaylistPage/`). Newer features put the main component at `FeatureName/index.tsx` (`SubscriptionImport/`, `VideosPage/`, `LibraryFolders/`). Either layout is fine.
 - `Configuration/` has no top-level component: it holds the settings sections, hooks and shared settings UI that `Settings/Settings.tsx` mounts.
 - `components/ui/` holds theme-neutral primitives (Button, Card, Dialog, Select, Box, Typography, Chip and so on) built on Radix and styled with CSS variables plus Tailwind. Use these; MUI is not installed.
 - `ui/Menu` and `ui/Popover` portal to `document.body`: a transformed ancestor (a Card's hover lift) would otherwise become the containing block for their fixed positioning. Neither is used inside a modal Dialog, which disables pointer events outside its content.
+- `ui/segmented-control` (`SegmentedControl`) is a single-choice control with radio semantics on `@radix-ui/react-toggle-group`.
+- `hooks/useContainerWidth` measures an element with a ResizeObserver, for layouts that follow the content box instead of the viewport (the Settings index, the Library folders page).
 - `ui/AccordionContent` stays mounted when collapsed (tests can query it) but is `invisible`, so its controls leave the tab order and the accessibility tree.
 - `components/layout/`: `AppShell.tsx` is the outer frame, `NavSidebar.tsx` and `NavHeader.tsx` own desktop and mobile nav, `navLayoutConstants.ts` the shared sizing, `layoutFallback.css` fallback variables for themes that skip layout overrides.
 - `themes/` holds `playful`, `linear`, `flat`, the shared `layoutPolicy.ts` and the `ALL_THEMES` registry; a new theme adds an entry and implements the required token surface.

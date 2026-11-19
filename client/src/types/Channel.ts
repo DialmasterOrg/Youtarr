@@ -1,3 +1,4 @@
+import type { LibraryLayout } from './tvShows';
 export type ChannelTabType = 'videos' | 'shorts' | 'streams';
 
 // Public-video download stats for one channel tab. total is YouTube's count
@@ -37,4 +38,8 @@ export interface Channel {
   auto_removal_keep_recent_count?: number | null;
   // Only on /getchannels entries.
   tab_download_stats?: TabDownloadStatsByTab;
+  // Layout of the folder the channel downloads to. Only on /getchannels entries.
+  layout?: LibraryLayout;
+  // Active title shows, when the channel has any. Only on /getchannels entries.
+  titleShows?: number;
 }

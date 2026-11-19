@@ -10,7 +10,7 @@ import {
 } from '../../ui';
 import { Delete as DeleteIcon, Edit as EditIcon } from '../../../lib/icons';
 import { Channel } from '../../../types/Channel';
-import { SubFolderChip, QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip, DownloadFormatConfigIndicator, TerminatedChip, ProtectedChip } from './chips';
+import { SubFolderChip, QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip, DownloadFormatConfigIndicator, TerminatedChip, ProtectedChip, TvChip, ShowsChip } from './chips';
 import RatingBadge from '../../shared/RatingBadge';
 
 interface ChannelListRowProps {
@@ -45,6 +45,7 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
     : '/images/channelthumb-default.jpg';
 
   const canNavigate = Boolean(channel.channel_id) && !isPendingAddition;
+  const isTvChannel = channel.layout === 'tv';
 
   const renderChannelHeader = () => {
     const headerProps = {
@@ -84,6 +85,8 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
               <div style={{ marginTop: 2, display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
                 <QualityChip videoQuality={channel.video_quality} globalPreferredResolution={globalPreferredResolution} />
                 <SubFolderChip subFolder={channel.sub_folder} />
+                {isTvChannel && <TvChip />}
+                <ShowsChip count={channel.titleShows ?? 0} />
                 <RatingBadge rating={channel.default_rating} />
                 <ProtectedChip
                   autoRemovalProtected={channel.auto_removal_protected}
@@ -214,6 +217,8 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
         >
           <QualityChip videoQuality={channel.video_quality} globalPreferredResolution={globalPreferredResolution} />
           <SubFolderChip subFolder={channel.sub_folder} />
+          {isTvChannel && <TvChip />}
+          <ShowsChip count={channel.titleShows ?? 0} />
           <RatingBadge rating={channel.default_rating} />
           <ProtectedChip
             autoRemovalProtected={channel.auto_removal_protected}

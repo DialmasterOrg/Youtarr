@@ -29,10 +29,10 @@ describe('navigation helpers', () => {
 
 describe('isNavSubItemActive', () => {
   test('a prefix sub-item stays active on paths under it', () => {
-    const page = { to: '/settings/plex', matchPrefix: true };
-    expect(isNavSubItemActive('/settings/plex', page)).toBe(true);
-    expect(isNavSubItemActive('/settings/plex/libraries', page)).toBe(true);
-    expect(isNavSubItemActive('/settings/plexx', page)).toBe(false);
+    const library = { to: '/settings/library', matchPrefix: true };
+    expect(isNavSubItemActive('/settings/library', library)).toBe(true);
+    expect(isNavSubItemActive('/settings/library/Kids', library)).toBe(true);
+    expect(isNavSubItemActive('/settings/libraryx', library)).toBe(false);
   });
 
   test('other sub-items match exactly, so /videos is not active on /videos/find', () => {

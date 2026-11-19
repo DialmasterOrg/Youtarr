@@ -1,0 +1,129 @@
+import { MOVE_MAIN_FOLDER_STEP, detectSetup, pathOptions, pathSteps, setupLines } from '../tvSetupPaths';
+import type { LibraryFolder } from '../../../types/tvShows';
+import type { LibraryCheckResponse } from '../../../types/libraryCheck';
+
+const f = (name: string, extra: Partial<LibraryFolder> = {}): LibraryFolder => ({
+  name, layout: 'videos', isDefault: false, hasFiles: false, channels: 0, ...extra,
+});
+const servers = [{ serverType: 'jellyfin' as const, name: 'Jellyfin' }];
+const check = (mainExact: boolean, kidsExact: boolean): LibraryCheckResponse => ({
+  servers: [{ serverType: 'jellyfin', name: 'Jellyfin', reachable: true, error: null, downloadsPath: '/yt' }],
+  folders: [
+    { name: '', layout: 'videos', hasFiles: true, channels: 3, servers: [{ serverType: 'jellyfin', status: mainExact ? 'ok' : 'missing', issues: [],
+      libraries: mainExact ? [{ id: '1', name: 'YouTube', type: 'videos', location: '/yt', relation: 'exact' }] : [] }] },
+    { name: 'Kids', layout: 'videos', hasFiles: true, channels: 2, servers: [{ serverType: 'jellyfin', status: 'ok', issues: [],
+      libraries: [kidsExact
+        ? { id: '2', name: 'Kids', type: 'videos', location: '/yt/__Kids', relation: 'exact' }
+        : { id: '1', name: 'YouTube', type: 'videos', location: '/yt', relation: 'covers' }] }] },
+  ],
+});
+const folders = [f('', { channels: 3, channelsChosen: 3, fileCount: 10 }), f('Kids', { channels: 2, fileCount: 5 })];
+
+describe('tvSetupPaths', () => {
+  test('detects a whole-folder library with channels in the main folder', () => {
+    const setup = detectSetup(folders, check(true, false), servers);
+    expect(setup.servers[0]).toMatchObject({ kind: 'whole', whole: { name: 'YouTube', location: '/yt' } });
+    expect(setupLines(setup)).toEqual([
+      '1 Video folder in use: __Kids.',
+      '3 channels download straight into the main folder.',
+      'Jellyfin: YouTube (Movies) shows your whole downloads folder.',
+    ]);
+  });
+
+  test('path A recommended; B unavailable while Video folders are in use on Jellyfin', () => {
+    const options = pathOptions(detectSetup(folders, check(true, false), servers), servers);
+    expect(options.map((option) => [option.key, option.recommended, option.disabledReason])).toEqual([
+      ['A', true, null],
+      ['B', false, 'You use other folders (__Kids): Jellyfin and Emby would show each one as an extra show.'],
+      ['C', false, null],
+    ]);
+  });
+
+  test('B unavailable while a TV show folder is in use on Jellyfin', () => {
+    const tvInUse = [f('', { channels: 3, channelsChosen: 3 }), f('Shows', { layout: 'tv', channels: 2 })];
+    const pathB = pathOptions(detectSetup(tvInUse, null, servers), servers).find((option) => option.key === 'B');
+    expect(pathB?.disabledReason).toBe('You use other folders (__Shows): Jellyfin and Emby would show each one as an extra show.');
+  });
+
+  test('B stays available with an unused TV show folder', () => {
+    const tvUnused = [f('', { channels: 3, channelsChosen: 3 }), f('Shows', { layout: 'tv' })];
+    const pathB = pathOptions(detectSetup(tvUnused, null, servers), servers).find((option) => option.key === 'B');
+    expect(pathB?.disabledReason).toBeNull();
+  });
+
+  test('B notes that Plex skips a TV show folder in use when only Plex is connected', () => {
+    const plex = [{ serverType: 'plex' as const, name: 'Plex' }];
+    const tvInUse = [f('', { channels: 3, channelsChosen: 3 }), f('Shows', { layout: 'tv', channels: 2 })];
+    const pathB = pathOptions(detectSetup(tvInUse, null, plex), plex).find((option) => option.key === 'B');
+    expect(pathB).toMatchObject({ disabledReason: null, note: "Plex skips the __subfolders; Jellyfin and Emby wouldn't." });
+  });
+
+  test('path A steps edit the whole-folder library with exact paths', () => {
+    const steps = pathSteps('A', detectSetup(folders, check(true, false), servers), {});
+    expect(steps.youtarr.map((step) => step.text)).toEqual([
+      MOVE_MAIN_FOLDER_STEP,
+      'Add a TV show folder.',
+      'Switch the channels you want as shows to it: Channel Settings > Library folder, or TV Show > Show this channel as TV show. Each switch shows its moves first.',
+    ]);
+    expect(steps.servers[0].steps[0]).toMatchObject({
+      text: 'Edit YouTube: remove /yt and add your Video folders, including the Video folder step 1 moves your downloads into:',
+      paths: [{ text: '/yt/__Kids', copyable: true }],
+      after: 'It keeps its type.',
+    });
+  });
+
+  test('path A starts with the main folder move while the main folder is in use', () => {
+    const setup = detectSetup([f('', { channels: 3 })], null, []);
+    expect(pathSteps('A', setup, {}).youtarr[0]).toMatchObject({ action: { kind: 'moveMainFolder' } });
+  });
+
+  test('path C starts with the main folder move too', () => {
+    const setup = detectSetup([f('', { channels: 3 }), f('Kids', { channels: 1 })], null, []);
+    expect(pathSteps('C', setup, { folder: 'Kids' }).youtarr[0]).toMatchObject({ action: { kind: 'moveMainFolder' } });
+  });
+
+  test('no move step once nothing is saved in the main folder', () => {
+    const setup = detectSetup([f('', { channels: 0, hasFiles: false, isDefault: false }), f('Videos', { channels: 3 })], null, []);
+    expect(pathSteps('A', setup, {}).youtarr.map((step) => step.action?.kind)).not.toContain('moveMainFolder');
+  });
+
+  test('the whole-folder library step mentions the folder step 1 creates', () => {
+    const setup = detectSetup([f('', { channels: 3 })], check(true, false), servers);
+    expect(pathSteps('A', setup, {}).servers[0].steps[0].text).toMatch(/the Video folder step 1 moves your downloads into/);
+  });
+
+  test('the whole-folder library step ends with a period when no Video folder path is listed', () => {
+    const setup = detectSetup([f('', { channels: 3 })], check(true, false), servers);
+    expect(pathSteps('A', setup, {}).servers[0].steps[0]).toMatchObject({
+      text: 'Edit YouTube: remove /yt and add your Video folders, including the Video folder step 1 moves your downloads into.',
+      paths: [],
+    });
+  });
+
+  test('path C with a library on the folder itself says to rebuild it', () => {
+    const steps = pathSteps('C', detectSetup(folders, check(false, true), servers), { folder: 'Kids' });
+    expect(steps.youtarr[1]).toMatchObject({ text: 'Open __Kids and choose Move to TV shows. You review every move first.', action: { kind: 'openFolder', folder: 'Kids' } });
+    expect(steps.servers[0].steps[0].text).toBe("Jellyfin can't change a library's type: remove Kids and create a Shows library pointed at /yt/__Kids.");
+  });
+
+  test('path C whole-folder lists the other Video folders', () => {
+    const withTwo = [...folders, f('Music', { channels: 1 })];
+    const steps = pathSteps('C', detectSetup(withTwo, check(true, false), servers), { folder: 'Kids' });
+    expect(steps.servers[0].steps[0]).toMatchObject({
+      text: 'Edit YouTube: remove /yt and add your other Video folders:',
+      paths: [{ text: '/yt/__Music', copyable: true }],
+    });
+  });
+
+  test('path C whole-folder with no other Video folder lists no paths', () => {
+    const step = pathSteps('C', detectSetup(folders, check(true, false), servers), { folder: 'kids' }).servers[0].steps[0];
+    expect(step.text).toBe('Remove YouTube: no other Video folder is in use.');
+    expect(step.paths).toBeUndefined();
+    expect(step.after).toBe('Then add a Shows library pointed at /yt/__kids only.');
+  });
+
+  test('without servers the steps cover each server type', () => {
+    const steps = pathSteps('A', detectSetup(folders, null, []), {});
+    expect(steps.servers.map((group) => group.name)).toEqual(['Plex', 'Jellyfin', 'Emby']);
+  });
+});

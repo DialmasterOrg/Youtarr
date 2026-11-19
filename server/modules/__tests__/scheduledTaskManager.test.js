@@ -604,4 +604,61 @@ describe('scheduledTaskManager', () => {
       expect(snapshot.blocker).toBeNull();
     });
   });
+
+  describe('cross-task blocker (a reorganize moving files)', () => {
+    const reorganizing = { reason: 'reorganizing', message: 'Waiting for the reorganize of Chan to finish.' };
+    let recorder;
+
+    beforeEach(() => {
+      recorder = {
+        start: jest.fn().mockResolvedValue({ id: 1 }),
+        finish: jest.fn().mockResolvedValue(undefined),
+        record: jest.fn().mockResolvedValue(undefined),
+        recordSkipped: jest.fn().mockResolvedValue(undefined),
+      };
+      manager.setRunRecorder(recorder);
+      manager.updateTask({ id, expression, run });
+    });
+
+    afterEach(() => manager.setExclusiveBlocker(null));
+
+    test('refuses a manual run with the blocker\'s reason', async () => {
+      manager.setExclusiveBlocker((taskId) => (taskId === id ? reorganizing : null));
+
+      const result = await manager.runNow(id);
+
+      expect(result).toMatchObject({ started: false, reason: 'reorganizing' });
+      expect(run).not.toHaveBeenCalled();
+    });
+
+    test('skips a scheduled occurrence and records why', async () => {
+      manager.setExclusiveBlocker(() => reorganizing);
+
+      await cron.schedule.mock.calls[0][1]();
+
+      expect(run).not.toHaveBeenCalled();
+      expect(recorder.record).toHaveBeenCalledWith(expect.objectContaining({
+        taskKey: id, trigger: 'scheduled', status: 'skipped', message: reorganizing.message,
+      }));
+    });
+
+    test('lets tasks the blocker does not name run', async () => {
+      manager.setExclusiveBlocker((taskId) => (taskId === 'other' ? reorganizing : null));
+
+      await cron.schedule.mock.calls[0][1]();
+
+      expect(run).toHaveBeenCalled();
+    });
+
+    test('fails open when the blocker throws', async () => {
+      manager.setExclusiveBlocker(() => { throw new Error('boom'); });
+
+      await expect(manager.getRunBlocker(id)).resolves.toBeNull();
+    });
+
+    test('reports whether a task is running by id', () => {
+      expect(manager.isTaskRunningById(id)).toBe(false);
+      expect(manager.isTaskRunningById('unknown')).toBe(false);
+    });
+  });
 });

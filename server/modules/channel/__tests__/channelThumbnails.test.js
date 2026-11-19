@@ -8,6 +8,9 @@ jest.mock('child_process');
 jest.mock('../../../logger');
 jest.mock('../../configModule', () => mockFactories.mockConfigModule());
 jest.mock('../../filesystem', () => mockFactories.mockFilesystem());
+// Every library folder uses the videos layout, so no channel is a TV show.
+jest.mock('../../tvShows/libraryLayouts', () => ({ getLayoutResolver: jest.fn(async () => () => 'videos') }));
+jest.mock('../../tvShows/channelFolders', () => ({ isTvChannel: jest.fn(async () => false), resolveChannelDirectory: jest.fn() }));
 
 describe('channelThumbnails', () => {
   let channelThumbnails;

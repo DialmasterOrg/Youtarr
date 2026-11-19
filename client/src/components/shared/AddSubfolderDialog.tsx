@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
+import { LIBRARY_FOLDERS_PATH } from '../../utils/libraryLayouts';
 import {
   Dialog,
   DialogTitle,
@@ -19,8 +21,8 @@ interface AddSubfolderDialogProps {
 }
 
 /**
- * Dialog for adding a new subfolder name.
- * Validates input and returns the cleaned subfolder name.
+ * Dialog for adding a new library folder name.
+ * Validates input and returns the cleaned library folder name.
  */
 export function AddSubfolderDialog({
   open,
@@ -46,7 +48,7 @@ export function AddSubfolderDialog({
 
       // Check empty
       if (!cleaned) {
-        return { isValid: false, cleanedValue: '', error: 'Subfolder name cannot be empty' };
+        return { isValid: false, cleanedValue: '', error: 'Library folder name cannot be empty' };
       }
 
       // Reserved prefix
@@ -54,7 +56,7 @@ export function AddSubfolderDialog({
         return {
           isValid: false,
           cleanedValue: cleaned,
-          error: 'Subfolder names cannot start with __ (reserved prefix)',
+          error: 'Library folder names cannot start with __ (reserved prefix)',
         };
       }
 
@@ -72,7 +74,7 @@ export function AddSubfolderDialog({
         return {
           isValid: false,
           cleanedValue: cleaned,
-          error: 'Subfolder name can only contain letters, numbers, spaces, hyphens, and underscores',
+          error: 'Library folder name can only contain letters, numbers, spaces, hyphens, and underscores',
         };
       }
 
@@ -81,7 +83,7 @@ export function AddSubfolderDialog({
         return {
           isValid: false,
           cleanedValue: cleaned,
-          error: 'Invalid subfolder name',
+          error: 'Invalid library folder name',
         };
       }
 
@@ -96,7 +98,7 @@ export function AddSubfolderDialog({
         return {
           isValid: false,
           cleanedValue: cleaned,
-          error: 'A subfolder with this name already exists',
+          error: 'A library folder with this name already exists',
         };
       }
 
@@ -134,18 +136,18 @@ export function AddSubfolderDialog({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Add New Subfolder</DialogTitle>
+      <DialogTitle>Add library folder</DialogTitle>
       <DialogContent>
         <TextField
           autoFocus
           fullWidth
-          label="Subfolder Name"
+          label="Library folder name"
           value={inputValue}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           error={!!validationError}
           helperText={
-            validationError || 'Enter a name for the new subfolder (e.g., Sports, Music)'
+            validationError || 'Enter a name for the new library folder (e.g., Sports, Music)'
           }
           InputLabelProps={{ shrink: true }}
           inputProps={{
@@ -153,11 +155,24 @@ export function AddSubfolderDialog({
           }}
           style={{ marginTop: 8 }}
         />
+        <p className="mt-2 text-xs text-muted-foreground">
+          Creates a Videos folder. To make a TV show folder, use{' '}
+          <RouterLink
+            to={LIBRARY_FOLDERS_PATH}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline max-md:inline-flex max-md:min-h-[44px] max-md:items-center"
+          >
+            Settings &gt; Library folders
+            <span className="sr-only"> (opens in a new tab)</span>
+          </RouterLink>
+          .
+        </p>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
         <Button onClick={handleAdd} variant="contained" disabled={!isValid}>
-          Add Subfolder
+          Add library folder
         </Button>
       </DialogActions>
     </Dialog>

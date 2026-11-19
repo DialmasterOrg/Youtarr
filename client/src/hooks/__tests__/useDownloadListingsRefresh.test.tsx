@@ -90,6 +90,26 @@ describe('useDownloadListingsRefresh', () => {
     expect(onRefresh).toHaveBeenCalledTimes(1);
   });
 
+  test.each(['completed', 'partial', 'failed'])('calls onRefresh when a reorganize ends as %s', (status) => {
+    const onRefresh = jest.fn();
+    renderHook(() => useDownloadListingsRefresh(onRefresh), { wrapper });
+
+    emitMessage({ destination: 'broadcast', type: 'tvReorganizeProgress', payload: { operationId: 7, status } });
+    jest.advanceTimersByTime(1000);
+
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  test('ignores a reorganize that is still running', () => {
+    const onRefresh = jest.fn();
+    renderHook(() => useDownloadListingsRefresh(onRefresh), { wrapper });
+
+    emitMessage({ destination: 'broadcast', type: 'tvReorganizeProgress', payload: { operationId: 7, status: 'running' } });
+    jest.advanceTimersByTime(1000);
+
+    expect(onRefresh).not.toHaveBeenCalled();
+  });
+
   test('ignores unrelated message types', () => {
     const onRefresh = jest.fn();
     renderHook(() => useDownloadListingsRefresh(onRefresh), { wrapper });

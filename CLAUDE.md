@@ -33,14 +33,15 @@ For multi-part requests (e.g., "review this PR AND explain WebSocket handling"),
 ### Backend (`server/`)
 
 - `server.js` is the Express entry point, `db.js` the Sequelize setup, `logger.js` the Pino logger (request correlation; file transport and log scrubber in `logging/`).
-- `routes/`: one file per API area (auth, channels, videos, videoDetail, videoSearch, videoTrash, channelSearch, config, jobs, plex, setup, subscriptions, apikeys, ytdlpOptions, health, status, maintenance, playlists, playlistSubscribeSettings, mediaServers, subfolders, schedules, logs, feeds, arrBridge, arrBridgeSettings, youtubeApiKey, externalApi, externalRequests; `runNowResponse` and `overrideSettingsValidator` are helpers). Every file is a dependency-injection factory wired in `routes/index.js`; `middleware/` holds the External API auth.
-- `models/`: Sequelize models (apikey, apikeychannelgrant, arrbridgegrab, channel, channelvideo, externalapiusagebucket, externalrequest, job, jobvideo, jobvideodownload, mediaserveruser, playlist, playlistsyncstate, playlistvideo, scheduledtaskrun, session, subfolder, video, videowatchstatus, watchstatussynccursor).
+- `routes/`: one file per API area (auth, channels, videos, videoDetail, videoSearch, videoTrash, channelSearch, config, jobs, plex, setup, subscriptions, apikeys, ytdlpOptions, health, status, maintenance, playlists, playlistSubscribeSettings, mediaServers, subfolders, schedules, logs, tvShows, tvTitleShows, tvReorganize, feeds, arrBridge, arrBridgeSettings, youtubeApiKey, externalApi, externalRequests; `runNowResponse` and `overrideSettingsValidator` are helpers). Every file is a dependency-injection factory wired in `routes/index.js`; `middleware/` holds the External API auth.
+- `models/`: Sequelize models (apikey, apikeychannelgrant, arrbridgegrab, channel, channelvideo, episodeconflict, externalapiusagebucket, externalrequest, job, jobvideo, jobvideodownload, mediaserveruser, playlist, playlistsyncstate, playlistvideo, scheduledtaskrun, session, subfolder, tvreorganizeitem, tvreorganizeoperation, tvshow, tvshowpattern, tvshowseason, video, videoclassification, videowatchstatus, watchstatushold, watchstatussynccursor).
 - `modules/`: class-based singletons holding the business logic, by area:
   - Downloads: `downloadModule`, `jobModule`, `modules/download/` (yt-dlp command builder, executor, progress monitor, finalizer, run tracker, retry and diagnosis helpers), `ytdlpModule`, cookie handling, `membersAccess` + `membersAccessState` (members-only access per cookie file), `storageGuard`, `archiveModule`, `modules/filenamePreview/` (filename template preview), `modules/constants/` (shared constants).
   - Channels: `channelModule` (facade) over `modules/channel/`, `channelSettingsModule`, `channelDownloadAllModule`, `channelSearchModule`, `titleFilterRegex`, `modules/subscriptionImport/`.
   - Playlists: `playlistModule`, `playlistDownloadModule`, `m3uGenerator`, `playlistOutputRefresh`.
   - Videos and the library: `videosModule`, `videoMetadataModule`, `videoSearchModule`, `videoDeletionModule`, `videoTrashModule`, `videoRemovalState`, `libraryRootCheck`, the rescan (`rescanRowUpdate`, `videoRowGuard`), the info.json cache (`infoJsonSlimmer`, `infoJsonCachePruner`), `subfolderModule`, `modules/filesystem/` (path and file abstraction; the sub-module aggregator pattern to copy).
-  - Media servers: `plexModule`, `nfoGenerator`, `modules/mediaServers/` (adapter registry, playlist sync, watch status sync).
+  - TV shows and library folders: `modules/tvShows/` (folder layouts, channel shows, title shows, episode numbering and placement, the Library folders API), `modules/reorganize/` (moving downloads between the Videos and TV layouts), `sidecarWriter`, `videoInfoStore`, `subfolderDeletion`.
+  - Media servers: `plexModule`, `nfoGenerator`, `modules/mediaServers/` (adapter registry, playlist sync, watch status sync, watch-state holds, the per-folder library check).
   - Scheduling: `scheduleConfig`, `scheduledTaskManager`, `scheduledTaskRuns`, `cronJobs`.
   - Runtime: `configModule`, `webSocketServer` + `webSocketAuth`, `messageEmitter`, `databaseSocket`, `databaseHealthModule`, `sessionAuth`, `apiKeyModule`, `logLevelSync`, `logFilesModule`.
   - Notifications: `notificationModule`, `modules/notifications/` (service registry, formatters, senders).
@@ -54,7 +55,7 @@ For multi-part requests (e.g., "review this PR AND explain WebSocket handling"),
 ### Frontend (`client/src/`)
 
 - `App.tsx`: routing plus the global `fetch()` override and axios response interceptor that turn a 503 `requiresDbFix` response into the database error overlay.
-- `components/`: one directory per feature (`Subscriptions/`, `ChannelPage/`, `PlaylistPage/`, `VideosPage/`, `FindVideos/`, `FindChannels/`, `DownloadManager/`, `SubscriptionImport/`, `Settings/` + `Configuration/`); `components/shared/` for cross-feature pieces (`VideoModal/`, `DeleteVideosDialog`, `AddChannelDialog`); `components/ui/` for theme-neutral primitives; `components/layout/` for the app shell and nav.
+- `components/`: one directory per feature (`Subscriptions/`, `ChannelPage/`, `PlaylistPage/`, `VideosPage/`, `FindVideos/`, `FindChannels/`, `DownloadManager/`, `SubscriptionImport/`, `LibraryFolders/`, `Settings/` + `Configuration/`); `components/shared/` for cross-feature pieces (`VideoModal/`, `DeleteVideosDialog`, `AddChannelDialog`, `Reorganize/`, `LibraryCheck/`, `EpisodeAssign/`); `components/ui/` for theme-neutral primitives; `components/layout/` for the app shell and nav.
 - `hooks/`, `contexts/`, `providers/` (auth token, WebSocket, theme, video activity), `themes/` (the `ALL_THEMES` registry), `config/` (the `CONFIG_FIELDS` registry), `types/`, `utils/`.
 
 ### Database
@@ -81,6 +82,9 @@ Each file loads on its own when you Read, Edit or Write a matching file. A diff 
 - `channels.md`: subscriptions, listings, title filters, tab counts, channel search, import.
 - `playlists.md`: following, download selection, m3u files.
 - `media-servers.md`: Plex, Jellyfin and Emby playlist and watch status sync.
+- `tv-shows.md`: TV-layout folders, channel shows, title shows, episode numbering and placement.
+- `reorganize.md`: moving downloads between layouts, the reorganize lock, watch-state holds.
+- `library-folders.md`: the Library folders page and API, server-owned folder settings, the library check.
 - `videos.md`: rescan, library repair, deleted vs. missing, trash, auto-removal, info.json cache.
 - `video-search.md`: Find Videos search, local status, single-video lookup.
 - `scheduling.md`: cron expressions, task manager, run history, Scheduling page.

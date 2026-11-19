@@ -1145,6 +1145,26 @@ describe('VideoTableView Component', () => {
       expect(screen.queryByText('Watched')).not.toBeInTheDocument();
     });
   });
+
+  describe('Episode Chip', () => {
+    test('renders the episode code for a downloaded TV episode', () => {
+      const episodeVideo = { ...mockVideo, added: true, removed: false, episode: { showName: 'Test Channel', season: 2024, episode: 3151200, code: 'S2024E03151200' } };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[episodeVideo]} />);
+      expect(screen.getByTestId('episode-chip')).toHaveTextContent('S2024E03151200');
+    });
+
+    test('renders the planned episode of a video not downloaded yet', () => {
+      const plannedVideo = { ...mockVideo, added: false, plannedEpisode: { showName: 'Beyblade', season: 1, episode: 20, code: 'S01E20' } };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[plannedVideo]} />);
+      expect(screen.getByLabelText('Planned TV episode Beyblade, S01E20, once downloaded')).toBeInTheDocument();
+    });
+
+    test('does not render an episode chip for a video without episode details', () => {
+      renderWithProviders(<VideoTableView {...defaultProps} />);
+      expect(screen.queryByTestId('episode-chip')).not.toBeInTheDocument();
+    });
+  });
+
   describe('Members-only access', () => {
     test('shows the access chip and a row checkbox for a video the cookies can open', () => {
       const video = { ...mockVideo, availability: 'subscriber_only', members_access: 'confirmed' as const };

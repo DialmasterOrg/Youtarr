@@ -10,6 +10,7 @@ const ChannelVideo = require('../models/channelvideo');
 const channelVideoReanchor = require('./channelVideoReanchor');
 const { parseTierFromFormatNote, selectionTierForHeight } = require('./resolutionTier');
 const { isFileForVideo } = require('./filesystem/pathBuilder');
+const episodeInfo = require('./tvShows/episodeInfo');
 const { slimInfoJson } = require('./infoJsonSlimmer');
 const membersAccess = require('./membersAccess');
 
@@ -227,6 +228,13 @@ class VideoMetadataModule {
       curated.membersAccess = fetchedMembersState !== undefined
         ? fetchedMembersState
         : await this._lookupMembersAccess(youtubeId, rawData.availability);
+      // Show and SxxEyy when the downloaded file is a TV episode (decoration: never fails the request)
+      curated.episode = await episodeInfo.getEpisodeInfoMap([{ youtubeId, filePath: rawData._actual_filepath || null }])
+        .then((map) => map.get(youtubeId) || null)
+        .catch((err) => {
+          logger.warn({ err, youtubeId }, 'Failed to read episode details');
+          return null;
+        });
       return curated;
     } catch (err) {
       logger.error({ err, youtubeId }, 'Unexpected error in getVideoMetadata');

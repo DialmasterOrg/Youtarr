@@ -37,9 +37,10 @@ function ConfigurationSkeleton({ compact = false }: ConfigurationSkeletonProps) 
         </span>
       )}
 
-      {/* Loading skeleton for Core: titled sections */}
+      {/* Loading skeleton for Core: the Library folders card, then two titled sections */}
       <div className="mb-6 flex flex-col gap-8">
-        {[1, 2, 3].map((row) => (
+        <Skeleton variant="rectangular" height={140} />
+        {[1, 2].map((row) => (
           <div key={row} className="grid gap-2.5 md:grid-cols-[240px_minmax(0,1fr)] md:gap-10">
             <div>
               <Skeleton variant="text" width={120} height={22} />

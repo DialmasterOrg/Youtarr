@@ -73,7 +73,8 @@ export function FlatStructureDialog({ open, turningOn, token, onConfirm, onCance
             </>
           )}
         </div>
-        <DialogContentText>
+        <DialogContentText>Channels in TV shows folders aren&apos;t affected: their episodes always go straight into Season folders.</DialogContentText>
+        <DialogContentText className="mt-2">
           Previously downloaded videos are not affected. Existing files will not be moved or renamed; only new downloads use the new structure.
         </DialogContentText>
       </DialogContent>

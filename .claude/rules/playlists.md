@@ -42,7 +42,7 @@ YouTube playlist following, playlist downloads, and the `.m3u` files.
 - Already-active entries (queued or downloading, per `videoActivity`) are excluded before selection.
 - Without allowRedownload, entries the archive lists without a Videos row (`archiveOnlyIds.findArchiveOnlyIds`; channel-ignored videos excepted, since a download removes their entry) are not eligible on any path: yt-dlp would skip them, so a sweep would queue them again every run.
 - Explicit-id downloads can override ignored. `following_requested_count` reports eligible outstanding selections in the header without claiming they failed.
-- `playlistDownloadGrouper` resolves per-video settings override -> channel -> playlist -> global and groups videos by the result.
+- `playlistDownloadGrouper` resolves per-video settings override -> channel -> playlist -> global and groups videos by the result; MP3 is downgraded to video for videos whose predicted folder has the TV layout.
 - `playlistVideoFilters` orders before pagination and resolves `downloadState`/`watchedState` into a youtube_id constraint; models and `watchStatusQueries` are passed at call time so the route keeps its dependency injection.
 - Playlist title filters are case-insensitive JavaScript regexes (`playlistModule.buildTitleFilterRegExp`); the settings route rejects patterns it cannot compile. Client feature defaults live in `components/PlaylistPage/playlistConstants.ts`.
 

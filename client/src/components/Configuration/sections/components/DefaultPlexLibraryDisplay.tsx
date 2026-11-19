@@ -9,7 +9,7 @@ import {
 import { PlexLibraryLabel } from './PlexLibraryLabel';
 
 const DEFAULT_LIBRARY_TOOLTIP =
-  'Youtarr refreshes this library after downloads to the root folder, or to any subfolder that does not have its own mapping below.';
+  'Youtarr refreshes this library after downloads to the main folder, and any library folder whose page in Library folders does not choose another library.';
 
 interface DefaultPlexLibraryDisplayProps {
   libraries: PlexLibrary[];

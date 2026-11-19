@@ -18,6 +18,7 @@ import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 import WatchedChip from '../shared/WatchedChip';
+import EpisodeChip from '../shared/EpisodeChip';
 import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
 import { getPublishedDateDisplay } from './publishedDateDisplay';
 
@@ -354,6 +355,7 @@ function VideoTableView({
                         style={{ ...SHARED_STATUS_CHIP_SMALL_STYLE }}
                       />
                     )}
+                    <EpisodeChip episode={video.episode ?? video.plannedEpisode} planned={!video.episode && Boolean(video.plannedEpisode)} />
                     {/* The status chip already reads Members Only when no cookies are set. */}
                     {!video.added && isMembersOnlyVideo(video) && video.members_access && video.members_access !== 'no_cookies' && (
                       <MembersAccessChip access={video.members_access} />

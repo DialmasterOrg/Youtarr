@@ -17,6 +17,7 @@ const ChannelVideo = require('../models/channelvideo');
 const logger = require('../logger');
 const playlistDownloadModule = require('./playlistDownloadModule');
 const storageGuard = require('./storageGuard');
+const episodeConflicts = require('./tvShows/episodeConflicts');
 const membersAccess = require('./membersAccess');
 
 const DEFAULT_FILES_TO_DOWNLOAD = 5;
@@ -965,6 +966,9 @@ class DownloadModule {
                 await archiveModule.removeVideoFromArchive(video.youtube_id);
                 logger.info({ youtubeId: video.youtube_id }, 'Removed ignored video from archive for manual download');
               }
+              // A title-show duplicate Youtarr suppressed gets its line back
+              // after the job unless it downloads.
+              await episodeConflicts.noteArchiveLinesRemoved(ignoredVideos.map((video) => video.youtube_id));
             }
           } catch (err) {
             logger.error({ err }, 'Error removing ignored videos from archive');

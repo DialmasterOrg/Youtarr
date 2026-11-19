@@ -11,6 +11,7 @@ jest.mock('axios', () => ({
 const axios = require('axios');
 
 import { useSubfolders, SUBFOLDERS_UPDATED_EVENT } from '../useSubfolders';
+import { ReorganizeRequiredError } from '../../components/shared/Reorganize/reorganizeErrors';
 
 describe('useSubfolders', () => {
   const mockToken = 'test-token-123';
@@ -350,6 +351,48 @@ describe('useSubfolders', () => {
         { headers: { 'x-access-token': 't' } }
       );
       expect(dispatchSpy.mock.calls.some(([e]) => (e as Event).type === SUBFOLDERS_UPDATED_EVENT)).toBe(true);
+    });
+
+    test('creates a folder with a layout', async () => {
+      axios.get.mockResolvedValue({ data: [] });
+      axios.post.mockResolvedValueOnce({ data: {} });
+      const { result } = renderHook(() => useSubfolders('t'));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      await act(async () => { await result.current.createSubfolder('TV Shows', 'tv'); });
+
+      expect(axios.post).toHaveBeenCalledWith(
+        '/api/subfolders',
+        { name: 'TV Shows', layout: 'tv' },
+        { headers: { 'x-access-token': 't' } }
+      );
+    });
+
+    test('turns a reorganize refusal into a ReorganizeRequiredError', async () => {
+      axios.get.mockResolvedValue({ data: [] });
+      axios.post.mockRejectedValueOnce({
+        isAxiosError: true,
+        response: {
+          status: 409,
+          data: { error: 'Move first', reorganizeRequired: true, change: { type: 'mainFolderMove', folder: 'Videos' } },
+        },
+      });
+      const { result } = renderHook(() => useSubfolders('t'));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      await expect(result.current.createSubfolder('TV Shows', 'tv')).rejects.toBeInstanceOf(ReorganizeRequiredError);
+    });
+
+    test('createSubfolder throws the server error message for any other refusal', async () => {
+      axios.get.mockResolvedValue({ data: [] });
+      axios.post.mockRejectedValueOnce({
+        isAxiosError: true,
+        response: { status: 400, data: { error: 'Invalid name' } },
+      });
+      const { result } = renderHook(() => useSubfolders('t'));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      await expect(result.current.createSubfolder('x')).rejects.toThrow('Invalid name');
     });
 
     test('deleteSubfolder throws the server error message on 409', async () => {
