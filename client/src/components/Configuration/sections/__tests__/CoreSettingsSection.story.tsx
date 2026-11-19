@@ -52,7 +52,7 @@ type Story = StoryObj<typeof CoreSettingsSection>;
 export const ToggleAutoDownloads: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const checkbox = await canvas.findByRole('checkbox', { name: /enable automatic downloads/i });
+    const checkbox = await canvas.findByRole('checkbox', { name: 'Automatic downloads' });
     await userEvent.click(checkbox);
     await expect(checkbox).toBeChecked();
 

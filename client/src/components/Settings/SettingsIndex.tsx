@@ -1,91 +1,100 @@
 import React from 'react';
-import { Card, CardActionArea, CardContent, Grid, Typography } from '../ui';
 import { Link as RouterLink } from 'react-router-dom';
+import type { LucideIcon } from 'lucide-react';
+import { ChevronRight, Download, Link as IntegrationsIcon, RefreshCw, Server, Settings as SettingsIcon } from '../../lib/icons';
+import { useContainerWidth } from '../../hooks/useContainerWidth';
 
-const SETTINGS_CARD_CONTENT_HEIGHT = 72;
+export type SettingsGroupKey = 'downloads' | 'servers' | 'automation' | 'integrations' | 'system';
 
-export const SETTINGS_PAGES = [
-  { key: 'scheduling', title: 'Scheduling', description: 'Choose when automatic downloads and maintenance tasks run.' },
-  { key: 'core', title: 'Core', description: 'Downloads folder, quality, defaults, and core behavior.' },
-  { key: 'downloading', title: 'YT-DLP', description: 'yt-dlp backend settings for downloads and reliability.' },
-  { key: 'api-keys', title: 'API Keys & Bookmarklet', description: 'One-click "Send to Youtarr" bookmarklet and phone shortcuts.' },
-  { key: 'appearance', title: 'Appearance', description: 'Theme, animations, and visual preferences.' },
-  { key: 'autoremove', title: 'Auto Removal', description: 'Automated cleanup and retention policies.' },
-  { key: 'storage-limits', title: 'Storage Limits', description: 'Pause downloads when storage is full or over a size limit.' },
-  { key: 'cookies', title: 'Cookies', description: 'Cookie configuration and login helpers.' },
-  { key: 'maintenance', title: 'Maintenance & Rescan', description: 'Rescan files on disk and other maintenance actions.' },
-  { key: 'logging', title: 'Logging', description: 'Log level and log files for troubleshooting.' },
-  { key: 'notifications', title: 'Notifications', description: 'Toast notifications and alert behavior.' },
-  { key: 'rss-feeds', title: 'RSS Feeds', description: 'A private RSS feed of your downloaded videos.' },
-  { key: 'sonarr-radarr', title: 'Sonarr / Radarr', description: 'Let Sonarr and Radarr search and grab YouTube videos through Youtarr.' },
-  { key: 'plex', title: 'Plex', description: 'Plex integration and library configuration.' },
-  { key: 'jellyfin', title: 'Jellyfin', description: 'Jellyfin connection for library refreshes, native playlists and watch status.' },
-  { key: 'emby', title: 'Emby', description: 'Emby connection for library refreshes, native playlists and watch status.' },
-  { key: 'watch-status', title: 'Watch Status', description: 'Sync watched state from your media servers into Youtarr.' },
-  { key: 'security', title: 'Account Security', description: 'Authentication and password management.' },
-  { key: 'sponsorblock', title: 'SponsorBlock', description: 'Skip segments and SponsorBlock settings.' },
-  { key: 'youtube-api', title: 'YouTube API', description: 'Optional YouTube Data API v3 key for faster metadata fetches.' },
-  { key: 'about', title: 'About', description: 'Version, project background, and ways to support Youtarr.' },
+export interface SettingsPage {
+  /** Route segment under /settings */
+  key: string;
+  /** Index row title and page title */
+  title: string;
+  description: string;
+  group: SettingsGroupKey;
+}
+
+export const SETTINGS_GROUPS: Array<{ key: SettingsGroupKey; title: string; description: string; Icon: LucideIcon }> = [
+  { key: 'downloads', title: 'Downloads & library', description: 'What Youtarr downloads and where the files go.', Icon: Download },
+  { key: 'servers', title: 'Media servers', description: 'Connections for library refreshes, playlists and watch status.', Icon: Server },
+  { key: 'automation', title: 'Automation & storage', description: 'Schedules, cleanup and disk space.', Icon: RefreshCw },
+  { key: 'integrations', title: 'Integrations', description: 'Other apps and services that work with Youtarr.', Icon: IntegrationsIcon },
+  { key: 'system', title: 'System', description: 'Appearance, access and troubleshooting.', Icon: SettingsIcon },
 ];
 
-export function SettingsIndex() {
-  return (
-    <div>
-      {/* Page title is rendered by the parent Settings page; keep this index compact */}
+/** Nav order (tab strip, sidebar). The index groups by `group`. */
+export const SETTINGS_PAGES: SettingsPage[] = [
+  { key: 'scheduling', title: 'Scheduling', group: 'automation', description: 'Choose when automatic downloads and maintenance tasks run.' },
+  { key: 'core', title: 'Core', group: 'downloads', description: 'Downloads folder, quality, defaults, and core behavior.' },
+  { key: 'downloading', title: 'YT-DLP', group: 'downloads', description: 'yt-dlp backend settings for downloads and reliability.' },
+  { key: 'api-keys', title: 'API Keys & Bookmarklet', group: 'integrations', description: 'One-click "Send to Youtarr" bookmarklet and phone shortcuts.' },
+  { key: 'appearance', title: 'Appearance', group: 'system', description: 'Theme, animations, and visual preferences.' },
+  { key: 'autoremove', title: 'Auto Removal', group: 'automation', description: 'Automated cleanup and retention policies.' },
+  { key: 'storage-limits', title: 'Storage Limits', group: 'automation', description: 'Pause downloads when storage is full or over a size limit.' },
+  { key: 'cookies', title: 'Cookies', group: 'downloads', description: 'Cookie configuration and login helpers.' },
+  { key: 'maintenance', title: 'Maintenance & Rescan', group: 'automation', description: 'Rescan files on disk and other maintenance actions.' },
+  { key: 'logging', title: 'Logging', group: 'system', description: 'Log level and log files for troubleshooting.' },
+  { key: 'notifications', title: 'Notifications', group: 'integrations', description: 'Toast notifications and alert behavior.' },
+  { key: 'rss-feeds', title: 'RSS Feeds', group: 'integrations', description: 'A private RSS feed of your downloaded videos.' },
+  { key: 'sonarr-radarr', title: 'Sonarr / Radarr', group: 'integrations', description: 'Let Sonarr and Radarr search and grab YouTube videos through Youtarr.' },
+  { key: 'plex', title: 'Plex', group: 'servers', description: 'Plex integration and library configuration.' },
+  { key: 'jellyfin', title: 'Jellyfin', group: 'servers', description: 'Jellyfin connection for library refreshes, native playlists and watch status.' },
+  { key: 'emby', title: 'Emby', group: 'servers', description: 'Emby connection for library refreshes, native playlists and watch status.' },
+  { key: 'watch-status', title: 'Watch Status', group: 'servers', description: 'Sync watched state from your media servers into Youtarr.' },
+  { key: 'security', title: 'Account Security', group: 'system', description: 'Authentication and password management.' },
+  { key: 'sponsorblock', title: 'SponsorBlock', group: 'downloads', description: 'Skip segments and SponsorBlock settings.' },
+  { key: 'youtube-api', title: 'YouTube API', group: 'downloads', description: 'Optional YouTube Data API v3 key for faster metadata fetches.' },
+  { key: 'about', title: 'About', group: 'system', description: 'Version, project background, and ways to support Youtarr.' },
+];
 
-      <Grid container spacing={2}>
-        {SETTINGS_PAGES.map((page) => (
-          <Grid item xs={12} md={6} lg={4} key={page.key} style={{ display: 'flex' }}>
-            <Card
-              className="settings-splash-card"
-              variant="outlined"
-              style={{
-                borderRadius: 'var(--radius-ui)',
-                width: '100%',
-                height: '100%',
-                border: 'var(--border-weight) solid var(--border)',
-              }}
-            >
-              <CardActionArea
-                component={RouterLink}
-                to={`/settings/${page.key}`}
-                style={{ height: '100%', display: 'flex' }}
-              >
-                <CardContent
-                  style={{
-                    flex: 1,
-                    height: SETTINGS_CARD_CONTENT_HEIGHT,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'flex-start',
-                    gap: 4,
-                    padding: '12px 12px',
-                  }}
-                >
-                  <div style={{ minWidth: 0 }}>
-                    <Typography variant="h6" style={{ fontWeight: 700, marginBottom: 2, lineHeight: 1 }}>
-                      {page.title}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      style={{
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        lineHeight: 1.15,
-                      } as React.CSSProperties}
-                    >
-                      {page.description}
-                    </Typography>
-                  </div>
-                </CardContent>
-              </CardActionArea>
-            </Card>
-          </Grid>
+const TWO_COLUMN_MIN_WIDTH = 720;
+const LEFT: SettingsGroupKey[] = ['downloads', 'automation'];
+const RIGHT: SettingsGroupKey[] = ['servers', 'integrations', 'system'];
+const STACKED: SettingsGroupKey[] = ['downloads', 'servers', 'automation', 'integrations', 'system'];
+
+function Group({ groupKey }: { groupKey: SettingsGroupKey }) {
+  const group = SETTINGS_GROUPS.find((entry) => entry.key === groupKey)!;
+  const titleId = `settings-group-${groupKey}`;
+  return (
+    <section aria-labelledby={titleId}>
+      <h2 id={titleId} className="flex items-center gap-2 font-display text-base font-semibold leading-[22px]">
+        <group.Icon size={16} aria-hidden="true" className="text-muted-foreground" />{group.title}
+      </h2>
+      <p className="mt-1 text-[13px] text-muted-foreground">{group.description}</p>
+      <ul className="mt-2.5 divide-y divide-border/60 rounded-ui border border-border bg-card">
+        {SETTINGS_PAGES.filter((page) => page.group === groupKey).map((page) => (
+          <li key={page.key}>
+            <RouterLink to={`/settings/${page.key}`} className="group flex min-h-[56px] items-center gap-3 px-4 py-3.5 hover:bg-muted/40">
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold leading-5">{page.title}</span>
+                <span className="mt-0.5 block text-[13px] leading-[19.5px] text-muted-foreground">{page.description}</span>
+              </span>
+              <ChevronRight size={16} aria-hidden="true" className="shrink-0 text-muted-foreground group-hover:text-foreground" />
+            </RouterLink>
+          </li>
         ))}
-      </Grid>
+      </ul>
+    </section>
+  );
+}
+
+/** /settings: pages grouped as list cards. */
+export function SettingsIndex() {
+  const [measureRef, width] = useContainerWidth<HTMLDivElement>();
+  const columns = width !== null && width >= TWO_COLUMN_MIN_WIDTH;
+  return (
+    <div ref={measureRef}>
+      {columns ? (
+        <div className="grid grid-cols-2 items-start gap-6">
+          <div className="flex flex-col gap-8">{LEFT.map((key) => <Group key={key} groupKey={key} />)}</div>
+          <div className="flex flex-col gap-8">{RIGHT.map((key) => <Group key={key} groupKey={key} />)}</div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-8">
+          {STACKED.map((key) => <Group key={key} groupKey={key} />)}
+        </div>
+      )}
     </div>
   );
 }

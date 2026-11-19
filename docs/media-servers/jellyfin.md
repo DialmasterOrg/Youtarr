@@ -93,7 +93,7 @@ Jellyfin reads NFO files containing:
 Youtarr provides:
 - **`poster.jpg`**: Channel artwork in each channel folder
 - **`<VIDEO NAME>.jpg`**: Video thumbnail in each video folder
-- **`backdrop.jpg`**: Channel background art from the YouTube channel banner, written when "Create backdrop images" is enabled in Settings -> Core (off by default)
+- **`backdrop.jpg`**: Channel background art from the YouTube channel banner, written when "Backdrop images" is enabled in Settings -> Core -> **Media server files** (off by default)
 - **`<VIDEO NAME>-backdrop.jpg`**: Per-video background art from the video thumbnail, controlled by the same setting (new downloads only)
 - Proper image naming for Jellyfin recognition
 

@@ -38,7 +38,7 @@ When `PLATFORM=elfhosted`:
 - **Backend, nightly cron (4:00 AM):** the yt-dlp auto-update job no-ops, regardless of the `autoUpdateYtdlp` config toggle (`server/modules/cronJobs.js:116`).
 - **Backend, manual update route:** `POST /api/ytdlp/update` returns `403` with `{ success: false, message: 'yt-dlp is managed by the platform and cannot be updated from Youtarr.' }` (`server/routes/health.js:248-252`).
 - **Backend, `/getconfig` response:** the `isPlatformManaged` object exposes `useTmpForDownloads: true` and `ytdlpUpdates: true` so the frontend can disable the corresponding controls (`server/routes/config.js:123-124`).
-- **Frontend:** the Youtarr-version-update banner is suppressed (`client/src/App.tsx:91, 95`). When the `/tmp` directory warning fires, an Elfhosted setup-guide link is appended (`App.tsx:576-588`). In Settings, the "Use external temp directory" control (Settings -> Core) and the yt-dlp card (Settings -> YT-DLP) show "Managed by Elfhosted" chips and platform-managed messages (`client/src/components/Configuration/sections/CoreSettingsSection.tsx:640-652`, `client/src/components/Configuration/sections/YtdlpUpdateSection.tsx:104-116`).
+- **Frontend:** the Youtarr-version-update banner is suppressed (`client/src/App.tsx:91, 95`). When the `/tmp` directory warning fires, an Elfhosted setup-guide link is appended (`App.tsx:576-588`). In Settings, the "External temp directory" control (Settings -> Core -> **Advanced**) and the yt-dlp card (Settings -> YT-DLP) show "Managed by Elfhosted" chips and platform-managed messages (`client/src/components/Configuration/sections/CoreSettingsSection.tsx:640-652`, `client/src/components/Configuration/sections/YtdlpUpdateSection.tsx:104-116`).
 
 ### `AUTH_ENABLED`
 
@@ -106,8 +106,6 @@ This exports `PLATFORM=elfhosted` and `AUTH_ENABLED=false` for the run, prints a
 The flag does **not** set `DATA_PATH` or `PLEX_URL`, because those need real values, not constants. Without them:
 - Plex IP/port fields in Settings remain editable (no "Platform Managed" lock).
 - Persistent data stays in the normal dev locations (`./jobs/`, `./server/images/`) instead of relocating to `/app/config/jobs/` and `/app/config/images/`.
-- The `youtubeOutputDirectory` field shows the env-var-managed copy, not the platform-managed copy.
-
 That is fine for almost all dev work; downloads and the new yt-dlp gating both work end-to-end. Set the extra vars only when you specifically need to test code that consults `DATA_PATH` (storage-status path, persistent-data relocation, image/jobs directories) or `PLEX_URL` (Plex URL locking, `plexUrl` config seeding).
 
 **Full platform-deployment spoof - also relocates persistent data and locks the Plex URL:**
@@ -145,7 +143,8 @@ After `./scripts/start-dev.sh --as-elfhosted`:
 - No login screen - the app auto-authenticates with the synthetic `'platform-managed-auth'` token (from the `AUTH_ENABLED=false` half of the spoof).
 - The logout button is hidden in the nav header (`NavHeaderActions.tsx:157`).
 - The Youtarr self-update banner does not appear, even when a newer Youtarr version is published to Docker Hub (suppressed via `isElfHosted` in `client/src/App.tsx:91, 95`).
-- Settings -> Core Settings, in the **Use external temp directory** row: "Managed by Elfhosted" chip, the checkbox is disabled and forced on.
+- Settings -> Core -> **Advanced**, in the **External temp directory** row: "Managed by Elfhosted" chip, the switch is disabled and forced on.
+- Settings -> Core -> **Folders**, the **Downloads folder** row's description reads "This path is configured by your platform deployment and cannot be changed here." It follows `PLATFORM`, not `DATA_PATH` (`CoreFoldersSection.tsx:17-18, 61`).
 - Settings -> YT-DLP, in the **yt-dlp Version & Updates** card: "Managed by Elfhosted" chip, no Update button, no release-channel picker, no auto-update toggle, replacement caption: "yt-dlp is managed by Elfhosted and cannot be updated from Youtarr. Updates are applied automatically by the platform."
 - `curl -i -X POST http://localhost:3087/api/ytdlp/update` returns `403` with the platform-managed message body.
 - Downloads still work; they stage in `./config/temp_downloads/` on the host (auto-created on first download).
@@ -153,7 +152,6 @@ After `./scripts/start-dev.sh --as-elfhosted`:
 
 Additional behavior only when you also set `DATA_PATH` in `.env`:
 
-- Settings -> Core Settings, the `youtubeOutputDirectory` field's helper text changes to "This path is configured by your platform deployment and cannot be changed here." (`CoreSettingsSection.tsx:568-569`).
 - Persistent data is read from `/app/config/jobs/` and `/app/config/images/` (bind-mounted to `./config/jobs/` and `./config/images/` on the host) instead of `./jobs/` and `./server/images/`.
 
 Additional behavior only when you also set `PLEX_URL` in `.env`:
@@ -198,9 +196,8 @@ When you make a change that depends on Elfhosted detection, audit these location
   - Uses `isPlatformManaged.plexUrl` to determine whether a Plex server is "configured" (line 80)
   - Passes `isPlatformManaged` into the Core, Plex, and YT-DLP sections and `isPlatformManaged.authEnabled` into Account Security (lines 303, 318, 404, 445)
   - Skips the post-save yt-dlp version re-check when `isPlatformManaged.ytdlpUpdates` is true (line 220)
-- `client/src/components/Configuration/sections/CoreSettingsSection.tsx`
-  - YouTube Output Directory helper text branches on `deploymentEnvironment.platform === 'elfhosted'` (lines 568-569)
-  - "Use external temp directory" chip and disabled state (lines 627-657)
+- `client/src/components/Configuration/sections/CoreSettingsSection.tsx` - "External temp directory" chip and disabled state, in the **Advanced** section (lines 183-191)
+- `client/src/components/Configuration/sections/components/CoreFoldersSection.tsx` - the **Downloads folder** row's description branches on `deploymentEnvironment.platform === 'elfhosted'` (lines 17-18, 42, 61)
 - `client/src/components/Configuration/sections/YtdlpUpdateSection.tsx` - the whole yt-dlp card: version display, Update button, release-channel picker, auto-update toggle. When `isPlatformManaged.ytdlpUpdates` is true, all of those are replaced by the chip and the platform-managed caption (lines 59-60, 104-116)
 - `client/src/components/Configuration/sections/PlexIntegrationSection.tsx:160-180` - Plex URL field locking when `PLEX_URL` is set
 - `client/src/components/Configuration/types.ts:78-83` - `PlatformManagedState` type; add a new flag here when you add a new platform-managed control

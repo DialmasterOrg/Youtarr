@@ -4,9 +4,11 @@ import {
   TextField,
   Typography,
   Button,
-  Link,
   CircularProgress,
 } from '../../../ui';
+import { cn } from '../../../../lib/cn';
+import { useMediaQuery } from '../../../../hooks/useMediaQuery';
+import { settingDescriptionId } from '../../common/SettingRow';
 import {
   FILENAME_PRESETS,
   PLEX_TV_SERIES_PRESET_PREFIX,
@@ -28,7 +30,11 @@ interface VideoFilenameTemplateProps {
   onPreviewSuccess?: (prefix: string) => void;
   /** Whether the embedded MP4 title is still prefixed with the channel name. */
   channelPrefixEnabled?: boolean;
+  /** Id of the template input; its SettingRow label and description point at it */
+  inputId?: string;
 }
+
+const PHONE_QUERY = '(max-width: 767px)';
 
 const SEVERITY_TEXT: Record<'warn' | 'danger', string> = {
   warn:
@@ -44,7 +50,9 @@ export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
   saveRequirement,
   onPreviewSuccess,
   channelPrefixEnabled = false,
+  inputId = 'videoFilenamePrefix',
 }) => {
+  const phone = useMediaQuery(PHONE_QUERY);
   const validation = useMemo(() => validatePrefix(value), [value]);
   const showTvSeriesPrefixTip = channelPrefixEnabled && value === PLEX_TV_SERIES_PRESET_PREFIX;
   const preview = useFilenamePreview(token);
@@ -77,37 +85,16 @@ export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
 
   return (
     <Box className="flex flex-col gap-3">
-      <Typography variant="subtitle2" className="font-bold">
-        Video Filename Template
-      </Typography>
-      <Typography variant="caption" color="text.secondary">
-        How yt-dlp names downloaded video files and per-video folders. Youtarr always appends{' '}
-        <span className="font-mono px-1 py-0.5 rounded text-xs bg-muted">
-          [VIDEO_ID].EXT
-        </span>{' '}
-        to filenames and{' '}
-        <span className="font-mono px-1 py-0.5 rounded text-xs bg-muted">
-          - VIDEO_ID
-        </span>{' '}
-        to folder names so it can re-find your videos on disk. Only applies to new downloads.{' '}
-        <Link
-          href="https://github.com/yt-dlp/yt-dlp#output-template"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          See yt-dlp output template docs
-        </Link>
-        .
-      </Typography>
-
       <TextField
+        id={inputId}
         fullWidth
-        label="Video Filename Template"
+        className="[&_input]:font-mono"
         value={value}
         onChange={handleChange as React.ChangeEventHandler<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>}
         error={!validation.ok}
         helperText={validation.error}
-        inputProps={{ style: { fontFamily: 'monospace' } }}
+        aria-describedby={settingDescriptionId(inputId)}
+        inputProps={{ 'aria-label': 'Video filename template' }}
       />
 
       <Box className="flex flex-wrap gap-2">
@@ -116,6 +103,8 @@ export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
             key={preset.label}
             variant="outlined"
             size="small"
+            aria-pressed={value === preset.prefix}
+            className={cn(value === preset.prefix && 'border-primary bg-primary/10', phone ? 'min-h-[44px]' : 'h-[30px]')}
             onClick={() => onChange(preset.prefix)}
             title={preset.description}
           >
@@ -125,23 +114,19 @@ export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
       </Box>
 
       {showTvSeriesPrefixTip && (
-        <Box
-          data-testid="tv-series-channel-prefix-tip"
-          className="rounded p-2 bg-muted"
-        >
-          <Typography variant="caption" color="text.secondary">
-            Tip: in a Plex TV Shows library the channel is already the show name, so turn off
-            &quot;Prefix channel name in embedded video title&quot; under Download Settings to keep
-            episode titles clean.
-          </Typography>
-        </Box>
+        <p data-testid="tv-series-channel-prefix-tip" className="rounded-ui bg-muted p-2 text-[13px] text-muted-foreground">
+          Tip: in a Plex TV Shows library the channel is already the show name, so turn off
+          &quot;Channel name in embedded title&quot; above to keep episode titles clean.
+        </p>
       )}
 
-      <Box className="flex items-center gap-3">
+      <Box className={cn('flex gap-3', phone ? 'flex-col items-stretch' : 'items-center')}>
         <Button
           data-testid="filename-preview-button"
-          variant="contained"
+          variant="outlined"
           size="small"
+          fullWidth={phone}
+          className={cn(phone && 'min-h-[44px]')}
           onClick={handlePreviewClick}
           disabled={previewDisabled}
           startIcon={preview.loading ? <CircularProgress size={14} /> : undefined}

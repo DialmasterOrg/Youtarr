@@ -31,10 +31,10 @@ Youtarr supports integration with multiple media servers, providing rich metadat
 All media servers receive:
 - **Video Files**: MP4 with embedded metadata
 - **Thumbnails**: Video preview images
-- **NFO Files**: XML metadata for each video if enabled in Settings -> Core (Download Settings section)
-- **Poster Images**: Channel artwork (poster.jpg) if enabled in Settings -> Core (Download Settings section)
+- **NFO Files**: XML metadata for each video if enabled in Settings -> Core -> **Media server files**
+- **Poster Images**: Channel artwork (poster.jpg) if enabled in Settings -> Core -> **Media server files**
 
-Optional artwork, both off by default and enabled in the same Download Settings section:
+Optional artwork, both off by default and enabled in the same **Media server files** section:
 - **Video Fanart**: `<video name>-fanart.jpg` beside each video, from the video thumbnail. Some Plex clients (NVIDIA Shield, for example) use it as the background preview.
 - **Backdrop Images**: `backdrop.jpg` in each channel folder (from the channel banner) plus `<video name>-backdrop.jpg` beside each video, used by Emby and Jellyfin for background art.
 
@@ -61,7 +61,7 @@ See [YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md](YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.m
 
 ### Essential Settings
 
-Navigate to Settings -> Core, Download Settings section:
+Navigate to Settings -> Core -> **Media server files**:
 
 *The .nfo and poster files are not used by Plex, but it is recommended to leave them enabled since they provide the best compatibility for all media servers*
 
@@ -69,10 +69,10 @@ Disable if you are using Plex-only and want less "clutter" of files
 
 | Setting | Default | Purpose |
 |---------|---------|---------|
-| **Generate video .nfo files** | Enabled | Creates metadata for Kodi/Jellyfin/Emby |
-| **Copy channel poster.jpg files** | Enabled | Adds channel artwork to folders |
-| **Create video fanart files** | Disabled | Writes `-fanart.jpg` per video; some Plex clients use it as the background preview |
-| **Create backdrop images** | Disabled | Writes `backdrop.jpg` per channel and `-backdrop.jpg` per video for Emby/Jellyfin background art |
+| **Video .nfo files** | Enabled | Creates metadata for Kodi/Jellyfin/Emby |
+| **Channel poster.jpg** | Enabled | Adds channel artwork to folders |
+| **Video fanart** | Disabled | Writes `-fanart.jpg` per video; some Plex clients use it as the background preview |
+| **Backdrop images** | Disabled | Writes `backdrop.jpg` per channel and `-backdrop.jpg` per video for Emby/Jellyfin background art |
 
 ### Platform-Specific Settings
 
@@ -118,7 +118,7 @@ See [Youtarr Downloads Folder Structure](YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md)
 **Embedded MP4 Metadata**:
 | Field                | Description                               |
 | -------------------- | ----------------------------------------- |
-| `title`              | `Channel - Title` by default; just the title when **Prefix channel name in embedded video title** is off |
+| `title`              | `Channel - Title` by default; just the title when **Channel name in embedded title** (Settings -> Core -> **Naming**) is off |
 | `artist`             | Channel name                              |
 | `studio`             | Channel name                              |
 | `album`              | Channel name (for collection grouping)    |
@@ -146,7 +146,7 @@ Youtarr can pull per-video, per-user watch status from Plex, Jellyfin, and Emby,
    - [Kodi Guide](media-servers/kodi.md)
    - [Emby Guide](media-servers/emby.md)
 
-2. **Enable Metadata Generation** in Youtarr (Settings -> Core)
+2. **Enable Metadata Generation** in Youtarr (Settings -> Core -> **Media server files**)
 
 3. **Add Channels** and let Youtarr download with metadata
 
@@ -155,7 +155,7 @@ Youtarr can pull per-video, per-user watch status from Plex, Jellyfin, and Emby,
 ### For Existing Users
 
 If you already have downloaded videos:
-1. Enable metadata generation in Settings -> Core
+1. Enable metadata generation in Settings -> Core -> **Media server files**
 2. New downloads will include metadata
 3. Existing videos won't be retroactively updated
 4. Consider deleting and re-downloading if metadata is important

@@ -6,7 +6,7 @@ By default, videos in each channel folder are placed into their own subfolders w
 
 ### File and Folder Names
 
-The examples below use the default **Video Filename Template** (Settings -> Core -> File Structure Settings), which names files `<Channel> - <Title>` with the title capped at 64 bytes. You can change the template or pick a preset (Date prefix, Plex YouTube-Agent, Plex TV Series, Title only); see [Video Filename Template](CONFIG.md#video-filename-template). Whatever template you choose, Youtarr always appends:
+The examples below use the default **Video filename template** (Settings -> Core -> **Naming**), which names files `<Channel> - <Title>` with the title capped at 64 bytes. You can change the template or pick a preset (Date prefix, Plex YouTube-Agent, Plex TV Series, Title only); see [Video Filename Template](CONFIG.md#video-filename-template). Whatever template you choose, Youtarr always appends:
 
 - ` [<youtube-id>]` to file names, for example `Channel - Title [dQw4w9WgXcQ].mp4`
 - ` - <youtube-id>` to per-video folder names, for example `Channel - Title - dQw4w9WgXcQ/` (a dash, not brackets)
@@ -22,15 +22,15 @@ is also used for manually downloaded files from channels that are not set up in 
 <YOUTUBE_OUTPUT_DIR>/
 ├── Channel Name/
 │   ├── poster.jpg                               # Channel poster
-│   ├── backdrop.jpg                             # Optional; written from the channel banner when "Create backdrop images" is on
+│   ├── backdrop.jpg                             # Optional; written from the channel banner when "Backdrop images" is on
 │   ├── Channel Name.m3u                         # Optional; written when the channel's "Generate channel playlist file" setting is on
 │   └── Channel - Title - id/
 │       ├── Channel - Title [id].mp4             # Video file
 │       ├── Channel - Title [id].nfo             # Video metadata
 │       ├── Channel - Title [id].[lang].srt      # Subtitle file(s)
 │       ├── Channel - Title [id].jpg             # Video thumbnail
-│       ├── Channel - Title [id]-fanart.jpg      # Optional; written when "Create video fanart files" is on
-│       └── Channel - Title [id]-backdrop.jpg    # Optional; written when "Create backdrop images" is on
+│       ├── Channel - Title [id]-fanart.jpg      # Optional; written when "Video fanart" is on
+│       └── Channel - Title [id]-backdrop.jpg    # Optional; written when "Backdrop images" is on
 ├── Another Channel/
 ```
 
@@ -60,7 +60,7 @@ YouTube Downloads/
 
 You can use a flat file structure, where video files are placed directly in the channel folder instead of individual video subfolders. It only affects new downloads. There are three places to set it:
 
-- **Global default**: turn on **Flat file structure by default** in Settings -> Core -> File Structure Settings. Every channel that has not chosen its own structure follows this, as do downloads from untracked channels. See [Flat File Structure Default](CONFIG.md#flat-file-structure-default).
+- **Global default**: turn on **Flat file structure by default** in Settings -> Core -> **Naming**. Every channel that has not chosen its own structure follows this, as do downloads from untracked channels. See [Flat File Structure Default](CONFIG.md#flat-file-structure-default).
 - **Per channel**: in the channel settings dialog, set "Video File Structure" to "Flat (no video subfolders)" or "Video subfolders" to override the global default. The default option, "Use global setting", follows the global default.
 - **One download**: the manual download settings dialog can force either structure for a single download.
 
