@@ -180,7 +180,7 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
   - **Date prefix** (`%(upload_date>%Y-%m-%d)s - %(title).64B`): `2025-10-17 - ESCAPING 99 Nights ... [Cbq15X05wyY].mp4`
   - **Plex YouTube-Agent** (`%(upload_date>%Y_%m_%d)s %(title).64B`): `2025_10_17 ESCAPING 99 Nights ... [Cbq15X05wyY].mp4` (compatible with [Absolute-Series-Scanner](https://github.com/ZeroQI/Absolute-Series-Scanner) and [YouTube-Agent.bundle](https://github.com/ZeroQI/YouTube-Agent.bundle))
   - **Title only** (`%(title).64B`): `ESCAPING 99 Nights ... [Cbq15X05wyY].mp4`
-- **UI**: A live preview in **Settings -> Core Settings -> File Structure Settings** shows the rendered folder and file names against a sample video, with length warnings (yellow > 110 chars, red > 130 chars on the rendered name).
+- **UI**: A live preview under **Video filename template** in Settings -> Core -> **Naming** shows the rendered folder and file names against a sample video, with length warnings (yellow > 110 chars, red > 130 chars on the rendered name).
 
 ### Enable Subtitles
 - **Config Key**: `subtitlesEnabled`

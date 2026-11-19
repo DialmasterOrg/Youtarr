@@ -21,7 +21,7 @@ const ADVICE = {
       'finish this video. Merging the video and audio needs roughly twice ' +
       'the video\'s size. Free up space there, then try again. The server ' +
       'log names the folder and how much space it had; where downloads are ' +
-      'staged depends on "Use external temp directory" in Settings.',
+      'staged depends on "External temp directory" in Settings.',
   },
   'http-403-cookies-enabled': {
     title: 'YouTube blocked the download while using your cookies',

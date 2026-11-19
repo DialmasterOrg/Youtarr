@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import type { Location, NavigateFunction } from 'react-router-dom';
 import { Paper } from '../ui';
-import { NavItem, isNavPathActive } from './navigation';
+import { NavItem, isNavSubItemActive } from './navigation';
 import { MOBILE_NAV_PRIMARY_HEIGHT, NAV_SUB_FONT_SIZE } from './navLayoutConstants';
 import { useScrollEdges } from './useScrollEdges';
 
@@ -80,7 +80,7 @@ export const NavSidebarMobileBottomNav: React.FC<NavSidebarMobileBottomNavProps>
           }}
         >
           {(activeItemWithSubItems.subItems ?? []).map((subItem) => {
-            const subSelected = isNavPathActive(location.pathname, subItem.to);
+            const subSelected = isNavSubItemActive(location.pathname, subItem);
             return (
               <button
                 key={subItem.key}

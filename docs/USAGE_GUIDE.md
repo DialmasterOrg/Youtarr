@@ -84,7 +84,7 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
        - **Subfolder**: pick or create a subfolder to organize channels into separate media libraries (e.g., `__kids`, `__music`); the picker has an inline **Add Subfolder** action for new names
        - **Resolution Override**: a **Channel Video Quality Override** that takes precedence over the global setting
        - **Video File Structure**: download videos directly into the channel folder (flat) or into individual video subfolders (see [Folder Structure](YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md))
-       - **Auto Downloads**: separate toggles for **New Videos**, **New Shorts**, and **New Live/Streams**. These only take effect while the global **Enable Automatic Downloads** toggle in Settings -> Core is on.
+       - **Auto Downloads**: separate toggles for **New Videos**, **New Shorts**, and **New Live/Streams**. These only take effect while the global **Automatic downloads** toggle in Settings -> Core -> **Downloads** is on.
      - **Filters**: duration limits and a title regex to control which videos auto-download
      - **Ratings**: a default content rating for this channel's downloads
      - **Tags**: custom tags that can be automatically added to downloaded videos separated by '|'. This applies only to videos downloaded in the future.
