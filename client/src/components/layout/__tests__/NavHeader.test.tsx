@@ -136,6 +136,55 @@ describe('NavHeader shared update indicator', () => {
     expect(within(channelsLink).getByText('ChannelsIcon')).toBeInTheDocument();
   });
 
+  it('lists grouped sub-items under their group headings in the top-nav menu', async () => {
+    const user = userEvent.setup();
+    renderHeader({
+      navItems: [
+        ...NAV_ITEMS,
+        {
+          key: 'settings',
+          label: 'Settings',
+          icon: <span>SettingsIcon</span>,
+          to: '/settings',
+          subItems: [
+            { key: 'core', label: 'Core', to: '/settings/core', group: 'Downloads & library' },
+            { key: 'cookies', label: 'Cookies', to: '/settings/cookies', group: 'Downloads & library' },
+            { key: 'plex', label: 'Plex', to: '/settings/plex', group: 'Media servers' },
+          ],
+        },
+      ],
+    });
+
+    await user.hover(screen.getByRole('link', { name: /Settings$/ }));
+
+    const downloads = screen.getByRole('group', { name: 'Downloads & library' });
+    expect(within(downloads).getAllByRole('link').map((link) => link.getAttribute('href')))
+      .toEqual(['/settings/core', '/settings/cookies']);
+    const servers = screen.getByRole('group', { name: 'Media servers' });
+    expect(within(servers).getByRole('link', { name: 'Plex' })).toHaveAttribute('href', '/settings/plex');
+  });
+
+  it('lists sub-items without a group as a plain top-nav menu', async () => {
+    const user = userEvent.setup();
+    renderHeader({
+      navItems: [{
+        key: 'downloads',
+        label: 'Downloads',
+        icon: <span>DownloadsIcon</span>,
+        to: '/downloads',
+        subItems: [
+          { key: 'download-manual', label: 'Manual Download', to: '/downloads/manual' },
+          { key: 'download-activity', label: 'Activity', to: '/downloads/activity' },
+        ],
+      }],
+    });
+
+    await user.hover(screen.getByRole('link', { name: /Downloads$/ }));
+
+    expect(screen.getByRole('link', { name: 'Activity' })).toHaveAttribute('href', '/downloads/activity');
+    expect(screen.queryByRole('group')).not.toBeInTheDocument();
+  });
+
   it('hides section icons in top-nav theme buttons when disabled', () => {
     localStorage.setItem('uiSectionIconsVisible:linear', 'false');
 

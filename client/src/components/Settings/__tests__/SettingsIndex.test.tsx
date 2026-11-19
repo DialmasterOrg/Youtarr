@@ -44,6 +44,13 @@ describe('SettingsIndex', () => {
     expect(SETTINGS_PAGES.every((page) => groups.includes(page.group))).toBe(true);
   });
 
+  test('keeps each group\'s pages together, in group order, for the nav menus', () => {
+    const pageGroups = SETTINGS_PAGES.map((page) => page.group);
+    expect(pageGroups.filter((group, index) => group !== pageGroups[index - 1])).toEqual(
+      SETTINGS_GROUPS.map((group) => group.key)
+    );
+  });
+
   test('links every page exactly once', () => {
     renderWithProviders(<SettingsIndex />);
     const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
