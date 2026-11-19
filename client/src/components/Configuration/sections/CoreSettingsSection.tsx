@@ -163,6 +163,8 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
             )} />
           <SettingRow controlId="prefixChannelNameInTitle" label="Channel name in embedded title"
             description={'Write the MP4 title as "Channel - Title"; Plex shows it as the video title. New downloads only.'}
+            tooltip="Turn it off for a Plex TV Shows library, where the channel is already the show name."
+            onMobileTooltipClick={onMobileTooltipClick}
             control={switchFor('prefixChannelNameInTitle')} />
           <SettingRow controlId="videoFilenamePrefix" label="Video filename template"
             description={(
@@ -177,7 +179,8 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
             )}>
             <VideoFilenameTemplate inputId="videoFilenamePrefix" value={config.videoFilenamePrefix}
               onChange={(value) => onConfigChange({ videoFilenamePrefix: value })} token={token}
-              saveRequirement={filenameTemplateSaveRequirement} onPreviewSuccess={onFilenameTemplatePreviewSuccess} />
+              saveRequirement={filenameTemplateSaveRequirement} onPreviewSuccess={onFilenameTemplatePreviewSuccess}
+              channelPrefixEnabled={config.prefixChannelNameInTitle} />
           </SettingRow>
         </SettingsSection>
 

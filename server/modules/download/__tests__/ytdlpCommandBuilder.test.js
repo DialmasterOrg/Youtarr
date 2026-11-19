@@ -596,6 +596,16 @@ describe('YtdlpCommandBuilder', () => {
   });
 
   describe('buildMatchFilters', () => {
+    it('uses the members-only clause it is given', () => {
+      const result = YtdlpCommandBuilder.buildMatchFilters(null, 'id!~=\'^(?:aaaaaaaaaaa)$\'');
+      expect(result).toBe('id!~=\'^(?:aaaaaaaaaaa)$\' & !is_live & live_status!=is_upcoming');
+    });
+
+    it('drops the members-only clause when it is given none', () => {
+      const result = YtdlpCommandBuilder.buildMatchFilters(null, null);
+      expect(result).toBe('!is_live & live_status!=is_upcoming');
+    });
+
     it('should return base filters when no filter config provided', () => {
       const result = YtdlpCommandBuilder.buildMatchFilters();
       expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming');
@@ -804,9 +814,29 @@ describe('YtdlpCommandBuilder', () => {
         'availability!=subscriber_only & !is_live & live_status!=is_upcoming & title ~= \'(?i:b)\'',
       ]);
     });
+
+    it('gives every title show filter the members-only clause it was handed', () => {
+      const filterConfig = {
+        hasGroupingCriteria: () => true,
+        showFilters: [{ filterRegex: '(?i:a)', excludeRegexes: [] }, { filterRegex: '(?i:b)', excludeRegexes: [] }],
+      };
+      const result = YtdlpCommandBuilder.getBaseCommandArgs('1080', false, null, filterConfig, null, false, { membersFilter: null });
+      const filters = result.filter((arg, index) => result[index - 1] === '--match-filter');
+      expect(filters).toEqual([
+        '!is_live & live_status!=is_upcoming & title ~= \'(?i:a)\'',
+        '!is_live & live_status!=is_upcoming & title ~= \'(?i:b)\'',
+      ]);
+    });
   });
 
   describe('getBaseCommandArgs', () => {
+    it('passes the members-only clause from its options into the match filter', () => {
+      const result = YtdlpCommandBuilder.getBaseCommandArgs('1080', false, null, null, null, false, { membersFilter: null });
+
+      const filterIndex = result.indexOf('--match-filter');
+      expect(result[filterIndex + 1]).toBe('!is_live & live_status!=is_upcoming');
+    });
+
     it('should build basic command args with default values', () => {
       const result = YtdlpCommandBuilder.getBaseCommandArgs();
 
@@ -1100,6 +1130,13 @@ describe('YtdlpCommandBuilder', () => {
       // Check that duration filter is NOT included, but live video filtering is
       const filterIndex = result.indexOf('--match-filter');
       expect(result[filterIndex + 1]).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming');
+    });
+
+    it('uses the members-only clause from its options', () => {
+      const result = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload(null, false, null, false, { membersFilter: null });
+
+      const filterIndex = result.indexOf('--match-filter');
+      expect(result[filterIndex + 1]).toBe('!is_live & live_status!=is_upcoming');
     });
 
     it('should otherwise be identical to regular command args', () => {
@@ -1534,6 +1571,13 @@ describe('YtdlpCommandBuilder', () => {
       expect(args).toEqual(expect.arrayContaining(['--dump-json', '--lazy-playlist']));
       expect(args).not.toContain('--dump-single-json');
     });
+
+    test('buildMetadataFetchArgs prints one JSON line per entry without lazy mode when entryPerLine is set', () => {
+      const args = YtdlpCommandBuilder.buildMetadataFetchArgs('https://x/y', { flatPlaylist: true, entryPerLine: true });
+      expect(args).toContain('--dump-json');
+      expect(args).not.toContain('--lazy-playlist');
+      expect(args).not.toContain('--dump-single-json');
+    });
   });
 
   describe('cookie player clients', () => {
@@ -1601,6 +1645,18 @@ describe('YtdlpCommandBuilder', () => {
       const args = YtdlpCommandBuilder.buildMetadataFetchArgs('https://www.youtube.com/watch?v=abc');
 
       expect(args).toContain(MANAGED_TOKEN);
+    });
+
+    test('buildMetadataFetchArgs with cookiesEnabled false sends neither the cookies nor their player clients', () => {
+      configModule.getCookiesPath.mockReturnValue('/path/to/cookies.txt');
+      const url = 'https://www.youtube.com/watch?v=abc';
+
+      const cookieless = YtdlpCommandBuilder.buildMetadataFetchArgs(url, { cookiesEnabled: false });
+      const byDefault = YtdlpCommandBuilder.buildMetadataFetchArgs(url);
+
+      expect(cookieless).not.toContain('--cookies');
+      expect(youtubeTokens(cookieless)).toEqual([]);
+      expect(byDefault).toEqual(expect.arrayContaining(['--cookies', '/path/to/cookies.txt', MANAGED_TOKEN]));
     });
 
     test('buildMetadataFetchArgs skips the player clients for flat playlist listings', () => {

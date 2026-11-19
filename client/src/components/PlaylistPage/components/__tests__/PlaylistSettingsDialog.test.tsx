@@ -173,6 +173,19 @@ describe('PlaylistSettingsDialog', () => {
     });
   });
 
+  test('explains that a Video + MP3 playlist syncs as a video playlist', async () => {
+    setupDialog();
+
+    fireEvent.mouseDown(screen.getByLabelText('Download Type'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Video + MP3' }));
+
+    expect(
+      screen.getByText(
+        'MP3 files are saved at 192kbps in the same folder as videos. Video + MP3 playlists sync to media servers as video playlists: the server needs a video-type library that includes your Youtarr output folder.'
+      )
+    ).toBeInTheDocument();
+  });
+
   test('persists a subfolder change', async () => {
     setupDialog();
 

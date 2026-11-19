@@ -490,4 +490,65 @@ describe('NfoGenerator', () => {
       expect(nfoContent).not.toContain('<year>');
     });
   });
+
+  describe('writeVideoNfoFile dateadded', () => {
+    const mediaPath = '/videos/Channel/Video [abc123].mp4';
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('keeps a dateadded value handed to it', () => {
+      nfoGenerator.writeVideoNfoFile(mediaPath, { title: 'Video' }, { dateAdded: '2020-01-01 00:00:00' });
+
+      expect(fs.writeFileSync.mock.calls[0][1]).toContain('<dateadded>2020-01-01 00:00:00</dateadded>');
+    });
+
+    it('formats a Date handed as dateadded', () => {
+      nfoGenerator.writeVideoNfoFile(mediaPath, { title: 'Video' }, { dateAdded: new Date('2025-05-05T06:07:08Z') });
+
+      expect(fs.writeFileSync.mock.calls[0][1]).toContain('<dateadded>2025-05-05 06:07:08</dateadded>');
+    });
+
+    it('stamps the current time when no dateadded is given', () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-11-04T22:40:25Z'));
+
+      nfoGenerator.writeVideoNfoFile(mediaPath, { title: 'Video' });
+
+      expect(fs.writeFileSync.mock.calls[0][1]).toContain('<dateadded>2026-11-04 22:40:25</dateadded>');
+    });
+
+    it('stamps the current time for an invalid Date', () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-11-04T22:40:25Z'));
+
+      nfoGenerator.writeVideoNfoFile(mediaPath, { title: 'Video' }, { dateAdded: new Date('not a date') });
+
+      expect(fs.writeFileSync.mock.calls[0][1]).toContain('<dateadded>2026-11-04 22:40:25</dateadded>');
+    });
+  });
+
+  describe('readDateAdded', () => {
+    const mediaPath = '/videos/Channel/Video [abc123].mp4';
+
+    it('returns the dateadded of the NFO beside the media file', () => {
+      fs.readFileSync.mockReturnValue('<movie>\n  <dateadded>2020-01-01 00:00:00</dateadded>\n</movie>');
+
+      expect(nfoGenerator.readDateAdded(mediaPath)).toBe('2020-01-01 00:00:00');
+      expect(fs.readFileSync).toHaveBeenCalledWith('/videos/Channel/Video [abc123].nfo', 'utf8');
+    });
+
+    it('returns null when there is no NFO', () => {
+      fs.readFileSync.mockImplementation(() => {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      });
+
+      expect(nfoGenerator.readDateAdded(mediaPath)).toBeNull();
+    });
+
+    it('returns null when the NFO has no dateadded', () => {
+      fs.readFileSync.mockReturnValue('<movie><title>Video</title><dateadded></dateadded></movie>');
+
+      expect(nfoGenerator.readDateAdded(mediaPath)).toBeNull();
+    });
+  });
 });

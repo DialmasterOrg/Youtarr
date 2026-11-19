@@ -19,6 +19,7 @@ const EXTERNAL_MIGRATIONS = [
   '20260908101000-create-api-key-channel-grants.js',
   '20260908102000-create-external-requests.js',
   '20260908106000-create-external-api-usage-buckets.js',
+  '20261022045156-add-external-request-approval-source.js',
 ];
 const DATABASE_NAME = `youtarr_external_api_${process.pid}`;
 const dbOptions = {

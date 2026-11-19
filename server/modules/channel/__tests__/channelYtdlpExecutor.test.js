@@ -94,6 +94,32 @@ describe('channelYtdlpExecutor', () => {
       await expect(promise).resolves.toBeUndefined();
     });
 
+    test('bounds metadata calls and kills a child that ignores termination', async () => {
+      jest.useFakeTimers();
+      proc.kill = jest.fn();
+      try {
+        const promise = executor.executeYtDlpCommand(['--dump-json'], null, { timeoutMs: 100 });
+        const rejected = expect(promise).rejects.toMatchObject({ code: 'YT_DLP_TIMEOUT' });
+        await jest.advanceTimersByTimeAsync(100);
+        await rejected;
+        expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
+        await jest.advanceTimersByTimeAsync(5000);
+        expect(proc.kill).toHaveBeenCalledWith('SIGKILL');
+      } finally { jest.useRealTimers(); }
+    });
+
+    test('does not impose the metadata deadline on large catalog listings', async () => {
+      jest.useFakeTimers();
+      proc.kill = jest.fn();
+      try {
+        const promise = executor.executeYtDlpCommand(['--flat-playlist']);
+        await jest.advanceTimersByTimeAsync(180000);
+        expect(proc.kill).not.toHaveBeenCalled();
+        proc.emit('exit', 0);
+        await expect(promise).resolves.toBeUndefined();
+      } finally { jest.useRealTimers(); }
+    });
+
     test('rejects with COOKIES_REQUIRED when stderr reports a bot check, even on exit code 0', async () => {
       const promise = executor.executeYtDlpCommand(['--dump-json']);
       proc.stderr.emit('data', 'ERROR: Sign in to confirm you\'re not a bot');

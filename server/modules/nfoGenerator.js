@@ -82,21 +82,58 @@ class NfoGenerator {
   }
 
   /**
+   * Path of the NFO beside a media file: same name, .nfo extension.
+   * @param {string} videoPath - Path to the media file
+   * @returns {string}
+   */
+  nfoPathFor(videoPath) {
+    const parsedPath = path.parse(videoPath);
+    return path.format({ dir: parsedPath.dir, name: parsedPath.name, ext: '.nfo' });
+  }
+
+  /**
+   * The <dateadded> of the NFO beside a media file, so a rewrite can keep the
+   * date the video entered the library.
+   * @param {string} videoPath - Path to the media file
+   * @returns {string|null} The value as written, or null when there is no NFO or no date
+   */
+  readDateAdded(videoPath) {
+    let content;
+    try {
+      content = fs.readFileSync(this.nfoPathFor(videoPath), 'utf8');
+    } catch {
+      return null;
+    }
+    const match = /<dateadded>([^<]*)<\/dateadded>/.exec(content);
+    const value = match ? match[1].trim() : '';
+    return value || null;
+  }
+
+  /**
+   * The <dateadded> value to write: a value kept from an existing NFO, a
+   * valid Date, or the current time.
+   * @param {string|Date} [dateAdded]
+   * @returns {string}
+   */
+  resolveDateAdded(dateAdded) {
+    if (typeof dateAdded === 'string' && dateAdded) return this.escapeXml(dateAdded);
+    if (dateAdded instanceof Date && !Number.isNaN(dateAdded.getTime())) return this.formatDateAdded(dateAdded);
+    return this.formatDateAdded();
+  }
+
+  /**
    * Generates and writes an NFO file for a video
    * @param {string} videoPath - Path to the video file
    * @param {object} jsonData - Parsed .info.json data
+   * @param {object} [options]
+   * @param {string|Date} [options.dateAdded] - <dateadded> to write: a value kept
+   *   from an existing NFO or a Date; omitted, the current time is stamped
    * @returns {boolean} True if successful, false otherwise
    */
-  writeVideoNfoFile(videoPath, jsonData) {
+  writeVideoNfoFile(videoPath, jsonData, { dateAdded } = {}) {
     logger.info({ videoPath }, 'Writing NFO file for video');
     try {
-      // Generate NFO path (same as video but with .nfo extension)
-      const parsedPath = path.parse(videoPath);
-      const nfoPath = path.format({
-        dir: parsedPath.dir,
-        name: parsedPath.name,
-        ext: '.nfo'
-      });
+      const nfoPath = this.nfoPathFor(videoPath);
 
       // Extract and prepare data
       const title = this.escapeXml(jsonData.fulltitle || jsonData.title || 'Unknown Title');
@@ -149,7 +186,7 @@ class NfoGenerator {
         // Without <year>, Emby guesses ProductionYear and breaks episode sorting
         xml += `  <year>${premiered.substring(0, 4)}</year>\n`;
       }
-      xml += `  <dateadded>${this.formatDateAdded()}</dateadded>\n`;
+      xml += `  <dateadded>${this.resolveDateAdded(dateAdded)}</dateadded>\n`;
 
       xml += '\n  <!-- People / orgs -->\n';
       xml += `  <studio>${studio}</studio>\n`;

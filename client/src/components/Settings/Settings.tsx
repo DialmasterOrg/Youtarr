@@ -6,7 +6,7 @@ import {
   Typography,
 } from '../ui';
 import { Info as InfoIcon } from '../../lib/icons';
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Link as RouterLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import PlexLibrarySelector from '../PlexLibrarySelector';
 import PlexAuthDialog from '../PlexAuthDialog';
 import ConfigurationSkeleton from '../Configuration/common/ConfigurationSkeleton';
@@ -19,6 +19,8 @@ import WatchStatusSection from '../Configuration/sections/WatchStatusSection';
 import { SponsorBlockSection } from '../Configuration/sections/SponsorBlockSection';
 import { CookieConfigSection } from '../Configuration/sections/CookieConfigSection';
 import { NotificationsSection } from '../Configuration/sections/NotificationsSection';
+import { RssFeedsSection } from '../Configuration/sections/RssFeedsSection';
+import { ArrBridgeSection } from '../Configuration/sections/ArrBridgeSection';
 import { DownloadPerformanceSection } from '../Configuration/sections/DownloadPerformanceSection';
 import { YtdlpOptionsSection } from '../Configuration/sections/YtdlpOptionsSection';
 import { YtdlpUpdateSection } from '../Configuration/sections/YtdlpUpdateSection';
@@ -48,6 +50,7 @@ import { SettingsIndex } from './SettingsIndex';
 import { settingsHeading } from './settingsHeading';
 import LibraryFolders from '../LibraryFolders';
 import { MaintenanceSection } from './MaintenanceSection';
+import { AboutSection } from './AboutSection';
 import { SchedulingSection } from '../Configuration/sections/SchedulingSection';
 import { LoggingSection } from '../Configuration/sections/LoggingSection';
 
@@ -261,7 +264,7 @@ export function Settings({ token }: SettingsProps) {
     setHasUnsavedChanges(changed);
   }, [config, initialConfig]);
 
-  const pageTitle = useMemo(() => settingsHeading(location.pathname), [location.pathname]);
+  const heading = useMemo(() => settingsHeading(location.pathname), [location.pathname]);
 
   return (
     <div>
@@ -288,10 +291,14 @@ export function Settings({ token }: SettingsProps) {
         onClose={() => setChannelApplyTarget(null)}
       />
 
-      {pageTitle !== null && (
+      {heading !== null && (
         <div style={{ marginBottom: 16 }}>
           <Typography variant="h5" style={{ fontWeight: 800 }}>
-            {pageTitle}
+            {heading.subPage === null ? 'Settings' : (
+              <>
+                <RouterLink to="/settings" className="hover:underline">Settings</RouterLink> / {heading.subPage}
+              </>
+            )}
           </Typography>
         </div>
       )}
@@ -427,6 +434,30 @@ export function Settings({ token }: SettingsProps) {
             }
           />
           <Route
+            path="rss-feeds"
+            element={
+              <RssFeedsSection
+                token={token}
+                config={config}
+                savedConfig={initialConfig}
+                onConfigChange={handleConfigChange}
+                setSnackbar={setSnackbar}
+              />
+            }
+          />
+          <Route
+            path="sonarr-radarr"
+            element={
+              <ArrBridgeSection
+                token={token}
+                config={config}
+                savedConfig={initialConfig}
+                onConfigChange={handleConfigChange}
+                setSnackbar={setSnackbar}
+              />
+            }
+          />
+          <Route
             path="downloading"
             element={
               <>
@@ -531,6 +562,8 @@ export function Settings({ token }: SettingsProps) {
               />
             }
           />
+
+          <Route path="about" element={<AboutSection />} />
 
           <Route path="*" element={<Navigate to="/settings" replace />} />
         </Routes>

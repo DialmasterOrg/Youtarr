@@ -28,6 +28,10 @@ const { parseSubtitleLanguages, isExpandableLanguageCode } = require('./subtitle
 // use_regex=True); Node 20 cannot evaluate the (?-i:...) groups.
 const LANGUAGE_VARIANT_SUFFIX = '(-(?-i:[A-Z][a-z]{3}))?(-(?-i:[A-Z]{2}|[0-9]{3}))?';
 
+// The match filter clause that keeps members-only videos out of a run. Used
+// when the caller did not ask membersAccess for one.
+const MEMBERS_ONLY_EXCLUDED_FILTER = 'availability!=subscriber_only';
+
 class YtdlpCommandBuilder {
   /**
    * Build output path with optional subfolder support
@@ -348,6 +352,8 @@ class YtdlpCommandBuilder {
    * @param {boolean} options.cookiesEnabled - Pass the configured cookies (default true)
    * @param {boolean} options.streamEntries - Print one JSON line per playlist entry as each page
    *   arrives instead of a single JSON document at exit (no playlist-level fields)
+   * @param {boolean} options.entryPerLine - Print one JSON line per playlist entry after the whole
+   *   playlist is resolved, so each entry still carries the playlist's counts
    * @returns {string[]} - Complete args array
    */
   static buildMetadataFetchArgs(url, options = {}) {
@@ -360,6 +366,8 @@ class YtdlpCommandBuilder {
     args.push('--skip-download');
     if (options.streamEntries) {
       args.push('--dump-json', '--lazy-playlist');
+    } else if (options.entryPerLine) {
+      args.push('--dump-json');
     } else {
       args.push('--dump-single-json');
     }
@@ -384,7 +392,7 @@ class YtdlpCommandBuilder {
     // Flat listings don't make player requests, so they skip the cookie clients.
     args.push(...(options.flatPlaylist
       ? this.buildCustomArgs(config)
-      : this.buildVideoExtractionCustomArgs(config)));
+      : this.buildVideoExtractionCustomArgs(config, { cookiesEnabled: options.cookiesEnabled })));
 
     args.push(url);
     return args;
@@ -485,10 +493,12 @@ class YtdlpCommandBuilder {
    * @param {Object} filterConfig - ChannelFilterConfig instance with min_duration, max_duration, title_filter_regex
    * @returns {string} - Complete match filter string for yt-dlp
    */
-  static buildMatchFilters(filterConfig = null) {
-    // Base filters - always applied for channel downloads
+  static buildMatchFilters(filterConfig = null, membersFilter = MEMBERS_ONLY_EXCLUDED_FILTER) {
+    // Base filters - always applied for channel downloads. membersFilter comes
+    // from membersAccess.buildDownloadFilter: members-only videos are left out
+    // without cookies, and only fresh denials are left out with them.
     const baseFilters = [
-      'availability!=subscriber_only',
+      ...(membersFilter ? [membersFilter] : []),
       '!is_live',
       'live_status!=is_upcoming',
     ];
@@ -550,10 +560,11 @@ class YtdlpCommandBuilder {
    * different shows are never joined into one regex: repeated group names or
    * flags would crash yt-dlp mid-run.
    * @param {Object} filterConfig - ChannelFilterConfig (showFilters: [{ filterRegex, excludeRegexes }])
+   * @param {string|null} [membersFilter] - members-only match filter clause (membersAccess.buildDownloadFilter)
    * @returns {string[]}
    */
-  static buildMatchFilterList(filterConfig = null) {
-    const channelFilter = this.buildMatchFilters(filterConfig);
+  static buildMatchFilterList(filterConfig = null, membersFilter = MEMBERS_ONLY_EXCLUDED_FILTER) {
+    const channelFilter = this.buildMatchFilters(filterConfig, membersFilter);
     const shows = filterConfig && Array.isArray(filterConfig.showFilters) ? filterConfig.showFilters : [];
     if (shows.length === 0) return [channelFilter];
     return shows.map((show) => [
@@ -605,6 +616,8 @@ class YtdlpCommandBuilder {
    * @param {Object|null} filterConfig - Channel filter configuration
    * @param {string|null} audioFormat - Audio format ('video_mp3', 'mp3_only', or null for video only)
    * @param {boolean} skipVideoFolder - If true, skip the video subfolder level (flat structure)
+   * @param {Object} [options]
+   * @param {string|null} [options.membersFilter] - members-only match filter clause (membersAccess.buildDownloadFilter)
    * @returns {string[]} - Array of yt-dlp command arguments
    */
   static getBaseCommandArgs(
@@ -613,7 +626,8 @@ class YtdlpCommandBuilder {
     subFolder = null,
     filterConfig = null,
     audioFormat = null,
-    skipVideoFolder = false
+    skipVideoFolder = false,
+    { membersFilter = MEMBERS_ONLY_EXCLUDED_FILTER } = {}
   ) {
     const config = configModule.getConfig();
     const res = resolution || config.preferredResolution || '1080';
@@ -663,7 +677,7 @@ class YtdlpCommandBuilder {
     }
 
     // Build match filters with any channel-specific filtering
-    const matchFilters = this.buildMatchFilterList(filterConfig).flatMap((filter) => ['--match-filter', filter]);
+    const matchFilters = this.buildMatchFilterList(filterConfig, membersFilter).flatMap((filter) => ['--match-filter', filter]);
 
     args.push(
       '--ignore-errors',
@@ -698,6 +712,9 @@ class YtdlpCommandBuilder {
    * @param {boolean} allowRedownload - Allow re-downloading previously fetched videos
    * @param {string|null} audioFormat - Audio format ('video_mp3', 'mp3_only', or null for video only)
    * @param {boolean} skipVideoFolder - If true, skip the video subfolder level (flat structure)
+   * @param {Object} [options]
+   * @param {boolean} [options.cookiesEnabled] - pass the configured cookies to yt-dlp
+   * @param {string|null} [options.membersFilter] - members-only match filter clause (membersAccess.buildDownloadFilter)
    * @returns {string[]} - Array of yt-dlp command arguments
    */
   static getBaseCommandArgsForManualDownload(
@@ -708,7 +725,7 @@ class YtdlpCommandBuilder {
     options = {}
   ) {
     const config = configModule.getConfig();
-    const { cookiesEnabled = true } = options;
+    const { cookiesEnabled = true, membersFilter = MEMBERS_ONLY_EXCLUDED_FILTER } = options;
     const res = resolution || config.preferredResolution || '1080';
     const videoCodec = config.videoCodec || 'default';
 
@@ -761,7 +778,7 @@ class YtdlpCommandBuilder {
       '--write-info-json',
       '--no-write-playlist-metafiles',
       '--extractor-args', 'youtubetab:tab=videos;sort=dd',
-      '--match-filter', 'availability!=subscriber_only & !is_live & live_status!=is_upcoming',
+      '--match-filter', this.buildMatchFilters(null, membersFilter),
       '-o', outputPath,
       '--datebefore', 'now',
       '-o', `thumbnail:${thumbnailPath}`,

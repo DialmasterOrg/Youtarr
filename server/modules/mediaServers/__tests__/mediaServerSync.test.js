@@ -2,6 +2,7 @@ describe('mediaServerSync', () => {
   let mediaServerSync;
   let Playlist, PlaylistVideo, PlaylistSyncState, Video;
   let serverRegistry;
+  let messageEmitter;
 
   beforeEach(() => {
     jest.resetModules();
@@ -10,7 +11,7 @@ describe('mediaServerSync', () => {
     jest.doMock('../../../models', () => ({
       Playlist: { findByPk: jest.fn() },
       PlaylistVideo: { findAll: jest.fn() },
-      PlaylistSyncState: { findOne: jest.fn(), create: jest.fn() },
+      PlaylistSyncState: { findOne: jest.fn(), findAll: jest.fn(), create: jest.fn() },
       Video: { findAll: jest.fn() },
     }));
     jest.doMock('../../configModule', () => ({ getConfig: () => ({}) }));
@@ -18,7 +19,9 @@ describe('mediaServerSync', () => {
     jest.doMock('../../../logger', () => ({
       info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn(),
     }));
+    jest.doMock('../../messageEmitter', () => ({ emitMessage: jest.fn() }));
 
+    messageEmitter = require('../../messageEmitter');
     mediaServerSync = require('../mediaServerSync');
     const models = require('../../../models');
     Playlist = models.Playlist;
@@ -50,6 +53,20 @@ describe('mediaServerSync', () => {
     }
     Object.defineProperty(adapter, 'constructor', { value: { name } });
     return adapter;
+  }
+
+  // Runs fn with the backoff sleeps collapsed, so a sync that never resolves
+  // its files finishes instantly.
+  async function withInstantBackoff(fn) {
+    const setTimeoutSpy = jest.spyOn(global, 'setTimeout').mockImplementation((cb) => {
+      cb();
+      return 0;
+    });
+    try {
+      await fn();
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
   }
 
   test('builds itemIds in position order, skips un-resolvable ones, and calls createPlaylist on first sync', async () => {
@@ -206,7 +223,7 @@ describe('mediaServerSync', () => {
     expect(jellyfinAdapter.createPlaylist).toHaveBeenCalled();
   });
 
-  test('skips playlist creation when no items resolve yet (first-time sync, videos not downloaded)', async () => {
+  test('creates no server playlist and records why when nothing is downloaded yet', async () => {
     Playlist.findByPk.mockResolvedValue({
       id: 1, playlist_id: 'PL1', title: 'PL',
       sync_to_plex: true, sync_to_jellyfin: false, sync_to_emby: false,
@@ -226,7 +243,12 @@ describe('mediaServerSync', () => {
 
     expect(plexAdapter.createPlaylist).not.toHaveBeenCalled();
     expect(plexAdapter.replacePlaylistItems).not.toHaveBeenCalled();
-    expect(PlaylistSyncState.create).not.toHaveBeenCalled();
+    expect(PlaylistSyncState.create).toHaveBeenCalledTimes(1);
+    expect(PlaylistSyncState.create).toHaveBeenCalledWith({
+      playlist_id: 1,
+      server_type: 'plex',
+      last_error: 'No downloaded items to sync yet.',
+    });
   });
 
   test('fetches downloaded videos in a single batched query', async () => {
@@ -364,7 +386,7 @@ describe('mediaServerSync', () => {
       expect.stringContaining('Unable to sync playlist "My PL" to Jellyfin: server not reachable or not responding')
     );
     expect(PlaylistSyncState.create).toHaveBeenCalledWith(
-      expect.objectContaining({ last_error: 'Jellyfin not reachable or not responding' })
+      expect.objectContaining({ last_error: 'Jellyfin not reachable or not responding.' })
     );
   });
 
@@ -649,7 +671,11 @@ describe('mediaServerSync', () => {
 
     expect(plexAdapter.triggerLibraryScan).toHaveBeenCalledWith(null, { mediaType: 'video' });
     expect(plexAdapter.createPlaylist).not.toHaveBeenCalled();
-    expect(PlaylistSyncState.create).not.toHaveBeenCalled();
+    expect(PlaylistSyncState.create).toHaveBeenCalledWith({
+      playlist_id: 1,
+      server_type: 'plex',
+      last_error: 'None of the downloaded items has a video file. This playlist syncs as a video playlist because its Download Type is Video Only.',
+    });
   });
 
   test('keeps the existing server playlist when no downloads match the playlist type yet', async () => {
@@ -706,7 +732,12 @@ describe('mediaServerSync', () => {
     }
 
     expect(plexAdapter.replacePlaylistItems).not.toHaveBeenCalled();
-    expect(updateMock).not.toHaveBeenCalled();
+    // Only the reason is written: the server playlist id and the time of the
+    // last real sync stay as they were.
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    expect(updateMock).toHaveBeenCalledWith({
+      last_error: expect.stringContaining('Downloaded video files were not found on Plex.'),
+    });
   });
 
   test('leaves out videos whose files were deleted', async () => {
@@ -912,6 +943,268 @@ describe('mediaServerSync', () => {
       finish(null);
       await pending;
       expect(mediaServerSync.isAnySyncInFlight()).toBe(false);
+    });
+  });
+
+  describe('recorded sync result', () => {
+    function mockPlaylist(overrides = {}) {
+      Playlist.findByPk.mockResolvedValue({
+        id: 1, playlist_id: 'PL1', title: 'PL',
+        sync_to_plex: false, sync_to_jellyfin: true, sync_to_emby: false,
+        public_on_servers: false, audio_format: null,
+        ...overrides,
+      });
+    }
+
+    test('a Video + MP3 playlist whose videos the server lacks says it syncs as video', async () => {
+      mockPlaylist({ audio_format: 'video_mp3' });
+      PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'v1', position: 1, ignored: false }]);
+      Video.findAll.mockResolvedValue([
+        { youtubeId: 'v1', filePath: '/youtube/A/v1.mp4', audioFilePath: '/youtube/A/v1.mp3' },
+      ]);
+      PlaylistSyncState.findOne.mockResolvedValue(null);
+      const jellyfinAdapter = makeAdapter('JellyfinAdapter', {
+        resolveItemIdByFilepath: jest.fn().mockResolvedValue(null),
+      });
+      serverRegistry.getEnabledAdapters.mockReturnValue([jellyfinAdapter]);
+
+      await withInstantBackoff(() => mediaServerSync.syncPlaylist(1));
+
+      expect(PlaylistSyncState.create).toHaveBeenCalledWith({
+        playlist_id: 1,
+        server_type: 'jellyfin',
+        last_error: 'Downloaded video files were not found on Jellyfin. If they were just downloaded, the server may still be scanning; otherwise check that the files still exist and that the server has a video-type library that includes your Youtarr output folder. This playlist syncs as a video playlist because its Download Type is Video + MP3.',
+      });
+    });
+
+    test('a Video Only playlist whose videos the server lacks does not mention the Download Type', async () => {
+      mockPlaylist();
+      PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'v1', position: 1, ignored: false }]);
+      Video.findAll.mockResolvedValue([{ youtubeId: 'v1', filePath: '/youtube/A/v1.mp4' }]);
+      PlaylistSyncState.findOne.mockResolvedValue(null);
+      const jellyfinAdapter = makeAdapter('JellyfinAdapter', {
+        resolveItemIdByFilepath: jest.fn().mockResolvedValue(null),
+      });
+      serverRegistry.getEnabledAdapters.mockReturnValue([jellyfinAdapter]);
+
+      await withInstantBackoff(() => mediaServerSync.syncPlaylist(1));
+
+      expect(PlaylistSyncState.create).toHaveBeenCalledWith({
+        playlist_id: 1,
+        server_type: 'jellyfin',
+        last_error: 'Downloaded video files were not found on Jellyfin. If they were just downloaded, the server may still be scanning; otherwise check that the files still exist and that the server has a video-type library that includes your Youtarr output folder.',
+      });
+    });
+
+    test('an MP3 Only playlist whose mp3s the server lacks asks for a music-type library', async () => {
+      mockPlaylist({ audio_format: 'mp3_only' });
+      PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'a1', position: 1, ignored: false }]);
+      Video.findAll.mockResolvedValue([
+        { youtubeId: 'a1', filePath: null, audioFilePath: '/youtube/A/a1.mp3' },
+      ]);
+      PlaylistSyncState.findOne.mockResolvedValue(null);
+      const jellyfinAdapter = makeAdapter('JellyfinAdapter', {
+        resolveItemIdByFilepath: jest.fn().mockResolvedValue(null),
+      });
+      serverRegistry.getEnabledAdapters.mockReturnValue([jellyfinAdapter]);
+
+      await withInstantBackoff(() => mediaServerSync.syncPlaylist(1));
+
+      expect(PlaylistSyncState.create).toHaveBeenCalledWith({
+        playlist_id: 1,
+        server_type: 'jellyfin',
+        last_error: 'Downloaded MP3 files were not found on Jellyfin. If they were just downloaded, the server may still be scanning; otherwise check that the files still exist and that the server has a music-type library that includes your Youtarr output folder.',
+      });
+    });
+
+    test('an MP3 Only playlist with only video downloads says it syncs as music', async () => {
+      mockPlaylist({ audio_format: 'mp3_only' });
+      PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'v1', position: 1, ignored: false }]);
+      Video.findAll.mockResolvedValue([
+        { youtubeId: 'v1', filePath: '/youtube/A/v1.mp4', audioFilePath: null },
+      ]);
+      PlaylistSyncState.findOne.mockResolvedValue(null);
+      serverRegistry.getEnabledAdapters.mockReturnValue([makeAdapter('JellyfinAdapter')]);
+
+      await mediaServerSync.syncPlaylist(1);
+
+      expect(PlaylistSyncState.create).toHaveBeenCalledWith({
+        playlist_id: 1,
+        server_type: 'jellyfin',
+        last_error: 'None of the downloaded items has an MP3 file. This playlist syncs as a music playlist because its Download Type is MP3 Only.',
+      });
+    });
+
+    test('the warning for an item the server lacks names its file and type', async () => {
+      const logger = require('../../../logger');
+      mockPlaylist({ title: 'My PL' });
+      PlaylistVideo.findAll.mockResolvedValue([
+        { youtube_id: 'v1', position: 1, ignored: false },
+        { youtube_id: 'v2', position: 2, ignored: false },
+      ]);
+      Video.findAll.mockResolvedValue([
+        { youtubeId: 'v1', filePath: '/youtube/A/Found [v1].mp4' },
+        { youtubeId: 'v2', filePath: '/youtube/B/Lost [v2].mp4' },
+      ]);
+      PlaylistSyncState.findOne.mockResolvedValue(null);
+      PlaylistSyncState.create.mockResolvedValue({});
+      const jellyfinAdapter = makeAdapter('JellyfinAdapter', {
+        resolveItemIdByFilepath: jest.fn((p) => Promise.resolve(p.includes('Found') ? 'jf1' : null)),
+        createPlaylist: jest.fn().mockResolvedValue({ id: 'jf-pl' }),
+      });
+      serverRegistry.getEnabledAdapters.mockReturnValue([jellyfinAdapter]);
+
+      await withInstantBackoff(() => mediaServerSync.syncPlaylist(1));
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        { youtube_id: 'v2', serverType: 'jellyfin', fileName: 'Lost [v2].mp4', itemType: 'Video' },
+        'Unable to sync item v2 for playlist "My PL" to Jellyfin: Video file "Lost [v2].mp4" not found on server, skipping'
+      );
+    });
+
+    test('an HTTP failure is recorded as a short message naming the server and status', async () => {
+      mockPlaylist();
+      PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'v1', position: 1, ignored: false }]);
+      Video.findAll.mockResolvedValue([{ youtubeId: 'v1', filePath: '/youtube/A/v1.mp4' }]);
+      PlaylistSyncState.findOne.mockResolvedValue(null);
+      const httpError = Object.assign(new Error('Request failed with status code 401'), {
+        isAxiosError: true,
+        response: { status: 401 },
+        config: { headers: { 'X-Emby-Token': 'secret-token' } },
+      });
+      const jellyfinAdapter = makeAdapter('JellyfinAdapter', {
+        resolveItemIdByFilepath: jest.fn().mockResolvedValue('jf1'),
+        createPlaylist: jest.fn().mockRejectedValue(httpError),
+      });
+      serverRegistry.getEnabledAdapters.mockReturnValue([jellyfinAdapter]);
+
+      await mediaServerSync.syncPlaylist(1);
+
+      expect(PlaylistSyncState.create).toHaveBeenCalledWith({
+        playlist_id: 1,
+        server_type: 'jellyfin',
+        last_error: 'Jellyfin request failed (HTTP 401).',
+      });
+    });
+
+    test('an HTTP failure with no response is recorded with its error code', async () => {
+      mockPlaylist();
+      PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'v1', position: 1, ignored: false }]);
+      Video.findAll.mockResolvedValue([{ youtubeId: 'v1', filePath: '/youtube/A/v1.mp4' }]);
+      PlaylistSyncState.findOne.mockResolvedValue(null);
+      const httpError = Object.assign(new Error('socket hang up'), {
+        isAxiosError: true,
+        code: 'ECONNRESET',
+      });
+      const jellyfinAdapter = makeAdapter('JellyfinAdapter', {
+        resolveItemIdByFilepath: jest.fn().mockResolvedValue('jf1'),
+        createPlaylist: jest.fn().mockRejectedValue(httpError),
+      });
+      serverRegistry.getEnabledAdapters.mockReturnValue([jellyfinAdapter]);
+
+      await mediaServerSync.syncPlaylist(1);
+
+      expect(PlaylistSyncState.create).toHaveBeenCalledWith({
+        playlist_id: 1,
+        server_type: 'jellyfin',
+        last_error: 'Jellyfin request failed (ECONNRESET).',
+      });
+    });
+  });
+
+  describe('getSyncStatus', () => {
+    test('returns each server\'s last sync time and reason', async () => {
+      const syncedAt = new Date('2026-11-18T10:00:00Z');
+      PlaylistSyncState.findAll.mockResolvedValue([
+        { server_type: 'plex', server_playlist_id: 'p1', last_synced_at: syncedAt, last_error: null },
+        { server_type: 'jellyfin', server_playlist_id: null, last_synced_at: null, last_error: 'No downloaded items to sync yet.' },
+      ]);
+
+      const status = await mediaServerSync.getSyncStatus({ id: 7 });
+
+      expect(PlaylistSyncState.findAll).toHaveBeenCalledWith({ where: { playlist_id: 7 } });
+      expect(status).toEqual({
+        syncing: false,
+        servers: {
+          plex: { last_synced_at: syncedAt, last_error: null },
+          jellyfin: { last_synced_at: null, last_error: 'No downloaded items to sync yet.' },
+        },
+      });
+    });
+
+    test('reports syncing only while a sync of that playlist is running', async () => {
+      PlaylistSyncState.findAll.mockResolvedValue([]);
+      let release;
+      const gate = new Promise((resolve) => { release = resolve; });
+      Playlist.findByPk.mockImplementation(async () => {
+        await gate;
+        return null;
+      });
+
+      const run = mediaServerSync.syncPlaylist(7);
+      const during = await mediaServerSync.getSyncStatus({ id: 7 });
+      const otherPlaylist = await mediaServerSync.getSyncStatus({ id: 8 });
+      release();
+      await run;
+      const after = await mediaServerSync.getSyncStatus({ id: 7 });
+
+      expect(during.syncing).toBe(true);
+      expect(otherPlaylist.syncing).toBe(false);
+      expect(after.syncing).toBe(false);
+    });
+  });
+
+  describe('playlistSyncUpdated broadcast', () => {
+    const broadcastFor = (id) => ['broadcast', null, 'playlists', 'playlistSyncUpdated', { playlistDbId: id }];
+
+    test('is sent when a sync starts and again when it ends', async () => {
+      let release;
+      const gate = new Promise((resolve) => { release = resolve; });
+      Playlist.findByPk.mockImplementation(async () => {
+        await gate;
+        return null;
+      });
+
+      const run = mediaServerSync.syncPlaylist(7);
+      expect(messageEmitter.emitMessage).toHaveBeenCalledTimes(1);
+      expect(messageEmitter.emitMessage).toHaveBeenLastCalledWith(...broadcastFor(7));
+
+      release();
+      await run;
+      expect(messageEmitter.emitMessage).toHaveBeenCalledTimes(2);
+      expect(messageEmitter.emitMessage).toHaveBeenLastCalledWith(...broadcastFor(7));
+    });
+
+    test('the end is sent once the sync no longer counts as running, so a refetch sees it finished', async () => {
+      PlaylistSyncState.findAll.mockResolvedValue([]);
+      Playlist.findByPk.mockResolvedValue(null);
+      const statusAtBroadcast = [];
+      messageEmitter.emitMessage.mockImplementation(() => {
+        statusAtBroadcast.push(mediaServerSync.getSyncStatus({ id: 7 }));
+      });
+
+      await mediaServerSync.syncPlaylist(7);
+
+      const [atStart, atEnd] = await Promise.all(statusAtBroadcast);
+      expect(atStart.syncing).toBe(true);
+      expect(atEnd.syncing).toBe(false);
+    });
+
+    test('is sent at the end of a sync that rejects', async () => {
+      Playlist.findByPk.mockRejectedValue(new Error('db down'));
+
+      await expect(mediaServerSync.syncPlaylist(7)).rejects.toThrow('db down');
+
+      expect(messageEmitter.emitMessage).toHaveBeenCalledTimes(2);
+    });
+
+    test('a failing broadcast does not fail the sync', async () => {
+      Playlist.findByPk.mockResolvedValue(null);
+      messageEmitter.emitMessage.mockImplementation(() => {
+        throw new Error('no socket server');
+      });
+
+      await expect(mediaServerSync.syncPlaylist(7)).resolves.toBeUndefined();
     });
   });
 });

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import axios from 'axios';
 import { useVideoActivity } from '../providers/VideoActivityProvider';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -21,6 +22,7 @@ import { useDownloadListingsRefresh } from '../hooks/useDownloadListingsRefresh'
 import { usePlaylistMutations } from '../hooks/usePlaylistMutations';
 import { useMediaServerStatus } from '../hooks/useMediaServerStatus';
 import { MediaServerType, PlaylistSubscribeSettings, PlaylistVideo } from '../types/playlist';
+import type { MembersAccessState } from '../types/ChannelVideo';
 import PlaylistHeader from './PlaylistPage/components/PlaylistHeader';
 import NoMediaServerWarning from './PlaylistPage/components/NoMediaServerWarning';
 import PlaylistVideoList from './PlaylistPage/components/PlaylistVideoList';
@@ -35,6 +37,7 @@ import PlaylistFollowingDialog, { FollowingDialogMode } from './PlaylistPage/com
 import PlaylistSettingsDialog from './PlaylistPage/components/PlaylistSettingsDialog';
 import { isDeletable, isDownloadable, toModalData } from './PlaylistPage/components/playlistVideoHelpers';
 import { usePlaylistVideoDeletion } from './PlaylistPage/hooks/usePlaylistVideoDeletion';
+import { usePlaylistSyncUpdates } from './PlaylistPage/hooks/usePlaylistSyncUpdates';
 import DeleteVideosDialog from './shared/DeleteVideosDialog';
 import DownloadSettingsDialog from './DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from './DownloadManager/ManualDownload/types';
@@ -69,6 +72,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     followingExistingCount,
     followingRequestedCount,
     unsyncableCount,
+    syncStatus,
     loading,
     loadingMore,
     hasMore,
@@ -85,11 +89,27 @@ function PlaylistPage({ token }: PlaylistPageProps) {
   } = usePlaylistDetail({ token, playlistId, sortOrder, downloadState, watchedState });
 
   const { snapshot } = useVideoActivity();
+  // What the video modal learned about members-only access, until the next fetch.
+  const [availabilityOverrides, setAvailabilityOverrides] = useState<
+    Record<string, Pick<PlaylistVideo, 'availability' | 'members_access'>>
+  >({});
   const videos = useMemo(() => playlistVideos.map(video => ({
-    ...video, activity: snapshot.videos[video.youtube_id]?.state,
-  })), [playlistVideos, snapshot]);
+    ...video,
+    ...availabilityOverrides[video.youtube_id],
+    activity: snapshot.videos[video.youtube_id]?.state,
+  })), [playlistVideos, snapshot, availabilityOverrides]);
+  const handleAvailabilityDetected = useCallback(
+    (youtubeId: string, availability: string | null, membersAccess?: MembersAccessState | null) => {
+      setAvailabilityOverrides((prev) => ({
+        ...prev,
+        [youtubeId]: { availability, members_access: membersAccess ?? null },
+      }));
+    },
+    []
+  );
 
   useDownloadListingsRefresh(refetch);
+  usePlaylistSyncUpdates(playlist?.id ?? null, refetchMeta);
 
   const {
     status: serverStatus,
@@ -149,8 +169,9 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         showSnackbar(successMessage ?? `${label} succeeded`);
         return true;
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : `${label} failed`;
-        showSnackbar(msg, 'error');
+        const serverMessage: unknown = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
+        const fallback = err instanceof Error ? err.message : `${label} failed`;
+        showSnackbar(typeof serverMessage === 'string' && serverMessage ? serverMessage : fallback, 'error');
         return false;
       } finally {
         setRunningAction(null);
@@ -432,6 +453,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         followingRequestedCount={followingRequestedCount}
         onChooseExisting={() => setFollowingMode('batch')}
         unsyncableCount={unsyncableCount}
+        syncStatus={syncStatus}
         togglePending={pending}
         actionRunning={actionRunning}
         refreshing={runningAction === 'Refresh'}
@@ -470,9 +492,10 @@ function PlaylistPage({ token }: PlaylistPageProps) {
             </Box>
           </Box>
           <Typography variant="caption" color="text.secondary" className="block mb-2">
-            Private, members-only, and deleted videos can&apos;t be accessed, so
-            they are never loaded or downloaded; you may see fewer videos here
-            than YouTube reports for the playlist.
+            Private and deleted videos can&apos;t be accessed, so they are never
+            loaded or downloaded; you may see fewer videos here than YouTube
+            reports for the playlist. Members-only videos download only with
+            cookies from an account that is a member of the channel.
           </Typography>
           <PlaylistVideoList
             videos={videos}
@@ -595,6 +618,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
           token={token}
           allowIgnore={false}
           onVideoDeleted={handleVideoDeleted}
+          onAvailabilityDetected={handleAvailabilityDetected}
         />
       )}
 

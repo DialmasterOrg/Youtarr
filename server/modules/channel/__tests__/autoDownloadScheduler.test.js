@@ -652,7 +652,7 @@ describe('autoDownloadScheduler', () => {
       await expect(record.finalRecord).resolves.toEqual(expect.objectContaining({
         status: 'success',
         outcome: 'completed',
-        message: '3 videos downloaded, 6 skipped (already downloaded or filtered).',
+        message: '3 videos downloaded.',
       }));
     });
 

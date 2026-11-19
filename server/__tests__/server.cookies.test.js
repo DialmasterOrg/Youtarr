@@ -38,6 +38,9 @@ describe('Cookie Module Integration Tests', () => {
       v4: jest.fn(() => 'test-uuid-1234')
     }));
 
+    // The real logger writes through the fs mocked above, which has no write().
+    jest.doMock('../logger', () => require('../__mocks__/logger'));
+
     fs = require('fs');
     configModule = require('../modules/configModule');
   });

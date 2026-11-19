@@ -137,6 +137,33 @@ describe('YtdlpErrorTracker', () => {
       expect(deps.persistMembersOnlyAvailability).toHaveBeenCalledWith('fallbackVid');
     });
 
+    it('records an upcoming video once when the error appears on both streams', () => {
+      const { tracker } = createTracker();
+      const line = 'ERROR: [youtube] abc123def45: Premieres in 3 hours';
+
+      tracker.handleErrorLine(line, 'stdout');
+      tracker.handleErrorLine(line, 'stderr');
+
+      expect([...tracker.upcomingVideoIds]).toEqual(['abc123def45']);
+    });
+
+    it('falls back to currentVideoId when the upcoming error has no extractable id', () => {
+      const { tracker } = createTracker();
+      tracker.trackVideoStart('fallbackVid');
+
+      tracker.handleErrorLine('ERROR: This live event will begin in 2 hours', 'stderr');
+
+      expect([...tracker.upcomingVideoIds]).toEqual(['fallbackVid']);
+    });
+
+    it('does not record a members-only video as upcoming', () => {
+      const { tracker } = createTracker();
+
+      tracker.handleErrorLine('ERROR: [youtube] abc123def45: Join this channel to get access to members-only content', 'stdout');
+
+      expect(tracker.upcomingVideoIds.size).toBe(0);
+    });
+
     it('records a terminated channel and emits the disabled warning on successful persistence', async () => {
       const { tracker, deps } = createTracker();
 

@@ -247,6 +247,12 @@ describe('DownloadProgressMonitor', () => {
       expect(result.title).toBe('Title');
     });
 
+    it('should keep a title that ends in an unclosed bracket', () => {
+      const line = '[download] Destination: /path/to/Channel - Song [ O [v0_Z2bXFwpQ].f137.mp4';
+      const result = monitor.extractVideoInfo(line);
+      expect(result.title).toBe('Song [ O');
+    });
+
     it('should return lastVideoInfo for non-destination lines', () => {
       monitor.lastVideoInfo = { channel: 'OldChannel', title: 'OldTitle', displayTitle: 'OldTitle' };
       const result = monitor.extractVideoInfo('Some other line');
@@ -346,6 +352,46 @@ describe('DownloadProgressMonitor', () => {
 
       it('should identify downloading_audio state', () => {
         expect(monitor.determineState('[download] Destination: file.f140.m4a')).toBe('downloading_audio');
+      });
+
+      it('should identify a webm video stream', () => {
+        expect(monitor.determineState('[download] Destination: file.f315.webm')).toBe('downloading_video');
+      });
+
+      it('should identify an opus audio stream', () => {
+        expect(monitor.determineState('[download] Destination: file.f251.opus')).toBe('downloading_audio');
+      });
+
+      it('should identify a dash-suffixed audio format', () => {
+        expect(monitor.determineState('[download] Destination: file.f140-1.m4a')).toBe('downloading_audio');
+      });
+
+      it('should use the announced formats to tell webm video from webm audio', () => {
+        expect(monitor.determineState('[info] abc123: Downloading 1 format(s): 315+251')).toBeNull();
+        expect(monitor.requestedFormatIds).toEqual(['315', '251']);
+        expect(monitor.determineState('[download] Destination: file.f315.webm')).toBe('downloading_video');
+        expect(monitor.determineState('[download] Destination: file.f251.webm')).toBe('downloading_audio');
+      });
+
+      it('should tell streams apart by extension when audio is listed first', () => {
+        monitor.determineState('[info] abc123: Downloading 1 format(s): 140+137');
+        expect(monitor.determineState('[download] Destination: file.f140.m4a')).toBe('downloading_audio');
+        expect(monitor.determineState('[download] Destination: file.f137.mp4')).toBe('downloading_video');
+      });
+
+      it('should read only the first of several comma-separated format selections', () => {
+        expect(monitor.determineState('[info] abc123: Downloading 2 format(s): 242+140, 18')).toBeNull();
+        expect(monitor.requestedFormatIds).toEqual(['242', '140']);
+      });
+
+      it('should show progress through a 4K webm download', () => {
+        monitor.processProgress('', '[info] Fi_OAQqil0s: Downloading 1 format(s): 315+140-1', {});
+        monitor.processProgress('', '[info] Writing video metadata as JSON to: /path/file.info.json', {});
+        expect(monitor.currentState).toBe('processing_metadata');
+        monitor.processProgress('', '[download] Destination: /path/file [Fi_OAQqil0s].f315.webm', {});
+        expect(monitor.currentState).toBe('downloading_video');
+        monitor.processProgress('', '[download] Destination: /path/file [Fi_OAQqil0s].f140-1.m4a', {});
+        expect(monitor.currentState).toBe('downloading_audio');
       });
 
       it('should identify downloading_thumbnail state', () => {

@@ -213,5 +213,11 @@ class TabCountSources {
 
 const tabCountSources = new TabCountSources();
 tabCountSources.STOPPED_AFTER_FAILURES = STOPPED_AFTER_FAILURES;
+// Whether a yt-dlp failure means YouTube is throttling this IP (bot check or
+// rate limit), for other bulk callers that should stop and try again later.
+// channelYtdlpExecutor rejects with a generic message and keeps yt-dlp's own
+// words in `stderr`, so a rate limit is looked for there too.
+tabCountSources.isThrottleFailure = (err) =>
+  THROTTLE_FAILURES.has(classifyFailure(err)) || RATE_LIMIT_PATTERN.test(err.stderr || '');
 
 module.exports = tabCountSources;

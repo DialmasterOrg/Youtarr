@@ -7,6 +7,7 @@ const createVideoRoutes = require('./videos');
 const createJobRoutes = require('./jobs');
 const createPlexRoutes = require('./plex');
 const createApiKeyRoutes = require('./apikeys');
+const createStatusRoutes = require('./status');
 const createSubscriptionRoutes = require('./subscriptions');
 const createVideoDetailRoutes = require('./videoDetail');
 const createVideoSearchRoutes = require('./videoSearch');
@@ -17,14 +18,22 @@ const createYoutubeApiKeyRoutes = require('./youtubeApiKey');
 const createYtdlpOptionsRoutes = require('./ytdlpOptions');
 const createMaintenanceRoutes = require('./maintenance');
 const createSubfolderRoutes = require('./subfolders');
+const createSupportPromptRoutes = require('./supportPrompt');
 const createSchedulesRoutes = require('./schedules');
 const createLogRoutes = require('./logs');
 const createTvShowRoutes = require('./tvShows');
 const createTvReorganizeRoutes = require('./tvReorganize');
 const createTvTitleShowRoutes = require('./tvTitleShows');
 const createVideoTrashRoutes = require('./videoTrash');
+const createFeedRoutes = require('./feeds');
+const createArrBridgeRoutes = require('./arrBridge');
+const createArrBridgeSettingsRoutes = require('./arrBridgeSettings');
+const createExternalRequestReviewRoutes = require('./externalRequests');
+const { createExternalApiRoutes } = require('./externalApi');
+const { sendExternalError } = require('../modules/externalApi/externalApiResponse');
 const videoMetadataModule = require('../modules/videoMetadataModule');
 const videoTrashModule = require('../modules/videoTrashModule');
+const downloadsFeed = require('../modules/feeds/downloadsFeed');
 const videoOembedEnricher = require('../modules/videoOembedEnricher');
 const playlistModule = require('../modules/playlistModule');
 const m3uGenerator = require('../modules/m3uGenerator');
@@ -33,8 +42,10 @@ const channelSettingsModule = require('../modules/channelSettingsModule');
 const channelDownloadAllModule = require('../modules/channelDownloadAllModule');
 const ratingMapper = require('../modules/ratingMapper');
 const subfolderModule = require('../modules/subfolderModule');
+const supportPromptModule = require('../modules/supportPromptModule');
 const playlistVideoFilters = require('../modules/playlistVideoFilters');
 const playlistDownloadModule = require('../modules/playlistDownloadModule');
+const membersAccess = require('../modules/membersAccess');
 const models = require('../models');
 const videoLocalStatus = require('../modules/videoLocalStatus');
 const youtubeUrlParser = require('../modules/youtubeUrlParser');
@@ -45,6 +56,7 @@ const scheduleConfig = require('../modules/scheduleConfig');
 const rescanRunSummary = require('../modules/rescanRunSummary');
 const ytdlpUpdateRunSummary = require('../modules/ytdlpUpdateRunSummary');
 const storageGuard = require('../modules/storageGuard');
+const statusSummaryModule = require('../modules/statusSummaryModule');
 const cookieDetails = require('../modules/cookieDetails');
 const cookieTest = require('../modules/cookieTest');
 const logger = require('../logger');
@@ -59,6 +71,12 @@ const reorganize = require('../modules/reorganize');
 const watchStatusHolds = require('../modules/mediaServers/watchStatusHolds');
 const watchStatusPushBack = require('../modules/mediaServers/watchStatusPushBack');
 const libraryCheck = require('../modules/mediaServers/libraryCheck');
+const externalCatalogService = require('../modules/externalApi/externalCatalogService');
+const externalThumbnailProxy = require('../modules/externalApi/externalThumbnailProxy');
+const { sharedExternalWorkLimiter } = require('../modules/externalApi/externalWorkLimiter');
+const { createExternalRequestService } = require('../modules/externalApi/externalRequestService');
+const { createExternalQuotaService } = require('../modules/externalApi/externalQuotaService');
+const { isExternalApiEnabled } = require('../modules/externalApi/externalApiConfig');
 
 /**
  * Registers all route modules with the Express app
@@ -66,6 +84,10 @@ const libraryCheck = require('../modules/mediaServers/libraryCheck');
  * @param {Object} deps - Dependencies to inject into route modules
  */
 function registerRoutes(app, deps) {
+  // server.js owns the request service so it can wire the background
+  // executor to job completion; standalone callers get their own.
+  const externalRequestService = deps.externalRequestService || createExternalRequestService();
+  const externalQuotaService = createExternalQuotaService();
   const {
     verifyToken,
     loginLimiter,
@@ -74,6 +96,10 @@ function registerRoutes(app, deps) {
     ytdlpValidationRateLimiter,
     filenamePreviewRateLimiter,
     cookieTestRateLimiter,
+    feedLimiter,
+    arrBridgeLimiter,
+    arrBridgeConnectionLimiter,
+    arrBridge,
     configModule,
     channelModule,
     plexModule,
@@ -90,6 +116,13 @@ function registerRoutes(app, deps) {
     setupTokenModule,
     getClientAddress,
     isWslEnvironment,
+    externalApiAuth,
+    externalApiIngressLimiter,
+    externalApiLimiter,
+    externalApiWriteLimiter,
+    recordExternalApiUse,
+    externalRequestReviewLimiter,
+    serverVersion,
   } = deps;
 
   // Health routes (no auth required for health checks, but yt-dlp endpoints are authenticated)
@@ -143,14 +176,24 @@ function registerRoutes(app, deps) {
   // API Key routes
   app.use(createApiKeyRoutes({ verifyToken }));
 
+  // Read-only status summary for dashboards (session or status API key)
+  app.use(createStatusRoutes({ verifyToken, statusSummaryModule, getCachedYtDlpVersion, serverVersion }));
+
+  // Session-authenticated administrator review of external requests
+  app.use(createExternalRequestReviewRoutes({
+    verifyToken,
+    reviewLimiter: externalRequestReviewLimiter,
+    requestService: externalRequestService,
+  }));
+
   // Subscription import routes
   app.use(createSubscriptionRoutes({ verifyToken, subscriptionImportModule }));
 
-  // Video detail routes (metadata and streaming)
-  app.use(createVideoDetailRoutes({ verifyToken, videoMetadataModule, mediaServers }));
+  // Video detail routes (single video, metadata and streaming)
+  app.use(createVideoDetailRoutes({ verifyToken, videosModule, videoMetadataModule, mediaServers }));
 
   // Playlist routes
-  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard, layoutGuards }));
+  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard, layoutGuards, membersAccess }));
 
   // Media server routes
   app.use(createMediaServerRoutes({ verifyToken, configModule, mediaServers, scheduledTaskManager }));
@@ -162,6 +205,9 @@ function registerRoutes(app, deps) {
 
   // Subfolder registry routes
   app.use(createSubfolderRoutes({ verifyToken, subfolderModule, libraryFolders, layoutGuards, jobModule }));
+
+  // One-time support prompt routes
+  app.use(createSupportPromptRoutes({ verifyToken, supportPromptModule }));
 
   // Scheduled task status routes
   app.use(createSchedulesRoutes({ verifyToken, scheduledTaskManager, scheduledTaskRuns, scheduleConfig }));
@@ -180,6 +226,42 @@ function registerRoutes(app, deps) {
 
   // Reorganize (moving downloads between the Videos and TV layouts) and watch-state restores
   app.use(createTvReorganizeRoutes({ verifyToken, reorganize, watchStatusHolds, watchStatusPushBack, layoutGuards }));
+
+  // RSS feeds. The feed itself takes a token in its URL, not a session.
+  app.use(createFeedRoutes({ verifyToken, feedLimiter, downloadsFeed }));
+
+  // Sonarr/Radarr bridge. Takes its own key in the query string, not a
+  // session, and answers 404 while it is switched off. Callers that register
+  // routes without the bridge service (tests) get no /arr namespace.
+  if (arrBridge) app.use(createArrBridgeRoutes({ arrBridgeLimiter, arrBridge }));
+  // Its Settings endpoints, which do need a session.
+  if (arrBridge) app.use(createArrBridgeSettingsRoutes({ verifyToken, arrBridgeConnectionLimiter, arrBridge }));
+
+  // The versioned external API stays unreachable until a deployment opts in
+  // explicitly. This fail-closed default is independent of AUTH_ENABLED.
+  if (isExternalApiEnabled()) {
+    app.use('/external-api/v1', createExternalApiRoutes({
+      externalApiAuth,
+      externalApiIngressLimiter,
+      externalApiLimiter,
+      externalApiWriteLimiter,
+      recordExternalApiUse,
+      serverVersion,
+      catalogService: externalCatalogService,
+      thumbnailProxy: externalThumbnailProxy,
+      externalWorkLimiter: sharedExternalWorkLimiter,
+      requestService: externalRequestService,
+      quotaService: externalQuotaService,
+    }));
+  }
+  // Do not allow unknown or disabled external routes to fall through to the
+  // SPA. Keep the public namespace on the same versioned error contract.
+  app.use('/external-api', (req, res) =>
+    sendExternalError(res, 404, 'External API route not found', {
+      code: 'not_found',
+      requestId: req.id,
+    })
+  );
 
   // Defensive redirect: /channels -> /subscriptions (frontend handles client-side routing,
   // this fallback covers direct server-side hits during the transition period)

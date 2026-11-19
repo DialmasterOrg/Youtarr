@@ -8,8 +8,8 @@ Youtarr supports integration with multiple media servers, providing rich metadat
 |--------------|-----------------|------------------|-----------------|-------|
 | **Plex** | Full Integration | Embedded MP4 + NFO | Automatic | [Setup Guide](media-servers/plex.md) |
 | **Kodi** | NFO + Artwork | NFO Files | Manual/Scheduled | [Setup Guide](media-servers/kodi.md) |
-| **Jellyfin** | NFO + Artwork | NFO Files | Manual/Real-time | [Setup Guide](media-servers/jellyfin.md) |
-| **Emby** | NFO + Artwork | NFO Files + Embedded | Manual/Real-time | [Setup Guide](media-servers/emby.md) |
+| **Jellyfin** | NFO + Artwork | NFO Files | Automatic when connected, else Manual/Real-time | [Setup Guide](media-servers/jellyfin.md) |
+| **Emby** | NFO + Artwork | NFO Files + Embedded | Automatic when connected, else Manual/Real-time | [Setup Guide](media-servers/emby.md) |
 
 ## Quick Comparison
 
@@ -17,7 +17,7 @@ Youtarr supports integration with multiple media servers, providing rich metadat
 
 | Feature | Plex | Kodi | Jellyfin | Emby |
 |---------|------|------|----------|------|
-| Automatic Library Refresh via Youtarr | ✅ | ❌ | ❌ | ❌ |
+| Automatic Library Refresh via Youtarr | ✅ | ❌ | ✅ (when connected) | ✅ (when connected) |
 | Native Playlist Sync | ✅ | M3U only | ✅ | ✅ |
 | Channel Playlist (.m3u) Auto-Import | ❌ | Manual import | Mixed or Music libraries only | Mixed-type libraries only |
 | Watch Status Sync (into Youtarr) | ✅ | ❌ | ✅ | ✅ |
@@ -105,6 +105,7 @@ Disable if you are using Plex-only and want less "clutter" of files
 #### Jellyfin and Emby
 - For metadata only, no Youtarr-side settings are needed. Just point the server at your download directory and the NFO and poster files are picked up automatically.
 - For native playlist sync, you do need to connect the server in Youtarr: enable it under Settings, then enter the server URL, an API key, and the user account that should own the playlists. See [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md) for the full setup.
+- A connected server is also refreshed after each download job that adds videos, so new videos appear without waiting for the server's own scan. Fill in **Video Library IDs** to refresh only the libraries that hold your Youtarr videos; left blank, every library is refreshed.
 
 #### Kodi
 - No specific configuration needed for metadata; point Kodi at the download directory.
@@ -188,7 +189,7 @@ If you already have downloaded videos:
 |---------|----------|---------|
 | Metadata not showing | Enable "Local Media Assets" or NFO reader | All |
 | Posters missing | Check poster.jpg exists, verify permissions | All |
-| Library not updating | Check API key (Plex) or trigger manual scan | Plex |
+| Library not updating | Check the API key and connection in Settings, or trigger a manual scan | Plex, Jellyfin, Emby |
 | Special characters broken | Ensure UTF-8 encoding, update media server | All |
 | Duplicate entries | Check for overlapping library paths | All |
 | TV library is empty | Another library includes the TV folder; point it at your Videos folders instead | Jellyfin, Emby |

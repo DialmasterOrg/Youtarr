@@ -4,6 +4,7 @@ const JobVideo = require('./jobvideo');
 const JobVideoDownload = require('./jobvideodownload');
 const Video = require('./video');
 const Channel = require('./channel');
+const ChannelVideo = require('./channelvideo');
 const Session = require('./session');
 const ApiKey = require('./apikey');
 const Playlist = require('./playlist');
@@ -25,6 +26,8 @@ const EpisodeConflict = require('./episodeconflict');
 const ApiKeyChannelGrant = require('./apikeychannelgrant');
 const ExternalRequest = require('./externalrequest');
 const ExternalApiUsageBucket = require('./externalapiusagebucket');
+const VideoMembersAccess = require('./videomembersaccess');
+const ArrBridgeGrab = require('./arrbridgegrab');
 
 Job.hasMany(JobVideo, { foreignKey: 'job_id', as: 'jobVideos' });
 Job.hasMany(JobVideoDownload, { foreignKey: 'job_id', as: 'jobVideoDownloads' });
@@ -74,6 +77,7 @@ module.exports = {
   JobVideoDownload,
   Video,
   Channel,
+  ChannelVideo,
   Session,
   ApiKey,
   Playlist,
@@ -95,4 +99,6 @@ module.exports = {
   ApiKeyChannelGrant,
   ExternalRequest,
   ExternalApiUsageBucket,
+  VideoMembersAccess,
+  ArrBridgeGrab,
 };

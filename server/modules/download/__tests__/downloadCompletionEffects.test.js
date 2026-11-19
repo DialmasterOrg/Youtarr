@@ -21,6 +21,10 @@ jest.mock('../../plexModule', () => ({
   refreshLibrariesForSubfolders: jest.fn().mockResolvedValue(),
 }));
 
+jest.mock('../../mediaServers/libraryRefresh', () => ({
+  refreshAfterDownload: jest.fn().mockResolvedValue(),
+}));
+
 jest.mock('../../jobModule', () => ({
   startNextJob: jest.fn(() => Promise.resolve()),
 }));
@@ -63,6 +67,7 @@ jest.mock('../../m3uGenerator', () => ({
 }));
 
 const plexModule = require('../../plexModule');
+const libraryRefresh = require('../../mediaServers/libraryRefresh');
 const jobModule = require('../../jobModule');
 const channelModule = require('../../channelModule');
 const downloadModule = require('../../downloadModule');
@@ -330,6 +335,68 @@ describe('downloadCompletionEffects', () => {
       const [subfolders] = plexModule.refreshLibrariesForSubfolders.mock.calls[0];
       expect(subfolders.sort()).toEqual(['SubA', 'SubB']);
       expect(jobModule.startNextJob).toHaveBeenCalled();
+    });
+
+    it('refreshes Jellyfin and Emby once per job, however many videos it downloaded', async () => {
+      await runCompletionSideEffects({
+        jobId: 'job-1',
+        videoData: [
+          { youtubeId: 'vid1', filePath: '/mock/output/__SubA/Chan/video1.mp4' },
+          { youtubeId: 'vid2', filePath: '/mock/output/__SubB/Chan/video2.mp4' },
+          { youtubeId: 'vid3', audioFilePath: '/mock/output/Chan/audio3.mp3' },
+        ],
+        skipJobTransition: false,
+        tempChannelsFile: null,
+        onTempChannelsFileCleaned: jest.fn(),
+      });
+      await flushPromises();
+
+      expect(libraryRefresh.refreshAfterDownload).toHaveBeenCalledTimes(1);
+    });
+
+    it('skips the Jellyfin and Emby refresh when no videos were downloaded', async () => {
+      await runCompletionSideEffects({
+        jobId: 'job-1',
+        videoData: [],
+        skipJobTransition: false,
+        tempChannelsFile: null,
+        onTempChannelsFileCleaned: jest.fn(),
+      });
+      await flushPromises();
+
+      expect(libraryRefresh.refreshAfterDownload).not.toHaveBeenCalled();
+    });
+
+    it('skips the Jellyfin and Emby refresh for an intermediate group', async () => {
+      await runCompletionSideEffects({
+        jobId: 'job-1',
+        videoData: [{ youtubeId: 'vid1', filePath: '/mock/output/Chan/video.mp4' }],
+        skipJobTransition: true,
+        tempChannelsFile: null,
+        onTempChannelsFileCleaned: jest.fn(),
+      });
+      await flushPromises();
+
+      expect(libraryRefresh.refreshAfterDownload).not.toHaveBeenCalled();
+    });
+
+    it('still starts the next job when the Jellyfin and Emby refresh rejects', async () => {
+      libraryRefresh.refreshAfterDownload.mockRejectedValueOnce(new Error('boom'));
+
+      await runCompletionSideEffects({
+        jobId: 'job-1',
+        videoData: [{ youtubeId: 'vid1', filePath: '/mock/output/Chan/video.mp4' }],
+        skipJobTransition: false,
+        tempChannelsFile: null,
+        onTempChannelsFileCleaned: jest.fn(),
+      });
+      await flushPromises();
+
+      expect(jobModule.startNextJob).toHaveBeenCalled();
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ err: expect.any(Error) }),
+        'Failed to refresh Jellyfin/Emby libraries'
+      );
     });
 
     it('skips Plex refresh when no videos were downloaded but still starts next job', async () => {

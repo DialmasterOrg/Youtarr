@@ -544,10 +544,13 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             ?? finalSummary.terminationFailures?.length
             ?? 0;
           const jobIssues = finalSummary.jobIssues ?? [];
+          const totalAlreadyDownloaded = finalSummary.totalAlreadyDownloaded ?? 0;
+          const totalNotAvailable = finalSummary.totalNotAvailable ?? 0;
           const hasIssue =
             (finalSummary.totalFailed != null && finalSummary.totalFailed > 0)
             || (finalSummary.totalAutoRetried != null && finalSummary.totalAutoRetried > 0)
             || (finalSummary.totalMembersOnly != null && finalSummary.totalMembersOnly > 0)
+            || totalNotAvailable > 0
             || terminatedCount > 0
             || terminationFailureCount > 0
             || jobIssues.length > 0;
@@ -555,53 +558,62 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
           // on /10 tinted bg we want the saturated colour token itself.
           const bgClass = hasIssue ? 'bg-warning/10' : 'bg-success/10';
           const textClass = hasIssue ? 'text-warning' : 'text-success';
+          const parts: string[] = [];
+          if (finalSummary.totalDownloaded > 0) {
+            parts.push(`✓ ${finalSummary.totalDownloaded} video${finalSummary.totalDownloaded !== 1 ? 's' : ''} downloaded`);
+          }
+          if (finalSummary.totalFailed && finalSummary.totalFailed > 0) {
+            parts.push(`✗ ${finalSummary.totalFailed} failed`);
+          }
+          if (finalSummary.totalAutoRetried && finalSummary.totalAutoRetried > 0) {
+            parts.push(`${finalSummary.totalAutoRetried} queued for auto-retry`);
+          }
+          if (finalSummary.totalMembersOnly && finalSummary.totalMembersOnly > 0) {
+            parts.push(`${finalSummary.totalMembersOnly} members-only video${finalSummary.totalMembersOnly !== 1 ? 's' : ''} skipped`);
+          }
+          if (terminatedCount > 0) {
+            parts.push(`${terminatedCount} channel${terminatedCount !== 1 ? 's' : ''} marked terminated`);
+          }
+          if (terminationFailureCount > 0) {
+            parts.push(`${terminationFailureCount} termination${terminationFailureCount !== 1 ? 's' : ''} could not be auto-disabled`);
+          }
+          if (totalAlreadyDownloaded > 0) {
+            parts.push(`${totalAlreadyDownloaded} already downloaded`);
+          }
+          if (totalNotAvailable > 0) {
+            parts.push(`${totalNotAvailable} not available (live, upcoming or members-only)`);
+          }
+          jobIssues.forEach((issue) => {
+            const what = issue.status === 'Terminated' || issue.status === 'Killed'
+              ? '✗ Download job terminated'
+              : '✗ Download job failed';
+            const why = issue.reason ? issue.reason.replace(/\.$/, '') : '';
+            parts.push(why ? `${what} (${why})` : what);
+          });
+          // A job that ran to the end with nothing to report was only a check.
+          // A stopped job did not finish looking, so it can't claim there's nothing new.
+          const isQuietCheck = parts.length === 0 && !warningDetails;
+          const noResultText = isQuietCheck ? 'No new videos to download' : 'No new videos downloaded';
           return (
           <Box className="px-4 pb-4">
             <Box className={`p-2 rounded-[var(--radius-ui)] text-center ${bgClass}`}>
               <Typography variant="h6" className={textClass}>
-                Summary of last job
+                {isQuietCheck ? 'Last check' : 'Last download'}
               </Typography>
               <Typography variant="body1" className={textClass}>
-                {(() => {
-                  const parts: string[] = [];
-                  if (finalSummary.totalDownloaded > 0) {
-                    parts.push(`✓ ${finalSummary.totalDownloaded} video${finalSummary.totalDownloaded !== 1 ? 's' : ''} downloaded`);
-                  }
-                  if (finalSummary.totalFailed && finalSummary.totalFailed > 0) {
-                    parts.push(`✗ ${finalSummary.totalFailed} failed`);
-                  }
-                  if (finalSummary.totalAutoRetried && finalSummary.totalAutoRetried > 0) {
-                    parts.push(`${finalSummary.totalAutoRetried} queued for auto-retry`);
-                  }
-                  if (finalSummary.totalMembersOnly && finalSummary.totalMembersOnly > 0) {
-                    parts.push(`${finalSummary.totalMembersOnly} members-only video${finalSummary.totalMembersOnly !== 1 ? 's' : ''} skipped`);
-                  }
-                  if (terminatedCount > 0) {
-                    parts.push(`${terminatedCount} channel${terminatedCount !== 1 ? 's' : ''} marked terminated`);
-                  }
-                  if (terminationFailureCount > 0) {
-                    parts.push(`${terminationFailureCount} termination${terminationFailureCount !== 1 ? 's' : ''} could not be auto-disabled`);
-                  }
-                  if (finalSummary.totalSkipped > 0) {
-                    parts.push(`${finalSummary.totalSkipped} skipped (already downloaded or filtered)`);
-                  }
-                  jobIssues.forEach((issue) => {
-                    const what = issue.status === 'Terminated' || issue.status === 'Killed'
-                      ? '✗ Download job terminated'
-                      : '✗ Download job failed';
-                    const why = issue.reason ? issue.reason.replace(/\.$/, '') : '';
-                    parts.push(why ? `${what} (${why})` : what);
-                  });
-                  if (parts.length === 0) {
-                    return 'No new videos downloaded';
-                  }
-                  return parts.join(', ');
-                })()}
+                {parts.length > 0 ? parts.join(', ') : noResultText}
               </Typography>
               <Typography variant="caption" className={`mt-1 block ${textClass}`}>
                 {jobTypeLabel(finalSummary.jobType) +
-                  (finalSummary.completedAt ? ` • Completed ${formatTimestamp(finalSummary.completedAt)}` : '')}
+                  (finalSummary.completedAt
+                    ? ` • ${isQuietCheck ? 'Checked ' : ''}${formatTimestamp(finalSummary.completedAt)}`
+                    : '')}
               </Typography>
+              {finalSummary.lastCheckedAt && (
+                <Typography variant="caption" className={`block ${textClass}`}>
+                  {`Last checked ${formatTimestamp(finalSummary.lastCheckedAt)}: no new videos`}
+                </Typography>
+              )}
             </Box>
 
             {/* Show details of terminated channels if any */}

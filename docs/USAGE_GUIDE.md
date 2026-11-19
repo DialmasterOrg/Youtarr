@@ -11,6 +11,7 @@ This guide provides step-by-step instructions for common tasks in Youtarr. After
 - [Configure Automation](#configure-automation)
 - [Configure SponsorBlock](#configure-sponsorblock)
 - [Enable Download Notifications](#enable-download-notifications)
+- [RSS Feeds](#rss-feeds)
 - [Re-download Missing Videos](#re-download-missing-videos)
 - [Rescan Files on Disk](#rescan-files-on-disk)
 - [Organize Channels with Multi-Library Support](#organize-channels-with-multi-library-support)
@@ -58,11 +59,13 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
    - Click "Channels & Playlists" in the navigation menu
 
 2. **Add a channel**
-   - Paste the channel URL or @handle into the **Add a new channel** field, then click the **Channel** button (or press Enter)
+   - Paste the channel URL or @handle into the **Search or add a channel** field, then click the **Channel** button (or press Enter)
      - Examples:
        - `@MrBeast`
        - `https://youtube.com/@MrBeast`
        - `https://www.youtube.com/channel/UCX6OQ3DkcsbYNE6H8uQQuVA`
+   - The same field searches the channels you already have: type part of a name and the list below narrows as you type. Enter adds only a URL or an @handle; a plain word such as `MrBeast` is treated as a search until you click **Channel**.
+   - When a name matches none of your channels, click **Find on YouTube** to search YouTube for it.
    - Youtarr looks the channel up on YouTube (this can take a few seconds), then opens the **Add channel** dialog with the usual defaults filled in:
      - **Auto Downloads**: a toggle for each tab the channel has (**New Videos**, **New Shorts**, **New Live/Streams**)
      - **Video Quality**, **Download Type** (Video Only, Video + MP3, or MP3 Only), and **Library folder**
@@ -203,6 +206,16 @@ Subscribe to a YouTube playlist and Youtarr tracks its videos, downloads them, a
 
 > Click the **?** icon on the Playlists tab for an in-app summary of how playlists work.
 
+### Private playlists
+
+Public and unlisted playlists need no setup. A private playlist, including **Watch Later** (`https://www.youtube.com/playlist?list=WL`) and **Liked videos**, only works with [cookies](CONFIG.md#cookie-config) from the YouTube account that owns it. With cookies enabled, Youtarr sends them on every playlist refresh, the same way it does for channel listings.
+
+YouTube answers "The playlist does not exist" for a private playlist when the request is signed out, and also once the cookies expire. If a private playlist that used to refresh starts failing with that message, run **Test cookies** in Settings and upload fresh cookies if the test fails.
+
+**Note:** Watch Later and Liked videos belong to one account, so they need that account's cookies. YouTube can restrict accounts it sees used with tools like yt-dlp, which is why Youtarr otherwise recommends a throwaway account for cookies. Using your main account is your call.
+
+Cookies from an account you keep using in a browser can stop working very quickly: YouTube rotates the session as the browser uses it, which leaves the exported copy stale. Export them from a private window that you close right after exporting, and expect to re-export from time to time. See [Test Cookies Says Not Signed In](TROUBLESHOOTING.md#test-cookies-says-not-signed-in).
+
 ### Where the videos are saved
 
 Playlists don't get their own folder. Each video is saved under the channel that uploaded it, so a playlist that pulls from five channels lands in five channel folders.
@@ -212,7 +225,7 @@ Playlists don't get their own folder. Each video is saved under the channel that
 
 The same video never downloads twice just because it shows up in a playlist.
 
-Private, deleted, and members-only videos can't be accessed, so Youtarr leaves them out of the list and never downloads them. The video count reflects only the videos Youtarr can see.
+Private and deleted videos can't be accessed, so Youtarr leaves them out of the list and never downloads them. The video count reflects only the videos Youtarr can see. Members-only videos download only when cookies from an account that is a member of the channel are set up; see [Members-Only Videos](CONFIG.md#members-only-videos).
 
 ### The playlist detail page
 
@@ -315,7 +328,7 @@ The page shows the server timezone. Times and interval presets follow that clock
 
 Each task is a row you can expand. The collapsed row shows the task's status, its schedule in words, when it runs next, when it last ran and whether that failed, and how long that run took, so you can check every task at a glance. If the latest run was skipped, the row shows how long the run before it took instead; a run cut short by a server restart shows **Interrupted ... by a server restart**, since there is no end time to measure. For automatic downloads the run covers the whole update, from checking for new videos until the last download (retries included) finishes, and its result counts the videos downloaded, failed, and skipped; any failed video marks the run **Partly failed**. If a storage limit pauses downloads partway, the run ends there and says how many queued jobs will run when downloads resume. A summary line at the top counts running tasks and failures and names the next run. A pulsing dot and a **Running** label mark a task that is running now; **Off** marks one whose feature is switched off, and **Unsaved** a schedule you changed but have not saved yet. Expand a row for its description, the full result of its last run (for example "completed: Deleted 12 videos and freed 8.10 GB" or "failed: Permission denied"), a link to where its feature is turned on, and the schedule editor. **Edit schedule** links from other settings pages open the matching row. If a run is still going when its next time comes around, that occurrence is skipped and recorded as such. Times on this page are in the server timezone, and the page keeps itself up to date while it is open.
 
-Each task has a **Run now** button that starts it immediately with your saved settings (on phones it is a play icon). If Run now is greyed out, the row says why in a few words and the expanded row explains in full: the task is already running, its feature is turned off (use the link on the card to turn it on, then save), downloads are paused by a storage limit, or, for channel video counts, it ran less than 15 minutes ago, in which case the card shows when you can run it again. Automatic downloads can be run now even while they are turned off; the switch only stops the schedule. Running automatic video cleanup asks you to confirm, because it permanently deletes the videos your removal rules match.
+Each task has a **Run now** button that starts it immediately with your saved settings (on phones it is a play icon). If Run now is greyed out, the row says why in a few words and the expanded row explains in full: the task is already running, its feature is turned off (use the link on the card to turn it on, then save), downloads are paused by a storage limit, or, for channel video counts and the check for new videos, it ran less than 15 minutes ago, in which case the card shows when you can run it again. Automatic downloads can be run now even while they are turned off; the switch only stops the schedule. Running automatic video cleanup asks you to confirm, because it permanently deletes the videos your removal rules match.
 
 While a scheduled task other than automatic downloads is running, a clock icon with a pulsing dot appears in the top bar next to the download indicator. Hover it to see which task is running, or click it to open **Settings -> Scheduling**.
 
@@ -369,6 +382,34 @@ Get notified when new videos finish downloading. Notifications are delivered thr
    - Check the service for the test message
 
 **Note**: Download notifications are sent when a run downloads at least one new video, or when a run fails with a diagnosed cause or stops early. They are batched: a scheduled download run sends one summary covering all of its channels and playlists, not one message per video. Youtarr also sends notifications when automatic cleanup deletes videos and when downloads pause or resume because of a storage limit.
+
+## RSS Feeds
+
+Youtarr can publish a private RSS feed of the videos it has downloaded, so you can see what's new in your RSS reader instead of getting a notification for each download run. The feed is off by default, and it doesn't change your notifications.
+
+1. **Open Youtarr Settings -> RSS Feeds** and turn on **Enable the download feed**
+
+2. **Save configuration**
+
+3. **Copy the feed URL** and add it to your RSS reader
+
+Each downloaded video is one item in the feed, newest first, with its thumbnail, title, channel, length, upload date and the start of its description. New videos appear shortly after they finish downloading. Failed downloads aren't listed, and deleted videos drop off the feed.
+
+You can also choose:
+
+- **Videos in the feed**: how many of the newest downloads the feed lists (50 by default)
+- **Clicking an item opens**: YouTube, this Youtarr, or a custom link such as your media server. A custom link uses `{youtubeId}` for the video ID.
+- **Include**: videos, Shorts and livestreams
+
+**Keep the URL private.** RSS readers can't log in, so the URL contains a long random secret, and anyone with the URL can see your video titles, descriptions and thumbnails (but not the video files). An online reader also stores what it fetches, and a reverse proxy can record the URL in its logs. If the URL gets out, click **Create new URL**: the old URL stops working right away, and you'll need to add the new one to your reader.
+
+**Things to know:**
+
+- Online readers like Feedly need to reach your Youtarr over the internet. A reader on your home network doesn't.
+- If you use a login proxy like Authelia or Cloudflare Access, add an exception for the `/feeds/` path, because a reader can't get past the login page. See [the API key instructions](API_INTEGRATION.md#cors-error--blocked-by-external-auth-cloudflare-zero-trust-authelia-etc) for how to add one, using `/feeds/` as the path. Youtarr checks the secret in the URL even with `AUTH_ENABLED=false`, so this exception is safe in both setups.
+- Re-downloading a video won't show it as new in most readers, because it's still the same feed item.
+- Big "Download all" jobs show up in the feed too. The feed still only lists the newest videos, up to your limit.
+- The feed doesn't contain the video files, so readers won't download them.
 
 ## Re-download Missing Videos
 
@@ -723,6 +764,7 @@ Click any thumbnail on the Videos page or a channel page to open a video detail 
    - For downloaded videos, the modal shows the downloaded format's dimensions from the video metadata, with the quality tier alongside when it isn't obvious from the numbers (e.g. `608x1080 (1080p)` for a vertical video); video listings show a small tier chip based on the file's measured on-disk resolution
    - For downloaded videos, data is served from the cached `.info.json`
    - For videos not yet downloaded, Youtarr fetches metadata on demand via yt-dlp (this can take a few seconds on the first open)
+   - Metadata fetched this way is cached in `jobs/info` for three weeks after it was fetched, then removed by the nightly file rescan; a downloaded video's metadata stays until you empty the trash
 
 3. **In-browser playback**
    - Downloaded videos stream directly from Youtarr through the built-in player; no media server required

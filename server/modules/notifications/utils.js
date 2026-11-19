@@ -17,6 +17,63 @@ function escapeHtml(text) {
     .replace(/'/g, '&#039;');
 }
 
+const LINK_TEMPLATE_VARIABLE = '{youtubeId}';
+const MAX_LINK_TEMPLATE_LENGTH = 500;
+const YOUTUBE_ID_PATTERN = /^[A-Za-z0-9_-]{6,20}$/;
+const SAMPLE_YOUTUBE_ID = 'dQw4w9WgXcQ';
+const NOT_A_URL_ERROR = 'Link template must be a full URL that starts with http:// or https://.';
+
+/**
+ * Check the link template that adds a link to each video in notifications.
+ * An empty template is valid: it turns the links off.
+ * @param {unknown} template - Value of the notificationLinkTemplate setting
+ * @returns {string|null} Error message, or null when the template is valid
+ */
+function getLinkTemplateError(template) {
+  if (template === undefined || template === null) return null;
+  if (typeof template !== 'string') return 'Link template must be text.';
+
+  const trimmed = template.trim();
+  if (trimmed === '') return null;
+  if (trimmed.length > MAX_LINK_TEMPLATE_LENGTH) {
+    return `Link template must have at most ${MAX_LINK_TEMPLATE_LENGTH} characters.`;
+  }
+
+  const sample = trimmed.split(LINK_TEMPLATE_VARIABLE).join(SAMPLE_YOUTUBE_ID);
+  if (/[{}]/.test(sample)) {
+    return `Link template can only use the variable ${LINK_TEMPLATE_VARIABLE}.`;
+  }
+
+  let url;
+  try {
+    url = new URL(sample);
+  } catch (err) {
+    return NOT_A_URL_ERROR;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return NOT_A_URL_ERROR;
+  }
+
+  return null;
+}
+
+/**
+ * Build the link to a video from the link template.
+ * @param {unknown} template - Value of the notificationLinkTemplate setting
+ * @param {Object} video - Video metadata object with a youtubeId
+ * @returns {string|null} Absolute http(s) URL, or null when the template is
+ *   empty or invalid, or when the video has no usable youtubeId
+ */
+function buildVideoLink(template, video) {
+  if (typeof template !== 'string' || template.trim() === '') return null;
+  if (getLinkTemplateError(template)) return null;
+
+  const youtubeId = video && video.youtubeId;
+  if (typeof youtubeId !== 'string' || !YOUTUBE_ID_PATTERN.test(youtubeId)) return null;
+
+  return new URL(template.trim().split(LINK_TEMPLATE_VARIABLE).join(youtubeId)).href;
+}
+
 /**
  * Format duration from seconds to human readable format (HH:MM:SS or MM:SS)
  * @param {number} seconds - Duration in seconds
@@ -350,6 +407,8 @@ function buildDownloadPauseContent(status = {}) {
 
 module.exports = {
   escapeHtml,
+  getLinkTemplateError,
+  buildVideoLink,
   buildDownloadPauseContent,
   formatDuration,
   buildTitle,

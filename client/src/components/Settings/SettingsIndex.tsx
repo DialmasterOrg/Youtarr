@@ -2,12 +2,15 @@ import React from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { LIBRARY_FOLDERS_PATH } from '../../utils/libraryLayouts';
 import type { LucideIcon } from 'lucide-react';
-import { ArrowRight, ChevronRight, Download, Film, Folder, Library, RefreshCw, Server, Settings as SettingsIcon, Tv } from '../../lib/icons';
+import {
+  ArrowRight, ChevronRight, Download, Film, Folder, Library, Link as IntegrationsIcon, RefreshCw, Server,
+  Settings as SettingsIcon, Tv,
+} from '../../lib/icons';
 import { useContainerWidth } from '../../hooks/useContainerWidth';
 import { useLibraryFolders } from '../../hooks/useLibraryFolders';
 import { LayoutChip } from '../shared/LayoutChip';
 
-export type SettingsGroupKey = 'downloads' | 'servers' | 'automation' | 'system';
+export type SettingsGroupKey = 'downloads' | 'servers' | 'automation' | 'integrations' | 'system';
 
 export interface SettingsPage {
   /** Route segment under /settings */
@@ -16,7 +19,7 @@ export interface SettingsPage {
   title: string;
   description: string;
   group: SettingsGroupKey;
-  /** Shorter label for the tab strip and sidebar sub-items */
+  /** Shorter label for the sidebar and top-nav sub-items */
   navLabel?: string;
 }
 
@@ -24,36 +27,44 @@ export const SETTINGS_GROUPS: Array<{ key: SettingsGroupKey; title: string; desc
   { key: 'downloads', title: 'Downloads & library', description: 'What Youtarr downloads and where the files go.', Icon: Download },
   { key: 'servers', title: 'Media servers', description: 'Connections for library checks, refreshes, playlists and watch status.', Icon: Server },
   { key: 'automation', title: 'Automation & storage', description: 'Schedules, cleanup and disk space.', Icon: RefreshCw },
-  { key: 'system', title: 'System', description: 'Notifications, access and troubleshooting.', Icon: SettingsIcon },
+  { key: 'integrations', title: 'Integrations', description: 'Other apps and services that work with Youtarr.', Icon: IntegrationsIcon },
+  { key: 'system', title: 'System', description: 'Appearance, access and troubleshooting.', Icon: SettingsIcon },
 ];
 
-/** Nav order (tab strip, sidebar): today's order with library after core. The index groups by `group`. */
+/**
+ * Order of the index rows and of the nav menus (sidebar, top-nav dropdown).
+ * Keep each group's pages together, in SETTINGS_GROUPS order: the nav menus
+ * print a group heading wherever the group changes.
+ */
 export const SETTINGS_PAGES: SettingsPage[] = [
-  { key: 'scheduling', title: 'Scheduling', group: 'automation', description: 'Choose when automatic downloads and maintenance tasks run.' },
   { key: 'core', title: 'Core', group: 'downloads', description: 'Automatic downloads, quality, subtitles, metadata and naming.' },
   { key: 'library', title: 'Library folders', navLabel: 'Library', group: 'downloads', description: 'Folders, their Videos or TV shows layout, and the media server library for each.' },
   { key: 'downloading', title: 'YT-DLP', group: 'downloads', description: 'yt-dlp backend settings for downloads and reliability.' },
-  { key: 'api-keys', title: 'API Keys & Bookmarklet', group: 'system', description: 'One-click "Send to Youtarr" bookmarklet and phone shortcuts.' },
-  { key: 'appearance', title: 'Appearance', group: 'system', description: 'Theme, animations, and visual preferences.' },
-  { key: 'autoremove', title: 'Auto Removal', group: 'automation', description: 'Automated cleanup and retention policies.' },
-  { key: 'storage-limits', title: 'Storage Limits', group: 'automation', description: 'Pause downloads when storage is full or over a size limit.' },
   { key: 'cookies', title: 'Cookies', group: 'downloads', description: 'Cookie configuration and login helpers.' },
-  { key: 'maintenance', title: 'Maintenance & Rescan', group: 'automation', description: 'Rescan files on disk and other maintenance actions.' },
-  { key: 'logging', title: 'Logging', group: 'system', description: 'Log level and log files for troubleshooting.' },
-  { key: 'notifications', title: 'Notifications', group: 'system', description: 'Toast notifications and alert behavior.' },
-  { key: 'plex', title: 'Plex', group: 'servers', description: 'Plex connection, default library and playlist visibility.' },
-  { key: 'jellyfin', title: 'Jellyfin', group: 'servers', description: 'Jellyfin connection for native playlist sync.' },
-  { key: 'emby', title: 'Emby', group: 'servers', description: 'Emby connection for native playlist sync.' },
-  { key: 'watch-status', title: 'Watch Status', group: 'servers', description: 'Sync watched state from your media servers into Youtarr.' },
-  { key: 'security', title: 'Account Security', group: 'system', description: 'Authentication and password management.' },
   { key: 'sponsorblock', title: 'SponsorBlock', group: 'downloads', description: 'Skip segments and SponsorBlock settings.' },
   { key: 'youtube-api', title: 'YouTube API', group: 'downloads', description: 'Optional YouTube Data API v3 key for faster metadata fetches.' },
+  { key: 'plex', title: 'Plex', group: 'servers', description: 'Plex connection, default library and playlist visibility.' },
+  { key: 'jellyfin', title: 'Jellyfin', group: 'servers', description: 'Jellyfin connection for library refreshes, native playlists and watch status.' },
+  { key: 'emby', title: 'Emby', group: 'servers', description: 'Emby connection for library refreshes, native playlists and watch status.' },
+  { key: 'watch-status', title: 'Watch Status', group: 'servers', description: 'Sync watched state from your media servers into Youtarr.' },
+  { key: 'scheduling', title: 'Scheduling', group: 'automation', description: 'Choose when automatic downloads and maintenance tasks run.' },
+  { key: 'autoremove', title: 'Auto Removal', group: 'automation', description: 'Automated cleanup and retention policies.' },
+  { key: 'storage-limits', title: 'Storage Limits', group: 'automation', description: 'Pause downloads when storage is full or over a size limit.' },
+  { key: 'maintenance', title: 'Maintenance & Rescan', group: 'automation', description: 'Rescan files on disk and other maintenance actions.' },
+  { key: 'api-keys', title: 'API Keys & Bookmarklet', group: 'integrations', description: 'One-click "Send to Youtarr" bookmarklet and phone shortcuts.' },
+  { key: 'notifications', title: 'Notifications', group: 'integrations', description: 'Toast notifications and alert behavior.' },
+  { key: 'rss-feeds', title: 'RSS Feeds', group: 'integrations', description: 'A private RSS feed of your downloaded videos.' },
+  { key: 'sonarr-radarr', title: 'Sonarr / Radarr', group: 'integrations', description: 'Let Sonarr and Radarr search and grab YouTube videos through Youtarr.' },
+  { key: 'appearance', title: 'Appearance', group: 'system', description: 'Theme, animations, and visual preferences.' },
+  { key: 'logging', title: 'Logging', group: 'system', description: 'Log level and log files for troubleshooting.' },
+  { key: 'security', title: 'Account Security', group: 'system', description: 'Authentication and password management.' },
+  { key: 'about', title: 'About', group: 'system', description: 'Version, project background, and ways to support Youtarr.' },
 ];
 
 const TWO_COLUMN_MIN_WIDTH = 720;
 const LEFT: SettingsGroupKey[] = ['downloads', 'automation'];
-const RIGHT: SettingsGroupKey[] = ['servers', 'system'];
-const STACKED: SettingsGroupKey[] = ['downloads', 'servers', 'automation', 'system'];
+const RIGHT: SettingsGroupKey[] = ['servers', 'integrations', 'system'];
+const STACKED: SettingsGroupKey[] = ['downloads', 'servers', 'automation', 'integrations', 'system'];
 const HELP_STEPS = [
   'Keep different kinds of content in their own library folders, like __Kids or __TV Shows.',
   'Set each folder to Videos or TV shows, and show it in a library of the matching type. One library on the whole downloads folder works while every folder uses Videos.',
@@ -123,7 +134,7 @@ function HelpCard() {
   );
 }
 
-/** /settings: pages grouped as list cards (Core spec 7). */
+/** /settings: pages grouped as list cards. */
 export function SettingsIndex({ token }: { token: string | null }) {
   const [measureRef, width] = useContainerWidth<HTMLDivElement>();
   const columns = width !== null && width >= TWO_COLUMN_MIN_WIDTH;

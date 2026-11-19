@@ -6,6 +6,7 @@ const channelYtdlpExecutor = require('./channelYtdlpExecutor');
 const videoEntryParser = require('./videoEntryParser');
 const channelVideoWriter = require('./channelVideoWriter');
 const tabState = require('./tabState');
+const fetchRegistry = require('./fetchRegistry');
 
 class ChannelVideoFetcher {
   /**
@@ -63,29 +64,6 @@ class ChannelVideoFetcher {
   }
 
   /**
-   * Check if channel videos need refreshing for a specific tab
-   * @param {Object} channel - Channel database record
-   * @param {number} videoCount - Current video count for this tab
-   * @param {string} mediaType - Media type: 'video', 'short', or 'livestream'
-   * @returns {boolean} - True if refresh needed
-   */
-  shouldRefreshChannelVideos(channel, videoCount, mediaType) {
-    if (!channel) return false;
-
-    // Always re-probe terminated channels so a reinstatement is detected on
-    // the very next page load, regardless of cache freshness. Without this,
-    // a terminated channel with recent lastFetched would skip yt-dlp and the
-    // termination notice would stick until cache expiry.
-    if (channel.terminated_at) return true;
-
-    const lastFetched = tabState.getLastFetchedForTab(channel, mediaType);
-
-    return !lastFetched ||
-           new Date() - lastFetched > 1 * 60 * 60 * 1000 ||
-           videoCount === 0;
-  }
-
-  /**
    * Clear terminated_at on a channel when we've proven it's reachable.
    * Swallows failures so the calling page-load path can't be broken by a
    * stuck UPDATE - the marker would just stay set until the next attempt.
@@ -112,7 +90,7 @@ class ChannelVideoFetcher {
    * @param {string} channelId - Channel ID
    * @param {string} tabType - Type of tab to fetch videos from
    * @param {Date|null} mostRecentVideoDate - Date of the most recent video we have
-   * @returns {Promise<void>}
+   * @returns {Promise<{newVideos: number}>} How many listed videos were not stored before
    * @throws {Error} - Re-throws yt-dlp errors
    */
   async fetchAndSaveVideosViaYtDlp(channel, channelId, tabType, mostRecentVideoDate = null) {
@@ -122,8 +100,10 @@ class ChannelVideoFetcher {
 
       const mediaType = MEDIA_TAB_TYPE_MAP[tabType];
 
+      let newVideos = 0;
       if (videos.length > 0) {
-        await channelVideoWriter.insertVideosIntoDb(videos, channelId, mediaType);
+        const { created } = await channelVideoWriter.insertVideosIntoDb(videos, channelId, mediaType);
+        newVideos = created;
       }
 
       if (channel) {
@@ -145,9 +125,41 @@ class ChannelVideoFetcher {
         // channel is reachable - inverse of persistTerminatedChannel.
         await this._clearTerminationMarkerIfSet(channel, channelId);
       }
+
+      return { newVideos };
     } catch (ytdlpError) {
       logger.error({ err: ytdlpError, channelId }, 'Error fetching channel videos');
       throw ytdlpError;
+    }
+  }
+
+  /**
+   * List a tab and save it while the fetch registry shows it as in flight,
+   * leaving the outcome there as the tab's last result. One listing per tab
+   * at a time: a tab that is already being fetched is skipped.
+   * @param {Object} channel - Channel database record
+   * @param {string} channelId - Channel ID
+   * @param {string} tabType - Tab to list: 'videos', 'shorts' or 'streams'
+   * @param {Object} options
+   * @param {string} options.type - Who asked: 'autoRefresh' (page open) or 'feedCheck'
+   * @param {Date|null} [options.mostRecentVideoDate] - Newest stored video date; null lists the widest window
+   * @returns {Promise<{skipped: true}|{skipped: false, newVideos: number}>}
+   * @throws {Error} - Re-throws yt-dlp errors, after recording the failure
+   */
+  async refreshTabTracked(channel, channelId, tabType, { type, mostRecentVideoDate = null }) {
+    const key = `${channelId}:${tabType}`;
+    if (fetchRegistry.has(key)) {
+      return { skipped: true };
+    }
+
+    fetchRegistry.set(key, { startTime: new Date().toISOString(), type, tabType });
+    try {
+      const { newVideos } = await this.fetchAndSaveVideosViaYtDlp(channel, channelId, tabType, mostRecentVideoDate);
+      fetchRegistry.finish(key, { type, newVideos, failed: false });
+      return { skipped: false, newVideos };
+    } catch (err) {
+      fetchRegistry.finish(key, { type, newVideos: 0, failed: true });
+      throw err;
     }
   }
 }

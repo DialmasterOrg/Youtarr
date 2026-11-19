@@ -18,6 +18,7 @@ describe('Channel Poster Functionality', () => {
     // Mock fs-extra
     jest.doMock('fs-extra', () => ({
       existsSync: jest.fn(),
+      pathExists: jest.fn().mockResolvedValue(false),
       copySync: jest.fn(),
       promises: {
         readFile: jest.fn(),
@@ -91,7 +92,7 @@ describe('Channel Poster Functionality', () => {
       ];
 
       // Mock file existence checks
-      fs.existsSync.mockImplementation((path) => {
+      fs.pathExists.mockImplementation(async (path) => {
         // Output directory exists
         if (path === '/videos') return true;
         // Channel folders exist
@@ -122,7 +123,7 @@ describe('Channel Poster Functionality', () => {
         { channel_id: 'UC123', uploader: 'Test Channel' }
       ];
 
-      fs.existsSync.mockReturnValue(false);
+      fs.pathExists.mockResolvedValue(false);
 
       await channelModule.backfillChannelImages(channels);
 
@@ -136,7 +137,7 @@ describe('Channel Poster Functionality', () => {
         { channel_id: 'UC456', uploader: 'Valid Channel' }
       ];
 
-      fs.existsSync.mockImplementation((path) => {
+      fs.pathExists.mockImplementation(async (path) => {
         if (path === '/videos') return true;
         if (path === '/videos/Valid Channel') return true;
         if (path === '/videos/Valid Channel/poster.jpg') return false;
@@ -173,7 +174,7 @@ describe('Channel Poster Functionality', () => {
         { channel_id: 'UC123', uploader: 'Test Channel' }
       ];
 
-      fs.existsSync.mockImplementation((path) => {
+      fs.pathExists.mockImplementation(async (path) => {
         if (path === '/videos') return true;
         if (path === '/videos/Test Channel') return true;
         if (path === '/videos/Test Channel/poster.jpg') return false;
@@ -202,7 +203,7 @@ describe('Channel Poster Functionality', () => {
         { channel_id: 'UC123', uploader: 'Test Channel' }
       ];
 
-      fs.existsSync.mockImplementation((path) => {
+      fs.pathExists.mockImplementation(async (path) => {
         if (path === '/videos') return true;
         if (path === '/videos/Test Channel') return true;
         if (path === '/videos/Test Channel/poster.jpg') return false;
@@ -222,7 +223,7 @@ describe('Channel Poster Functionality', () => {
         { channel_id: 'UC123', uploader: 'Test Channel' }
       ];
 
-      fs.existsSync.mockImplementation((path) => {
+      fs.pathExists.mockImplementation(async (path) => {
         if (path === '/videos') return true;
         if (path === '/videos/Test Channel') return true;
         if (path === '/videos/Test Channel/backdrop.jpg') return false;
@@ -247,7 +248,7 @@ describe('Channel Poster Functionality', () => {
         { channel_id: 'UC123', uploader: 'Test Channel' }
       ];
 
-      fs.existsSync.mockReturnValue(true);
+      fs.pathExists.mockResolvedValue(true);
 
       await channelModule.backfillChannelImages(channels);
 
@@ -262,7 +263,7 @@ describe('Channel Poster Functionality', () => {
         { channel_id: 'UC123', uploader: 'Test Channel', sub_folder: '##USE_GLOBAL_DEFAULT##' }
       ];
 
-      fs.existsSync.mockImplementation((path) => {
+      fs.pathExists.mockImplementation(async (path) => {
         if (path === '/videos') return true;
         if (path === '/videos/__GlobalDefault/Test Channel') return true;
         if (path === '/videos/__GlobalDefault/Test Channel/backdrop.jpg') return false;
@@ -287,7 +288,7 @@ describe('Channel Poster Functionality', () => {
         { channel_id: 'UC123', uploader: 'Test Channel', sub_folder: 'Library1' }
       ];
 
-      fs.existsSync.mockImplementation((path) => {
+      fs.pathExists.mockImplementation(async (path) => {
         if (path === '/videos') return true;
         if (path === '/videos/__Library1/Test Channel') return true;
         if (path === '/videos/__Library1/Test Channel/poster.jpg') return false;
@@ -312,7 +313,7 @@ describe('Channel Poster Functionality', () => {
         { channel_id: 'UC123', uploader: 'Test Channel', sub_folder: 'TV' }
       ];
 
-      fs.existsSync.mockImplementation((path) => {
+      fs.pathExists.mockImplementation(async (path) => {
         if (path === '/videos') return true;
         if (path === '/videos/__TV/Pinned Show') return true;
         if (path === '/images/channelthumb-UC123.jpg') return true;
@@ -335,7 +336,7 @@ describe('Channel Poster Functionality', () => {
         { channel_id: 'UC123', uploader: 'Test Channel' }
       ];
 
-      fs.existsSync.mockImplementation((path) => {
+      fs.pathExists.mockImplementation(async (path) => {
         if (path === '/videos') return true;
         if (path === '/videos/Test Channel') return true;
         if (path === '/videos/Test Channel/poster.jpg') return false;

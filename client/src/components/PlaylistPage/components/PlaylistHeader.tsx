@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Card, CardContent, Chip, Stack, Tooltip, Typography } from '../../ui';
-import { MediaServerStatus, MediaServerType, Playlist } from '../../../types/playlist';
+import { MediaServerStatus, MediaServerType, Playlist, PlaylistSyncStatus } from '../../../types/playlist';
 import LibraryDownloadsGroup from './LibraryDownloadsGroup';
 import MediaServerSyncGroup from './MediaServerSyncGroup';
 import OpenInYouTubeLink, { youtubePlaylistUrl } from '../../shared/OpenInYouTubeLink';
@@ -30,6 +30,7 @@ interface PlaylistHeaderProps {
   onSyncNow: () => void;
   onRegenerateM3U: () => void;
   unsyncableCount?: number | null;
+  syncStatus?: PlaylistSyncStatus | null;
 }
 
 function formatTimestamp(value: string | null): string {
@@ -64,6 +65,7 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
   onSyncNow,
   onRegenerateM3U,
   unsyncableCount,
+  syncStatus,
 }) => {
   const isAudioPlaylist = playlist.audio_format === 'mp3_only';
   return (
@@ -152,6 +154,7 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
                 anyConfigured={anyConfigured}
                 actionRunning={actionRunning}
                 unsyncableCount={unsyncableCount}
+                syncStatus={syncStatus}
               />
             </div>
           </div>

@@ -215,6 +215,36 @@ describe('VideoMetadataProcessor', () => {
       expect(result[0].filePath).toBe('/output/directory/Channel／Name/Channel／Name - Video ｜ With Pipe： Test - pipe123/Channel／Name - Video ｜ With Pipe： Test [pipe123].mp4');
     });
 
+    it('never locates a video inside the Sonarr/Radarr staging folder', async () => {
+      const newVideoUrls = ['https://youtu.be/stage123'];
+      // A channel called "Arr" also matches the staging folder's name loosely.
+      const stagedData = { ...mockVideoData, id: 'stage123', title: 'Episode', uploader: 'Arr' };
+      delete stagedData._actual_filepath;
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockReturnValue(JSON.stringify(stagedData));
+      fs.promises.stat.mockResolvedValue({ size: 1024000 });
+      fs.promises.readdir.mockImplementation((dirPath) => {
+        if (dirPath === '/output/directory') {
+          return Promise.resolve([
+            createDirent('.arr-staging', { directory: true }),
+            createDirent('Arr', { directory: true }),
+          ]);
+        }
+        if (dirPath === '/output/directory/.arr-staging') {
+          return Promise.resolve([createDirent('Episode [stage123].mp4', { file: true })]);
+        }
+        if (dirPath === '/output/directory/Arr') {
+          return Promise.resolve([createDirent('Arr - Episode [stage123].mp4', { file: true })]);
+        }
+        return Promise.resolve([]);
+      });
+
+      const result = await VideoMetadataProcessor.processVideoMetadata(newVideoUrls);
+
+      expect(result[0].filePath).toBe('/output/directory/Arr/Arr - Episode [stage123].mp4');
+      expect(fs.promises.readdir).not.toHaveBeenCalledWith('/output/directory/.arr-staging', expect.anything());
+    });
+
     it('should warn when video path cannot be located and continue gracefully', async () => {
       const newVideoUrls = ['https://youtu.be/missingpath'];
       const dataWithoutPath = {

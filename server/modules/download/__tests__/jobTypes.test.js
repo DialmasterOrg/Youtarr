@@ -6,8 +6,10 @@ const {
   CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX,
   AUTO_RETRY_LABEL_PREFIX,
   PLAYLIST_SWEEP_LABEL,
+  ARR_BRIDGE_JOB_LABEL,
   isSpecificUrlDownloadJob,
   isDownloadJob,
+  isArrBridgeJob,
   playlistJobLabel,
   playlistRetryJobLabel,
   channelDownloadAllJobLabel,
@@ -37,6 +39,13 @@ describe('jobTypes', () => {
 
     it('matches playlist jobs by prefix', () => {
       expect(isSpecificUrlDownloadJob('Playlist: My Favorites')).toBe(true);
+    });
+
+    it('treats a Sonarr/Radarr grab as a manual URL-list download', () => {
+      expect(ARR_BRIDGE_JOB_LABEL).toBe('Manually Added Urls (Sonarr/Radarr grab)');
+      expect(isSpecificUrlDownloadJob(ARR_BRIDGE_JOB_LABEL)).toBe(true);
+      expect(isDownloadJob(ARR_BRIDGE_JOB_LABEL)).toBe(true);
+      expect(isChannelDownloadAllJob(ARR_BRIDGE_JOB_LABEL)).toBe(false);
     });
 
     it('does not match channel downloads', () => {
@@ -108,6 +117,21 @@ describe('jobTypes', () => {
         .toBe(`${AUTO_RETRY_LABEL_PREFIX}1 video (no cookies)`);
       expect(autoRetryJobLabel(2, { anonymous: true }))
         .toBe(`${AUTO_RETRY_LABEL_PREFIX}2 videos (no cookies)`);
+    });
+
+    it('names the retry of a Sonarr/Radarr grab after the grab', () => {
+      expect(autoRetryJobLabel(1, { arrBridge: true }))
+        .toBe(`${AUTO_RETRY_LABEL_PREFIX}1 video (Sonarr/Radarr grab)`);
+      expect(autoRetryJobLabel(2, { anonymous: true, arrBridge: true }))
+        .toBe(`${AUTO_RETRY_LABEL_PREFIX}2 videos (no cookies) (Sonarr/Radarr grab)`);
+    });
+
+    it('recognizes a Sonarr/Radarr grab and the retries of one, and no other job', () => {
+      expect(isArrBridgeJob(ARR_BRIDGE_JOB_LABEL)).toBe(true);
+      expect(isArrBridgeJob(autoRetryJobLabel(1, { arrBridge: true }))).toBe(true);
+      expect(isArrBridgeJob(autoRetryJobLabel(1))).toBe(false);
+      expect(isArrBridgeJob(MANUAL_DOWNLOAD_LABEL)).toBe(false);
+      expect(isArrBridgeJob(null)).toBe(false);
     });
 
     it('treats auto-retry jobs as specific URL-list download jobs', () => {

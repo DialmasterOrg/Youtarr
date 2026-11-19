@@ -32,6 +32,8 @@ interface VideoFilenameTemplateProps {
   token: string | null;
   saveRequirement?: string | null;
   onPreviewSuccess?: (prefix: string) => void;
+  /** Whether the embedded MP4 title is still prefixed with the channel name. */
+  channelPrefixEnabled?: boolean;
   /** Id of the template input; its SettingRow label and description point at it */
   inputId?: string;
 }
@@ -54,10 +56,12 @@ export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
   token,
   saveRequirement,
   onPreviewSuccess,
+  channelPrefixEnabled = false,
   inputId = 'videoFilenamePrefix',
 }) => {
   const phone = useMediaQuery(PHONE_QUERY);
   const validation = useMemo(() => validatePrefix(value), [value]);
+  const showTvSeriesPrefixTip = channelPrefixEnabled && value === PLEX_TV_SERIES_PRESET_PREFIX;
   const preview = useFilenamePreview(token);
   const isStale = preview.isStale(value);
 
@@ -142,6 +146,13 @@ export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
             shows is a separate step you review first.{' '}
             <RouterLink to={LIBRARY_FOLDERS_PATH} className="text-primary underline max-md:inline-flex max-md:min-h-[44px] max-md:items-center">Library folders</RouterLink>
           </span>
+        </p>
+      )}
+
+      {showTvSeriesPrefixTip && (
+        <p data-testid="tv-series-channel-prefix-tip" className="rounded-ui bg-muted p-2 text-[13px] text-muted-foreground">
+          Tip: in a Plex TV Shows library the channel is already the show name, so turn off
+          &quot;Channel name in embedded title&quot; above to keep episode titles clean.
         </p>
       )}
 

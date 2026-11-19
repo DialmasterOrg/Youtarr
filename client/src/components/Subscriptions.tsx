@@ -15,7 +15,6 @@ import {
   Menu,
   MenuItem,
   Popover,
-  TextField,
   Tooltip,
   Typography,
   ListItemText,
@@ -24,13 +23,13 @@ import {
 } from './ui';
 import {
   HelpOutline as HelpOutlineIcon,
-  FilterAlt as FilterAltIcon,
   SortByAlpha as SortByAlphaIcon,
   ArrowUpward as ArrowUpwardIcon,
   ArrowDownward as ArrowDownwardIcon,
   TableChart as TableChartIcon,
   ViewList as ViewListIcon,
   Save as SaveIcon,
+  Search as SearchIcon,
   MoreVert as MoreVertIcon,
 } from '../lib/icons';
 import { Undo2 as UndoIcon, FolderOpen as FolderSpecialIcon } from 'lucide-react';
@@ -47,6 +46,7 @@ import ChannelCard from './Subscriptions/components/ChannelCard';
 import ChannelListRow, { CHANNEL_LIST_DESKTOP_TEMPLATE } from './Subscriptions/components/ChannelListRow';
 import {
   channelMatchesFilter,
+  isExplicitChannelReference,
   DEFAULT_SUBFOLDER_KEY,
   normalizeSubFolderKey,
   formatSubFolderLabel,
@@ -79,6 +79,7 @@ type SortOrder = 'asc' | 'desc';
 const AUTO_DOWNLOADS_COLUMN_LABEL = 'Auto downloads';
 const TV_FILTER_LABEL = 'TV shows only';
 const TV_FILTER_DESCRIPTION = 'Channels saved as TV shows';
+const CHANNEL_SEARCH_DEBOUNCE_MS = 300;
 
 interface SubscriptionsProps {
   token: string | null;
@@ -110,8 +111,8 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
   const [addPlaylistOpen, setAddPlaylistOpen] = useState(false);
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [page, setPage] = useState(1);
-  const [filterValue, setFilterValue] = useState('');
-  const [filterAnchorEl, setFilterAnchorEl] = useState<HTMLElement | null>(null);
+  // The add bar's text, applied to the channel list once typing pauses.
+  const [channelSearch, setChannelSearch] = useState('');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [channelToDelete, setChannelToDelete] = useState<Channel | null>(null);
   const [playlistDeleteConfirmOpen, setPlaylistDeleteConfirmOpen] = useState(false);
@@ -123,7 +124,6 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
   const [regexPopoverAnchor, setRegexPopoverAnchor] = useState<{ el: HTMLElement; regex: string } | null>(null);
   const [folderMenuAnchor, setFolderMenuAnchor] = useState<null | HTMLElement>(null);
   const [mobileActionsAnchorEl, setMobileActionsAnchorEl] = useState<null | HTMLElement>(null);
-  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [channelSettingsDialog, setChannelSettingsDialog] = useState<{
     channel: PendingChannel;
     mode: 'add' | 'edit';
@@ -142,12 +142,12 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
     token,
     page,
     pageSize: effectivePageSize,
-    searchTerm: filterValue,
+    searchTerm: channelSearch,
     sortOrder,
     subFolder: selectedSubFolder || undefined,
     layout: tvOnly ? ('tv' as const) : undefined,
     append: useInfiniteScroll,
-  }), [token, page, effectivePageSize, filterValue, sortOrder, selectedSubFolder, tvOnly, useInfiniteScroll]);
+  }), [token, page, effectivePageSize, channelSearch, sortOrder, selectedSubFolder, tvOnly, useInfiniteScroll]);
 
   const {
     channels: serverChannels,
@@ -191,15 +191,28 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
 
   const deletedSet = useMemo(() => new Set(deletedChannels), [deletedChannels]);
 
+  // Held while a lookup runs, so a URL being added (typed, or handed over from
+  // Find Channels) does not empty the list behind the lookup.
+  useEffect(() => {
+    if (isAddingChannel) return;
+    const next = typeFilter === 'channels' ? newSubscriptionUrl.trim() : '';
+    if (!next) {
+      setChannelSearch('');
+      return;
+    }
+    const timer = setTimeout(() => setChannelSearch(next), CHANNEL_SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [newSubscriptionUrl, typeFilter, isAddingChannel]);
+
   // Pending additions ignore the folder filter: an unsaved add (often seeded with
   // the global-default sentinel) would otherwise vanish and look like a no-op.
   const filteredPendingAdditions = useMemo(
     () =>
       pendingAdditions.filter(
         (channel) =>
-          channelMatchesFilter(channel.uploader || '', channel.url, filterValue)
+          channelMatchesFilter(channel.uploader || '', channel.url, channelSearch)
       ),
-    [pendingAdditions, filterValue]
+    [pendingAdditions, channelSearch]
   );
 
   const visibleServerChannels = useMemo(
@@ -243,7 +256,7 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
 
   useEffect(() => {
     setPage(1);
-  }, [filterValue, sortOrder, viewMode, isMobile, selectedSubFolder, tvOnly]);
+  }, [channelSearch, sortOrder, viewMode, isMobile, selectedSubFolder, tvOnly]);
 
   useEffect(() => {
     if (page > pageCount) {
@@ -364,10 +377,8 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
     setTypeFilter(next);
     setNewSubscriptionUrl('');
     // The channel toolbar popups are hidden in playlists view; close any left open.
-    setFilterAnchorEl(null);
     setFolderMenuAnchor(null);
     setMobileActionsAnchorEl(null);
-    setMobileFilterOpen(false);
   };
 
   const handleSaveChanges = async () => {
@@ -421,25 +432,8 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
     setRegexPopoverAnchor(null);
   };
 
-  const handleFilterIconClick = (event: React.MouseEvent<HTMLElement>) => {
-    if (isMobile) {
-      setMobileActionsAnchorEl(null);
-      setMobileFilterOpen((prev) => !prev);
-      return;
-    }
-
-    const anchorEl = event.currentTarget;
-    setFilterAnchorEl((prev) => (prev ? null : anchorEl));
-  };
-
-  const handleFilterChange = (value: string) => {
-    setFilterValue(value);
-  };
-
-  const clearFilter = () => {
-    setFilterValue('');
-    setFilterAnchorEl(null);
-    setMobileFilterOpen(false);
+  const handleFindOnYouTube = () => {
+    navigate(`/subscriptions/find?q=${encodeURIComponent(channelSearch)}`);
   };
 
   const handleViewChange = (_: React.MouseEvent<HTMLElement>, next: ViewMode | null) => {
@@ -474,7 +468,6 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
   };
 
   const handleMobileActionsOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setMobileFilterOpen(false);
     setMobileActionsAnchorEl(event.currentTarget);
   };
   const handleMobileActionsClose = () => setMobileActionsAnchorEl(null);
@@ -565,17 +558,6 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
                 </Button>
               </div>
 
-              {/* Filter button */}
-              <Button
-                variant={filterValue ? 'contained' : 'outlined'}
-                size="sm"
-                startIcon={<FilterAltIcon size={16} />}
-                onClick={handleFilterIconClick}
-                className="intent-base"
-              >
-                Filters{filterValue ? ' •' : ''}
-              </Button>
-
               <DownloadPercentInfo />
 
               {/* Actions button */}
@@ -664,18 +646,6 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
                 </button>
               </Tooltip>
 
-              <Tooltip title="Filter by channel name">
-                <button
-                  aria-label="Filter by channel name"
-                  className={`icon-btn${filterValue ? ' icon-btn-primary' : ''}`}
-                  type="button"
-                  onClick={handleFilterIconClick}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: filterValue ? 'var(--primary)' : 'inherit', display: 'inline-flex', alignItems: 'center', padding: 4, borderRadius: 4 }}
-                >
-                  <FilterAltIcon size={18} />
-                </button>
-              </Tooltip>
-
               <Tooltip title={folderTooltip}>
                 <button
                   aria-label={folderTooltip}
@@ -691,7 +661,7 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
 
             <div className="flex items-center gap-1">
               <Typography variant="body2" color="text.secondary">
-                {(folderControlActive && filterValue) ? `Total matching channels: ${total}` : `Total channels: ${total}`}
+                {(folderControlActive || channelSearch) ? `Total matching channels: ${total}` : `Total channels: ${total}`}
               </Typography>
               {viewMode === 'grid' && <DownloadPercentInfo />}
             </div>
@@ -725,6 +695,21 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
                 {loading && displayChannels.length === 0 ? (
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', paddingTop: 24, paddingBottom: 24 }}>
                 <CircularProgress />
+              </div>
+            ) : displayChannels.length === 0 && channelSearch ? (
+              <div className="flex flex-col items-center gap-2 px-2 py-6 text-center">
+                <Typography color="text.secondary" style={{ overflowWrap: 'anywhere' }}>
+                  {`No channels match "${channelSearch}".`}
+                </Typography>
+                {isExplicitChannelReference(channelSearch) ? (
+                  <Typography variant="body2" color="text.secondary">
+                    Use the Channel button above to add it.
+                  </Typography>
+                ) : (
+                  <Button variant="outlined" startIcon={<SearchIcon size={16} />} onClick={handleFindOnYouTube}>
+                    Find on YouTube
+                  </Button>
+                )}
               </div>
             ) : displayChannels.length === 0 ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 24, paddingBottom: 24 }}>
@@ -867,80 +852,6 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
           ))
         )}
       </Menu>
-
-      <Popover
-        open={!isMobile && Boolean(filterAnchorEl)}
-        anchorEl={filterAnchorEl}
-        onClose={() => setFilterAnchorEl(null)}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-        transformOrigin={{vertical: 'bottom', horizontal: 'center'}}
-      >
-        <div style={{ padding: 16, minWidth: 240 }}>
-          <TextField
-            label="Filter channels"
-            value={filterValue}
-            onChange={(e) => handleFilterChange(e.target.value)}
-            fullWidth
-            autoFocus
-          />
-          {filterValue && (
-            <Button size="small" onClick={clearFilter} style={{ marginTop: 8 }}>
-              Clear filter
-            </Button>
-          )}
-        </div>
-      </Popover>
-
-      {isMobile && mobileFilterOpen && (
-        <>
-          <div
-            aria-hidden="true"
-            onClick={() => setMobileFilterOpen(false)}
-            style={{
-              position: 'fixed',
-              inset: 0,
-              zIndex: 1299,
-              backgroundColor: 'var(--overlay-backdrop-background)',
-            }}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="channel-filter-sheet-title"
-            style={{
-              position: 'fixed',
-              left: 8,
-              right: 8,
-              bottom: 'calc(var(--mobile-nav-total-offset, 0px) + 8px)',
-              zIndex: 1300,
-              backgroundColor: 'var(--card)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-ui)',
-              boxShadow: 'var(--shadow-hard)',
-              padding: 12,
-            }}
-          >
-            <Typography id="channel-filter-sheet-title" variant="subtitle2" style={{ fontWeight: 700, marginBottom: 8 }}>
-              Filter channels
-            </Typography>
-            <TextField
-              label="Filter channels"
-              value={filterValue}
-              onChange={(e) => handleFilterChange(e.target.value)}
-              fullWidth
-              autoFocus
-            />
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 8 }}>
-              <Button size="small" variant="outlined" onClick={clearFilter} disabled={!filterValue}>
-                Clear filter
-              </Button>
-              <Button size="small" onClick={() => setMobileFilterOpen(false)}>
-                Done
-              </Button>
-            </div>
-          </div>
-        </>
-      )}
 
       <Dialog open={dialogOpen} onClose={() => { setDialogOpen(false); setDialogMessage(null); }}>
         <DialogContent>

@@ -50,6 +50,7 @@ class YtdlpOutputRouter {
     // jobs read metadata for every URL, so the finalizer must not count these
     // as downloaded.
     this.archiveSkippedIds = new Set();
+    this.filterSkippedCount = 0;
     this.downloadedIds = new Set();
     this.stderrBuffer = '';
     // Partial stderr line waiting on its newline, so a split line never
@@ -151,6 +152,7 @@ class YtdlpOutputRouter {
           if (isArchiveSkip && id && !this.downloadedIds.has(id)) {
             this.archiveSkippedIds.add(id);
           }
+          if (!isArchiveSkip) this.filterSkippedCount += 1;
         }
 
         // Track destination files for cleanup
@@ -285,7 +287,7 @@ class YtdlpOutputRouter {
         ? 'Bot detection encountered during the no-cookies fallback. The fallback also failed, so this video may be genuinely unavailable.'
         : this.cookiesEnabled
           ? 'Bot detection encountered even though cookies are configured - they are likely expired or rotated. Re-export fresh cookies from your browser and upload them again.'
-          : 'Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.';
+          : 'Bot detection encountered. YouTube is temporarily refusing requests from this server; this usually clears on its own, so try again later. If it keeps happening, upload YouTube cookies in Settings -> Cookies.';
       MessageEmitter.emitMessage(
         'broadcast',
         null,

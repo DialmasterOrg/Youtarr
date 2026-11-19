@@ -54,6 +54,8 @@ interface SubfolderAutocompleteProps {
   createSubfolder?: (name: string) => Promise<void>;
   /** Folder layouts ('' = main folder): TV folders are labelled "(TV)" */
   layoutOf?: LayoutResolver;
+  /** 'download' mode only: what the "no override" choice is called where "channel settings" would not fit */
+  noOverrideLabel?: string;
 }
 
 const ADD_NEW_SENTINEL = '__ADD_NEW__';
@@ -76,6 +78,7 @@ export function SubfolderAutocomplete({
   label = 'Library folder',
   createSubfolder,
   layoutOf,
+  noOverrideLabel = 'No override (use channel settings)',
 }: SubfolderAutocompleteProps) {
   // State for the Add library folder dialog
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -132,7 +135,7 @@ export function SubfolderAutocomplete({
     } else if (mode === 'download') {
       // "No override" option - maps to null (no override)
       opts.push({
-        label: 'No override (use channel settings)',
+        label: noOverrideLabel,
         value: null,
         isSpecial: true,
         isAddNew: false,
@@ -175,7 +178,7 @@ export function SubfolderAutocomplete({
     // This makes it reliably clickable in tests without depending on Radix Select portal events.
 
     return opts;
-  }, [mode, allSubfolders, defaultSubfolderDisplay, layoutOf]);
+  }, [mode, allSubfolders, defaultSubfolderDisplay, layoutOf, noOverrideLabel]);
 
   // Find the current option based on value
   const currentOption = useMemo((): SubfolderOption | null => {

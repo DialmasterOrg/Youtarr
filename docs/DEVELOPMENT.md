@@ -44,7 +44,7 @@ If you set `YOUTARR_IMAGE` in `.env`, remove or comment that line first, otherwi
 
 For development, you'll need:
 
-1. **Node.js 20.19+ and npm 11.10+** (needed for the build script that compiles the client and installs dependencies before Docker runs)
+1. **Node.js 20.19+ and npm 11.10+** (needed for the build script that compiles the client and installs dependencies before Docker runs). Distro packages are often too old: `apt` on Ubuntu 24.04 and 26.04 installs npm 9.2, and 24.04 also has Node 18. If yours are older, install a current Node with [nvm](https://github.com/nvm-sh/nvm) or from [nodejs.org](https://nodejs.org), then follow the npm upgrade steps below.
 2. **Docker** and Docker Compose (v2 or v1)
 3. **Git** for version control
 4. A code editor (VS Code recommended)
@@ -442,6 +442,9 @@ npm run lint:backend
 
 # TypeScript type checking
 npm run lint:ts
+
+# Check that every path in .claude/rules still matches a file (also part of npm run lint)
+npm run lint:rules
 ```
 
 ### Pre-commit Hooks
@@ -455,7 +458,7 @@ git commit --no-verify
 
 ### Running Tests
 
-All tests run on your host machine (not in Docker) since they're isolated unit tests:
+The unit suites run on your host machine without a database:
 
 ```bash
 # Run all tests (backend + frontend)
@@ -473,6 +476,15 @@ npm run test:coverage
 # Watch mode (backend)
 npm run test:watch
 ```
+
+### External API Database Tests
+
+The separate external API integration suite requires a disposable MariaDB 10.3
+or MySQL 8.0 server. It runs the real migrations and model-backed request,
+approval, quota, and catalog flows without contacting YouTube. Follow the
+[database setup and query-plan commands](EXTERNAL_API.md#database-integration-and-query-plans)
+to run both engines, including rollback/reapply and the synthetic index report.
+The ordinary backend Jest command does not run these database tests.
 
 ### External Cookie Validation Tests
 

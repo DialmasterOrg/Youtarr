@@ -33,6 +33,7 @@ const SCHEDULES = {
   sessionCleanupFrequency: { label: 'Session cleanup', default: '0 3 * * *' },
   videoRescanFrequency: { label: 'Rescan files on disk', default: '30 3 * * *' },
   ytdlpUpdateFrequency: { label: 'Automatic yt-dlp updates', default: '0 4 * * *' },
+  channelFeedCheckFrequency: { label: 'Check channels for new videos', default: '30 * * * *' },
   channelVideoCountsFrequency: { label: 'Refresh channel video counts', default: '45 4 * * *' },
 };
 

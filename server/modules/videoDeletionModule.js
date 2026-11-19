@@ -3,8 +3,8 @@ const fs = require('fs').promises;
 const path = require('path');
 const logger = require('../logger');
 const configModule = require('./configModule');
-const { isVideoDirectoryFor, isFileForVideo, cleanupEmptyChannelDirectory, cleanupEmptyParents, isSubfolderDir, extractSubfolderName, listSubdirectories, removeDirectoryResilient, resolveLibraryFolder, locateEpisodeFolders, cleanupEmptyShowFolders, cleanupOrphanShowFolder } = require('./filesystem');
-const { MAIN_LIBRARY_FOLDER } = require('./filesystem/constants');
+const { isVideoDirectoryFor, isFileForVideo, cleanupEmptyChannelDirectory, cleanupEmptyParents, isSubfolderDir, extractSubfolderName, listSubdirectories, removeDirectoryResilient, removeEmptyVideoDirectory, resolveLibraryFolder, locateEpisodeFolders, cleanupEmptyShowFolders, cleanupOrphanShowFolder } = require('./filesystem');
+const { MAIN_LIBRARY_FOLDER, ARR_STAGING_DIR_NAME } = require('./filesystem/constants');
 const libraryLayouts = require('./tvShows/libraryLayouts');
 const m3uGenerator = require('./m3uGenerator');
 const playlistOutputRefresh = require('./playlistOutputRefresh');
@@ -75,9 +75,12 @@ class VideoDeletionModule {
    * Best-effort: errors are logged as warnings and do not propagate
    * @param {string} filePath - The deleted video's file path
    * @param {boolean} flat - Whether the video used flat directory structure
+   * @param {{anyDepth?: boolean}} [options] - anyDepth: the video's own folder was removed from a
+   *   place the nested layout does not cover, so the folder that held it is cleaned up at whatever
+   *   depth it sits inside the downloads folder
    * @private
    */
-  async _tryCleanupChannelDirectory(filePath, flat) {
+  async _tryCleanupChannelDirectory(filePath, flat, { anyDepth = false } = {}) {
     try {
       const baseDir = configModule.directoryPath;
 
@@ -93,10 +96,13 @@ class VideoDeletionModule {
         : path.dirname(path.dirname(filePath));
 
       const removed = await cleanupEmptyChannelDirectory(channelDir, baseDir, {
-        includeIgnorableFiles: true
+        includeIgnorableFiles: true,
+        anyDepth
       });
 
-      if (removed) {
+      // With anyDepth the folders above are the user's own layout, not ones
+      // Youtarr created, so they stay even when empty.
+      if (removed && !anyDepth) {
         // Clean up empty subfolder parent (e.g., /base/__subfolder/ now empty)
         await cleanupEmptyParents(path.dirname(channelDir), baseDir);
       }
@@ -184,7 +190,8 @@ class VideoDeletionModule {
         return {
           success: false,
           videoId,
-          error: `${libraryCheck.message} Nothing was deleted; check that the drive is mounted.`
+          error: `${libraryCheck.message} Nothing was deleted; check that the drive is mounted.`,
+          code: 'LIBRARY_UNAVAILABLE'
         };
       }
 
@@ -206,10 +213,11 @@ class VideoDeletionModule {
       }
 
       // Delete the video files
+      let ownFolderRemoved = false;
       try {
         if (flat) {
           // Flat structure: delete only files matching this video's youtube ID
-          // NEVER delete the directory itself (it's the channel folder containing other videos)
+          // NEVER delete the directory recursively (it may be the channel folder containing other videos)
           logger.info({ videoId, videoDirectory, youtubeId: video.youtubeId }, 'Flat structure detected, deleting individual files');
           const files = await fs.readdir(videoDirectory);
           let firstUnlinkError = null;
@@ -232,6 +240,10 @@ class VideoDeletionModule {
           if (firstUnlinkError) {
             throw firstUnlinkError;
           }
+          // A per-video folder stored where the nested check does not accept it
+          // (outside the downloads folder, or deeper than a channel folder) was
+          // just emptied file by file; remove it if nothing else is in it (#941).
+          ownFolderRemoved = await removeEmptyVideoDirectory(videoDirectory, video.youtubeId);
         } else {
           // Nested structure: delete the entire video directory.
           // Uses the resilient remover so SMB AppleDouble race conditions
@@ -257,7 +269,7 @@ class VideoDeletionModule {
       await video.update(removedColumns(removal.reason, { detail: removal.detail }));
 
       // Best-effort cleanup of empty channel directory
-      await this._tryCleanupChannelDirectory(primaryPath, flat);
+      await this._tryCleanupChannelDirectory(primaryPath, flat && !ownFolderRemoved, { anyDepth: ownFolderRemoved });
 
       return {
         success: true,
@@ -321,7 +333,8 @@ class VideoDeletionModule {
       } else {
         failed.push({
           videoId,
-          error: result.error || 'Unknown error'
+          error: result.error || 'Unknown error',
+          ...(result.code ? { code: result.code } : {})
         });
       }
     }
@@ -373,7 +386,8 @@ class VideoDeletionModule {
         } else {
           failed.push({
             youtubeId,
-            error: result.error || 'Unknown error'
+            error: result.error || 'Unknown error',
+            ...(result.code ? { code: result.code } : {})
           });
         }
       } catch (error) {
@@ -566,6 +580,9 @@ ${excludeClause}        ORDER BY timeCreated ASC
 
       for (const dir of topLevelDirs) {
         const dirName = path.basename(dir);
+
+        // Not a channel folder: Sonarr and Radarr expect it to exist.
+        if (dirName === ARR_STAGING_DIR_NAME) continue;
 
         if (isSubfolderDir(dirName)) {
           // Subfolder directory (e.g., __Music) — check its children as channel or show dirs

@@ -145,6 +145,7 @@ const createServerModule = ({
         const configModuleMock = {
           directoryPath: '/downloads',
           getConfig: jest.fn(() => configState),
+          onConfigChange: jest.fn(),
           updateConfig: jest.fn((patch) => Object.assign(configState, patch)),
           getImagePath: jest.fn(() => '/images'),
           getCookiesStatus: jest.fn(() => ({
@@ -401,6 +402,8 @@ const createServerModule = ({
           run: jest.fn(),
           isBusyError: jest.fn(() => false)
         }));
+        // Same reason: playlistModule loads ytdlpCommandBuilder.
+        jest.doMock('../modules/playlistModule', () => ({}));
         const ytdlpModuleMock = {
           getLatestVersion: jest.fn().mockResolvedValue('2026.04.20'),
           isUpdateAvailable: jest.fn(() => false),
@@ -410,6 +413,7 @@ const createServerModule = ({
           shouldReapplyChannel: jest.fn(() => false),
         };
         jest.doMock('../modules/ytdlpModule', () => ytdlpModuleMock);
+        jest.doMock('../modules/membersAccess');
         jest.doMock('../models/channelvideo', () => ({
           update: jest.fn().mockResolvedValue([1])
         }));

@@ -2,7 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { Box, Button, Paper } from '../ui';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
-import { NavItem, isNavItemExpanded, isNavSubItemActive } from './navigation';
+import { NavItem, groupNavSubItems, isNavItemExpanded, isNavSubItemActive } from './navigation';
+
+const GROUPED_MENU_WIDTH = 600;
+const GROUPED_MENU_COLUMNS = 3;
+const GROUPED_MENU_MIN_COLUMN_WIDTH = 170;
+const MENU_VIEWPORT_MARGIN = 16;
+
+/**
+ * How far left of its nav item a grouped menu must start to stay inside the
+ * window: the menu is wider than the space to the right of the last nav item.
+ */
+function groupedMenuLeft(itemLeft: number): number {
+  const width = Math.min(GROUPED_MENU_WIDTH, window.innerWidth - MENU_VIEWPORT_MARGIN * 2);
+  const maxLeft = window.innerWidth - MENU_VIEWPORT_MARGIN - width;
+  return Math.max(MENU_VIEWPORT_MARGIN, Math.min(itemLeft, maxLeft)) - itemLeft;
+}
 
 interface NavHeaderTopItemsProps {
   navItems: NavItem[];
@@ -19,12 +34,14 @@ export const NavHeaderTopItems: React.FC<NavHeaderTopItemsProps> = ({
   const { showSectionIcons } = useThemeEngine();
 
   const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [activeItemLeft, setActiveItemLeft] = useState(0);
 
   useEffect(() => {
     setActiveKey(null);
   }, [location.pathname]);
 
-  const handleUnitEnter = (_event: React.MouseEvent<HTMLElement>, key: string) => {
+  const handleUnitEnter = (event: React.MouseEvent<HTMLElement>, key: string) => {
+    setActiveItemLeft(event.currentTarget.getBoundingClientRect().left);
     setActiveKey(key);
   };
 
@@ -66,6 +83,8 @@ export const NavHeaderTopItems: React.FC<NavHeaderTopItemsProps> = ({
         const isOpen = activeKey === item.key;
         const hasSubItems = item.subItems && item.subItems.length > 0;
         const isParentActive = isNavItemExpanded(location.pathname, item);
+        const sections = groupNavSubItems(item.subItems ?? []);
+        const isGrouped = sections.some((section) => section.group !== null);
 
         return (
           <Box
@@ -103,37 +122,60 @@ export const NavHeaderTopItems: React.FC<NavHeaderTopItemsProps> = ({
                 style={{
                   position: 'absolute',
                   top: '100%',
-                  left: 0,
+                  left: isGrouped ? groupedMenuLeft(activeItemLeft) : 0,
                   zIndex: 1500,
                   paddingTop: 8,
                 }}
               >
-                <Paper style={menuPaperStyle}>
-                  {(item.subItems ?? []).map((subItem) => {
-                    const isSubActive = isNavSubItemActive(location.pathname, subItem);
-                    return (
-                      <RouterLink
-                        key={subItem.key}
-                        to={subItem.to}
-                        onClick={handleUnitLeave}
-                        style={{
-                          display: 'block',
-                          textDecoration: 'none',
-                          width: '100%',
-                          borderRadius: 'var(--layout-header-menu-radius)',
-                          fontSize: '0.85rem',
-                          fontWeight: 500,
-                          color: isSubActive
-                            ? 'var(--header-subnav-active-color)'
-                            : 'var(--muted-foreground)',
-                          padding: '8px 12px',
-                          boxSizing: 'border-box',
-                        }}
-                      >
-                        {subItem.label}
-                      </RouterLink>
-                    );
-                  })}
+                <Paper
+                  style={isGrouped
+                    ? {
+                        ...menuPaperStyle,
+                        width: `min(${GROUPED_MENU_WIDTH}px, calc(100vw - ${MENU_VIEWPORT_MARGIN * 2}px))`,
+                        columns: `${GROUPED_MENU_COLUMNS} ${GROUPED_MENU_MIN_COLUMN_WIDTH}px`,
+                        columnGap: 4,
+                      }
+                    : menuPaperStyle}
+                >
+                  {sections.map((section) => (
+                    <div
+                      key={section.group ?? section.items[0].key}
+                      role={section.group ? 'group' : undefined}
+                      aria-label={section.group ?? undefined}
+                      className="break-inside-avoid"
+                    >
+                      {section.group && (
+                        <div aria-hidden="true" className="px-3 pb-1 pt-2 text-[0.68rem] font-bold uppercase tracking-wide text-foreground">
+                          {section.group}
+                        </div>
+                      )}
+                      {section.items.map((subItem) => {
+                        const isSubActive = isNavSubItemActive(location.pathname, subItem);
+                        return (
+                          <RouterLink
+                            key={subItem.key}
+                            to={subItem.to}
+                            onClick={handleUnitLeave}
+                            style={{
+                              display: 'block',
+                              textDecoration: 'none',
+                              width: '100%',
+                              borderRadius: 'var(--layout-header-menu-radius)',
+                              fontSize: '0.85rem',
+                              fontWeight: 500,
+                              color: isSubActive
+                                ? 'var(--header-subnav-active-color)'
+                                : 'var(--muted-foreground)',
+                              padding: '8px 12px',
+                              boxSizing: 'border-box',
+                            }}
+                          >
+                            {subItem.label}
+                          </RouterLink>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </Paper>
               </div>
             )}

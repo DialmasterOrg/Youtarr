@@ -17,6 +17,8 @@ interface NewPlaylistSettingsProps {
 
 const MP3_ONLY_SYNC_HINT =
   ' MP3 Only playlists sync to media servers as music playlists: the server needs a music-type library that includes your Youtarr output folder.';
+const VIDEO_MP3_SYNC_HINT =
+  ' Video + MP3 playlists sync to media servers as video playlists: the server needs a video-type library that includes your Youtarr output folder.';
 
 /** Settings chosen in the Add Playlist dialog before subscribing. */
 const NewPlaylistSettings: React.FC<NewPlaylistSettingsProps> = ({ token, values, onChange, readOnly = false }) => {
@@ -59,6 +61,7 @@ const NewPlaylistSettings: React.FC<NewPlaylistSettingsProps> = ({ token, values
         subfolderLabel="Library folder"
         subfolderHelperText="Where this playlist's videos are saved when the channel has no library folder of its own."
         mp3OnlyHint={MP3_ONLY_SYNC_HINT}
+        videoMp3Hint={VIDEO_MP3_SYNC_HINT}
         disabled={readOnly}
       />
     </div>

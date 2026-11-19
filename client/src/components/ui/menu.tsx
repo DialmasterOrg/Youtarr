@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { cn } from '../../lib/cn';
 import { MenuItem } from './select';
@@ -295,7 +296,9 @@ const Menu: React.FC<MenuProps> = (props) => {
   // Strip maxHeight from PaperProps.style so we can apply the clamped value ourselves.
   const { maxHeight: _pMax, ...paperStyleRest } = PaperProps?.style ?? {};
 
-  return (
+  // Portaled to <body>: a transformed ancestor (a Card's hover lift) would
+  // otherwise become the containing block for the fixed positioning below.
+  return createPortal(
     <>
       {/* Backdrop */}
       {open && <div data-testid="menu-backdrop" className="fixed inset-0 z-40" onClick={onClose} />}
@@ -333,7 +336,8 @@ const Menu: React.FC<MenuProps> = (props) => {
       >
         {children}
       </div>
-    </>
+    </>,
+    document.body
   );
 };
 
@@ -388,7 +392,8 @@ const Popover: React.FC<PopoverProps> = ({ open, anchorEl, onClose, children, cl
 
   if (!open) return null;
 
-  return (
+  // Portaled to <body> for the same reason as Menu.
+  return createPortal(
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
@@ -419,7 +424,8 @@ const Popover: React.FC<PopoverProps> = ({ open, anchorEl, onClose, children, cl
       >
         {children}
       </div>
-    </>
+    </>,
+    document.body
   );
 };
 

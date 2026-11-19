@@ -14,16 +14,22 @@ describe('toRunRecord', () => {
     });
   });
 
-  test('counts what downloaded and what was skipped', () => {
+  test('says what downloaded', () => {
     const record = toRunRecord({ sweep: finished({ totalDownloaded: 3, totalSkipped: 6, jobCount: 2 }) });
     expect(record).toMatchObject({ status: 'success', outcome: 'completed' });
-    expect(record.message).toBe('3 videos downloaded, 6 skipped (already downloaded or filtered).');
+    expect(record.message).toBe('3 videos downloaded.');
+  });
+
+  test('keeps videos it looked at and left alone out of the message but in the details', () => {
+    const record = toRunRecord({ sweep: finished({ totalSkipped: 9, totalMembersOnly: 2 }) });
+    expect(record.message).toBe('No new videos.');
+    expect(record.details).toMatchObject({ skipped: 9, membersOnly: 2 });
   });
 
   test('marks a sweep with failed videos as partly failed, with the counts', () => {
     const record = toRunRecord({ sweep: finished({ totalDownloaded: 3, totalFailed: 2, totalSkipped: 6 }) });
     expect(record).toMatchObject({ status: 'error', outcome: 'partial' });
-    expect(record.message).toBe('3 videos downloaded, 2 failed, 6 skipped (already downloaded or filtered).');
+    expect(record.message).toBe('3 videos downloaded, 2 failed.');
     expect(record.details).toMatchObject({ downloaded: 3, failed: 2 });
   });
 

@@ -209,10 +209,14 @@ const TV_SHOW_IGNORABLE_FILE_PATTERN = /^(tvshow\.nfo|\.plexignore|(poster|folde
 const LOCAL_TEMP_DIR_NAME = '.youtarr_tmp';
 const M3U_FOLDER_NAME = '__playlists__';
 const HEALTHCHECK_FILE_PREFIX = '.youtarr_healthcheck_';
+// Temporary hardlinks handed to Sonarr and Radarr (modules/arrBridge). Never
+// library content: every walk of the downloads folder skips it.
+const ARR_STAGING_DIR_NAME = '.arr-staging';
 
 module.exports = {
   SUBFOLDER_PREFIX,
   LOCAL_TEMP_DIR_NAME,
+  ARR_STAGING_DIR_NAME,
   M3U_FOLDER_NAME,
   HEALTHCHECK_FILE_PREFIX,
   GLOBAL_DEFAULT_SENTINEL,

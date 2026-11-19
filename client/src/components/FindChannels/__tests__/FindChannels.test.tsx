@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 
 jest.mock('axios', () => ({
   post: jest.fn(),
@@ -32,10 +32,16 @@ const apiResult = (overrides = {}) => ({
   ...overrides,
 });
 
-function renderPage() {
+function LocationProbe() {
+  const { search } = useLocation();
+  return <div data-testid="location-search">{search}</div>;
+}
+
+function renderPage(initialEntry = '/subscriptions/find') {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <FindChannels token="t" />
+      <LocationProbe />
     </MemoryRouter>
   );
 }
@@ -102,6 +108,64 @@ describe('FindChannels page', () => {
     fireEvent.click(await screen.findByRole('button', { name: /view alpha/i }));
 
     expect(mockNavigate).toHaveBeenCalledWith('/channel/UCa');
+  });
+
+  describe('?q= in the URL', () => {
+    test('runs that search when the page opens', async () => {
+      axios.post.mockResolvedValueOnce({ data: { results: [apiResult()] } });
+
+      renderPage('/subscriptions/find?q=linus%20tech');
+
+      expect(await screen.findByText('Alpha')).toBeInTheDocument();
+      expect(axios.post).toHaveBeenCalledTimes(1);
+      expect(axios.post).toHaveBeenCalledWith(
+        '/api/channels/search',
+        { query: 'linus tech', count: 25 },
+        expect.anything()
+      );
+    });
+
+    test('fills the search box with it', async () => {
+      axios.post.mockResolvedValueOnce({ data: { results: [apiResult()] } });
+
+      renderPage('/subscriptions/find?q=linus%20tech');
+
+      expect(await screen.findByRole('textbox')).toHaveValue('linus tech');
+    });
+
+    test('does not search on open without it', () => {
+      renderPage();
+
+      expect(axios.post).not.toHaveBeenCalled();
+    });
+
+    test('is updated to the submitted query', async () => {
+      axios.post.mockResolvedValueOnce({ data: { results: [apiResult()] } });
+
+      renderPage();
+      fireEvent.change(screen.getByRole('textbox'), { target: { value: 'alpha beta' } });
+      fireEvent.click(screen.getByRole('button', { name: /^search$/i }));
+
+      expect(await screen.findByText('Alpha')).toBeInTheDocument();
+      expect(screen.getByTestId('location-search')).toHaveTextContent('?q=alpha+beta');
+    });
+
+    test('retries the query the page was opened with', async () => {
+      axios.post
+        .mockRejectedValueOnce({ response: { data: { error: 'Search timed out' } } })
+        .mockResolvedValueOnce({ data: { results: [apiResult()] } });
+
+      renderPage('/subscriptions/find?q=alpha');
+
+      fireEvent.click(await screen.findByRole('button', { name: /try again/i }));
+
+      expect(await screen.findByText('Alpha')).toBeInTheDocument();
+      expect(axios.post).toHaveBeenLastCalledWith(
+        '/api/channels/search',
+        { query: 'alpha', count: 25 },
+        expect.anything()
+      );
+    });
   });
 
   test('shows the server error and retries the last query', async () => {

@@ -151,6 +151,11 @@ Channel.init(
       allowNull: true,
       defaultValue: null,
     },
+    feed_checked_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null,
+    },
   },
   {
     sequelize,

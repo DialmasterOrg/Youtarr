@@ -85,8 +85,19 @@ export const CookieFileCard: React.FC<CookieFileCardProps> = ({
           <Alert severity="warning">
             <AlertTitle>Use a throwaway account</AlertTitle>
             <Typography variant="body2">
-              A cookie file grants access to the Google account it came from. Export cookies from a
-              throwaway account, not your main one.
+              A cookie file grants access to the Google account it came from, and YouTube can
+              restrict or ban accounts used for automated downloads. Export cookies from a
+              throwaway account, not your main one; using your main account is at your own risk.
+              See the{' '}
+              <a
+                href="https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary underline"
+              >
+                yt-dlp warning
+              </a>
+              .
             </Typography>
           </Alert>
         </>
@@ -145,7 +156,7 @@ export const CookieFileCard: React.FC<CookieFileCardProps> = ({
       )}
       <Typography variant="caption" className="block text-muted-foreground">
         {hasFile
-          ? 'A cookie file grants access to the Google account it came from; use a throwaway account.'
+          ? 'A cookie file grants access to the Google account it came from, and YouTube can ban accounts used for automated downloads; use a throwaway account.'
           : 'Netscape format cookie file exported from your browser, up to 1 MB.'}
       </Typography>
     </Box>

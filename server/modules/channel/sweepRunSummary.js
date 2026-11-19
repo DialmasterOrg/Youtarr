@@ -19,15 +19,14 @@ function plural(count, word) {
   return `${count} ${word}${count === 1 ? '' : 's'}`;
 }
 
-// "3 videos downloaded, 2 failed, 6 skipped (already downloaded or filtered)."
+// "3 videos downloaded, 2 failed." The videos a sweep looked at and left alone
+// stay in the record's details: they come back every run, so they aren't news.
 function describeCounts(totals) {
   const parts = [];
   if (totals.totalDownloaded > 0) parts.push(`${plural(totals.totalDownloaded, 'video')} downloaded`);
   if (totals.totalFailed > 0) {
     parts.push(parts.length > 0 ? `${totals.totalFailed} failed` : `${plural(totals.totalFailed, 'video')} failed`);
   }
-  if (totals.totalMembersOnly > 0) parts.push(`${totals.totalMembersOnly} members-only skipped`);
-  if (totals.totalSkipped > 0) parts.push(`${totals.totalSkipped} skipped (already downloaded or filtered)`);
   return parts.length > 0 ? `${parts.join(', ')}.` : 'No new videos.';
 }
 

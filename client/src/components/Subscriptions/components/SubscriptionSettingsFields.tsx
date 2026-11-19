@@ -23,6 +23,8 @@ interface SubscriptionSettingsFieldsProps {
   subfolderHelperText: string;
   /** Extra helper text appended when MP3 Only is chosen. */
   mp3OnlyHint?: string;
+  /** Extra helper text appended when Video + MP3 is chosen. */
+  videoMp3Hint?: string;
   disabled?: boolean;
   /** Note under the folder picker that a TV folder saves the subscription as a TV show (channels). */
   showTvShowCaption?: boolean;
@@ -41,6 +43,7 @@ const SubscriptionSettingsFields: React.FC<SubscriptionSettingsFieldsProps> = ({
   subfolderLabel,
   subfolderHelperText,
   mp3OnlyHint = '',
+  videoMp3Hint = '',
   disabled = false,
   showTvShowCaption = false,
 }) => {
@@ -62,7 +65,7 @@ const SubscriptionSettingsFields: React.FC<SubscriptionSettingsFieldsProps> = ({
         onChange={(value) => onChange({ audio_format: value })}
         videoOnly={isTvFolder}
         helperText={values.audio_format && !isTvFolder
-          ? MP3_HELPER_TEXT + (values.audio_format === 'mp3_only' ? mp3OnlyHint : '')
+          ? MP3_HELPER_TEXT + (values.audio_format === 'mp3_only' ? mp3OnlyHint : videoMp3Hint)
           : undefined}
         disabled={disabled}
       />

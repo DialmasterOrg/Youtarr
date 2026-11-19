@@ -46,7 +46,7 @@ ApiKey.init(
       allowNull: false,
       defaultValue: 'legacy_download',
       validate: {
-        isIn: [['legacy_download', 'view', 'request', 'delete', 'admin']],
+        isIn: [['legacy_download', 'status_read', 'view', 'request', 'delete', 'admin']],
       },
     },
     auto_approve_video_requests: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },

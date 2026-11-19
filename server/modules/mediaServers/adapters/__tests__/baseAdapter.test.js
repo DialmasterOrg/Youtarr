@@ -6,8 +6,15 @@ const {
   bestItemMatchesByPath,
   isServerUnavailableError,
   describeHttpError,
+  normalizeLibraryIds,
   MediaServerUnavailableError,
 } = require('../baseAdapter');
+
+describe('BaseAdapter.refreshAfterDownload (default)', () => {
+  test('resolves without doing anything for adapters that do not override it', async () => {
+    await expect(new BaseAdapter({}).refreshAfterDownload()).resolves.toBeUndefined();
+  });
+});
 
 describe('BaseAdapter.resolveItemIdsByFilepaths (default batch)', () => {
   class PerFileAdapter extends BaseAdapter {
@@ -124,6 +131,26 @@ describe('baseAdapter helpers', () => {
 
     test('handles a falsy error', () => {
       expect(describeHttpError(null)).toEqual({ message: 'unknown error' });
+    });
+  });
+
+  describe('normalizeLibraryIds', () => {
+    test('trims ids and drops blanks and duplicates from an array', () => {
+      expect(normalizeLibraryIds([' abc ', '', 'def', 'abc', null])).toEqual(['abc', 'def']);
+    });
+
+    test('splits a hand-edited comma-separated string', () => {
+      expect(normalizeLibraryIds('abc, def ,,')).toEqual(['abc', 'def']);
+    });
+
+    test('keeps numeric ids as strings', () => {
+      expect(normalizeLibraryIds([14438])).toEqual(['14438']);
+    });
+
+    test('returns an empty list for a missing or blank value', () => {
+      expect(normalizeLibraryIds(undefined)).toEqual([]);
+      expect(normalizeLibraryIds('')).toEqual([]);
+      expect(normalizeLibraryIds([])).toEqual([]);
     });
   });
 

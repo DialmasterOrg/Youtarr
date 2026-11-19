@@ -2,7 +2,12 @@
 jest.mock('../../modules/filenamePreview', () => ({
   previewTemplate: jest.fn(),
   validateTemplate: jest.fn().mockResolvedValue({ ok: true }),
+  isTimeoutError: jest.fn(() => false),
 }));
+
+const TIMEOUT_MESSAGE =
+  'The filename template could not be checked: yt-dlp took longer than 20 seconds. ' +
+  'The server may be busy; try again in a moment.';
 
 const express = require('express');
 const supertest = require('supertest');
@@ -78,6 +83,8 @@ beforeEach(() => {
   filenamePreview.validateTemplate.mockReset();
   filenamePreview.validateTemplate.mockResolvedValue({ ok: true });
   filenamePreview.previewTemplate.mockReset();
+  filenamePreview.isTimeoutError.mockReset();
+  filenamePreview.isTimeoutError.mockReturnValue(false);
 });
 
 describe('externally managed cookie routes', () => {
@@ -223,6 +230,42 @@ describe('POST /api/cookies/test', () => {
   });
 });
 
+describe('GET /getconfig', () => {
+  test('leaves out the download feed token, which only its own session route returns', async () => {
+    const { app, configModule } = makeApp();
+    configModule._config.downloadsFeedToken = 'saved-token';
+    const res = await supertest(app).get('/getconfig');
+    expect(res.status).toBe(200);
+    expect(res.body).not.toHaveProperty('downloadsFeedToken');
+  });
+
+  test('leaves out the Sonarr/Radarr bridge key but returns the bridge settings', async () => {
+    const { app, configModule } = makeApp();
+    configModule._config.arrBridgeApiKey = 'saved-key';
+    configModule._config.arrBridgeEnabled = true;
+    const res = await supertest(app).get('/getconfig');
+    expect(res.status).toBe(200);
+    expect(res.body).not.toHaveProperty('arrBridgeApiKey');
+    expect(res.body.arrBridgeEnabled).toBe(true);
+  });
+
+  // The Settings page reads the connections from /api/arr-bridge/status,
+  // which shows a normalized URL; a hand-edited one may hold credentials.
+  test('leaves out the Sonarr and Radarr connections, URLs included', async () => {
+    const { app, configModule } = makeApp();
+    configModule._config.arrBridgeSonarrUrl = 'http://user:secret@sonarr:8989';
+    configModule._config.arrBridgeSonarrApiKey = 'sonarr-key';
+    configModule._config.arrBridgeRadarrUrl = 'http://radarr:7878';
+    configModule._config.arrBridgeRadarrApiKey = 'radarr-key';
+    const res = await supertest(app).get('/getconfig');
+    expect(res.status).toBe(200);
+    expect(res.body).not.toHaveProperty('arrBridgeSonarrApiKey');
+    expect(res.body).not.toHaveProperty('arrBridgeRadarrApiKey');
+    expect(res.body).not.toHaveProperty('arrBridgeSonarrUrl');
+    expect(res.body).not.toHaveProperty('arrBridgeRadarrUrl');
+  });
+});
+
 describe('POST /updateconfig', () => {
   describe('library folder layouts', () => {
     const refusal = (message, status) => Object.assign(new Error(message), { status });
@@ -314,6 +357,20 @@ describe('POST /updateconfig', () => {
       .send({ ytdlpCustomArgs: '--no-mtime --concurrent-fragments 4' });
     expect(res.status).toBe(200);
     expect(configModule.updateConfig).toHaveBeenCalled();
+  });
+
+  test('keeps the stored supportPromptShownAt when a stale client saves null', async () => {
+    const { app, configModule } = makeApp();
+    configModule._config.supportPromptShownAt = '2026-11-14T10:00:00.000Z';
+
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ ytdlpCustomArgs: '', supportPromptShownAt: null });
+
+    expect(res.status).toBe(200);
+    expect(configModule.updateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ supportPromptShownAt: '2026-11-14T10:00:00.000Z' })
+    );
   });
 
   test('preserves managed rescanLastRun when saving settings', async () => {
@@ -506,6 +563,240 @@ describe('POST /updateconfig', () => {
     });
   });
 
+  describe('notificationLinkTemplate validation', () => {
+    test.each([
+      '',
+      '   ',
+      'https://youtarr.example.com/videos?video={youtubeId}',
+      'http://192.168.1.10:3087/videos?video={youtubeId}',
+    ])('accepts %p', async (value) => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({ notificationLinkTemplate: value });
+      expect(res.status).toBe(200);
+      expect(configModule.updateConfig).toHaveBeenCalled();
+    });
+
+    test('trims the saved template', async () => {
+      const { app, configModule } = makeApp();
+      await supertest(app)
+        .post('/updateconfig')
+        .send({ notificationLinkTemplate: '  https://youtarr.example.com/?video={youtubeId}  ' });
+      expect(configModule.updateConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ notificationLinkTemplate: 'https://youtarr.example.com/?video={youtubeId}' })
+      );
+    });
+
+    test.each([
+      ['not a URL', 'youtarr.example.com/{youtubeId}'],
+      ['not http or https', 'javascript:alert(1)//{youtubeId}'],
+      ['an unknown variable', 'https://youtarr.example.com/{id}'],
+      ['too long', `https://youtarr.example.com/${'a'.repeat(500)}`],
+      ['not text', 42],
+    ])('rejects a template that is %s without saving', async (_label, value) => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({ notificationLinkTemplate: value });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/^Link template/);
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+
+    test('does not re-check a template that is unchanged from the saved value', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.notificationLinkTemplate = 'edited by hand';
+      const res = await supertest(app)
+        .post('/updateconfig')
+        .send({ notificationLinkTemplate: 'edited by hand' });
+      expect(res.status).toBe(200);
+      expect(configModule.updateConfig).toHaveBeenCalled();
+    });
+  });
+
+  describe('Sonarr/Radarr bridge key', () => {
+    test('keeps the saved key when the client sends a different one', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.arrBridgeApiKey = 'saved-key';
+      await supertest(app).post('/updateconfig').send({ arrBridgeApiKey: 'stale-key' });
+      expect(configModule.updateConfig.mock.calls[0][0].arrBridgeApiKey).toBe('saved-key');
+    });
+
+    test('keeps the saved key when the client sends none, as the Settings page does', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.arrBridgeApiKey = 'saved-key';
+      await supertest(app).post('/updateconfig').send({ arrBridgeEnabled: true });
+      const saved = configModule.updateConfig.mock.calls[0][0];
+      expect(saved.arrBridgeApiKey).toBe('saved-key');
+      expect(saved.arrBridgeEnabled).toBe(true);
+    });
+
+    test('does not let a client set a key when none is saved', async () => {
+      const { app, configModule } = makeApp();
+      await supertest(app).post('/updateconfig').send({ arrBridgeApiKey: 'chosen-by-client' });
+      expect(configModule.updateConfig.mock.calls[0][0].arrBridgeApiKey).toBeUndefined();
+    });
+
+    test('keeps the saved Sonarr and Radarr keys, which the Settings page never receives', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.arrBridgeSonarrApiKey = 'sonarr-key';
+      configModule._config.arrBridgeRadarrApiKey = 'radarr-key';
+      await supertest(app).post('/updateconfig').send({ arrBridgeSonarrApiKey: 'stale', arrBridgeEnabled: true });
+      const saved = configModule.updateConfig.mock.calls[0][0];
+      expect(saved.arrBridgeSonarrApiKey).toBe('sonarr-key');
+      expect(saved.arrBridgeRadarrApiKey).toBe('radarr-key');
+    });
+
+    // The stored key is sent to whatever URL is saved, so a client that
+    // could move the URL could have the key sent to a host of its choosing.
+    test('keeps the saved Sonarr and Radarr URLs when the client sends other ones', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.arrBridgeSonarrUrl = 'http://sonarr:8989';
+      configModule._config.arrBridgeSonarrApiKey = 'sonarr-key';
+      configModule._config.arrBridgeRadarrUrl = 'http://radarr:7878';
+      configModule._config.arrBridgeRadarrApiKey = 'radarr-key';
+      await supertest(app).post('/updateconfig').send({
+        arrBridgeSonarrUrl: 'http://elsewhere.example:8989',
+        arrBridgeRadarrUrl: 'http://elsewhere.example:7878',
+      });
+      const saved = configModule.updateConfig.mock.calls[0][0];
+      expect(saved.arrBridgeSonarrUrl).toBe('http://sonarr:8989');
+      expect(saved.arrBridgeRadarrUrl).toBe('http://radarr:7878');
+    });
+
+    test('keeps the saved URLs when the client sends none, and takes none from a client', async () => {
+      const stored = makeApp();
+      stored.configModule._config.arrBridgeSonarrUrl = 'http://sonarr:8989';
+      await supertest(stored.app).post('/updateconfig').send({ arrBridgeEnabled: true });
+      expect(stored.configModule.updateConfig.mock.calls[0][0].arrBridgeSonarrUrl).toBe('http://sonarr:8989');
+
+      const empty = makeApp();
+      await supertest(empty.app).post('/updateconfig').send({ arrBridgeSonarrUrl: 'http://elsewhere.example:8989' });
+      expect(empty.configModule.updateConfig.mock.calls[0][0].arrBridgeSonarrUrl).toBeUndefined();
+    });
+
+    test('rejects a bridge setting that could not be used, with its message', async () => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({ arrBridgeCategories: [{ name: 'a b' }] });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/^Sonarr\/Radarr categories:/);
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+
+    test('saves the bridge settings in their cleaned form', async () => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({
+        arrBridgeExcludeTerms: [' Trailer ', 'trailer'],
+        arrBridgeStagingPath: '/downloads/.arr-staging/',
+        arrBridgeCategories: [{ name: 'tv', subfolder: '' }],
+      });
+      expect(res.status).toBe(200);
+      const saved = configModule.updateConfig.mock.calls[0][0];
+      expect(saved.arrBridgeExcludeTerms).toEqual(['trailer']);
+      expect(saved.arrBridgeStagingPath).toBe('/downloads/.arr-staging');
+      expect(saved.arrBridgeCategories).toEqual([{ name: 'tv', subfolder: null }]);
+    });
+
+    // A tab loaded before the bridge settings existed posts a config without
+    // them, and a save replaces the whole config.
+    test('keeps the stored bridge settings when the client sends none', async () => {
+      const { app, configModule } = makeApp();
+      const categories = [{ name: 'tv', subfolder: 'Shows' }, { name: 'tv-4k', subfolder: null }];
+      configModule._config.arrBridgeEnabled = true;
+      configModule._config.arrBridgeCategories = categories;
+      configModule._config.arrBridgeLooseMatching = true;
+      const res = await supertest(app).post('/updateconfig').send({ darkModeEnabled: true });
+      expect(res.status).toBe(200);
+      const saved = configModule.updateConfig.mock.calls[0][0];
+      expect(saved.arrBridgeEnabled).toBe(true);
+      expect(saved.arrBridgeCategories).toEqual(categories);
+      expect(saved.arrBridgeLooseMatching).toBe(true);
+      expect(saved).not.toHaveProperty('arrBridgeMinTvMinutes');
+    });
+
+    test('a hand-edited stored value never blocks a save that does not send it', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.arrBridgeMinTvMinutes = 'ten';
+      const res = await supertest(app).post('/updateconfig').send({ darkModeEnabled: true });
+      expect(res.status).toBe(200);
+      expect(configModule.updateConfig.mock.calls[0][0].arrBridgeMinTvMinutes).toBe(10);
+    });
+  });
+
+  describe('download feed settings', () => {
+    test('keeps the saved token when the client sends a different one', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.downloadsFeedToken = 'saved-token';
+      await supertest(app).post('/updateconfig').send({ downloadsFeedToken: 'stale-token' });
+      expect(configModule.updateConfig.mock.calls[0][0].downloadsFeedToken).toBe('saved-token');
+    });
+
+    test('keeps the saved token when the client sends none, as the Settings page does', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.downloadsFeedToken = 'saved-token';
+      await supertest(app).post('/updateconfig').send({ downloadsFeedEnabled: true });
+      expect(configModule.updateConfig.mock.calls[0][0].downloadsFeedToken).toBe('saved-token');
+    });
+
+    test('accepts valid settings', async () => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({
+        downloadsFeedItemLimit: 100,
+        downloadsFeedMediaTypes: ['video', 'short'],
+      });
+      expect(res.status).toBe(200);
+      expect(configModule.updateConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ downloadsFeedItemLimit: 100, downloadsFeedMediaTypes: ['video', 'short'] })
+      );
+    });
+
+    test.each([9, 201, 1.5, '50'])('rejects the item limit %p without saving', async (value) => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({ downloadsFeedItemLimit: value });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/whole number from 10 to 200/);
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+
+    test.each([
+      ['an empty list', []],
+      ['an unknown type', ['podcast']],
+      ['text', 'video'],
+    ])('rejects media types that are %s without saving', async (_label, value) => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({ downloadsFeedMediaTypes: value });
+      expect(res.status).toBe(400);
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+
+    test('rejects an invalid link template without saving', async () => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app)
+        .post('/updateconfig')
+        .send({ downloadsFeedLinkTemplate: 'javascript:alert(1)//{youtubeId}' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/^Link template/);
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+
+    test('trims the saved link template', async () => {
+      const { app, configModule } = makeApp();
+      await supertest(app)
+        .post('/updateconfig')
+        .send({ downloadsFeedLinkTemplate: '  https://plex.example.com/{youtubeId}  ' });
+      expect(configModule.updateConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ downloadsFeedLinkTemplate: 'https://plex.example.com/{youtubeId}' })
+      );
+    });
+
+    test('does not re-check a link template that is unchanged from the saved value', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.downloadsFeedLinkTemplate = 'edited by hand';
+      const res = await supertest(app)
+        .post('/updateconfig')
+        .send({ downloadsFeedLinkTemplate: 'edited by hand' });
+      expect(res.status).toBe(200);
+      expect(configModule.updateConfig).toHaveBeenCalled();
+    });
+  });
+
   test('does not save the read-only logging status', async () => {
     const { app, configModule } = makeApp();
     await supertest(app).post('/updateconfig').send({ logLevel: 'debug', logging: LOGGING_STATUS });
@@ -685,10 +976,11 @@ describe('POST /updateconfig - videoFilenamePrefix validation', () => {
     expect(configModule.updateConfig).not.toHaveBeenCalled();
   });
 
-  test('blocks save with 400 on any filenamePreview failure (yt-dlp ships with the app)', async () => {
+  test('blocks save with 400 when yt-dlp times out checking the template', async () => {
     filenamePreview.validateTemplate.mockResolvedValueOnce({
       ok: false,
-      error: 'yt-dlp process timed out after 5000ms',
+      error: TIMEOUT_MESSAGE,
+      timedOut: true,
     });
     const { app, configModule } = makeApp();
     const res = await supertest(app)
@@ -696,8 +988,21 @@ describe('POST /updateconfig - videoFilenamePrefix validation', () => {
       .send({ videoFilenamePrefix: '%(title).76B' });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/timed out/);
     expect(configModule.updateConfig).not.toHaveBeenCalled();
+  });
+
+  test('reports a save timeout without calling the template rejected', async () => {
+    filenamePreview.validateTemplate.mockResolvedValueOnce({
+      ok: false,
+      error: TIMEOUT_MESSAGE,
+      timedOut: true,
+    });
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ videoFilenamePrefix: '%(title).76B' });
+
+    expect(res.body.error).toBe(TIMEOUT_MESSAGE);
   });
 
   test('forwards unexpected save errors to Express error handling', async () => {
@@ -800,16 +1105,24 @@ describe('POST /api/config/filename-preview', () => {
     expect(res.body.error).toMatch(/incomplete format key/);
   });
 
-  test('returns 400 with yt-dlp message on timeout (yt-dlp ships with the app, so any failure blocks)', async () => {
-    filenamePreview.previewTemplate.mockRejectedValueOnce(new Error(
-      'yt-dlp process timed out after 5000ms'
-    ));
+  test('returns 400 when yt-dlp times out rendering the preview', async () => {
+    filenamePreview.previewTemplate.mockRejectedValueOnce(new Error(TIMEOUT_MESSAGE));
+    filenamePreview.isTimeoutError.mockReturnValueOnce(true);
     const { app } = makeApp();
     const res = await supertest(app)
       .post('/api/config/filename-preview')
       .send({ prefix: '%(title).76B' });
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/timed out/);
+  });
+
+  test('reports a preview timeout without calling the template rejected', async () => {
+    filenamePreview.previewTemplate.mockRejectedValueOnce(new Error(TIMEOUT_MESSAGE));
+    filenamePreview.isTimeoutError.mockReturnValueOnce(true);
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/api/config/filename-preview')
+      .send({ prefix: '%(title).76B' });
+    expect(res.body.error).toBe(TIMEOUT_MESSAGE);
   });
 });
 
@@ -900,3 +1213,19 @@ describe('schedule configuration', () => {
     expect(res.body.customArgsCheck).toBeNull();
   });
 });
+
+test.each([[undefined, false], ['false', false], ['invalid', false], ['true', true]])(
+  'reports effective external API availability for %s', async (value, enabled) => {
+    const original = process.env.EXTERNAL_API_ENABLED;
+    try {
+      if (value === undefined) delete process.env.EXTERNAL_API_ENABLED;
+      else process.env.EXTERNAL_API_ENABLED = value;
+      const { app } = makeApp();
+      const response = await supertest(app).get('/getconfig').expect(200);
+      expect(response.body.isPlatformManaged.externalApiEnabled).toBe(enabled);
+    } finally {
+      if (original === undefined) delete process.env.EXTERNAL_API_ENABLED;
+      else process.env.EXTERNAL_API_ENABLED = original;
+    }
+  }
+);

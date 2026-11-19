@@ -159,6 +159,21 @@ function isVideoDirectory(dirPath) {
 }
 
 /**
+ * Whether a directory name is the one Youtarr gives a video's own folder:
+ * "<prefix> - <youtubeId>", or just "<youtubeId>" (see composeVideoFolderName).
+ *
+ * @param {string} dirName - Bare directory name (no path)
+ * @param {string} youtubeId - The video's YouTube ID
+ * @returns {boolean}
+ */
+function isNamedForVideo(dirName, youtubeId) {
+  if (!dirName || !youtubeId) {
+    return false;
+  }
+  return dirName === youtubeId || dirName.endsWith(` - ${youtubeId}`);
+}
+
+/**
  * Check if a directory is the per-video directory of a specific video.
  * Per-video directories are named "<prefix> - <youtubeId>", or just
  * "<youtubeId>" for an empty prefix (see composeVideoFolderName), and sit
@@ -179,8 +194,7 @@ function isVideoDirectoryFor(dirPath, youtubeId, baseDir) {
   if (!dirPath || !youtubeId || !baseDir) {
     return false;
   }
-  const dirName = path.basename(dirPath);
-  if (dirName !== youtubeId && !dirName.endsWith(` - ${youtubeId}`)) {
+  if (!isNamedForVideo(path.basename(dirPath), youtubeId)) {
     return false;
   }
 
@@ -239,6 +253,19 @@ function isChannelDirectory(dirPath, baseDir) {
 }
 
 /**
+ * Whether a directory is somewhere below baseDir (never baseDir itself).
+ * Lexical, like the other position checks here.
+ *
+ * @param {string} dirPath - Directory path to check
+ * @param {string} baseDir - The base output directory
+ * @returns {boolean}
+ */
+function isStrictlyInside(dirPath, baseDir) {
+  const relativePath = path.relative(path.resolve(baseDir), path.resolve(dirPath));
+  return Boolean(relativePath) && !relativePath.startsWith('..') && !path.isAbsolute(relativePath);
+}
+
+/**
  * Check if a directory name is a subfolder directory (starts with __ prefix)
  *
  * @param {string} dirName - Directory name to check
@@ -259,14 +286,20 @@ function isSubfolderDir(dirName) {
  * @param {string} baseDir - The base output directory
  * @param {Object} [options] - Options
  * @param {boolean} [options.includeIgnorableFiles=false] - When true, also removes directories containing only ignorable files (e.g., poster.jpg)
+ * @param {boolean} [options.anyDepth=false] - When true, accepts a directory at any depth inside baseDir
+ *   instead of only the two channel positions. For the folder a per-video folder was just removed from,
+ *   in a library that sits deeper than baseDir/channel.
  * @returns {Promise<boolean>} - True if directory was removed
  */
 async function cleanupEmptyChannelDirectory(channelDir, baseDir, options = {}) {
-  const { includeIgnorableFiles = false } = options;
+  const { includeIgnorableFiles = false, anyDepth = false } = options;
 
   try {
     // Verify this is actually a channel directory (not root or subfolder)
-    if (!isChannelDirectory(channelDir, baseDir)) {
+    const positionAccepted = anyDepth
+      ? isStrictlyInside(channelDir, baseDir)
+      : isChannelDirectory(channelDir, baseDir);
+    if (!positionAccepted) {
       logger.debug({ channelDir }, 'Not a channel directory, skipping cleanup');
       return false;
     }
@@ -314,6 +347,50 @@ async function cleanupEmptyChannelDirectory(channelDir, baseDir, options = {}) {
   } catch (error) {
     logger.error({ err: error, channelDir }, 'Error cleaning up empty channel directory');
     // Don't throw - this is a best-effort cleanup
+    return false;
+  }
+}
+
+/**
+ * Remove a video's own folder once nothing of the video is left in it.
+ * For a folder that isVideoDirectoryFor does not accept (outside baseDir, or
+ * deeper than a channel folder), so it was emptied file by file rather than
+ * removed recursively. The name must be the video's, and the folder may hold
+ * only ignorable leftovers (.DS_Store, AppleDouble files), which are swept
+ * first. Never recursive: a folder holding anything else is kept, so a
+ * channel folder that happens to carry the video's name is safe.
+ *
+ * @param {string} dirPath - The folder the video's files were deleted from
+ * @param {string} youtubeId - The video's YouTube ID
+ * @returns {Promise<boolean>} - True if the folder was removed
+ */
+async function removeEmptyVideoDirectory(dirPath, youtubeId) {
+  if (!dirPath || !isNamedForVideo(path.basename(dirPath), youtubeId)) {
+    return false;
+  }
+
+  try {
+    const entries = await fsPromises.readdir(dirPath);
+    if (!entries.every(isIgnorableEntry)) {
+      return false;
+    }
+    for (const entry of entries) {
+      try {
+        await fsPromises.unlink(path.join(dirPath, entry));
+      } catch (unlinkErr) {
+        if (unlinkErr.code !== 'ENOENT') {
+          throw unlinkErr;
+        }
+      }
+    }
+    await fsPromises.rmdir(dirPath);
+    logger.info({ dirPath }, 'Removed empty video directory');
+    return true;
+  } catch (error) {
+    // Best-effort: the video's files are already gone.
+    if (error.code !== 'ENOENT') {
+      logger.warn({ err: error, dirPath }, 'Could not remove empty video directory');
+    }
     return false;
   }
 }
@@ -501,6 +578,7 @@ module.exports = {
   isSubfolderDir,
   cleanupEmptyChannelDirectory,
   cleanupEmptyParents,
+  removeEmptyVideoDirectory,
   removeDirectoryResilient,
   isIgnorableEntry,
   listDirectory,

@@ -146,6 +146,8 @@ function resolveFinalPresentation({
   videoDataCount,
   failedCount,
   skippedCount,
+  alreadyDownloadedCount = 0,
+  notAvailableCount = 0,
   terminatedChannelCount,
   terminationFailureCount,
   videoCount,
@@ -222,7 +224,7 @@ function resolveFinalPresentation({
       ? 'Download failed: Bot detection encountered during the no-cookies fallback. The fallback also failed, so this video may be genuinely unavailable.'
       : cookiesEnabled
         ? 'Download failed: Bot detection encountered even though cookies are configured - they are likely expired or rotated. Re-export fresh cookies from your browser and upload them in Settings -> Cookies.'
-        : 'Download failed: Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.';
+        : 'Download failed: Bot detection encountered. YouTube is temporarily refusing requests from this server; this usually clears on its own, so try again later. If it keeps happening, upload YouTube cookies in Settings -> Cookies.';
   } else if (monitorHasError && finalState === 'complete' && !flags.hasOnlyHandledErrors) {
     // Don't let a recognized termination flip the state back to error
     // via DownloadProgressMonitor's broad hasError flag.
@@ -244,8 +246,11 @@ function resolveFinalPresentation({
     if (autoRetryQueuedCount > 0) {
       parts.push(`${autoRetryQueuedCount} queued for auto-retry`);
     }
-    if (skippedCount > 0) {
-      parts.push(`${skippedCount} already existed`);
+    if (alreadyDownloadedCount > 0) {
+      parts.push(`${alreadyDownloadedCount} already downloaded`);
+    }
+    if (notAvailableCount > 0) {
+      parts.push(`${notAvailableCount} not available`);
     }
     if (terminatedChannelCount > 0) {
       parts.push(`${terminatedChannelCount} channel${terminatedChannelCount !== 1 ? 's' : ''} marked terminated`);

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { isDeepStrictEqual } = require('util');
 const uuidv4 = require('uuid').v4;
 const EventEmitter = require('events');
 const logger = require('../logger');
@@ -7,6 +8,8 @@ const { getExternalCookiesPath, getExternalCookiesStatus } = require('./external
 const { getDefaultNameForUrl } = require('./notificationHelpers');
 const { SCHEDULES, normalizeToMinimumInterval, violatesMinimumInterval } = require('./scheduleConfig');
 const { normalizeLevelSetting } = require('../logging/logLevel');
+const { normalizeItemLimit, normalizeMediaTypes } = require('./feeds/feedSettings');
+const { correctStoredSettings: correctStoredArrBridgeSettings } = require('./arrBridge/arrBridgeConfig');
 const { SUBFOLDER_PREFIX } = require('./filesystem/constants');
 
 // A new install saves into this library folder instead of the downloads folder
@@ -100,6 +103,14 @@ class ConfigModule extends EventEmitter {
     }
 
     if (this.normalizeLogLevelSetting()) {
+      legacyMigrationNeeded = true;
+    }
+
+    if (this.normalizeDownloadsFeedFields()) {
+      legacyMigrationNeeded = true;
+    }
+
+    if (this.normalizeArrBridgeFields()) {
       legacyMigrationNeeded = true;
     }
 
@@ -510,6 +521,14 @@ class ConfigModule extends EventEmitter {
               legacyMigrationNeeded = true;
             }
 
+            if (this.normalizeDownloadsFeedFields()) {
+              legacyMigrationNeeded = true;
+            }
+
+            if (this.normalizeArrBridgeFields()) {
+              legacyMigrationNeeded = true;
+            }
+
             // Save config if modified by merge or legacy migrations
             if (mergeResult.modified || legacyMigrationNeeded) {
               this.saveConfig();
@@ -816,6 +835,45 @@ class ConfigModule extends EventEmitter {
     );
     this.config.logLevel = replacement;
     return true;
+  }
+
+  /**
+   * Correct hand-edited download feed settings. The UI always sends the full
+   * config and /updateconfig rejects invalid values, so a bad value would block
+   * every Settings save.
+   * @returns {boolean} True if any value changed
+   */
+  normalizeDownloadsFeedFields() {
+    let changed = false;
+    const fields = [
+      ['downloadsFeedItemLimit', normalizeItemLimit],
+      ['downloadsFeedMediaTypes', normalizeMediaTypes],
+    ];
+    for (const [key, normalize] of fields) {
+      const value = this.config[key];
+      if (value === undefined) continue;
+      const replacement = normalize(value);
+      if (isDeepStrictEqual(replacement, value)) continue;
+      logger.warn({ key, previous: value, replacement }, 'Corrected an invalid download feed setting');
+      this.config[key] = replacement;
+      changed = true;
+    }
+    return changed;
+  }
+
+  /**
+   * Correct hand-edited Sonarr/Radarr bridge settings, for the same reason as
+   * the download feed settings: /updateconfig rejects invalid values, so a bad
+   * stored one would block every Settings save.
+   * @returns {boolean} True if any value changed
+   */
+  normalizeArrBridgeFields() {
+    const corrections = correctStoredArrBridgeSettings(this.config);
+    for (const { key, previous, replacement } of corrections) {
+      logger.warn({ key, previous, replacement }, 'Corrected an invalid Sonarr/Radarr bridge setting');
+      this.config[key] = replacement;
+    }
+    return corrections.length > 0;
   }
 
   /**

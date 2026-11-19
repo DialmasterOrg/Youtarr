@@ -1,4 +1,4 @@
-import { jobTypeLabel } from '../jobTypeLabel';
+import { isArrBridgeJob, jobTypeLabel } from '../jobTypeLabel';
 
 describe('jobTypeLabel', () => {
   test('maps plain manual downloads', () => {
@@ -7,6 +7,23 @@ describe('jobTypeLabel', () => {
 
   test('maps API-initiated manual downloads with the key name', () => {
     expect(jobTypeLabel('Manually Added Urls (via API: my-key)')).toBe('API: my-key');
+  });
+
+  test('recognizes a Sonarr/Radarr grab by its label', () => {
+    expect(isArrBridgeJob('Manually Added Urls (Sonarr/Radarr grab)')).toBe(true);
+    expect(isArrBridgeJob('Manually Added Urls')).toBe(false);
+    expect(isArrBridgeJob('Manually Added Urls (via API: Phone)')).toBe(false);
+    expect(isArrBridgeJob(null)).toBe(false);
+  });
+
+  test('recognizes the automatic retry of a Sonarr/Radarr grab, and no other retry', () => {
+    expect(isArrBridgeJob('Auto-retry: 1 video (Sonarr/Radarr grab)')).toBe(true);
+    expect(isArrBridgeJob('Auto-retry: 2 videos (no cookies) (Sonarr/Radarr grab)')).toBe(true);
+    expect(isArrBridgeJob('Auto-retry: 1 video')).toBe(false);
+  });
+
+  test('maps Sonarr/Radarr grabs to their own label', () => {
+    expect(jobTypeLabel('Manually Added Urls (Sonarr/Radarr grab)')).toBe('Sonarr/Radarr grab');
   });
 
   test('maps plain channel downloads', () => {

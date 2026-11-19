@@ -68,7 +68,7 @@ beforeEach(() => {
 const rowHeader = (label: string) => within(screen.getByRole('region', { name: label }))
   .getByRole('button', { name: new RegExp(`^${label}`) });
 
-test('groups the eight schedules and shows the server timezone', () => {
+test('groups every schedule and shows the server timezone', () => {
   renderWithProviders(<SchedulingSection {...props} />);
   SCHEDULE_FIELDS.forEach((field) => {
     expect(screen.getByRole('region', { name: field.label })).toBeInTheDocument();

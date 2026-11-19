@@ -436,6 +436,68 @@ describe('downloadRunTracker', () => {
       expect(summary.failedVideos).toHaveLength(1);
     });
 
+    describe('per-video counts', () => {
+      const finishRun = (runOptions) => {
+        const runId = runOptions ? tracker.startRun(runOptions) : tracker.startRun();
+        tracker.registerJob(runId, 'j1');
+        tracker.recordJobResult(runId, 'j1', {
+          totalSkipped: 9,
+          totalMembersOnly: 3,
+          totalAlreadyDownloaded: 2,
+          totalNotAvailable: 1,
+          jobType: 'Playlist: Creators',
+        });
+        tracker.seal(runId);
+        return runId;
+      };
+
+      test('a run of chosen videos reports every one of them', () => {
+        finishRun();
+
+        expect(emittedSummary().finalSummary).toMatchObject({
+          totalMembersOnly: 3,
+          totalAlreadyDownloaded: 2,
+          totalNotAvailable: 1,
+        });
+      });
+
+      test('a sweep leaves them out, because the same videos come back every run', () => {
+        finishRun({ sweep: true });
+
+        expect(emittedSummary().finalSummary).toMatchObject({
+          totalMembersOnly: 0,
+          totalAlreadyDownloaded: 0,
+          totalNotAvailable: 0,
+        });
+      });
+
+      test('a sweep with nothing else to report is not a warning', () => {
+        finishRun({ sweep: true });
+
+        const payload = emittedSummary();
+        expect(payload.progress.state).toBe('complete');
+        expect(payload.warning).toBeUndefined();
+      });
+
+      test('a sweep\'s text says nothing about the videos it looked at', () => {
+        finishRun({ sweep: true });
+
+        expect(emittedSummary().text).toBe('Download completed: No new videos to download');
+      });
+
+      test('a run of chosen videos names what it did not download in its text', () => {
+        finishRun();
+
+        expect(emittedSummary().text).toBe('Download completed: 3 members-only skipped, 2 already downloaded, 1 not available');
+      });
+
+      test('a sweep still keeps the raw counts for its run record', () => {
+        const runId = finishRun({ sweep: true });
+
+        expect(tracker.getTotals(runId)).toMatchObject({ totalSkipped: 9, totalMembersOnly: 3 });
+      });
+    });
+
     test('merges diagnoses across jobs by key, summing counts', () => {
       const cookie403 = { key: 'http-403-cookies-enabled', title: 't', message: 'm', count: 1 };
       const runId = tracker.startRun();

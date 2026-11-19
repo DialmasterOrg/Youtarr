@@ -147,6 +147,7 @@ const createServerModule = ({
         const configModuleMock = {
           directoryPath: '/downloads',
           getConfig: jest.fn(() => configState),
+          onConfigChange: jest.fn(),
           updateConfig: jest.fn((patch) => Object.assign(configState, patch)),
           getImagePath: jest.fn(() => '/images'),
           getCookiesPath: jest.fn(() => null),
@@ -196,6 +197,11 @@ const createServerModule = ({
         jest.doMock('../logger', () => loggerMock);
         jest.doMock('child_process', () => childProcessMock);
         jest.doMock('pino-http', () => pinoHttpMock);
+        jest.doMock('swagger-jsdoc', () => jest.fn(() => ({
+          openapi: '3.0.0',
+          paths: {},
+          components: { schemas: {} },
+        })));
 
         jest.doMock('../modules/channelModule', () => ({
           subscribe: jest.fn(),
@@ -313,6 +319,9 @@ const createServerModule = ({
           run: jest.fn(),
           isBusyError: jest.fn(() => false)
         }));
+        // Same reason: playlistModule loads ytdlpCommandBuilder.
+        jest.doMock('../modules/playlistModule', () => ({}));
+        jest.doMock('../modules/membersAccess');
         jest.doMock('../models/channelvideo', () => ({
           update: jest.fn().mockResolvedValue([1])
         }));

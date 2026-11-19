@@ -1,7 +1,8 @@
 const logger = require('../../logger');
 const configModule = require('../configModule');
 const serverRegistry = require('./serverRegistry');
-const { MediaServerUnavailableError, describeHttpError } = require('./adapters/baseAdapter');
+const messageEmitter = require('../messageEmitter');
+const { MediaServerUnavailableError, describeHttpError, extractBasename } = require('./adapters/baseAdapter');
 const { Playlist, PlaylistVideo, PlaylistSyncState, Video } = require('../../models');
 const reorganizeLock = require('../reorganize/reorganizeLock');
 const libraryLocator = require('./libraryLocator');
@@ -22,6 +23,39 @@ const SERVER_DISPLAY_NAME = {
   jellyfin: 'Jellyfin',
   emby: 'Emby',
 };
+
+const DOWNLOAD_TYPE_LABEL = {
+  video_mp3: 'Video + MP3',
+  mp3_only: 'MP3 Only',
+};
+
+// Why a sync created or changed nothing on the server. The playlist page shows
+// this text as is, so it is whole sentences that name the likely cause.
+function describeDeferral({ playlist, mediaType, serverName, hasEntries, mismatched }) {
+  const isAudio = mediaType === 'audio';
+  const downloadType = DOWNLOAD_TYPE_LABEL[playlist.audio_format] || 'Video Only';
+  const syncsAs = `This playlist syncs as a ${isAudio ? 'music' : 'video'} playlist because its Download Type is ${downloadType}.`;
+
+  if (!hasEntries) {
+    if (mismatched === 0) return 'No downloaded items to sync yet.';
+    return `None of the downloaded items has ${isAudio ? 'an MP3' : 'a video'} file. ${syncsAs}`;
+  }
+  const notFound = `Downloaded ${isAudio ? 'MP3' : 'video'} files were not found on ${serverName}. If they were just downloaded, the server may still be scanning; otherwise check that the files still exist and that the server has a ${isAudio ? 'music' : 'video'}-type library that includes your Youtarr output folder.`;
+  // Video + MP3 is the one type whose sync type surprises: its mp3s may sit
+  // in a music library while the sync looks for the videos.
+  return playlist.audio_format === 'video_mp3' ? `${notFound} ${syncsAs}` : notFound;
+}
+
+// The message recorded for a failed sync. It is shown on the playlist page,
+// so an HTTP failure is reduced to its status or error code.
+function describeSyncFailure(err, serverName) {
+  if (err && err.isAxiosError) {
+    const { status, code } = describeHttpError(err);
+    const detail = status ? `HTTP ${status}` : code;
+    return detail ? `${serverName} request failed (${detail}).` : `${serverName} request failed.`;
+  }
+  return err && err.message ? err.message : String(err);
+}
 
 class MediaServerSync {
   constructor() {
@@ -61,6 +95,7 @@ class MediaServerSync {
     const entry = { rerunRequested: false };
     entry.promise = this._runWithRerun(key, playlistId, entry);
     this._inFlight.set(key, entry);
+    this._broadcastSyncUpdated(playlistId);
     return entry.promise;
   }
 
@@ -78,7 +113,30 @@ class MediaServerSync {
       }
     } finally {
       this._inFlight.delete(key);
+      this._broadcastSyncUpdated(playlistId);
     }
+  }
+
+  // Tells open playlist pages to re-read the sync status. Sent when a run
+  // starts and after it ends; never throws, since a sync must not fail over it.
+  _broadcastSyncUpdated(playlistId) {
+    try {
+      messageEmitter.emitMessage('broadcast', null, 'playlists', 'playlistSyncUpdated', { playlistDbId: playlistId });
+    } catch (err) {
+      logger.warn({ err, playlist_db_id: playlistId }, 'failed to broadcast playlist sync update');
+    }
+  }
+
+  // The last recorded result per server plus whether a sync is running now,
+  // for the playlist page.
+  async getSyncStatus(playlist) {
+    const syncing = this._inFlight.has(String(playlist.id));
+    const rows = await PlaylistSyncState.findAll({ where: { playlist_id: playlist.id } });
+    const servers = {};
+    for (const row of rows) {
+      servers[row.server_type] = { last_synced_at: row.last_synced_at, last_error: row.last_error };
+    }
+    return { syncing, servers };
   }
 
   async _doSync(playlistId) {
@@ -164,13 +222,19 @@ class MediaServerSync {
       entries.map((entry) => entry.filePath),
       { libraryIds }
     );
+    const serverName = SERVER_DISPLAY_NAME[serverType] || serverType;
+    const itemType = mediaType === 'audio' ? 'Audio' : 'Video';
     const itemIds = [];
     for (const entry of entries) {
       const id = resolvedByPath.get(entry.filePath);
-      if (id) itemIds.push(id);
-      else logger.warn(
-        { youtube_id: entry.youtube_id, serverType },
-        `Unable to sync item ${entry.youtube_id} for playlist "${playlist.title}" to ${SERVER_DISPLAY_NAME[serverType] || serverType}: not found on server, skipping`
+      if (id) {
+        itemIds.push(id);
+        continue;
+      }
+      const fileName = extractBasename(entry.filePath);
+      logger.warn(
+        { youtube_id: entry.youtube_id, serverType, fileName, itemType },
+        `Unable to sync item ${entry.youtube_id} for playlist "${playlist.title}" to ${serverName}: ${itemType} file "${fileName}" not found on server, skipping`
       );
     }
 
@@ -189,17 +253,16 @@ class MediaServerSync {
     // just-changed Download Type).
     const hasFiles = entries.length > 0 || mismatched > 0;
     if (itemIds.length === 0 && !(state?.server_playlist_id && !hasFiles)) {
-      const reason = entries.length === 0
-        ? mismatched > 0
-          ? `none of the downloaded items has a ${mediaType === 'audio' ? 'mp3' : 'video'} file matching the playlist's Download Type`
-          : 'no downloaded items resolved yet'
-        : mediaType === 'audio'
-          ? 'downloaded audio files were not found on the server. Audio playlists need a music-type library that includes the Youtarr output folder'
-          : 'downloaded files were not found on the server yet';
+      const reason = describeDeferral({
+        playlist, mediaType, serverName, hasEntries: entries.length > 0, mismatched,
+      });
       logger.info(
         { playlist_id: playlist.playlist_id, serverType },
-        `Deferring ${SERVER_DISPLAY_NAME[serverType] || serverType} sync of playlist "${playlist.title}": ${reason}`
+        `Deferring ${serverName} sync of playlist "${playlist.title}": ${reason}`
       );
+      // Recorded so the playlist page can say why nothing synced. Only the
+      // reason is written: the server playlist id and last_synced_at stay.
+      await this._recordError(playlist.id, serverType, reason);
       return;
     }
 
@@ -278,14 +341,14 @@ class MediaServerSync {
         { playlist_id: playlist.playlist_id, serverType },
         `Unable to sync playlist "${playlist.title}" to ${serverName}: server not reachable or not responding. Please ensure that your media server is up and reachable.`
       );
-      await this._recordError(playlist.id, serverType, `${serverName} not reachable or not responding`);
+      await this._recordError(playlist.id, serverType, `${serverName} not reachable or not responding.`);
       return;
     }
     const logData = { playlist_id: playlist.playlist_id, serverType };
     if (err && err.isAxiosError) logData.reason = describeHttpError(err);
     else logData.err = err;
     logger.error(logData, `Unable to sync playlist "${playlist.title}" to ${serverName}`);
-    await this._recordError(playlist.id, serverType, err && err.message ? err.message : String(err));
+    await this._recordError(playlist.id, serverType, describeSyncFailure(err, serverName));
   }
 
   // Never throws: this runs inside _doSync's per-adapter catch, and a

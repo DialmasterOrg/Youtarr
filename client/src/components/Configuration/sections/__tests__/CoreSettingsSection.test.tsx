@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { CoreSettingsSection } from '../CoreSettingsSection';
 import { DEFAULT_CONFIG } from '../../../../config/configSchema';
+import { PLEX_TV_SERIES_PRESET_PREFIX } from '../../../../utils/filenameTemplate/presets';
 import type { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../../types';
 
 jest.mock('axios', () => ({ get: jest.fn() }));
@@ -88,6 +89,24 @@ describe('CoreSettingsSection', () => {
     expect(onConfigChange).toHaveBeenCalledWith({ writeVideoNfoFiles: true });
   });
 
+  test('turning off the channel name in the embedded title writes its config key', async () => {
+    const onConfigChange = jest.fn();
+    renderCore({ config: { prefixChannelNameInTitle: true }, onConfigChange });
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Channel name in embedded title' }));
+    expect(onConfigChange).toHaveBeenCalledWith({ prefixChannelNameInTitle: false });
+  });
+
+  test('the Plex TV Series template suggests turning off the channel name prefix while it is on', () => {
+    renderCore({ config: { videoFilenamePrefix: PLEX_TV_SERIES_PRESET_PREFIX, prefixChannelNameInTitle: true } });
+    expect(screen.getByTestId('tv-series-channel-prefix-tip')).toBeInTheDocument();
+  });
+
+  test('the automatic downloads row links to its schedule', () => {
+    renderCore({ config: { channelAutoDownload: false } });
+    expect(screen.getByRole('link', { name: 'Edit schedule' })).toHaveAttribute('href', '/settings/scheduling#channelDownloadFrequency');
+    expect(screen.getByText('The schedule is idle until you turn this on.')).toBeInTheDocument();
+  });
+
   test('4K shows the VP9/AV1 resolution warning', () => {
     renderCore({ config: { preferredResolution: '2160' } });
     expect(screen.getByText(/1440p and 4K come as VP9 or AV1/)).toBeInTheDocument();
@@ -120,6 +139,11 @@ describe('CoreSettingsSection', () => {
   test('subtitle languages nest under the switch', () => {
     renderCore({ config: { subtitlesEnabled: true } });
     expect(screen.getByText('Videos without subtitles in these languages still download.')).toBeInTheDocument();
+  });
+
+  test('subtitle languages are hidden while subtitles are off', () => {
+    renderCore({ config: { subtitlesEnabled: false } });
+    expect(screen.queryByText('Videos without subtitles in these languages still download.')).not.toBeInTheDocument();
   });
 
   test('the temp directory switch is disabled and badged when platform managed', () => {

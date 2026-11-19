@@ -68,6 +68,11 @@ describe('checkLibraryRoot', () => {
     expect(result).toEqual(expect.objectContaining({ ok: false, reason: 'empty', path: ROOT }));
   });
 
+  test('reports empty when the root holds only the Sonarr/Radarr staging folder', async () => {
+    const result = await checkLibraryRoot(ROOT, { readdir: diskWith({ [ROOT]: [dir('.arr-staging')] }) });
+    expect(result).toEqual(expect.objectContaining({ ok: false, reason: 'empty', path: ROOT }));
+  });
+
   test('reports empty when the root holds only entries Youtarr itself creates', async () => {
     const readdir = diskWith({
       [ROOT]: [dir('.youtarr_tmp'), dir('__playlists__'), file('.youtarr_healthcheck_1234')],

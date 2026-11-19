@@ -30,6 +30,7 @@ export const CONFIG_FIELDS = {
   sessionCleanupFrequency: { default: '0 3 * * *', trackChanges: true },
   videoRescanFrequency: { default: '30 3 * * *', trackChanges: true },
   ytdlpUpdateFrequency: { default: '0 4 * * *', trackChanges: true },
+  channelFeedCheckFrequency: { default: '30 * * * *', trackChanges: true },
   channelVideoCountsFrequency: { default: '45 4 * * *', trackChanges: true },
   channelFilesToDownload: { default: 5, trackChanges: true },
 
@@ -129,6 +130,42 @@ export const CONFIG_FIELDS = {
   // Notifications
   notificationsEnabled: { default: false, trackChanges: true },
   appriseUrls: { default: [] as Array<{ url: string; name: string; richFormatting?: boolean }>, trackChanges: true },
+  notificationLinkTemplate: { default: '', trackChanges: true },
+
+  // Download RSS feed. Its token is server-owned and not part of this config.
+  downloadsFeedEnabled: { default: false, trackChanges: true },
+  downloadsFeedItemLimit: { default: 50, trackChanges: true },
+  downloadsFeedMediaTypes: { default: ['video', 'short', 'livestream'] as string[], trackChanges: true },
+  downloadsFeedLinkTemplate: { default: '', trackChanges: true },
+
+  // Sonarr/Radarr bridge. Its key and the Sonarr and Radarr connections are
+  // server-owned and not part of this config.
+  arrBridgeEnabled: { default: false, trackChanges: true },
+  arrBridgeCategories: {
+    default: [
+      { name: 'tv', subfolder: null },
+      { name: 'movies', subfolder: null },
+    ] as Array<{ name: string; subfolder: string | null }>,
+    trackChanges: true,
+  },
+  arrBridgeLooseMatching: { default: false, trackChanges: true },
+  arrBridgeExcludeTerms: {
+    default: [
+      'trailer', 'teaser', 'clip', 'clips', 'reaction', 'review', 'recap', 'behind the scenes',
+      'interview', 'promo', 'preview', 'sneak peek', 'explained', 'breakdown', 'bloopers',
+      'featurette', 'making of', 'soundtrack', 'theme song', 'highlights', 'best of',
+      'compilation', 'deleted scene', 'deleted scenes', 'summary', 'analysis', 'commentary',
+      'podcast', 'parody', 'abridged',
+    ] as string[],
+    trackChanges: true,
+  },
+  arrBridgeMinTvMinutes: { default: 10, trackChanges: true },
+  arrBridgeMinMovieMinutes: { default: 60, trackChanges: true },
+  arrBridgeStagingPath: { default: '', trackChanges: true },
+  arrBridgeStagingRetentionDays: { default: 7, trackChanges: true },
+  arrBridgeResolution: { default: '', trackChanges: true },
+  arrBridgeLabelLimit: { default: '', trackChanges: true },
+  arrBridgeRemoveAfterImport: { default: false, trackChanges: true },
 
   // Auto removal
   autoRemovalEnabled: { default: false, trackChanges: true },
@@ -194,6 +231,8 @@ export const CONFIG_FIELDS = {
   // System/internal fields (not tracked for changes)
   youtubeOutputDirectory: { default: '', trackChanges: false },
   uuid: { default: '', trackChanges: false },
+  // Server-owned: when the one-time support prompt was shown
+  supportPromptShownAt: { default: null as string | null, trackChanges: false },
   envAuthApplied: { default: false, trackChanges: false },
 };
 
@@ -217,6 +256,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   sessionCleanupFrequency: CONFIG_FIELDS.sessionCleanupFrequency.default,
   videoRescanFrequency: CONFIG_FIELDS.videoRescanFrequency.default,
   ytdlpUpdateFrequency: CONFIG_FIELDS.ytdlpUpdateFrequency.default,
+  channelFeedCheckFrequency: CONFIG_FIELDS.channelFeedCheckFrequency.default,
   channelVideoCountsFrequency: CONFIG_FIELDS.channelVideoCountsFrequency.default,
   channelFilesToDownload: CONFIG_FIELDS.channelFilesToDownload.default,
   preferredResolution: CONFIG_FIELDS.preferredResolution.default,
@@ -271,6 +311,22 @@ export const DEFAULT_CONFIG: ConfigState = {
   prefixChannelNameInTitle: CONFIG_FIELDS.prefixChannelNameInTitle.default,
   notificationsEnabled: CONFIG_FIELDS.notificationsEnabled.default,
   appriseUrls: CONFIG_FIELDS.appriseUrls.default,
+  notificationLinkTemplate: CONFIG_FIELDS.notificationLinkTemplate.default,
+  downloadsFeedEnabled: CONFIG_FIELDS.downloadsFeedEnabled.default,
+  downloadsFeedItemLimit: CONFIG_FIELDS.downloadsFeedItemLimit.default,
+  downloadsFeedMediaTypes: CONFIG_FIELDS.downloadsFeedMediaTypes.default,
+  downloadsFeedLinkTemplate: CONFIG_FIELDS.downloadsFeedLinkTemplate.default,
+  arrBridgeEnabled: CONFIG_FIELDS.arrBridgeEnabled.default,
+  arrBridgeCategories: CONFIG_FIELDS.arrBridgeCategories.default,
+  arrBridgeLooseMatching: CONFIG_FIELDS.arrBridgeLooseMatching.default,
+  arrBridgeExcludeTerms: CONFIG_FIELDS.arrBridgeExcludeTerms.default,
+  arrBridgeMinTvMinutes: CONFIG_FIELDS.arrBridgeMinTvMinutes.default,
+  arrBridgeMinMovieMinutes: CONFIG_FIELDS.arrBridgeMinMovieMinutes.default,
+  arrBridgeStagingPath: CONFIG_FIELDS.arrBridgeStagingPath.default,
+  arrBridgeStagingRetentionDays: CONFIG_FIELDS.arrBridgeStagingRetentionDays.default,
+  arrBridgeResolution: CONFIG_FIELDS.arrBridgeResolution.default,
+  arrBridgeLabelLimit: CONFIG_FIELDS.arrBridgeLabelLimit.default,
+  arrBridgeRemoveAfterImport: CONFIG_FIELDS.arrBridgeRemoveAfterImport.default,
   autoRemovalEnabled: CONFIG_FIELDS.autoRemovalEnabled.default,
   autoRemovalFreeSpaceThreshold: CONFIG_FIELDS.autoRemovalFreeSpaceThreshold.default,
   autoRemovalVideoAgeThreshold: CONFIG_FIELDS.autoRemovalVideoAgeThreshold.default,
@@ -300,6 +356,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   ytdlpCustomArgs: CONFIG_FIELDS.ytdlpCustomArgs.default,
   youtubeOutputDirectory: CONFIG_FIELDS.youtubeOutputDirectory.default,
   uuid: CONFIG_FIELDS.uuid.default,
+  supportPromptShownAt: CONFIG_FIELDS.supportPromptShownAt.default,
   envAuthApplied: CONFIG_FIELDS.envAuthApplied.default,
 };
 

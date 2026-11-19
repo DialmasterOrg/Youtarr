@@ -98,6 +98,23 @@ describe('VideoFilenameTemplate', () => {
     expect(screen.getByRole('link', { name: 'Library folders' })).toHaveAttribute('href', '/settings/library');
   });
 
+  describe('Plex TV Series channel prefix tip', () => {
+    it('shows the tip when the TV Series preset is active and the channel prefix is enabled', () => {
+      renderTemplate({ value: PLEX_TV_SERIES_PRESET_PREFIX, channelPrefixEnabled: true });
+      expect(screen.getByTestId('tv-series-channel-prefix-tip')).toBeInTheDocument();
+    });
+
+    it('hides the tip when the channel prefix is already disabled', () => {
+      renderTemplate({ value: PLEX_TV_SERIES_PRESET_PREFIX, channelPrefixEnabled: false });
+      expect(screen.queryByTestId('tv-series-channel-prefix-tip')).not.toBeInTheDocument();
+    });
+
+    it('hides the tip for templates other than the TV Series preset', () => {
+      renderTemplate({ channelPrefixEnabled: true });
+      expect(screen.queryByTestId('tv-series-channel-prefix-tip')).not.toBeInTheDocument();
+    });
+  });
+
   it('does not show preview lines until the user clicks Preview', () => {
     renderTemplate();
     expect(screen.queryByTestId('filename-preview-file')).not.toBeInTheDocument();

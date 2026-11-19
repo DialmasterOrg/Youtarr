@@ -2,9 +2,9 @@ import { settingsHeading } from '../settingsHeading';
 
 describe('settingsHeading', () => {
   test('titles pages by their first path segment', () => {
-    expect(settingsHeading('/settings')).toBe('Settings');
-    expect(settingsHeading('/settings/core')).toBe('Settings / Core');
-    expect(settingsHeading('/settings/downloading')).toBe('Settings / YT-DLP');
+    expect(settingsHeading('/settings')).toEqual({ subPage: null });
+    expect(settingsHeading('/settings/core')).toEqual({ subPage: 'Core' });
+    expect(settingsHeading('/settings/downloading')).toEqual({ subPage: 'YT-DLP' });
   });
 
   test('the library page renders its own heading', () => {

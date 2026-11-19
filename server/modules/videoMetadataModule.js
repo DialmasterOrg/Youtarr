@@ -3,6 +3,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const configModule = require('./configModule');
 const ytDlpRunner = require('./ytDlpRunner');
+const ytdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const logger = require('../logger');
 const youtubeApi = require('./youtubeApi');
 const ChannelVideo = require('../models/channelvideo');
@@ -10,6 +11,8 @@ const channelVideoReanchor = require('./channelVideoReanchor');
 const { parseTierFromFormatNote, selectionTierForHeight } = require('./resolutionTier');
 const { isFileForVideo } = require('./filesystem/pathBuilder');
 const episodeInfo = require('./tvShows/episodeInfo');
+const { slimInfoJson } = require('./infoJsonSlimmer');
+const membersAccess = require('./membersAccess');
 
 const NULL_METADATA = {
   description: null,
@@ -36,6 +39,7 @@ const NULL_METADATA = {
 };
 
 const YTDLP_FETCH_TIMEOUT_MS = 60000;
+const PROBE_FETCH_TIMEOUT_MS = 30000;
 
 // Convert yt-dlp upload_date (YYYYMMDD) to the ISO string format used by
 // channelvideos.publishedAt. Returns null if unparseable.
@@ -101,6 +105,8 @@ class VideoMetadataModule {
       const infoPath = path.join(infoDir, `${youtubeId}.info.json`);
 
       let rawData = null;
+      // Set when this call asked YouTube, so the answer is a fresh access check.
+      let fetchedMembersState;
 
       // Try reading cached .info.json from disk
       try {
@@ -111,10 +117,11 @@ class VideoMetadataModule {
         // Not cached - fetch via yt-dlp
         logger.debug({ youtubeId }, 'No cached .info.json, fetching via yt-dlp');
         try {
-          rawData = await ytDlpRunner.fetchMetadata(
+          rawData = slimInfoJson(await ytDlpRunner.fetchMetadata(
             `https://www.youtube.com/watch?v=${youtubeId}`,
             YTDLP_FETCH_TIMEOUT_MS
-          );
+          ));
+          fetchedMembersState = await membersAccess.recordFetchOutcome(youtubeId, { availability: rawData?.availability ?? null });
 
           // Cache the result for future requests
           try {
@@ -155,6 +162,10 @@ class VideoMetadataModule {
           // of treating the video as public until the next refetch.
           if (detectedMembersOnly) {
             fallbackMetadata.availability = 'subscriber_only';
+            fallbackMetadata.membersAccess = await membersAccess.recordFetchOutcome(youtubeId, {
+              errorMessage: fetchErr.message,
+              usedCookies: fetchErr.usedCookies === true,
+            });
           }
           return fallbackMetadata;
         }
@@ -213,51 +224,150 @@ class VideoMetadataModule {
         }
       }
 
-      // Use the numeric aspect_ratio from yt-dlp (e.g. 1.78 for 16:9)
-      const aspectRatio = rawData.aspect_ratio ?? null;
-
-      // Collect related files on disk (thumbnail, subtitles, nfo, etc.)
-      const relatedFiles = await this._getVideoRelatedFiles(youtubeId);
-
-      // Extract available resolutions from the formats array
-      const availableResolutions = this._extractAvailableResolutions(rawData.formats);
-
+      const curated = await this._curateMetadata(youtubeId, rawData);
+      curated.membersAccess = fetchedMembersState !== undefined
+        ? fetchedMembersState
+        : await this._lookupMembersAccess(youtubeId, rawData.availability);
       // Show and SxxEyy when the downloaded file is a TV episode (decoration: never fails the request)
-      const episode = await episodeInfo.getEpisodeInfoMap([{ youtubeId, filePath: rawData._actual_filepath || null }])
+      curated.episode = await episodeInfo.getEpisodeInfoMap([{ youtubeId, filePath: rawData._actual_filepath || null }])
         .then((map) => map.get(youtubeId) || null)
         .catch((err) => {
           logger.warn({ err, youtubeId }, 'Failed to read episode details');
           return null;
         });
-
-      return {
-        description: rawData.description ?? null,
-        viewCount: rawData.view_count ?? null,
-        likeCount: rawData.like_count ?? null,
-        commentCount: rawData.comment_count ?? null,
-        tags: rawData.tags ?? null,
-        categories: rawData.categories ?? null,
-        uploadDate: rawData.upload_date ?? null,
-        resolution: rawData.resolution ?? null,
-        width: rawData.width ?? null,
-        height: rawData.height ?? null,
-        fps: rawData.fps ?? null,
-        aspectRatio,
-        language: rawData.language ?? null,
-        isLive: rawData.is_live ?? null,
-        wasLive: rawData.was_live ?? null,
-        availability: rawData.availability ?? null,
-        channelFollowerCount: rawData.channel_follower_count ?? null,
-        ageLimit: rawData.age_limit ?? null,
-        webpageUrl: rawData.webpage_url ?? null,
-        relatedFiles,
-        availableResolutions,
-        episode,
-      };
+      return curated;
     } catch (err) {
       logger.error({ err, youtubeId }, 'Unexpected error in getVideoMetadata');
       return NULL_METADATA;
     }
+  }
+
+  // A cached .info.json says nothing about whether today's cookies can open
+  // the video, so its state comes from the recorded checks.
+  async _lookupMembersAccess(youtubeId, availability) {
+    try {
+      const knownMembersOnly = availability === 'subscriber_only' ? new Set([youtubeId]) : new Set();
+      const states = await membersAccess.getStates([youtubeId], { knownMembersOnly });
+      return states.get(youtubeId) ?? null;
+    } catch (err) {
+      logger.warn({ err, youtubeId }, 'Could not read members-only access');
+      return null;
+    }
+  }
+
+  /**
+   * Asks YouTube whether the configured cookies can open a members-only video
+   * and records the answer. Skips the cached .info.json on purpose.
+   *
+   * @param {string} youtubeId - YouTube video ID
+   * @returns {Promise<{ membersAccess: string|null, checked: boolean }>}
+   *   checked is false when YouTube could not be asked (timeout, network, bot check)
+   */
+  async checkMembersAccess(youtubeId) {
+    try {
+      const rawData = await ytDlpRunner.fetchMetadata(
+        `https://www.youtube.com/watch?v=${youtubeId}`,
+        YTDLP_FETCH_TIMEOUT_MS
+      );
+      const state = await membersAccess.recordFetchOutcome(youtubeId, { availability: rawData?.availability ?? null });
+      return { membersAccess: state, checked: true };
+    } catch (err) {
+      if (!ytDlpRunner.isMembersOnlyError(err?.message)) {
+        logger.warn({ err, youtubeId }, 'Could not check members-only access');
+        return { membersAccess: await this._lookupMembersAccess(youtubeId, null), checked: false };
+      }
+      const state = await membersAccess.recordFetchOutcome(youtubeId, {
+        errorMessage: err.message,
+        usedCookies: err.usedCookies === true,
+      });
+      return { membersAccess: state, checked: true };
+    }
+  }
+
+  /**
+   * The resolutions YouTube offers for a video, from one fresh yt-dlp fetch
+   * without cookies, for automated lookups. Unlike getVideoMetadata it reads
+   * and writes no .info.json, records no members-only access, never falls
+   * back to the API and updates no row.
+   *
+   * @param {string} youtubeId - YouTube video ID
+   * @param {Object} [options]
+   * @param {number} [options.timeoutMs]
+   * @returns {Promise<number[]|null>} Sorted tiers, or null when unknown. Never rejects.
+   */
+  async probeAvailableResolutions(youtubeId, { timeoutMs = PROBE_FETCH_TIMEOUT_MS } = {}) {
+    try {
+      const args = ytdlpCommandBuilder.buildMetadataFetchArgs(
+        `https://www.youtube.com/watch?v=${youtubeId}`,
+        { skipSleepRequests: true, cookiesEnabled: false }
+      );
+      const rawData = JSON.parse(await ytDlpRunner.run(args, { timeoutMs }));
+      return this._extractAvailableResolutions(rawData?.formats);
+    } catch (err) {
+      logger.debug({ err, youtubeId }, 'Resolution probe failed');
+      return null;
+    }
+  }
+
+  /**
+   * Curated metadata from an already-cached .info.json only. Unlike
+   * getVideoMetadata it never runs yt-dlp and never writes to the database,
+   * so callers outside the app (the external API) cannot trigger YouTube
+   * fetches. Returns null when no .info.json is cached.
+   *
+   * @param {string} youtubeId - YouTube video ID
+   * @returns {Promise<Object|null>} Curated metadata object, or null
+   */
+  async getCachedVideoMetadata(youtubeId) {
+    let rawData;
+    try {
+      const infoPath = path.join(configModule.getJobsPath(), 'info', `${youtubeId}.info.json`);
+      rawData = JSON.parse(await fs.readFile(infoPath, 'utf8'));
+    } catch {
+      return null;
+    }
+    if (!rawData || typeof rawData !== 'object') return null;
+    try {
+      return await this._curateMetadata(youtubeId, rawData);
+    } catch (err) {
+      logger.error({ err, youtubeId }, 'Unexpected error in getCachedVideoMetadata');
+      return null;
+    }
+  }
+
+  async _curateMetadata(youtubeId, rawData) {
+    // Use the numeric aspect_ratio from yt-dlp (e.g. 1.78 for 16:9)
+    const aspectRatio = rawData.aspect_ratio ?? null;
+
+    // Collect related files on disk (thumbnail, subtitles, nfo, etc.)
+    const relatedFiles = await this._getVideoRelatedFiles(youtubeId);
+
+    // Extract available resolutions from the formats array
+    const availableResolutions = this._extractAvailableResolutions(rawData.formats);
+
+    return {
+      description: rawData.description ?? null,
+      viewCount: rawData.view_count ?? null,
+      likeCount: rawData.like_count ?? null,
+      commentCount: rawData.comment_count ?? null,
+      tags: rawData.tags ?? null,
+      categories: rawData.categories ?? null,
+      uploadDate: rawData.upload_date ?? null,
+      resolution: rawData.resolution ?? null,
+      width: rawData.width ?? null,
+      height: rawData.height ?? null,
+      fps: rawData.fps ?? null,
+      aspectRatio,
+      language: rawData.language ?? null,
+      isLive: rawData.is_live ?? null,
+      wasLive: rawData.was_live ?? null,
+      availability: rawData.availability ?? null,
+      channelFollowerCount: rawData.channel_follower_count ?? null,
+      ageLimit: rawData.age_limit ?? null,
+      webpageUrl: rawData.webpage_url ?? null,
+      relatedFiles,
+      availableResolutions,
+    };
   }
 
   /**

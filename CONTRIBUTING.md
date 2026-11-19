@@ -21,7 +21,7 @@ Thank you for your interest in contributing to Youtarr! This document will help 
 ### Prerequisites
 
 - **Docker & Docker Compose** - Required for development and testing
-- **Node.js 18+** - For building the application
+- **Node.js 20.19+ and npm 11.10+** - For building the application
 - **Git** - Version control
 - **Bash shell** - Git Bash for Windows users
 
@@ -33,7 +33,7 @@ git clone https://github.com/DialmasterOrg/Youtarr.git
 cd Youtarr
 
 # Build the development Docker image
-./scripts/build-dev.sh
+./scripts/build-dev.sh --install-deps
 
 # Start the development environment
 ./scripts/start-dev.sh

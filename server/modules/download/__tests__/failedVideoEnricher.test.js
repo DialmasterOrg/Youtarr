@@ -5,13 +5,15 @@ jest.mock('../../../models/video', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models/channel', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models/channelvideo', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models/playlistvideo', () => ({ findAll: jest.fn() }));
+jest.mock('../../videoOembedEnricher', () => ({ enrichByIds: jest.fn() }));
 
 const Video = require('../../../models/video');
 const Channel = require('../../../models/channel');
 const ChannelVideo = require('../../../models/channelvideo');
 const PlaylistVideo = require('../../../models/playlistvideo');
+const videoOembedEnricher = require('../../videoOembedEnricher');
 const logger = require('../../../logger');
-const { enrichFailedVideos } = require('../failedVideoEnricher');
+const { enrichFailedVideos, OEMBED_LOOKUP_LIMIT } = require('../failedVideoEnricher');
 
 describe('enrichFailedVideos', () => {
   beforeEach(() => {
@@ -20,6 +22,7 @@ describe('enrichFailedVideos', () => {
     Channel.findAll.mockResolvedValue([]);
     ChannelVideo.findAll.mockResolvedValue([]);
     PlaylistVideo.findAll.mockResolvedValue([]);
+    videoOembedEnricher.enrichByIds.mockResolvedValue({});
   });
 
   test('fills title and channel from the videos table', async () => {
@@ -141,5 +144,95 @@ describe('enrichFailedVideos', () => {
     await expect(enrichFailedVideos(failed)).resolves.toBeUndefined();
     expect(logger.warn).toHaveBeenCalled();
     expect(failed[0].title).toBeUndefined();
+  });
+
+  describe('oEmbed fallback', () => {
+    test('fills title and channel from oEmbed when the database has never seen the video', async () => {
+      videoOembedEnricher.enrichByIds.mockResolvedValue({
+        abc123def45: { title: 'Fresh Upload', channelName: 'Fresh Channel' }
+      });
+      const failed = [{ youtubeId: 'abc123def45', error: 'Sign in to confirm you’re not a bot' }];
+
+      await enrichFailedVideos(failed);
+
+      expect(videoOembedEnricher.enrichByIds).toHaveBeenCalledWith(['abc123def45']);
+      expect(failed[0].title).toBe('Fresh Upload');
+      expect(failed[0].channel).toBe('Fresh Channel');
+    });
+
+    test('asks oEmbed only about videos the database could not title', async () => {
+      Video.findAll.mockResolvedValue([
+        { youtubeId: 'known0000001', youTubeVideoName: 'Known Title', youTubeChannelName: 'Known Channel' }
+      ]);
+      const failed = [
+        { youtubeId: 'known0000001', error: 'err' },
+        { youtubeId: 'fresh0000002', error: 'err' }
+      ];
+
+      await enrichFailedVideos(failed);
+
+      expect(videoOembedEnricher.enrichByIds).toHaveBeenCalledWith(['fresh0000002']);
+    });
+
+    test('skips oEmbed entirely when the database titled every video', async () => {
+      Video.findAll.mockResolvedValue([
+        { youtubeId: 'abc123def45', youTubeVideoName: 'Known Title', youTubeChannelName: null }
+      ]);
+      const failed = [{ youtubeId: 'abc123def45', error: 'err' }];
+
+      await enrichFailedVideos(failed);
+
+      expect(videoOembedEnricher.enrichByIds).not.toHaveBeenCalled();
+    });
+
+    test('caps the oEmbed lookup at OEMBED_LOOKUP_LIMIT ids per job', async () => {
+      const failed = Array.from({ length: OEMBED_LOOKUP_LIMIT + 5 }, (_, i) => ({
+        youtubeId: `vid${String(i).padStart(8, '0')}`,
+        error: 'err'
+      }));
+
+      await enrichFailedVideos(failed);
+
+      const requested = videoOembedEnricher.enrichByIds.mock.calls[0][0];
+      expect(requested).toHaveLength(OEMBED_LOOKUP_LIMIT);
+      expect(requested[0]).toBe('vid00000000');
+    });
+
+    test('keeps the database result when oEmbed also answers for the same id', async () => {
+      ChannelVideo.findAll.mockResolvedValue([
+        { youtube_id: 'abc123def45', title: null, channel_id: 'UCxx' }
+      ]);
+      Channel.findAll.mockResolvedValue([{ channel_id: 'UCxx', uploader: 'Tracked Channel' }]);
+      videoOembedEnricher.enrichByIds.mockResolvedValue({
+        abc123def45: { title: 'Fresh Upload', channelName: 'oEmbed Channel' }
+      });
+      const failed = [{ youtubeId: 'abc123def45', error: 'err' }];
+
+      await enrichFailedVideos(failed);
+
+      expect(failed[0].title).toBe('Fresh Upload');
+      expect(failed[0].channel).toBe('Tracked Channel');
+    });
+
+    test('survives an oEmbed failure without throwing', async () => {
+      videoOembedEnricher.enrichByIds.mockRejectedValue(new Error('network down'));
+      const failed = [{ youtubeId: 'abc123def45', error: 'err' }];
+
+      await expect(enrichFailedVideos(failed)).resolves.toBeUndefined();
+      expect(logger.warn).toHaveBeenCalled();
+      expect(failed[0].title).toBeUndefined();
+    });
+
+    test('still asks oEmbed when the database lookup itself failed', async () => {
+      Video.findAll.mockRejectedValue(new Error('db down'));
+      videoOembedEnricher.enrichByIds.mockResolvedValue({
+        abc123def45: { title: 'Fresh Upload', channelName: 'Fresh Channel' }
+      });
+      const failed = [{ youtubeId: 'abc123def45', error: 'err' }];
+
+      await enrichFailedVideos(failed);
+
+      expect(failed[0].title).toBe('Fresh Upload');
+    });
   });
 });

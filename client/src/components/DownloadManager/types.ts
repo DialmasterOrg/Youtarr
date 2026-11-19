@@ -58,6 +58,8 @@ export interface FinalSummary {
   totalFailed?: number;
   totalAutoRetried?: number;
   totalMembersOnly?: number;
+  totalAlreadyDownloaded?: number;
+  totalNotAvailable?: number;
   totalTerminatedChannels?: number;
   totalTerminationFailures?: number;
   failedVideos?: FailedVideo[];
@@ -67,6 +69,8 @@ export interface FinalSummary {
   jobIssues?: DownloadJobIssue[];
   jobType: string;
   completedAt?: string;
+  // Set when a later check found nothing new and this is the last real result.
+  lastCheckedAt?: string;
 }
 
 // One downloadProgress message payload (live broadcast or REST replay)

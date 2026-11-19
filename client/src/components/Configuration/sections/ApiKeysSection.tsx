@@ -22,6 +22,8 @@ import {
   Skeleton,
   Snackbar,
   Divider,
+  Checkbox,
+  FormControlLabel,
 } from '../../ui';
 import { Trash2 as DeleteIcon, Plus as AddIcon, Copy as ContentCopyIcon, AlertTriangle as WarningIcon } from 'lucide-react';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
@@ -36,7 +38,9 @@ interface ApiKey {
   created_at: string;
   last_used_at: string | null;
   is_active: boolean;
+  revoked_at?: string | null;
   usage_count: number;
+  role?: string;
 }
 
 interface ApiKeyCreatedResponse {
@@ -47,6 +51,19 @@ interface ApiKeyCreatedResponse {
   key: string;
   prefix: string;
 }
+
+interface CreatedKey extends ApiKeyCreatedResponse {
+  isStatusKey: boolean;
+}
+
+const STATUS_READ_ROLE = 'status_read';
+const DOWNLOAD_ROLE = 'legacy_download';
+
+const keyTypeLabel = (role?: string) => {
+  if (role === STATUS_READ_ROLE) return 'Read-only status';
+  if (!role || role === DOWNLOAD_ROLE) return 'Download';
+  return 'External';
+};
 
 interface ApiKeysSectionProps {
   token: string | null;
@@ -60,7 +77,8 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createdKeyDialogOpen, setCreatedKeyDialogOpen] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
-  const [createdKey, setCreatedKey] = useState<ApiKeyCreatedResponse | null>(null);
+  const [newKeyIsStatus, setNewKeyIsStatus] = useState(false);
+  const [createdKey, setCreatedKey] = useState<CreatedKey | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '' });
   const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<{ open: boolean; keyId: number | null; keyName: string }>({
@@ -82,7 +100,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
       
       if (response.ok) {
         const data = await response.json();
-        setApiKeys(data.keys || []);
+        setApiKeys((data.keys || []).filter((key: ApiKey) => !key.revoked_at));
       } else {
         const errData = await response.json();
         setError(errData.error || 'Failed to fetch API keys');
@@ -98,6 +116,12 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
     fetchApiKeys();
   }, [fetchApiKeys]);
 
+  // The dialog always opens on a download key, the default type.
+  const closeCreateDialog = () => {
+    setCreateDialogOpen(false);
+    setNewKeyIsStatus(false);
+  };
+
   const handleCreateKey = async () => {
     if (!token || !newKeyName.trim()) return;
 
@@ -108,16 +132,20 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
           'Content-Type': 'application/json',
           'x-access-token': token,
         },
-        body: JSON.stringify({ name: newKeyName.trim() }),
+        body: JSON.stringify({
+          name: newKeyName.trim(),
+          ...(newKeyIsStatus ? { role: STATUS_READ_ROLE } : {}),
+        }),
       });
 
       const data = await response.json();
 
       if (response.ok && data.success) {
-        setCreatedKey(data);
+        setCreatedKey({ ...data, isStatusKey: newKeyIsStatus });
         setCreateDialogOpen(false);
         setCreatedKeyDialogOpen(true);
         setNewKeyName('');
+        setNewKeyIsStatus(false);
         fetchApiKeys();
       } else {
         setError(data.error || 'Failed to create API key');
@@ -205,6 +233,8 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
       <Typography variant="body2" color="secondary" className="mb-4">
         Keys also work with Apple Shortcuts, Tasker, and other tools.
         <strong> Note:</strong> API keys currently support single video downloads only. Playlists and channels require the web UI.
+        {' '}A read-only status key is for dashboards and monitoring tools: it reads your library and download status
+        and cannot start downloads.
       </Typography>
 
       <Box className="flex justify-between items-center mb-4">
@@ -243,6 +273,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
             <TableHead>
               <TableRow>
                 <TableCell>Name</TableCell>
+                <TableCell>Type</TableCell>
                 <TableCell>Key</TableCell>
                 <TableCell>Created</TableCell>
                 <TableCell>Last Used</TableCell>
@@ -254,6 +285,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
               {apiKeys.map((key) => (
                 <TableRow key={key.id}>
                   <TableCell>{key.name}</TableCell>
+                  <TableCell>{keyTypeLabel(key.role)}</TableCell>
                   <TableCell>
                     <Chip
                       label={`${key.key_prefix}...`}
@@ -312,7 +344,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
       </Box>
 
       {/* Create Key Dialog */}
-      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={createDialogOpen} onClose={closeCreateDialog} maxWidth="sm" fullWidth>
         <DialogTitle>Create API Key</DialogTitle>
         <DialogContent>
           <TextField
@@ -326,13 +358,23 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
             inputProps={{ maxLength: 100 }}
             helperText="A descriptive name to identify this key"
           />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={newKeyIsStatus}
+                onChange={(e) => setNewKeyIsStatus(e.target.checked)}
+              />
+            }
+            label="Read-only status key"
+          />
           <Typography variant="body2" color="secondary" className="mt-2">
-            Next you'll get your key, the Send to Youtarr button, and the details for phone shortcuts. They're
-            shown only once.
+            {newKeyIsStatus
+              ? "For dashboards and monitoring tools. It can only read the status summary and cannot start downloads. Next you'll get your key and the address to use. They're shown only once."
+              : "Next you'll get your key, the Send to Youtarr button, and the details for phone shortcuts. They're shown only once."}
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
+          <Button onClick={closeCreateDialog}>Cancel</Button>
           <Button
             onClick={handleCreateKey}
             variant="contained"
@@ -371,6 +413,31 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
             </IconButton>
           </Paper>
 
+          {createdKey?.isStatusKey && (
+            <>
+              <Typography variant="subtitle2" gutterBottom>
+                Use it in your dashboard
+              </Typography>
+              <Typography variant="body2" color="secondary" className="mb-2">
+                This key can only read the status summary. Enter it as the API key in your dashboard, or send it
+                yourself:
+              </Typography>
+              <Paper className="p-4 bg-muted/50">
+                <Typography variant="body2" style={{ fontFamily: 'monospace' }} className="mb-2">
+                  <strong>URL:</strong> {locationUtils.getOrigin()}/api/status/summary
+                </Typography>
+                <Typography variant="body2" style={{ fontFamily: 'monospace' }} className="mb-2">
+                  <strong>Method:</strong> GET
+                </Typography>
+                <Typography variant="body2" style={{ fontFamily: 'monospace' }}>
+                  <strong>Header:</strong> x-api-key: {createdKey.key.substring(0, 8)}...
+                </Typography>
+              </Paper>
+            </>
+          )}
+
+          {!createdKey?.isStatusKey && (
+          <>
           <Typography variant="subtitle2" gutterBottom>
             📚 Add to Bookmarks
           </Typography>
@@ -439,6 +506,8 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
               <strong>Body:</strong> {`{ "url": "<youtube-url>" }`}
             </Typography>
           </Paper>
+          </>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCreatedKeyDialogOpen(false)} variant="contained">

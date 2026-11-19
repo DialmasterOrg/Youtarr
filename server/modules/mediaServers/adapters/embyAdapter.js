@@ -4,6 +4,8 @@ const {
   extractBasename,
   bestItemMatchesByPath,
   normalizeBaseUrl,
+  normalizeLibraryIds,
+  LIBRARY_SCAN_PARAMS,
   REQUEST_TIMEOUT_MS,
   isServerUnavailableError,
   describeHttpError,
@@ -26,6 +28,7 @@ class EmbyAdapter extends BaseAdapter {
     this.apiKey = String(config.embyApiKey || '').trim();
     this.userId = String(config.embyUserId || '').trim() || undefined;
     this.allUsers = config.embyWatchStatusAllUsers !== false;
+    this.videoLibraryIds = normalizeLibraryIds(config.embyVideoLibraryIds);
   }
 
   _headers() { return { 'X-Emby-Token': this.apiKey }; }
@@ -56,6 +59,32 @@ class EmbyAdapter extends BaseAdapter {
       await axios.post(`${this.url}/Library/Refresh`, null, { headers: this._headers(), timeout: REQUEST_TIMEOUT_MS });
     } catch (err) {
       logger.warn({ ...describeHttpError(err) }, 'emby: library refresh request failed');
+    }
+  }
+
+  // Only the libraries listed in "Video Library IDs" when any are set, so a
+  // download does not rescan unrelated libraries; every library otherwise.
+  async refreshAfterDownload() {
+    if (this.videoLibraryIds.length === 0) {
+      logger.info('emby: refreshing all libraries after download');
+      return this.triggerLibraryScan();
+    }
+    logger.info({ libraryIds: this.videoLibraryIds }, 'emby: refreshing video libraries after download');
+    await Promise.all(this.videoLibraryIds.map((libraryId) => this._scanLibrary(libraryId)));
+  }
+
+  async _scanLibrary(libraryId) {
+    try {
+      await axios.post(`${this.url}/Items/${encodeURIComponent(libraryId)}/Refresh`, null, {
+        headers: this._headers(),
+        params: LIBRARY_SCAN_PARAMS,
+        timeout: REQUEST_TIMEOUT_MS,
+      });
+    } catch (err) {
+      logger.warn(
+        { ...describeHttpError(err), libraryId },
+        'emby: refresh request for a library in Video Library IDs failed'
+      );
     }
   }
 

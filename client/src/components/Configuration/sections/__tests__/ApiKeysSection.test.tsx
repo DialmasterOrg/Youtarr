@@ -446,6 +446,112 @@ describe('ApiKeysSection Component', () => {
     });
   });
 
+  describe('Read-only status keys', () => {
+    const mockKeyCreation = () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValue({ keys: [] }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValue(mockCreatedKeyResponse),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValue({ keys: [] }),
+        });
+    };
+
+    const createRequestBody = () => {
+      const createCall = mockFetch.mock.calls.find(([, options]) => options?.method === 'POST');
+      return JSON.parse(createCall[1].body);
+    };
+
+    test('creates a status key when the read-only option is checked', async () => {
+      const user = userEvent.setup();
+      mockKeyCreation();
+      renderWithProviders(<ApiKeysSection {...createSectionProps()} />);
+
+      await user.click(await screen.findByRole('button', { name: /Create Key/i }));
+      await user.type(screen.getByLabelText(/Key Name/i), 'Dashboard');
+      await user.click(screen.getByRole('checkbox', { name: /Read-only status key/i }));
+      await user.click(screen.getByRole('button', { name: /^Create$/i }));
+
+      await screen.findByRole('dialog', { name: /API Key Created/i });
+      expect(createRequestBody()).toEqual({ name: 'Dashboard', role: 'status_read' });
+    });
+
+    test('creates a download key when the read-only option is left unchecked', async () => {
+      const user = userEvent.setup();
+      mockKeyCreation();
+      renderWithProviders(<ApiKeysSection {...createSectionProps()} />);
+
+      await user.click(await screen.findByRole('button', { name: /Create Key/i }));
+      await user.type(screen.getByLabelText(/Key Name/i), 'Bookmarklet');
+      await user.click(screen.getByRole('button', { name: /^Create$/i }));
+
+      await screen.findByRole('dialog', { name: /API Key Created/i });
+      expect(createRequestBody()).toEqual({ name: 'Bookmarklet' });
+    });
+
+    test('shows the status summary address instead of the bookmarklet for a status key', async () => {
+      const user = userEvent.setup();
+      mockKeyCreation();
+      renderWithProviders(<ApiKeysSection {...createSectionProps()} />);
+
+      await user.click(await screen.findByRole('button', { name: /Create Key/i }));
+      await user.type(screen.getByLabelText(/Key Name/i), 'Dashboard');
+      await user.click(screen.getByRole('checkbox', { name: /Read-only status key/i }));
+      await user.click(screen.getByRole('button', { name: /^Create$/i }));
+
+      const createdDialog = await screen.findByRole('dialog', { name: /API Key Created/i });
+      expect(within(createdDialog).getByText(/\/api\/status\/summary/)).toBeInTheDocument();
+      expect(within(createdDialog).queryByText(/Add to Bookmarks/i)).not.toBeInTheDocument();
+      expect(within(createdDialog).queryByText(/Send to Youtarr/i)).not.toBeInTheDocument();
+    });
+
+    test('explains what a status key can do before it is created', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<ApiKeysSection {...createSectionProps()} />);
+
+      await user.click(await screen.findByRole('button', { name: /Create Key/i }));
+      await user.click(screen.getByRole('checkbox', { name: /Read-only status key/i }));
+
+      expect(screen.getByText(/cannot start downloads\. Next you'll get your key/i)).toBeInTheDocument();
+    });
+
+    test('goes back to a download key when the create dialog is cancelled', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<ApiKeysSection {...createSectionProps()} />);
+
+      await user.click(await screen.findByRole('button', { name: /Create Key/i }));
+      await user.click(screen.getByRole('checkbox', { name: /Read-only status key/i }));
+      await user.click(screen.getByRole('button', { name: /Cancel/i }));
+      await user.click(screen.getByRole('button', { name: /Create Key/i }));
+
+      expect(await screen.findByRole('checkbox', { name: /Read-only status key/i })).not.toBeChecked();
+    });
+
+    test('lists the type of each key', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          keys: [
+            { ...mockApiKeys[0], name: 'Bookmarklet key', role: 'legacy_download' },
+            { ...mockApiKeys[1], name: 'Dashboard key', role: 'status_read' },
+          ],
+        }),
+      });
+      renderWithProviders(<ApiKeysSection {...createSectionProps()} />);
+
+      const downloadRow = await screen.findByRole('row', { name: /Bookmarklet key/i });
+      const statusRow = screen.getByRole('row', { name: /Dashboard key/i });
+      expect(within(downloadRow).getByText('Download')).toBeInTheDocument();
+      expect(within(statusRow).getByText('Read-only status')).toBeInTheDocument();
+    });
+  });
+
   describe('Delete API Key', () => {
     test('opens confirmation dialog when delete button is clicked', async () => {
       const user = userEvent.setup();
@@ -510,7 +616,7 @@ describe('ApiKeysSection Component', () => {
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: jest.fn().mockResolvedValue({ keys: [mockApiKeys[1]] }),
+          json: jest.fn().mockResolvedValue({ keys: [{ ...mockApiKeys[0], is_active: false, revoked_at: '2026-10-29T12:00:00Z' }, mockApiKeys[1]] }),
         });
       
       const props = createSectionProps();
@@ -533,6 +639,9 @@ describe('ApiKeysSection Component', () => {
           method: 'DELETE',
         }));
       });
+      await waitFor(() => expect(screen.queryByText('My Bookmarklet')).not.toBeInTheDocument());
+      expect(screen.getByText('iPhone Shortcut')).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: /Delete/i })).toHaveLength(1);
     });
   });
 

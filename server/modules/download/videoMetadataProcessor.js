@@ -5,6 +5,7 @@ const configModule = require('../configModule');
 const logger = require('../../logger');
 const { probeVideoDimensions } = require('../resolutionTier');
 const { presentColumns } = require('../videoRemovalState');
+const { ARR_STAGING_DIR_NAME } = require('../filesystem/constants');
 
 class VideoMetadataProcessor {
   static normalizeChannelName(value) {
@@ -81,7 +82,8 @@ class VideoMetadataProcessor {
         const entryPath = path.join(currentDir, entry.name);
 
         if (entry.isDirectory()) {
-          stack.push(entryPath);
+          // Hardlinks staged for Sonarr and Radarr are never the video's own file.
+          if (entry.name !== ARR_STAGING_DIR_NAME) stack.push(entryPath);
         } else if (entry.isFile() && entry.name.endsWith(targetSuffix)) {
           return entryPath;
         }
@@ -111,7 +113,7 @@ class VideoMetadataProcessor {
           const channelDirs = await fsPromises.readdir(baseDir, { withFileTypes: true });
 
           for (const dirent of channelDirs) {
-            if (!dirent.isDirectory()) {
+            if (!dirent.isDirectory() || dirent.name === ARR_STAGING_DIR_NAME) {
               continue;
             }
 

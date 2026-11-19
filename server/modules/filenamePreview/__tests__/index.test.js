@@ -9,6 +9,12 @@ const filenamePreview = require('..');
 
 const FIXTURE_PATH_FRAGMENT = 'sample-video.info.json';
 
+function makeRunnerTimeoutError() {
+  const err = new Error('yt-dlp process timed out after 20000ms');
+  err.code = 'YTDLP_TIMEOUT';
+  return err;
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   filenamePreview._resetCache();
@@ -98,6 +104,47 @@ describe('previewTemplate', () => {
     expect(ytDlpRunner.run).toHaveBeenCalledTimes(4);
   });
 
+  test('gives each yt-dlp render 20 seconds to finish', async () => {
+    ytDlpRunner.run.mockResolvedValue('x');
+    await filenamePreview.previewTemplate('%(title).76B');
+
+    expect(ytDlpRunner.run.mock.calls[0][1]).toEqual({ timeoutMs: 20000 });
+  });
+
+  test('replaces the runner timeout message with one that does not call the template invalid', async () => {
+    ytDlpRunner.run
+      .mockRejectedValueOnce(makeRunnerTimeoutError())
+      .mockRejectedValueOnce(makeRunnerTimeoutError());
+
+    await expect(filenamePreview.previewTemplate('%(title).76B')).rejects.toThrow(
+      'The filename template could not be checked: yt-dlp took longer than 20 seconds. ' +
+        'The server may be busy; try again in a moment.'
+    );
+  });
+
+  test('keeps the YTDLP_TIMEOUT code on a timeout', async () => {
+    ytDlpRunner.run
+      .mockRejectedValueOnce(makeRunnerTimeoutError())
+      .mockRejectedValueOnce(makeRunnerTimeoutError());
+
+    await expect(filenamePreview.previewTemplate('%(title).76B')).rejects.toMatchObject({
+      code: 'YTDLP_TIMEOUT',
+    });
+  });
+
+  test('does not cache a timed-out preview', async () => {
+    ytDlpRunner.run
+      .mockRejectedValueOnce(makeRunnerTimeoutError())
+      .mockRejectedValueOnce(makeRunnerTimeoutError())
+      .mockResolvedValueOnce('file [id].mp4')
+      .mockResolvedValueOnce('folder - id');
+
+    await expect(filenamePreview.previewTemplate('%(title).76B')).rejects.toThrow();
+    const result = await filenamePreview.previewTemplate('%(title).76B');
+
+    expect(result.fileLine).toBe('file [id].mp4');
+  });
+
   test('propagates yt-dlp error so the route can return 400 with stderr', async () => {
     const error = new Error(
       'yt-dlp: error: invalid default output template "%(title)Z": unsupported format character'
@@ -131,16 +178,33 @@ describe('validateTemplate', () => {
     expect(result.error).toMatch(/unsupported format character/);
   });
 
-  test('does not throw when yt-dlp times out', async () => {
-    const timeoutError = new Error('yt-dlp process timed out after 5000ms');
-    timeoutError.code = 'YTDLP_TIMEOUT';
+  test('does not flag a yt-dlp rejection as a timeout', async () => {
+    const error = new Error('yt-dlp: error: invalid default output template "%(title)Z"');
+    ytDlpRunner.run.mockRejectedValueOnce(error).mockRejectedValueOnce(error);
+
+    const result = await filenamePreview.validateTemplate('%(title)Z');
+
+    expect(result.timedOut).toBe(false);
+  });
+
+  test('returns ok=false with timedOut=true when yt-dlp times out', async () => {
     ytDlpRunner.run
-      .mockRejectedValueOnce(timeoutError)
-      .mockRejectedValueOnce(timeoutError);
+      .mockRejectedValueOnce(makeRunnerTimeoutError())
+      .mockRejectedValueOnce(makeRunnerTimeoutError());
 
     const result = await filenamePreview.validateTemplate('%(title).76B');
 
-    expect(result.ok).toBe(false);
-    expect(result.error).toMatch(/timed out/);
+    expect(result).toMatchObject({ ok: false, timedOut: true });
+  });
+});
+
+describe('isTimeoutError', () => {
+  test('is true for an error with the YTDLP_TIMEOUT code', () => {
+    expect(filenamePreview.isTimeoutError(makeRunnerTimeoutError())).toBe(true);
+  });
+
+  test('is false for other errors and for no error', () => {
+    expect(filenamePreview.isTimeoutError(new Error('boom'))).toBe(false);
+    expect(filenamePreview.isTimeoutError(undefined)).toBe(false);
   });
 });

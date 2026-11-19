@@ -13,11 +13,22 @@ When you subscribe to a YouTube playlist:
 
 What Youtarr does **not** do for playlists:
 
-- Does not deliver private YouTube playlists. Public and unlisted only (cookies-based auth for private playlists is out of scope for now).
+- Does not reach private YouTube playlists (Watch Later included) without cookies from the account that owns them. Public and unlisted playlists need none. See [Private playlists](USAGE_GUIDE.md#private-playlists).
 - Does not rename or move existing channel folders when a video is added to a tracked playlist.
 - Uses a single configured account per Jellyfin/Emby server. A playlist is either private to that account or public to everyone on the server (set the **Public on media servers** toggle); Youtarr can't target a playlist to a specific subset of other users.
 
 Automatic following supports up to 5,000 entries and requires a verified complete starting snapshot. Resetting that starting point preserves whether automatic downloads are paused. Older auto-enabled subscriptions without a saved starting point begin with future discoveries only; use **Choose existing videos** to request older entries. The full selection queues immediately. On scheduled runs, the configured limit applies separately to new discoveries and older saved retries (up to twice that limit in total). Older retries rotate by their last scheduling attempt; a requested discovery uses only the discovery allowance. Discovery jobs queue first and saved retries have a separate Download History label. The header shows the outstanding selection count. If that initial setup cannot verify a complete snapshot, the header explains why downloads are waiting; oversized playlists are paused, and usable partial listings can still be refreshed and selected manually. Subscribing/restoring reports a saved subscription with a warning when following setup cannot finish.
+
+## Sync status
+
+The **Media Server Sync** box on the playlist page shows the last result for each connected server the playlist syncs to:
+
+- **Synced 5 min ago**: the server playlist was created or updated by that sync.
+- **Not synced**, followed by a reason: the last sync changed nothing on that server. The reason says why, for example that the downloaded files were not found on the server, or that the server could not be reached. If an earlier sync worked, its time is shown as **Last synced**.
+- **Not synced yet**: no sync has run for that server.
+- **Syncing...**: a sync is running. It can take about a minute while the server is still scanning new files.
+
+The status updates on its own when a sync finishes. **Sync now** starts a sync in the background and only confirms that it started; the result appears in the box.
 
 ## Playlist order
 
@@ -46,7 +57,7 @@ Two things to know:
 
 1. In Jellyfin, go to **Dashboard -> API Keys** and create a new API key for Youtarr.
 2. Find your User ID under **Dashboard -> Users** (it is a GUID in the URL when editing a user), or open the **Jellyfin User** dropdown in Youtarr's Jellyfin settings to load the accounts from your server and pick yours.
-3. (Optional) Leave **Video Library IDs** blank. You can enter a comma-separated list of library IDs that hold your Youtarr videos, but Youtarr already matches downloaded videos to Jellyfin items across all your libraries, so this is rarely needed.
+3. (Optional) Leave **Video Library IDs** blank. Playlist sync does not use it: Youtarr matches downloaded videos to Jellyfin items across all your libraries. The field only limits which libraries are refreshed after a download; see the [Jellyfin guide](media-servers/jellyfin.md#step-2-connect-jellyfin-in-youtarr).
 4. Click **Test Connection** to verify reachability.
 5. Toggle **Enable Jellyfin integration** on.
 
@@ -58,7 +69,7 @@ The Emby flow mirrors Jellyfin. The two API surfaces share lineage but differ en
 
 1. In Emby, go to **Settings -> Advanced -> API Keys** and create a key.
 2. Find your User ID via the user-edit URL, or open the **Emby User** dropdown in Settings to load the accounts from your server and pick yours.
-3. (Optional) Leave **Video Library IDs** blank; Youtarr matches videos across all your libraries.
+3. (Optional) Leave **Video Library IDs** blank; playlist sync matches videos across all your libraries. The field only limits which libraries are refreshed after a download; see the [Emby guide](media-servers/emby.md#step-2-connect-emby-in-youtarr).
 4. **Test Connection**, then toggle **Enable Emby integration**.
 
 Note: Emby's `POST /Playlists` accepts query params with comma-separated `Ids`; Jellyfin's accepts a JSON body with an array. Youtarr's adapter handles both, so you don't have to do anything special.
@@ -128,9 +139,10 @@ The reserved `__playlists__` subfolder is rejected by the channel sub_folder val
 
 ## Troubleshooting
 
-- **"Playlist sync failed"**: inspect `playlist_sync_state.last_error` for the specific server. Common causes: stale API key, server moved, user ID changed.
+- **A server shows "Not synced" on the playlist page**: the reason is shown under it (see [Sync status](#sync-status)); the same text is stored in `playlist_sync_state.last_error`. For a request failure, common causes are a stale API key, a server that moved, or a changed user ID.
+- **Video + MP3 playlist never appears / "Downloaded video files were not found"**: a **Video + MP3** playlist syncs as a video playlist, so the server needs a video-type library that includes the Youtarr output folder. A music library never indexes the video files, even though it shows the mp3s. Add a video library over the same folder, or set the playlist's Download Type to **MP3 Only** to sync it as a music playlist.
 - **Items not appearing in the right order**: confirm the underlying videos are downloaded. Items missing on disk are skipped (not appended later); when they download, the next sync slots them into their correct position.
 - **One item missing from a synced playlist / logs say "not found on server, skipping"**: the file downloaded but the media server never indexed it, so sync cannot add it. On Plex for Windows the usual cause is the 260-character path limit; see [Video Downloads Fine but Never Appears in Plex](TROUBLESHOOTING.md#video-downloads-fine-but-never-appears-in-plex-windows-path-length). Once the file is visible in the server's library, the next sync (or **Sync now**) picks it up.
 - **Playlist not visible to other users (Plex)**: this is by design. Plex only exposes admin-created playlists to other accounts via per-user share grants; see "Visibility" above.
 - **Shared playlists don't appear for other users (Plex)**: after you share a playlist (the grant shows correctly under Settings -> Manage Library Access -> [user] -> Media), the recipient's **Playlists** section still shows '"Playlists" is empty' on every client. This is long-standing Plex behavior: the Playlists source only lists playlists the user created themselves, and playlists shared by another account appear under a separate sidebar source named **Media** (same level as Playlists and Libraries). Have the recipient open **Media**; the shared playlists are there. Also note: sharing a playlist does not grant access to the underlying library (share the library too, or items will be hidden), and content-rating parental restrictions hide YouTube videos because they carry no rating - use label-based restrictions for kid accounts instead.
-- **Audio playlist never appears / logs say "downloaded audio files were not found on the server"**: first check that you are looking in the right place - audio playlists are listed with music playlists (in Plex: the music library's Playlists tab, or the Playlists sidebar with the type filter set to Music), not alongside video playlists. If it is genuinely absent, the server has no music-type library covering the downloaded mp3s. See [Audio-only playlists](#audio-only-playlists).
+- **Audio playlist never appears / "Downloaded MP3 files were not found"**: first check that you are looking in the right place - audio playlists are listed with music playlists (in Plex: the music library's Playlists tab, or the Playlists sidebar with the type filter set to Music), not alongside video playlists. If it is genuinely absent, the server has no music-type library covering the downloaded mp3s. See [Audio-only playlists](#audio-only-playlists).

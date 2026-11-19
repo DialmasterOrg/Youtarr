@@ -277,6 +277,79 @@ describe('EmbyAdapter', () => {
     expect(axios.post.mock.calls[0][2].params.MediaType).toBe('Audio');
   });
 
+  describe('refreshAfterDownload', () => {
+    const scanParams = {
+      Recursive: true,
+      ImageRefreshMode: 'Default',
+      MetadataRefreshMode: 'Default',
+      ReplaceAllImages: false,
+      ReplaceAllMetadata: false,
+    };
+
+    test('refreshes every library when no Video Library IDs are set', async () => {
+      axios.post.mockResolvedValue({ status: 204 });
+      await new EmbyAdapter(cfg).refreshAfterDownload();
+
+      expect(axios.post).toHaveBeenCalledTimes(1);
+      expect(axios.post).toHaveBeenCalledWith(
+        'http://emby:8096/Library/Refresh',
+        null,
+        expect.objectContaining({ headers: { 'X-Emby-Token': 'KEY' } })
+      );
+    });
+
+    test('refreshes only the configured libraries when Video Library IDs are set', async () => {
+      axios.post.mockResolvedValue({ status: 204 });
+      await new EmbyAdapter({ ...cfg, embyVideoLibraryIds: ['14438', ' 14545 '] }).refreshAfterDownload();
+
+      expect(axios.post).toHaveBeenCalledTimes(2);
+      for (const id of ['14438', '14545']) {
+        expect(axios.post).toHaveBeenCalledWith(
+          `http://emby:8096/Items/${id}/Refresh`,
+          null,
+          expect.objectContaining({
+            headers: { 'X-Emby-Token': 'KEY' },
+            params: scanParams,
+            timeout: expect.any(Number),
+          })
+        );
+      }
+    });
+
+    test('URL-encodes a library id', async () => {
+      axios.post.mockResolvedValue({ status: 204 });
+      await new EmbyAdapter({ ...cfg, embyVideoLibraryIds: ['a/b'] }).refreshAfterDownload();
+
+      expect(axios.post.mock.calls[0][0]).toBe('http://emby:8096/Items/a%2Fb/Refresh');
+    });
+
+    test('warns about a library that fails and still refreshes the others', async () => {
+      const logger = require('../../../../logger');
+      axios.post
+        .mockRejectedValueOnce({ isAxiosError: true, response: { status: 500 }, message: 'Request failed with status code 500' })
+        .mockResolvedValueOnce({ status: 204 });
+
+      await expect(
+        new EmbyAdapter({ ...cfg, embyVideoLibraryIds: ['bad', 'good'] }).refreshAfterDownload()
+      ).resolves.toBeUndefined();
+
+      expect(axios.post).toHaveBeenCalledTimes(2);
+      expect(logger.warn).toHaveBeenCalledTimes(1);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 500, libraryId: 'bad' }),
+        expect.stringMatching(/Video Library IDs/)
+      );
+    });
+
+    test('does not reject when the full refresh fails', async () => {
+      const logger = require('../../../../logger');
+      axios.post.mockRejectedValueOnce({ isAxiosError: true, code: 'ECONNREFUSED', message: 'connect ECONNREFUSED' });
+
+      await expect(new EmbyAdapter(cfg).refreshAfterDownload()).resolves.toBeUndefined();
+      expect(logger.warn).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('fetchWatchStates', () => {
     const singleUserCfg = { ...cfg, embyWatchStatusAllUsers: false };
     const isWatchedQuery = (params) => params.isPlayed === true;

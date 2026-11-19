@@ -17,8 +17,10 @@ const downloadCleanup = require('./downloadCleanup');
 const transient403RetryPlanner = require('./transient403RetryPlanner');
 const failureAdvisor = require('./failureAdvisor');
 const failedVideoEnricher = require('./failedVideoEnricher');
+const membersAccess = require('../membersAccess');
 const tempSpaceProbe = require('./tempSpaceProbe');
 const { containsHttp403 } = require('./ytdlpStderrSignals');
+const { isSpecificUrlDownloadJob } = require('./jobTypes');
 const { runCompletionSideEffects } = require('./downloadCompletionEffects');
 const {
   describeSponsorBlockFailures,
@@ -168,6 +170,8 @@ async function finalizeDownloadJob({
   onTempChannelsFileCleaned,
   enqueueAutoRetry = null,
   cookiesEnabled = Boolean(configModule.getCookiesPath()),
+  // Whether yt-dlp actually got --cookies; preparation drops it for an unusable file.
+  cookiesPassed = cookiesEnabled,
   anonymousRetry = false,
   stdioClosed = true,
 }) {
@@ -225,6 +229,18 @@ async function finalizeDownloadJob({
 
     await downloadResultProcessor.reconcileArchive({ allowRedownload, failedVideosList, videoData, errorTracker });
 
+    // Best-effort: a failure here only means the next run checks again.
+    try {
+      await membersAccess.recordDownloadOutcome({
+        membersOnlyIds: errorTracker.membersOnlyVideoIds,
+        downloadedIds: videoData.map((video) => video.youtubeId),
+        usedCookies: cookiesEnabled && cookiesPassed && !anonymousRetry,
+        stderr: stderrBuffer,
+      });
+    } catch (err) {
+      logger.warn({ err, jobId }, 'Could not record members-only access from the download');
+    }
+
     const wasTerminated = Boolean(timeoutController.shutdownInProgress || timeoutController.shutdownReason || wasManuallyTerminated);
 
     // Failed attempts have ended; release them before retry admission. Keep
@@ -253,19 +269,20 @@ async function finalizeDownloadJob({
       });
       if (retryPlan) {
         try {
-          await enqueueAutoRetry({
+          const retryJobs = await enqueueAutoRetry({
             retryVideos: retryPlan.retryVideos,
             autoRetryAttempt: retryPlan.nextAttempt,
             runId,
             sourceJobData,
           });
-          const retryIds = new Set(retryPlan.retryVideos.map((video) => video.youtubeId));
+          const retryIds = new Set(Object.keys(retryJobs || {}));
           for (const failedVideo of failedVideosList) {
             if (retryIds.has(failedVideo.youtubeId)) {
               failedVideo.autoRetryQueued = true;
+              failedVideo.autoRetryJobId = retryJobs[failedVideo.youtubeId];
             }
           }
-          autoRetryQueuedCount = retryPlan.retryVideos.length;
+          autoRetryQueuedCount = retryIds.size;
           logger.info(
             { jobId, count: autoRetryQueuedCount, attempt: retryPlan.nextAttempt },
             'Queued auto-retry job for retryable download failures'
@@ -343,7 +360,7 @@ async function finalizeDownloadJob({
         ? 'Bot detection encountered during the no-cookies fallback. The fallback also failed, so this video may be genuinely unavailable.'
         : cookiesEnabled
           ? 'Bot detection encountered even though cookies are configured - they are likely expired or rotated.'
-          : 'Bot detection encountered. Please set cookies in your Configuration.';
+          : 'Bot detection encountered. YouTube is temporarily refusing requests from this server; this usually clears on its own, so try again later.';
 
       // Same leftovers, and the same guard, as the non-zero exit branch below.
       if (stdioClosed) {
@@ -360,7 +377,7 @@ async function finalizeDownloadJob({
           ? 'The no-cookies fallback was also rejected by YouTube. This video may be genuinely unavailable.'
           : cookiesEnabled
             ? 'YouTube requires authentication and your uploaded cookies appear stale. Re-export fresh cookies from your browser and upload them in Settings -> Cookies.'
-            : 'YouTube requires authentication. Enable cookies in Configuration to resolve this issue.',
+            : 'YouTube asked this server to sign in (bot check). Without cookies this is usually temporary and the next scheduled download retries the failed videos. If it keeps happening, upload YouTube cookies in Settings -> Cookies.',
         error: anonymousRetry ? 'NO_COOKIES_FALLBACK_FAILED' : 'COOKIES_REQUIRED'
       });
       jobErrorCode = anonymousRetry ? 'NO_COOKIES_FALLBACK_FAILED' : 'COOKIES_REQUIRED';
@@ -520,6 +537,16 @@ async function finalizeDownloadJob({
     // (updateJob or saveIntermediateGroupResults).
     terminalUpdateDone = true;
 
+    // A job given specific videos accounts for each one. A channel job only
+    // walks the newest videos of each tab, so these counts would just restate
+    // its settings. archiveSkippedIds, not the monitor's skipped count, because
+    // the monitor misses archive hits that follow a finished video.
+    const listsSpecificVideos = isSpecificUrlDownloadJob(jobType);
+    const perVideoCounts = {
+      totalAlreadyDownloaded: listsSpecificVideos ? router.archiveSkippedIds.size : 0,
+      totalNotAvailable: listsSpecificVideos ? router.filterSkippedCount + errorTracker.upcomingVideoIds.size : 0,
+    };
+
     const presentation = resolveFinalPresentation({
       code,
       jobErrorCode,
@@ -531,6 +558,8 @@ async function finalizeDownloadJob({
       videoDataCount: videoData.length,
       failedCount: failedVideosList.length,
       skippedCount: monitor.videoCount.skipped || 0,
+      alreadyDownloadedCount: perVideoCounts.totalAlreadyDownloaded,
+      notAvailableCount: perVideoCounts.totalNotAvailable,
       terminatedChannelCount: errorTracker.terminatedChannelIds.size,
       terminationFailureCount: errorTracker.terminationFailures.length,
       videoCount,
@@ -591,7 +620,8 @@ async function finalizeDownloadJob({
         totalSkipped: monitor.videoCount.skipped || 0,
         totalFailed: reportableFailedVideos.length,
         totalAutoRetried: autoRetryQueuedCount,
-        totalMembersOnly: errorTracker.membersOnlyVideoIds.size,
+        totalMembersOnly: listsSpecificVideos ? errorTracker.membersOnlyVideoIds.size : 0,
+        ...perVideoCounts,
         totalTerminatedChannels: errorTracker.terminatedChannelIds.size,
         totalTerminationFailures: errorTracker.terminationFailures.length,
         failedVideos: reportableFailedVideos,
@@ -641,6 +671,7 @@ async function finalizeDownloadJob({
         totalSkipped: monitor.videoCount.skipped || 0,
         totalFailed: reportableFailedVideos.length,
         totalMembersOnly: errorTracker.membersOnlyVideoIds.size,
+        ...perVideoCounts,
         failedVideos: reportableFailedVideos,
         diagnoses,
         terminatedChannels: [...errorTracker.terminatedChannels],

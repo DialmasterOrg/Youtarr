@@ -10,6 +10,7 @@ const tempPathManager = require('./download/tempPathManager');
 const downloadSettingsResolver = require('./download/downloadSettingsResolver');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const { selectSubtitleFilesToPrune } = require('./download/subtitleSidecarPruner');
+const { slimInfoJson } = require('./infoJsonSlimmer');
 const { JobVideoDownload } = require('../models');
 const videoPersistence = require('./videoPersistence');
 const { VIDEO_PERSISTED_MARKER } = require('./constants/outputMarkers');
@@ -427,8 +428,9 @@ async function removeYtdlpIntermediates(videoDirectory) {
 // Main execution wrapped in async IIFE to handle async operations
 (async () => {
   if (fs.existsSync(jsonPath)) {
-    // Read the JSON file to get the upload_date
-    const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+    // Read the JSON file to get the upload_date. Every later write of
+    // jsonData (temp path, then jobs/info) saves the slimmed copy.
+    const jsonData = slimInfoJson(JSON.parse(fs.readFileSync(jsonPath, 'utf-8')));
 
     // Parse the upload_date (format: YYYYMMDD) into a Date object
     let uploadDate = null;
@@ -452,7 +454,9 @@ async function removeYtdlpIntermediates(videoDirectory) {
     }
 
     const filename = path.basename(jsonPath, '.info.json'); // get the filename
-    const matches = filename.match(/\[(.*?)\]/g); // Extract all occurrences of video IDs enclosed in brackets
+    // A token never spans a "[", so an unclosed one left in the title is not
+    // read as the start of the ID.
+    const matches = filename.match(/\[([^[\]]*)\]/g); // Extract all occurrences of video IDs enclosed in brackets
     const id = matches
       ? matches[matches.length - 1].replace(/[[\]]/g, '')
       : 'default'; // take the last match and remove brackets or use 'default'

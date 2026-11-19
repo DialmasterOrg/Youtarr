@@ -1,5 +1,147 @@
 # Changelog
 
+## [v1.93.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.93.0) - 2026-11-17
+
+### Features
+
+* add Sonarr/Radarr bridge backend ([f589472](https://github.com/DialmasterOrg/Youtarr/commit/f589472b0fc5b684a456d2ed98b998f83f157307)), closes [#760](https://github.com/DialmasterOrg/Youtarr/issues/760)
+* add Sonarr/Radarr bridge settings page ([4c96d1d](https://github.com/DialmasterOrg/Youtarr/commit/4c96d1dbcfb0bde76e4b9ab82db5b13deb1878d1)), closes [#760](https://github.com/DialmasterOrg/Youtarr/issues/760)
+* guide Sonarr/Radarr setup, add resolution ([d81833c](https://github.com/DialmasterOrg/Youtarr/commit/d81833cb91370306a685feb1c2afad153e407c9b)), closes [#760](https://github.com/DialmasterOrg/Youtarr/issues/760)
+* hide Sonarr/Radarr grabs in history ([4d29191](https://github.com/DialmasterOrg/Youtarr/commit/4d29191dec5c64ade2c3e4441703e020f24f4408)), closes [#760](https://github.com/DialmasterOrg/Youtarr/issues/760)
+* honest release labels for Sonarr/Radarr ([6730ee3](https://github.com/DialmasterOrg/Youtarr/commit/6730ee30ed4470f61513b0a8555934afefec669c)), closes [#760](https://github.com/DialmasterOrg/Youtarr/issues/760)
+* list recent Sonarr/Radarr searches ([2e7e600](https://github.com/DialmasterOrg/Youtarr/commit/2e7e600311e96f810afb8fba45eeb6d7b2530f75)), closes [#760](https://github.com/DialmasterOrg/Youtarr/issues/760)
+* match Sonarr searches by episode title ([520ebab](https://github.com/DialmasterOrg/Youtarr/commit/520ebabf9dd4b85ca2ca45357d3b89c8f95bdb1d)), closes [#39](https://github.com/DialmasterOrg/Youtarr/issues/39) [#760](https://github.com/DialmasterOrg/Youtarr/issues/760)
+* remove grabbed videos after import ([c324f93](https://github.com/DialmasterOrg/Youtarr/commit/c324f93faf71bfcf5fc4ebb0f9d0895eba737b58)), closes [#760](https://github.com/DialmasterOrg/Youtarr/issues/760)
+* support Sonarr/Radarr outside Docker ([43ea038](https://github.com/DialmasterOrg/Youtarr/commit/43ea038b8467440671467257d692fc4eadf2a78c)), closes [#760](https://github.com/DialmasterOrg/Youtarr/issues/760)
+
+
+### Documentation
+
+* update CHANGELOG for v1.92.0 [skip ci] ([95dba27](https://github.com/DialmasterOrg/Youtarr/commit/95dba271bb0f95567d0a96122815cb6f4b3819c2))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.92.0...v1.93.0
+
+## [v1.92.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.92.0) - 2026-11-14
+
+### Features
+
+* add about page and one-time support prompt ([84ce7d1](https://github.com/DialmasterOrg/Youtarr/commit/84ce7d1bce2c91ccb867a8213b847fc5bdba4354))
+* add new language options for Vietnamese, Turkish, Thai, and Indonesian subtitles ([6465a02](https://github.com/DialmasterOrg/Youtarr/commit/6465a024c6ef2134ea0591e6128cda4bdd6c9e4e))
+* add Polish to subtitle language options ([21f3449](https://github.com/DialmasterOrg/Youtarr/commit/21f3449843df42ef8db1e0afe20c820be6a417f0))
+* check members-only feeds for new videos ([bf0491e](https://github.com/DialmasterOrg/Youtarr/commit/bf0491e1be3e7c185b14a53e756a6d6f030f52fc)), closes [#1019](https://github.com/DialmasterOrg/Youtarr/issues/1019)
+* download members-only videos when cookies have access ([eaeb35b](https://github.com/DialmasterOrg/Youtarr/commit/eaeb35b1bc9ea60afad010d91d6a7f7a36f3f6e7)), closes [#857](https://github.com/DialmasterOrg/Youtarr/issues/857)
+* open channel pages without waiting ([4bd44bb](https://github.com/DialmasterOrg/Youtarr/commit/4bd44bb72a0586dad6e09baaf415b3482e178097)), closes [#1019](https://github.com/DialmasterOrg/Youtarr/issues/1019)
+* search channels from the add field ([fea2875](https://github.com/DialmasterOrg/Youtarr/commit/fea2875a39505e5c6066aa8a1478e524da22bf12)), closes [#933](https://github.com/DialmasterOrg/Youtarr/issues/933)
+* use cookies when listing members-only playlists ([1fa7848](https://github.com/DialmasterOrg/Youtarr/commit/1fa7848eea74cb04344f70c11595e6a0236f7728))
+
+
+### Bug Fixes
+
+* **progress:** show download progress for webm video streams ([0258959](https://github.com/DialmasterOrg/Youtarr/commit/0258959e6307365b5ab7744fb2a6349354445a40))
+* address review on members-only access ([02ff63b](https://github.com/DialmasterOrg/Youtarr/commit/02ff63bfa5ea8ac235c06151629164c803201883))
+* bot-check advice and titles for failed videos ([c59e0e0](https://github.com/DialmasterOrg/Youtarr/commit/c59e0e0bcf2d2fd80da3f05842d643651d97b788))
+* keep members-only filter without live login cookies ([7a1763a](https://github.com/DialmasterOrg/Youtarr/commit/7a1763ad4db16278c1c9309373c07e03dc8e92a3))
+* only use announced formats to classify webm streams ([fc85d3e](https://github.com/DialmasterOrg/Youtarr/commit/fc85d3e6b3e259e7395a56cfbaa47d265bf48cd6))
+* parse video id after an unclosed bracket ([07514f4](https://github.com/DialmasterOrg/Youtarr/commit/07514f4cbfbf57c8927ccd01583f4150ed664490)), closes [#1021](https://github.com/DialmasterOrg/Youtarr/issues/1021)
+* remember rejected cookies for members-only downloads ([b5f96a0](https://github.com/DialmasterOrg/Youtarr/commit/b5f96a0b2621e04ceb323deca12f8cb046b40c6f))
+* stop channel list blocking other requests ([93992b2](https://github.com/DialmasterOrg/Youtarr/commit/93992b278338c21d2b9e9101a2f8686f1a81aa31))
+* stop Sequelize warnings on channel listings ([5ab99c6](https://github.com/DialmasterOrg/Youtarr/commit/5ab99c6db8608ec3efec31e7d428bfe64a052429))
+* stop treating feed outages as a problem ([2c08906](https://github.com/DialmasterOrg/Youtarr/commit/2c0890656cb75042d25e8f8a6c8731e671c031de)), closes [#1019](https://github.com/DialmasterOrg/Youtarr/issues/1019)
+
+
+### Continuous Integration
+
+* bump the github-actions group across 1 directory with 3 updates ([eb946c8](https://github.com/DialmasterOrg/Youtarr/commit/eb946c859a22d160849a267e7c484ca68ac4a803))
+
+
+### Documentation
+
+* add Gluetun integration ([3dd223f](https://github.com/DialmasterOrg/Youtarr/commit/3dd223fe9d56033793ed4a541f6f46da5670e79f))
+* clarify Gluetun setup and its gotchas ([4597eef](https://github.com/DialmasterOrg/Youtarr/commit/4597eef3b8da4ecbb2e8b2e31f2c5e7ea41d86b8)), closes [#1010](https://github.com/DialmasterOrg/Youtarr/issues/1010)
+* clarify instructions regarding Nfo file handling in CoreSettingsSection ([c3e9f0c](https://github.com/DialmasterOrg/Youtarr/commit/c3e9f0c1abbf9ff732a7bf546a5419c9e0fee40a))
+* enhance Gluetun integration documentation and add environment variables reference ([e69e1f7](https://github.com/DialmasterOrg/Youtarr/commit/e69e1f72e6c50e4d66d22622c6724b99fd68a9db))
+* Revise development prerequisites in DEVELOPMENT.md ([c80824b](https://github.com/DialmasterOrg/Youtarr/commit/c80824b7b00aac398b6e00835320f2f8bd7188e6))
+* update CHANGELOG for v1.91.0 [skip ci] ([e3282b4](https://github.com/DialmasterOrg/Youtarr/commit/e3282b493367965a53a4394b640fa53177183290))
+* Update development prerequisites in CONTRIBUTING.md and DEVELOPMENT.md ([1f9ac4f](https://github.com/DialmasterOrg/Youtarr/commit/1f9ac4fdc350eb8ca4b9cbbfb34c87e670ed5e0b))
+* update Gluetun integration documentation and configuration ([2049aa0](https://github.com/DialmasterOrg/Youtarr/commit/2049aa07c0a838df927532f1e43ed12ac33cbfdd))
+* update Gluetun integration documentation and environment variables reference ([42854a8](https://github.com/DialmasterOrg/Youtarr/commit/42854a85acbbd39430875e5581d4ca3f39eee4f9))
+* update Gluetun integration note with direct link to configuration file ([5734a89](https://github.com/DialmasterOrg/Youtarr/commit/5734a89d73d99684e9fd6b2a28de48b604f17576))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.91.0...v1.92.0
+
+## [v1.91.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.91.0) - 2026-11-06
+
+### Features
+
+* add a link template for videos in notifications ([74ad603](https://github.com/DialmasterOrg/Youtarr/commit/74ad603148e000f44420f6da0b5b0552a9c30a45)), closes [#961](https://github.com/DialmasterOrg/Youtarr/issues/961)
+* add external API control plane ([8c67673](https://github.com/DialmasterOrg/Youtarr/commit/8c676738a44b43bc7f4afb7448789ccfc9f376a5))
+* Add new frequency options to FREQUENCY_MAPPING ([813a1ca](https://github.com/DialmasterOrg/Youtarr/commit/813a1ca6929b31f12aeaaa720af94d82f02bb39e))
+* add output dir health check timeout env var ([3331783](https://github.com/DialmasterOrg/Youtarr/commit/3331783deb80bb9418b71cfbfd53c3fd6373b570)), closes [#988](https://github.com/DialmasterOrg/Youtarr/issues/988)
+* add RSS feed of downloaded videos ([ac92b0a](https://github.com/DialmasterOrg/Youtarr/commit/ac92b0a132524ea22255c73ddc0c20538e43f799)), closes [#533](https://github.com/DialmasterOrg/Youtarr/issues/533) [#998](https://github.com/DialmasterOrg/Youtarr/issues/998) [#533](https://github.com/DialmasterOrg/Youtarr/issues/533)
+* open a video from the videos page URL ([0b67971](https://github.com/DialmasterOrg/Youtarr/commit/0b6797184015fd3aa65095740224109908d81e76)), closes [#961](https://github.com/DialmasterOrg/Youtarr/issues/961)
+* run external requests in a background executor ([e2f8fac](https://github.com/DialmasterOrg/Youtarr/commit/e2f8fac1fea5a7ae2889025d2480f7cc783f6d33))
+
+
+### Bug Fixes
+
+* allow external request review with auth disabled and reject non-UTF-8 bodies ([e98ff1d](https://github.com/DialmasterOrg/Youtarr/commit/e98ff1d492ed158051157853927bdd3f5a97c66e))
+* bound channel metadata work without limiting catalog refreshes ([c3de9c3](https://github.com/DialmasterOrg/Youtarr/commit/c3de9c366d8805492e3069cf9b479f1016364563))
+* close config watcher after fixture validation ([89a8564](https://github.com/DialmasterOrg/Youtarr/commit/89a85643bc742873a705bb784aa74a7b6846a39c))
+* harden external API inputs and expose effective availability ([5595104](https://github.com/DialmasterOrg/Youtarr/commit/5595104c011d2e8484321be253961397339059aa))
+* keep contract pagination tests watcher-free ([f5e8340](https://github.com/DialmasterOrg/Youtarr/commit/f5e83409086dfc66a9da9291126d9a0daa2dd5c8))
+* keep external API changes out of shared logging and ratings ([c0242cc](https://github.com/DialmasterOrg/Youtarr/commit/c0242cce60a41efdfaeda2ba0a53d810789ccfad))
+* keep external catalog reads cached-only and portable ([9b87150](https://github.com/DialmasterOrg/Youtarr/commit/9b87150af1735fe07bd40ab5770a231bfd45f314))
+* keep external request tests watcher-free ([36f5f5d](https://github.com/DialmasterOrg/Youtarr/commit/36f5f5df6a73109e8d8b65c896c943f56814adcc))
+* load external request dependencies lazily at startup ([540260a](https://github.com/DialmasterOrg/Youtarr/commit/540260a208bd167c5977bd842c157f61e85a6713))
+* make external API opt-in and verify MariaDB migrations ([0082558](https://github.com/DialmasterOrg/Youtarr/commit/0082558098809aa581fbed4c6ae1a0f0a8377eeb))
+* make job summary report what changed ([d0c5676](https://github.com/DialmasterOrg/Youtarr/commit/d0c5676acc685375e221bcdbe9ffb2a936a634e2)), closes [#987](https://github.com/DialmasterOrg/Youtarr/issues/987)
+* match external API paths case-insensitively at the app level ([8e5bcc9](https://github.com/DialmasterOrg/Youtarr/commit/8e5bcc9fbd02df4a6a99693f14b6530e59433bef))
+* patch proxy address trust validation for external ingress ([e35e430](https://github.com/DialmasterOrg/Youtarr/commit/e35e430b47a1ee274451be3dfcdefa8b99285539))
+* point the external fixture check at the moved test ([60e5a65](https://github.com/DialmasterOrg/Youtarr/commit/60e5a654f9c30dff3d9e73021a404e1f3640873c))
+* preserve external request retries and completed results ([1882438](https://github.com/DialmasterOrg/Youtarr/commit/188243877acfedecf42ec680c7c8e33f63ffcd99))
+* raise filename preview timeout to 20 seconds ([5757b6b](https://github.com/DialmasterOrg/Youtarr/commit/5757b6ba7548699d08fb090bd13e9c730fd59d9d)), closes [#981](https://github.com/DialmasterOrg/Youtarr/issues/981)
+* return validation errors for unavailable channel grants ([ac3ad33](https://github.com/DialmasterOrg/Youtarr/commit/ac3ad33aeb0e8c87de20b613daa2bdcde14961e5))
+* serialize external approvals and recover durable download jobs ([10a9b86](https://github.com/DialmasterOrg/Youtarr/commit/10a9b86e976fb134c1c3a59bda5c7bbaf74e6be5))
+* **deps:** bump follow-redirects to 1.16.2 ([4e865d2](https://github.com/DialmasterOrg/Youtarr/commit/4e865d217ad2cf6844a51505d69c4198d3a4b1ff))
+* **deps:** update Storybook to 10.6.2 for GHSA-f2ph-cmg5-wxc8 ([d698fb3](https://github.com/DialmasterOrg/Youtarr/commit/d698fb3066b23e659e0e02a9212eece93d782ead))
+* shrink and prune the jobs/info metadata cache ([c061603](https://github.com/DialmasterOrg/Youtarr/commit/c061603e37e30689490a06c14296a38e0df14e2e)), closes [#990](https://github.com/DialmasterOrg/Youtarr/issues/990)
+* update NFO and info.json on rating change ([ac5b6a7](https://github.com/DialmasterOrg/Youtarr/commit/ac5b6a74b41a8eb0f6c1d319868236e1d5905582)), closes [#990](https://github.com/DialmasterOrg/Youtarr/issues/990) [#990](https://github.com/DialmasterOrg/Youtarr/issues/990)
+
+
+### Performance Improvements
+
+* batch external request history and verify runtime indexes ([b2213f5](https://github.com/DialmasterOrg/Youtarr/commit/b2213f5d899cd0dc38814164938177788f1483e3))
+
+
+### Continuous Integration
+
+* bump the github-actions group across 1 directory with 2 updates ([7ca1d93](https://github.com/DialmasterOrg/Youtarr/commit/7ca1d9383e56ed66153821a04871ec99bba966b8))
+
+
+### Documentation
+
+* Add warning to "Automatic Downloads" section over not running task too often ([51ae377](https://github.com/DialmasterOrg/Youtarr/commit/51ae377115f75c2214ad3c644d859d071668d65c))
+* describe the external request lifecycle and executor ([5f48d9c](https://github.com/DialmasterOrg/Youtarr/commit/5f48d9ce65aceb72fc4adc2848d2c7f627940c49))
+* Rename 'Every 2 weeks' to 'Twice a month (1st and 15th)' ([5444461](https://github.com/DialmasterOrg/Youtarr/commit/54444616b0406c5e4231bdec92f4df46dfe86e44))
+* revise automatic downloads description warning text ([f697dc6](https://github.com/DialmasterOrg/Youtarr/commit/f697dc6a7a4e93f99930e7c57db898167f54c984))
+* split CLAUDE.md into path-scoped rules ([4856545](https://github.com/DialmasterOrg/Youtarr/commit/48565459817a1de1215983351a890c10383b7f55))
+* update CHANGELOG for v1.90.2 [skip ci] ([758bc0a](https://github.com/DialmasterOrg/Youtarr/commit/758bc0a98109e2b8af07aeb263c1625fe6de4315))
+
+
+### Code Refactoring
+
+* group external API modules under modules/externalApi ([9380164](https://github.com/DialmasterOrg/Youtarr/commit/93801642f2c1221903284fc23a7a792a219078bf))
+* separate external request lifecycle and preserve approval retries ([62eaf05](https://github.com/DialmasterOrg/Youtarr/commit/62eaf055e9ef50ee7dca89854827bb23b05ef0a0))
+
+
+### Tests
+
+* align external request model indexes with runtime migration ([9140548](https://github.com/DialmasterOrg/Youtarr/commit/914054885fe9bc306c5e42325fa2b307f440642c))
+* keep auto-removal route mocks isolated ([9d78863](https://github.com/DialmasterOrg/Youtarr/commit/9d78863f8bc82b6d3881b06739777da8e8e1d742))
+* run the request executor only when database tests ask ([8af0111](https://github.com/DialmasterOrg/Youtarr/commit/8af011119fb187d798999ec55e9c1ea57dce206d))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.90.2...v1.91.0
+
 ## [v1.90.2](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.90.2) - 2026-10-27
 
 ### Bug Fixes

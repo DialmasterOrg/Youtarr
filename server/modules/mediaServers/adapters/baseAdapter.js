@@ -11,6 +11,13 @@ class BaseAdapter {
   async testConnection() { throw new Error('not implemented'); }
   async listUsers() { throw new Error('not implemented'); }
   async triggerLibraryScan(/* subfolder, opts: { mediaType } */) { throw new Error('not implemented'); }
+
+  /**
+   * Scan for files a finished download job added. Jellyfin and Emby override
+   * this; Plex is refreshed per subfolder mapping by plexModule instead, so
+   * the default does nothing. Never rejects: a failed request is logged.
+   */
+  async refreshAfterDownload() {}
   async resolveItemIdByFilepath(/* filepath */) { throw new Error('not implemented'); }
 
   /**
@@ -222,6 +229,27 @@ function normalizeBaseUrl(value) {
   return String(value || '').trim().replace(/\/+$/, '');
 }
 
+// Query for Jellyfin/Emby POST /Items/{libraryId}/Refresh that scans a library
+// for new and changed files without replacing metadata or images. Recursive
+// is required: videos sit in channel folders below the library root.
+const LIBRARY_SCAN_PARAMS = Object.freeze({
+  Recursive: true,
+  ImageRefreshMode: 'Default',
+  MetadataRefreshMode: 'Default',
+  ReplaceAllImages: false,
+  ReplaceAllMetadata: false,
+});
+
+/**
+ * Normalize a "Video Library IDs" setting to a list of distinct trimmed ids.
+ * The client saves an array, but a hand-edited config.json may hold a
+ * comma-separated string.
+ */
+function normalizeLibraryIds(value) {
+  const parts = Array.isArray(value) ? value : String(value || '').split(',');
+  return [...new Set(parts.map((id) => String(id ?? '').trim()).filter(Boolean))];
+}
+
 // True when an axios error means the server itself is unreachable or not
 // responding, rather than a normal "queried fine, no such item" result. No
 // response at all (ECONNREFUSED / ETIMEDOUT / ENOTFOUND / timeout) or any 5xx
@@ -250,6 +278,8 @@ module.exports.trailingSegmentMatch = trailingSegmentMatch;
 module.exports.bestItemMatchesByPath = bestItemMatchesByPath;
 module.exports.LIBRARY_TYPES = LIBRARY_TYPES;
 module.exports.normalizeBaseUrl = normalizeBaseUrl;
+module.exports.normalizeLibraryIds = normalizeLibraryIds;
+module.exports.LIBRARY_SCAN_PARAMS = LIBRARY_SCAN_PARAMS;
 module.exports.REQUEST_TIMEOUT_MS = REQUEST_TIMEOUT_MS;
 module.exports.MediaServerUnavailableError = MediaServerUnavailableError;
 module.exports.WatchStateFetchError = WatchStateFetchError;

@@ -12,7 +12,7 @@ All three monitor YouTube channels and archive new videos with yt-dlp, but they 
 
 Short summary of each:
 
-- **Youtarr** (Node.js/Express + React + MariaDB, ISC). Media-server automation tool with the strongest Plex story of the three. Unique strengths: automatic Plex library refresh with per-subfolder library mapping, native playlist sync that mirrors subscribed YouTube playlists into Plex, Jellyfin, and Emby (plus a universal `.m3u` fallback), MP3 playlists that sync as real music playlists, watch-status sync that pulls per-user watched state from Plex, Jellyfin, and Emby back into Youtarr's listing pages and filters, an optional TV Series layout that shows each channel as a show in Plex, one-click download of a channel's entire back catalog, automatic detection of terminated YouTube channels, channel grouping into user-defined subfolders (`__kids`/`__music`/`__news`, whatever), per-video content ratings, integrated in-app YouTube search, in-browser playback, a Swagger-documented REST API, MP3-only audio extraction, per-channel regex title filters, bulk channel import from Google Takeout CSV or a one-time cookies file, per-video and per-channel protection against auto-deletion, backup/restore scripts, in-app yt-dlp updates, and Apprise notifications. Weaker than the competition on full-text transcript/comment search, multi-user RBAC, podcast RSS output, and sheer community size.
+- **Youtarr** (Node.js/Express + React + MariaDB, ISC). Media-server automation tool with the strongest Plex story of the three. Unique strengths: automatic library refresh after downloads for Plex (with per-subfolder library mapping), Jellyfin, and Emby, native playlist sync that mirrors subscribed YouTube playlists into Plex, Jellyfin, and Emby (plus a universal `.m3u` fallback), MP3 playlists that sync as real music playlists, watch-status sync that pulls per-user watched state from Plex, Jellyfin, and Emby back into Youtarr's listing pages and filters, an optional TV Series layout that shows each channel as a show in Plex, one-click download of a channel's entire back catalog, automatic detection of terminated YouTube channels, channel grouping into user-defined subfolders (`__kids`/`__music`/`__news`, whatever), per-video content ratings, integrated in-app YouTube search, in-browser playback, a Swagger-documented REST API, MP3-only audio extraction, per-channel regex title filters, bulk channel import from Google Takeout CSV or a one-time cookies file, per-video and per-channel protection against auto-deletion, backup/restore scripts, in-app yt-dlp updates, and Apprise notifications. Weaker than the competition on full-text transcript/comment search, multi-user RBAC, podcast RSS output, and sheer community size.
 
 - **Pinchflat** (Elixir/Phoenix + SQLite, AGPL-3.0). Single-container media manager by Kieran Eglin. Community favorite for its "just works" install, powerful filename templating, per-source filters (regex, duration, date cutoff), audio-only Media Profiles that produce podcast-app-compatible RSS feeds, and first-class SponsorBlock + cookies handling. No built-in player by design, no REST API, single-user HTTP basic auth only.
 
@@ -47,7 +47,7 @@ Legend: ✅ supported, ❌ not supported, ⚠️ partial/caveat, "unclear" = not
 |---|---|---|---|
 | **Subscriptions & sources** | | | |
 | Channel subscriptions + auto-download | ✅ Per-tab controls (videos/shorts/streams); one-click Download All for the back catalog; terminated channels get flagged automatically | ✅ "Sources", the core model | ✅ Subscriptions page; separate "add to queue" for back-catalog |
-| Playlist as first-class source | ✅ Subscribe to public/unlisted playlists; auto-download + native sync to Plex/Jellyfin/Emby + `.m3u`; optional reverse ordering (no private playlists yet) | ✅ Yes (also user-created) | ✅ Yes, including reverse sort |
+| Playlist as first-class source | ✅ Subscribe to public/unlisted playlists; auto-download + native sync to Plex/Jellyfin/Emby + `.m3u`; optional reverse ordering; private playlists such as Watch Later with cookies | ✅ Yes (also user-created) | ✅ Yes, including reverse sort |
 | Individual/one-off downloads | ✅ Pre-validated URL preview; bulk video-URL import; bulk channel import from Takeout CSV or one-time cookies | ⚠️ Supported but not the design goal; docs suggest the "unlisted playlist" workaround | ✅ Accepts video/channel/playlist URLs |
 | Integrated YouTube search inside the UI | ✅ "Find Channels on YouTube" and "Find Videos on YouTube" pages; video results show "already downloaded" state | ❌ | ⚠️ Search operates on archived library; browser extension adds YouTube-side one-click archive |
 | Cron/scheduled fetching | ✅ Cron-based download scheduling | ✅ Per-source `index_frequency_minutes`; daily retention/update checks | ✅ Full cron UI at /settings/scheduling/ |
@@ -77,8 +77,8 @@ Legend: ✅ supported, ❌ not supported, ⚠️ partial/caveat, "unclear" = not
 | Search across comments | ❌ | ❌ | ⚠️ Comments archived; dedicated comment-search UI still on roadmap |
 | **Integrations** | | | |
 | Plex library refresh | ✅ Native (auto-refresh after downloads); HTTPS to Plex; per-subfolder library mapping; TV Series preset for a shows-style library | ⚠️ Indirect via NFO + filepaths | ⚠️ Via community `tubearchivist-plex` Scanner + Agent |
-| Jellyfin integration | ✅ NFO-compatible | ✅ NFO-compatible; community reports "just works" | ✅ Dedicated `tubearchivist-jf-plugin` with bidirectional watched-state sync |
-| Emby | ✅ NFO-compatible | ✅ NFO-compatible | ❌ No plugin |
+| Jellyfin integration | ✅ NFO-compatible; library auto-refresh after downloads when connected | ✅ NFO-compatible; community reports "just works" | ✅ Dedicated `tubearchivist-jf-plugin` with bidirectional watched-state sync |
+| Emby | ✅ NFO-compatible; library auto-refresh after downloads when connected | ✅ NFO-compatible | ❌ No plugin |
 | Kodi | ✅ NFO-compatible | ✅ NFO-compatible | ⚠️ Only via user-script-generated NFOs |
 | Content ratings (G/PG/R/TV-*) | ✅ Per-video/per-channel badges + policies | ❌ | ❌ |
 | Podcast RSS feed output | ❌ | ✅ Beta; used with AntennaPod/Pocket Casts | ❌ Roadmap item |
@@ -91,7 +91,7 @@ Legend: ✅ supported, ❌ not supported, ⚠️ partial/caveat, "unclear" = not
 | Backup / restore | ✅ In-app backup & restore scripts | ⚠️ File-level (copy `/config`) | ⚠️ Documented manual multi-step procedure |
 | Responsive / mobile-friendly UI | ✅ Responsive; mobile screenshots | ⚠️ Likely responsive (Tailwind); not explicitly claimed | ✅ |
 | Live-stream / premiere handling | ⚠️ Streams in per-tab controls; in-progress stream handling not supported | ✅ Per-source shorts/livestream rules | ✅ Streams as a separate per-channel tab; disable via page size 0 |
-| Member-only channel content | ❌ | ⚠️ Via cookies; distinguished for retry logic | ⚠️ Works implicitly if cookie has membership |
+| Member-only channel content | ✅ Via cookies of a member account; access is checked per video and denied videos are skipped | ⚠️ Via cookies; distinguished for retry logic | ⚠️ Works implicitly if cookie has membership |
 
 [^1]: The persistent `cookies.txt` is intended for a throwaway account, since download cookies risk suspension and rotate quickly on active accounts. The one-time cookies file is used only for bulk channel import and deleted immediately after, so you can safely import from your real account.
 

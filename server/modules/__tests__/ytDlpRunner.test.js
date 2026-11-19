@@ -279,6 +279,25 @@ describe('YtDlpRunner', () => {
     runSpy.mockRestore();
   });
 
+  it('tells a failed run that got cookies from one that did not', async () => {
+    const withCookies = ytDlpRunner.run(['--dump-json']);
+    const first = getLastProcess();
+    first.cookiesPassed = true;
+    emitDataAndClose(first, { stderr: 'ERROR: Join this channel', code: 1 });
+    await expect(withCookies).rejects.toMatchObject({ usedCookies: true });
+
+    const anonymous = ytDlpRunner.run(['--dump-json']);
+    emitDataAndClose(getLastProcess(), { stderr: 'ERROR: Join this channel', code: 1 });
+    await expect(anonymous).rejects.toMatchObject({ usedCookies: false });
+  });
+
+  it('fetchMetadata keeps whether the failed run got cookies', async () => {
+    const runSpy = jest.spyOn(ytDlpRunner, 'run').mockRejectedValueOnce(Object.assign(new Error('Join this channel'), { usedCookies: true }));
+
+    await expect(ytDlpRunner.fetchMetadata('https://example.com')).rejects.toMatchObject({ usedCookies: true });
+    runSpy.mockRestore();
+  });
+
   it('fetchMetadata propagates other errors with additional context', async () => {
     const runSpy = jest.spyOn(ytDlpRunner, 'run').mockRejectedValueOnce(new Error('unexpected failure'));
 
