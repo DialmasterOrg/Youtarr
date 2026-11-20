@@ -1,8 +1,7 @@
 /* eslint-env jest */
-const { createRecentSearches, DEFAULT_MAX_ENTRIES } = require('../recentSearches');
+const { createRecentSearches } = require('../recentSearches');
 
 const AT = new Date('2025-06-01T10:00:00.000Z');
-const minutesLater = (minutes) => new Date(AT.getTime() + minutes * 60 * 1000);
 
 function episodeRequest(overrides = {}) {
   return {
@@ -12,7 +11,11 @@ function episodeRequest(overrides = {}) {
   };
 }
 
-const rssRequest = (kind) => episodeRequest({ shape: 'rss', kind, text: null, textSource: null, season: null, episode: null });
+// The recorder and what it handed on, in the order it did.
+function recording() {
+  const saved = [];
+  return { searches: createRecentSearches({ save: (entry) => saved.push(entry) }), saved };
+}
 
 const result = (youtubeId, overrides = {}) => ({
   youtubeId, title: `Video ${youtubeId}`, channelName: 'Uploads', duration: 1320, publishedAt: '2024-03-01T12:00:00.000Z',
@@ -20,16 +23,22 @@ const result = (youtubeId, overrides = {}) => ({
 });
 
 describe('recentSearches', () => {
-  test('lists nothing before a request is answered', () => {
-    const searches = createRecentSearches();
+  test('hands on nothing before a request is answered', () => {
+    const { searches, saved } = recording();
 
     searches.start(episodeRequest(), AT);
 
-    expect(searches.list()).toEqual([]);
+    expect(saved).toEqual([]);
+  });
+
+  test('records without anywhere to hand the search on', () => {
+    const record = createRecentSearches().start(episodeRequest(), AT);
+
+    expect(() => record.answered(0)).not.toThrow();
   });
 
   test('records what was asked, the search that ran and what became of each result', () => {
-    const searches = createRecentSearches();
+    const { searches, saved } = recording();
     const offered = result('aaaaaaaaaaa');
     const rejected = result('bbbbbbbbbbb', { duration: undefined });
 
@@ -39,11 +48,8 @@ describe('recentSearches', () => {
     stage.reject(rejected, 'unknown-length');
     record.answered(1);
 
-    expect(searches.list()).toEqual([{
-      id: 1,
-      at: '2025-06-01T10:00:00.000Z',
-      firstAt: '2025-06-01T10:00:00.000Z',
-      count: 1,
+    expect(saved).toEqual([{
+      at: AT,
       kind: 'tv',
       shape: 'episode',
       asked: {
@@ -72,7 +78,7 @@ describe('recentSearches', () => {
   });
 
   test('a search that ran and offered nothing is "nothing"; one that never ran is "not-searched"', () => {
-    const searches = createRecentSearches();
+    const { searches, saved } = recording();
 
     const searched = searches.start(episodeRequest(), AT);
     searched.stage({ matcher: 'episode-code', query: 'Beyblade S01E29' }, []);
@@ -82,85 +88,27 @@ describe('recentSearches', () => {
     skipped.notSearched('no-season');
     skipped.answered(0);
 
-    expect(searches.list().map(({ outcome, note, titleStageSkipped }) => ({ outcome, note, titleStageSkipped }))).toEqual([
-      { outcome: 'not-searched', note: 'no-season', titleStageSkipped: null },
+    expect(saved.map(({ outcome, note, titleStageSkipped }) => ({ outcome, note, titleStageSkipped }))).toEqual([
       { outcome: 'nothing', note: null, titleStageSkipped: 'no-connection' },
+      { outcome: 'not-searched', note: 'no-season', titleStageSkipped: null },
     ]);
   });
 
-  test('a failed search is listed with the stages that ran before it failed', () => {
-    const searches = createRecentSearches();
+  test('a failed search is handed on once, with the stages that ran before it failed', () => {
+    const { searches, saved } = recording();
 
     const record = searches.start(episodeRequest(), AT);
     record.stage({ matcher: 'episode-title', query: 'Beyblade Play It Again Dizzi' }, [result('aaaaaaaaaaa')]);
     record.failed('search-failed');
     record.answered(3);
 
-    expect(searches.list()).toHaveLength(1);
-    expect(searches.list()[0]).toMatchObject({ outcome: 'failed', offered: 0, note: 'search-failed' });
-    expect(searches.list()[0].stages).toHaveLength(1);
-  });
-
-  test('keeps the newest searches and drops the oldest past the limit', () => {
-    const searches = createRecentSearches();
-
-    for (let index = 0; index < DEFAULT_MAX_ENTRIES + 5; index += 1) {
-      searches.start(episodeRequest({ episode: index }), minutesLater(index)).answered(0);
-    }
-
-    const list = searches.list();
-    expect(list).toHaveLength(50);
-    expect(list[0].asked.episode).toBe(54);
-    expect(list[49].asked.episode).toBe(5);
-  });
-
-  describe('the no-query feed, asked on every RSS sync', () => {
-    function askPlaceholder(searches, kind, at) {
-      const record = searches.start(rssRequest(kind), at);
-      record.notSearched('no-query');
-      record.answered(0);
-    }
-
-    test('shares one row per kind, counted, at the time of the latest request', () => {
-      const searches = createRecentSearches();
-
-      askPlaceholder(searches, 'tv', AT);
-      askPlaceholder(searches, 'movie', minutesLater(1));
-      askPlaceholder(searches, 'tv', minutesLater(15));
-
-      expect(searches.list().map(({ kind, count, at, firstAt }) => ({ kind, count, at, firstAt }))).toEqual([
-        { kind: 'tv', count: 2, at: '2025-06-01T10:15:00.000Z', firstAt: '2025-06-01T10:00:00.000Z' },
-        { kind: 'movie', count: 1, at: '2025-06-01T10:01:00.000Z', firstAt: '2025-06-01T10:01:00.000Z' },
-      ]);
-    });
-
-    test('never pushes a real search out of the list', () => {
-      const searches = createRecentSearches({ max: 3 });
-      searches.start(episodeRequest(), AT).answered(0);
-
-      for (let index = 1; index <= 10; index += 1) askPlaceholder(searches, 'tv', minutesLater(index));
-
-      expect(searches.list().map(({ shape, count }) => ({ shape, count }))).toEqual([
-        { shape: 'rss', count: 10 },
-        { shape: 'episode', count: 1 },
-      ]);
-    });
-
-    test('does not fold other requests that ran no search', () => {
-      const searches = createRecentSearches();
-
-      for (let index = 0; index < 2; index += 1) {
-        const record = searches.start(episodeRequest({ shape: 'empty' }), minutesLater(index));
-        record.notSearched('no-season');
-        record.answered(0);
-      }
-
-      expect(searches.list().map(({ count }) => count)).toEqual([1, 1]);
-    });
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({ outcome: 'failed', offered: 0, note: 'search-failed' });
+    expect(saved[0].stages).toHaveLength(1);
   });
 
   test('cuts overlong text', () => {
-    const searches = createRecentSearches();
+    const { searches, saved } = recording();
     const long = 'x'.repeat(500);
     const video = result('aaaaaaaaaaa', { title: long, channelName: long });
 
@@ -169,7 +117,7 @@ describe('recentSearches', () => {
     stage.offer(video, long);
     record.answered(1);
 
-    const [entry] = searches.list();
+    const [entry] = saved;
     const [candidate] = entry.stages[0].candidates;
     expect([
       entry.asked.text, entry.stages[0].query, candidate.title, candidate.channelName, candidate.releaseTitle,
@@ -177,7 +125,7 @@ describe('recentSearches', () => {
   });
 
   test('ignores a result the stage was not started with', () => {
-    const searches = createRecentSearches();
+    const { searches, saved } = recording();
     const record = searches.start(episodeRequest(), AT);
     const stage = record.stage({ matcher: 'episode-code', query: 'Beyblade S01E29' }, [result('aaaaaaaaaaa')]);
 
@@ -185,7 +133,7 @@ describe('recentSearches', () => {
     stage.reject(result('zzzzzzzzzzz'), 'too-short');
     record.answered(0);
 
-    expect(searches.list()[0].stages[0].candidates).toEqual([
+    expect(saved[0].stages[0].candidates).toEqual([
       expect.objectContaining({ youtubeId: 'aaaaaaaaaaa', outcome: 'rejected', reason: null }),
     ]);
   });

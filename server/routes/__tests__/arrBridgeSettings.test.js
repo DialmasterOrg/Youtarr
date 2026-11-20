@@ -17,7 +17,10 @@ const STATUS = {
 const SAVED = { ok: true, appName: 'Sonarr', version: '4.0.20.3014', connection: { url: 'http://sonarr:8989', keySet: true } };
 const GRAB = { id: 'g1', releaseTitle: 'Beyblade.S01E29.1080p.WEB-DL-X', state: 'ready' };
 
+const GRAB_PAGE = { grabs: [GRAB], total: 21, page: 2, pageSize: 20 };
+
 const SEARCH = { id: 1, shape: 'episode', outcome: 'nothing', asked: { text: 'Beyblade' }, stages: [] };
+const SEARCH_PAGE = { searches: [SEARCH], total: 21, page: 3, pageSize: 10 };
 
 function makeApp({ settings = {}, verifyToken, limiter, listRecentGrabs, listRecentSearches } = {}) {
   const arrBridge = {
@@ -32,8 +35,8 @@ function makeApp({ settings = {}, verifyToken, limiter, listRecentGrabs, listRec
       checkSharedFolder: jest.fn().mockResolvedValue({ ok: true, visible: true, path: '/data/.arr-staging' }),
       ...settings,
     },
-    listRecentGrabs: listRecentGrabs || jest.fn().mockResolvedValue([GRAB]),
-    listRecentSearches: listRecentSearches || jest.fn(() => [SEARCH]),
+    listRecentGrabs: listRecentGrabs || jest.fn().mockResolvedValue(GRAB_PAGE),
+    listRecentSearches: listRecentSearches || jest.fn().mockResolvedValue(SEARCH_PAGE),
   };
   const log = { error: jest.fn(), info: jest.fn() };
   const app = express();
@@ -272,22 +275,22 @@ describe('the Sonarr/Radarr bridge settings routes', () => {
   });
 
   describe('GET /api/arr-bridge/grabs', () => {
-    test('lists the recent grabs', async () => {
+    test('lists a page of the recent grabs', async () => {
       const { app, arrBridge } = makeApp();
 
-      const res = await supertest(app).get('/api/arr-bridge/grabs?limit=20');
+      const res = await supertest(app).get('/api/arr-bridge/grabs?page=2&pageSize=20&q=beyblade');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ grabs: [GRAB] });
-      expect(arrBridge.listRecentGrabs).toHaveBeenCalledWith('20');
+      expect(res.body).toEqual(GRAB_PAGE);
+      expect(arrBridge.listRecentGrabs).toHaveBeenCalledWith({ page: '2', pageSize: '20', q: 'beyblade' });
     });
 
-    test('a repeated limit parameter reads as none', async () => {
+    test('a repeated parameter reads as none', async () => {
       const { app, arrBridge } = makeApp();
 
-      await supertest(app).get('/api/arr-bridge/grabs?limit=5&limit=9');
+      await supertest(app).get('/api/arr-bridge/grabs?page=5&page=9&q=a&q=b');
 
-      expect(arrBridge.listRecentGrabs).toHaveBeenCalledWith(undefined);
+      expect(arrBridge.listRecentGrabs).toHaveBeenCalledWith({ page: undefined, pageSize: undefined, q: undefined });
     });
 
     test('a failure answers 500', async () => {
@@ -302,21 +305,18 @@ describe('the Sonarr/Radarr bridge settings routes', () => {
   });
 
   describe('GET /api/arr-bridge/searches', () => {
-    test('lists the recent searches', async () => {
-      const { app } = makeApp();
+    test('lists a page of the recent searches', async () => {
+      const { app, arrBridge } = makeApp();
 
-      const res = await supertest(app).get('/api/arr-bridge/searches');
+      const res = await supertest(app).get('/api/arr-bridge/searches?page=3&q=bluey');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ searches: [SEARCH] });
+      expect(res.body).toEqual(SEARCH_PAGE);
+      expect(arrBridge.listRecentSearches).toHaveBeenCalledWith({ page: '3', pageSize: undefined, q: 'bluey' });
     });
 
     test('a failure answers 500', async () => {
-      const { app, log } = makeApp({
-        listRecentSearches: jest.fn(() => {
-          throw new Error('broken');
-        }),
-      });
+      const { app, log } = makeApp({ listRecentSearches: jest.fn().mockRejectedValue(new Error('db down')) });
 
       const res = await supertest(app).get('/api/arr-bridge/searches');
 

@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const { Op } = require('sequelize');
 const { FAILED_GRAB_GUARD_DAYS, isValidCategoryName } = require('./arrBridgeConfig');
+const { readListQuery } = require('./listQuery');
 
 const WAITING_STATUSES = ['pending', 'queued'];
 const FINISHED_STATUSES = ['completed', 'failed'];
@@ -11,8 +12,6 @@ const ACTIVE_STATUSES = ['pending', 'queued', 'completed'];
 const MAX_QUEUE_ROWS = 200;
 const DEFAULT_HISTORY_LIMIT = 60;
 const MAX_HISTORY_LIMIT = 200;
-const DEFAULT_RECENT_LIMIT = 50;
-const MAX_RECENT_LIMIT = 100;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -44,7 +43,7 @@ function grabState(row) {
 
 /**
  * @param {Object} deps
- * @param {Object} deps.models - { ArrBridgeGrab }
+ * @param {Object} deps.models - { ArrBridgeGrab, Video }
  * @param {Function} deps.getSettings - () => arrBridgeConfig.readSettings(config)
  * @param {Object} deps.staging
  * @param {Function} deps.wakeExecutor - Runs a new grab without waiting for the sweep
@@ -57,7 +56,7 @@ function createGrabService({
   models, getSettings, staging, wakeExecutor, onHandedOff = async () => {}, now = () => new Date(), logger,
   newId = crypto.randomUUID,
 }) {
-  const { ArrBridgeGrab } = models;
+  const { ArrBridgeGrab, Video } = models;
 
   const categoryFilter = (category) => (typeof category === 'string' && category ? { category } : {});
 
@@ -119,15 +118,33 @@ function createGrabService({
     });
   }
 
+  // The video columns are named as the table has them: Sequelize does not
+  // translate an attribute name inside a `$...$` reference.
+  const matchesGrab = (pattern) => ({
+    [Op.or]: [
+      { release_title: { [Op.like]: pattern } },
+      { youtube_id: { [Op.like]: pattern } },
+      { '$video.youtube_video_name$': { [Op.like]: pattern } },
+      { '$video.youtube_channel_name$': { [Op.like]: pattern } },
+    ],
+  });
+
   /**
-   * For the Settings page's status list: every status, removed grabs too.
-   * @param {unknown} [limit]
+   * One page of the Settings page's grab list: every status, removed grabs
+   * too, each with the video Youtarr holds for it as `video`, if any.
+   * @param {Object} [query] - { page, pageSize, q }, as listQuery reads them
+   * @returns {Promise<{rows: Array<Object>, total: number, page: number, pageSize: number}>} Newest first
    */
-  function listRecent(limit) {
-    return ArrBridgeGrab.findAll({
+  async function listRecent(query) {
+    const { page, pageSize, offset, patterns } = readListQuery(query);
+    const { rows, count } = await ArrBridgeGrab.findAndCountAll({
+      where: patterns.length > 0 ? { [Op.and]: patterns.map(matchesGrab) } : {},
+      include: [{ model: Video, as: 'video', attributes: ['youTubeVideoName', 'youTubeChannelName'], required: false }],
       order: [['created_at', 'DESC'], ['id', 'DESC']],
-      limit: clampLimit(limit, DEFAULT_RECENT_LIMIT, MAX_RECENT_LIMIT),
+      limit: pageSize,
+      offset,
     });
+    return { rows, total: count, page, pageSize };
   }
 
   function markRemoved(id, fromStatuses) {

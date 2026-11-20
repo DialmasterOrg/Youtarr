@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
 import { useArrBridgeSearches } from '../useArrBridgeSearches';
 
 jest.mock('axios', () => ({
@@ -25,35 +25,19 @@ const SEARCH = {
 describe('useArrBridgeSearches', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    axios.get.mockResolvedValue({ data: { searches: [SEARCH] } });
   });
 
-  test('loads the searches with the session token', async () => {
+  test('loads a page of searches and how many there are', async () => {
+    axios.get.mockResolvedValue({ data: { searches: [SEARCH], total: 14, page: 1, pageSize: 10 } });
+
     const { result } = renderHook(() => useArrBridgeSearches('session', true));
 
-    await waitFor(() => expect(result.current.searches).toEqual([SEARCH]));
-
-    expect(axios.get).toHaveBeenCalledWith('/api/arr-bridge/searches', { headers: { 'x-access-token': 'session' } });
-    expect(result.current.loading).toBe(false);
-    expect(result.current.error).toBeNull();
-  });
-
-  test('does not load while the bridge is off or without a session', () => {
-    renderHook(() => useArrBridgeSearches('session', false));
-    renderHook(() => useArrBridgeSearches(null, true));
-
-    expect(axios.get).not.toHaveBeenCalled();
-  });
-
-  test('refresh loads the list again', async () => {
-    const { result } = renderHook(() => useArrBridgeSearches('session', true));
-    await waitFor(() => expect(result.current.searches).toHaveLength(1));
-    axios.get.mockResolvedValue({ data: { searches: [{ ...SEARCH, id: 2 }, SEARCH] } });
-
-    act(() => result.current.refresh());
-
-    await waitFor(() => expect(result.current.searches).toHaveLength(2));
-    expect(axios.get).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(result.current.items).toEqual([SEARCH]));
+    expect(result.current.total).toBe(14);
+    expect(axios.get).toHaveBeenCalledWith('/api/arr-bridge/searches', {
+      headers: { 'x-access-token': 'session' },
+      params: { page: 1, pageSize: 10 },
+    });
   });
 
   test('reports a list that cannot be loaded', async () => {
@@ -62,28 +46,5 @@ describe('useArrBridgeSearches', () => {
     const { result } = renderHook(() => useArrBridgeSearches('session', true));
 
     await waitFor(() => expect(result.current.error).toBe('Could not load the recent searches.'));
-    expect(result.current.searches).toEqual([]);
-  });
-
-  test('an answer without a list reads as empty', async () => {
-    axios.get.mockResolvedValue({ data: {} });
-
-    const { result } = renderHook(() => useArrBridgeSearches('session', true));
-
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.searches).toEqual([]);
-  });
-
-  test('ignores an answer that arrives after unmounting', async () => {
-    let respond: (value: unknown) => void = () => {};
-    axios.get.mockReturnValue(new Promise((resolve) => { respond = resolve; }));
-    const { result, unmount } = renderHook(() => useArrBridgeSearches('session', true));
-
-    unmount();
-    await act(async () => {
-      respond({ data: { searches: [SEARCH] } });
-    });
-
-    expect(result.current.searches).toEqual([]);
   });
 });

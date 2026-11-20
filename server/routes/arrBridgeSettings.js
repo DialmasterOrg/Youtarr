@@ -2,6 +2,11 @@ const express = require('express');
 
 const UNKNOWN_APP = { error: 'Unknown app' };
 
+// A repeated parameter arrives as an array and reads as not given. The
+// bridge service turns the rest into a page, a size and search words.
+const textOf = (value) => (typeof value === 'string' ? value : undefined);
+const listQueryOf = (query) => ({ page: textOf(query.page), pageSize: textOf(query.pageSize), q: textOf(query.q) });
+
 /**
  * Creates the Settings endpoints of the Sonarr/Radarr bridge. Unlike the
  * /arr namespace (routes/arrBridge.js), which Sonarr and Radarr call with
@@ -309,24 +314,42 @@ function createArrBridgeSettingsRoutes({ verifyToken, arrBridgeConnectionLimiter
    * /api/arr-bridge/grabs:
    *   get:
    *     summary: List recent Sonarr/Radarr grabs
-   *     description: The newest grabs, removed ones included, each with a state. "handed-off" means Sonarr or Radarr took the file, by importing it or because it was removed there; the two cannot be told apart.
+   *     description: One page of the grabs, newest first, removed ones included, each with a state. "handed-off" means Sonarr or Radarr took the file, by importing it or because it was removed there; the two cannot be told apart.
    *     tags: [Sonarr/Radarr bridge]
    *     parameters:
    *       - in: query
-   *         name: limit
+   *         name: page
    *         schema:
    *           type: integer
    *           minimum: 1
-   *           maximum: 100
-   *           default: 50
+   *           default: 1
+   *       - in: query
+   *         name: pageSize
+   *         schema:
+   *           type: integer
+   *           minimum: 1
+   *           maximum: 50
+   *           default: 10
+   *       - in: query
+   *         name: q
+   *         description: Search text, at most 100 characters and 5 words. A grab must have every word in its release name, its video id, or the title or channel of the video Youtarr holds.
+   *         schema:
+   *           type: string
    *     responses:
    *       200:
-   *         description: The grabs, newest first
+   *         description: The page of grabs, newest first
    *         content:
    *           application/json:
    *             schema:
    *               type: object
    *               properties:
+   *                 total:
+   *                   type: integer
+   *                   description: How many grabs match, on all pages
+   *                 page:
+   *                   type: integer
+   *                 pageSize:
+   *                   type: integer
    *                 grabs:
    *                   type: array
    *                   items:
@@ -376,8 +399,7 @@ function createArrBridgeSettingsRoutes({ verifyToken, arrBridgeConnectionLimiter
    */
   router.get('/api/arr-bridge/grabs', verifyToken, async (req, res) => {
     try {
-      const limit = typeof req.query.limit === 'string' ? req.query.limit : undefined;
-      return res.json({ grabs: await arrBridge.listRecentGrabs(limit) });
+      return res.json(await arrBridge.listRecentGrabs(listQueryOf(req.query)));
     } catch (err) {
       req.log.error({ err }, 'Failed to read the Sonarr/Radarr grabs');
       return res.status(500).json({ error: 'Could not read the grabs' });
@@ -389,16 +411,42 @@ function createArrBridgeSettingsRoutes({ verifyToken, arrBridgeConnectionLimiter
    * /api/arr-bridge/searches:
    *   get:
    *     summary: List recent Sonarr/Radarr searches
-   *     description: The last 50 searches Sonarr and Radarr sent, newest first, with the YouTube searches each one ran and what became of every result. Kept in memory, so a restart empties the list. It never holds a key or a feed link.
+   *     description: One page of the searches Sonarr and Radarr sent, newest first, with the YouTube searches each one ran and what became of every result. Searches are kept for 30 days, and at most the newest 2,000. The list never holds a key or a feed link.
    *     tags: [Sonarr/Radarr bridge]
+   *     parameters:
+   *       - in: query
+   *         name: page
+   *         schema:
+   *           type: integer
+   *           minimum: 1
+   *           default: 1
+   *       - in: query
+   *         name: pageSize
+   *         schema:
+   *           type: integer
+   *           minimum: 1
+   *           maximum: 50
+   *           default: 10
+   *       - in: query
+   *         name: q
+   *         description: Search text, at most 100 characters and 5 words. A search must have every word in what it asked for - the name with its episode (S01E02), season (S01), air date (2024-05-01) or year.
+   *         schema:
+   *           type: string
    *     responses:
    *       200:
-   *         description: The searches, newest first
+   *         description: The page of searches, newest first
    *         content:
    *           application/json:
    *             schema:
    *               type: object
    *               properties:
+   *                 total:
+   *                   type: integer
+   *                   description: How many searches match, on all pages
+   *                 page:
+   *                   type: integer
+   *                 pageSize:
+   *                   type: integer
    *                 searches:
    *                   type: array
    *                   items:
@@ -482,9 +530,9 @@ function createArrBridgeSettingsRoutes({ verifyToken, arrBridgeConnectionLimiter
    *       500:
    *         description: The searches could not be read
    */
-  router.get('/api/arr-bridge/searches', verifyToken, (req, res) => {
+  router.get('/api/arr-bridge/searches', verifyToken, async (req, res) => {
     try {
-      return res.json({ searches: arrBridge.listRecentSearches() });
+      return res.json(await arrBridge.listRecentSearches(listQueryOf(req.query)));
     } catch (err) {
       req.log.error({ err }, 'Failed to read the Sonarr/Radarr searches');
       return res.status(500).json({ error: 'Could not read the searches' });

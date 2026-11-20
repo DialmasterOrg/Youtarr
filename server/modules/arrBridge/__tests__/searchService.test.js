@@ -968,9 +968,10 @@ describe('searchService', () => {
     });
 
     function recorded(options = {}, extraDeps = {}) {
-      const recentSearches = createRecentSearches();
+      const saved = [];
+      const recentSearches = createRecentSearches({ save: (entry) => saved.push(entry) });
       const { deps } = setup(options);
-      return { service: createSearchService({ ...deps, ...extraDeps, recentSearches }), recentSearches };
+      return { service: createSearchService({ ...deps, ...extraDeps, recentSearches }), saved };
     }
 
     const outcomes = (stage) => stage.candidates.map(({ title, outcome, reason, releaseTitle }) => (
@@ -983,11 +984,11 @@ describe('searchService', () => {
         video('The Office US S01E03'),
         video('The Office US S01E02 Trailer'),
       ];
-      const { service, recentSearches } = recorded({ results });
+      const { service, saved } = recorded({ results });
 
       await service.search(request(episodeQuery()), ORIGIN);
 
-      const [entry] = recentSearches.list();
+      const [entry] = saved;
       expect(entry).toMatchObject({
         kind: 'tv',
         shape: 'episode',
@@ -1014,11 +1015,11 @@ describe('searchService', () => {
         'Beyblade Play It Again Dizzi': [video('Episode 29: Play It Again Dizzi!', { duration: 6 })],
         'Beyblade S01E29': [video('Beyblade S01E29', { channelName: 'Uploads', duration: 1320 })],
       };
-      const { service, recentSearches } = recorded({ results, catalog: resolving(beybladeEpisode()) });
+      const { service, saved } = recorded({ results, catalog: resolving(beybladeEpisode()) });
 
       await service.search(request(beybladeQuery), ORIGIN);
 
-      const [entry] = recentSearches.list();
+      const [entry] = saved;
       expect(entry).toMatchObject({ outcome: 'offered', offered: 1, titleStageSkipped: null });
       expect(entry.stages.map(({ matcher, query, results: count }) => ({ matcher, query, count }))).toEqual([
         { matcher: 'episode-title', query: 'Beyblade Play It Again Dizzi', count: 1 },
@@ -1037,11 +1038,11 @@ describe('searchService', () => {
 
     test('a video whose grab failed lately is listed with that reason', async () => {
       const failed = video('The Office US S01E02');
-      const { service, recentSearches } = recorded({ results: [failed], failedIds: [failed.youtubeId] });
+      const { service, saved } = recorded({ results: [failed], failedIds: [failed.youtubeId] });
 
       await service.search(request(episodeQuery()), ORIGIN);
 
-      const [entry] = recentSearches.list();
+      const [entry] = saved;
       expect(entry).toMatchObject({ outcome: 'nothing', offered: 0 });
       expect(entry.stages[0].candidates[0]).toMatchObject({ outcome: 'rejected', reason: 'failed-recently' });
     });
@@ -1051,11 +1052,11 @@ describe('searchService', () => {
         video('Beyblade Episode 29: Play it Again Dizzi!', { channelName: 'Some Uploader', duration: 1318 }),
         video('Episode 29: Play it Again Dizzi!', { channelName: 'Beyblade', duration: 1318 }),
       ];
-      const { service, recentSearches } = recorded({ results, catalog: resolving(beybladeEpisode()) });
+      const { service, saved } = recorded({ results, catalog: resolving(beybladeEpisode()) });
 
       await service.search(request(beybladeQuery), ORIGIN);
 
-      const reasons = recentSearches.list()[0].stages[0].candidates.map(({ channelName, outcome, reason }) => (
+      const reasons = saved[0].stages[0].candidates.map(({ channelName, outcome, reason }) => (
         { channelName, outcome, reason }
       ));
       expect(reasons).toEqual([
@@ -1066,11 +1067,11 @@ describe('searchService', () => {
 
     test('a second video with the same release name is listed as a duplicate', async () => {
       const results = [video('The Office US S01E02'), video('The Office US S01E02 HD')];
-      const { service, recentSearches } = recorded({ results });
+      const { service, saved } = recorded({ results });
 
       await service.search(request(episodeQuery()), ORIGIN);
 
-      expect(outcomes(recentSearches.list()[0].stages[0]).map(({ outcome, reason }) => ({ outcome, reason }))).toEqual([
+      expect(outcomes(saved[0].stages[0]).map(({ outcome, reason }) => ({ outcome, reason }))).toEqual([
         { outcome: 'offered', reason: null },
         { outcome: 'rejected', reason: 'duplicate-name' },
       ]);
@@ -1082,13 +1083,13 @@ describe('searchService', () => {
         video('The Office US S01E02', { channelName: 'Second' }),
         video('The Office US S01E02', { channelName: 'Third' }),
       ];
-      const { service, recentSearches } = recorded({ results });
+      const { service, saved } = recorded({ results });
 
       const items = await service.search(request(episodeQuery({ limit: '1' })), ORIGIN);
 
       expect(items).toHaveLength(1);
-      expect(recentSearches.list()[0].offered).toBe(1);
-      expect(recentSearches.list()[0].stages[0].candidates.map(({ reason }) => reason)).toEqual([
+      expect(saved[0].offered).toBe(1);
+      expect(saved[0].stages[0].candidates.map(({ reason }) => reason)).toEqual([
         null, 'over-limit', 'over-limit',
       ]);
     });
@@ -1104,12 +1105,12 @@ describe('searchService', () => {
       ],
       ['text with nothing usable', episodeQuery({ title: '!!!' }), {}, 'no-search-text'],
     ])('%s is listed as not searched, with the reason', async (_name, query, options, note) => {
-      const { service, recentSearches } = recorded(options);
+      const { service, saved } = recorded(options);
 
       await service.search(request(query), ORIGIN);
 
-      expect(recentSearches.list()).toHaveLength(1);
-      expect(recentSearches.list()[0]).toMatchObject({ outcome: 'not-searched', offered: 0, note, stages: [] });
+      expect(saved).toHaveLength(1);
+      expect(saved[0]).toMatchObject({ outcome: 'not-searched', offered: 0, note, stages: [] });
     });
 
     test.each([
@@ -1117,12 +1118,12 @@ describe('searchService', () => {
       ['search-failed', 'search-failed'],
     ])('a search that could not run (%s) is listed as failed', async (reason, note) => {
       const queue = { run: jest.fn().mockRejectedValue(new SearchUnavailableError(reason)) };
-      const { service, recentSearches } = recorded({}, { queue });
+      const { service, saved } = recorded({}, { queue });
 
       await expect(service.search(request(episodeQuery()), ORIGIN)).rejects.toBeInstanceOf(SearchUnavailableError);
 
-      expect(recentSearches.list()).toHaveLength(1);
-      expect(recentSearches.list()[0]).toMatchObject({ outcome: 'failed', offered: 0, note, stages: [] });
+      expect(saved).toHaveLength(1);
+      expect(saved[0]).toMatchObject({ outcome: 'failed', offered: 0, note, stages: [] });
     });
 
     test.each([
@@ -1132,34 +1133,34 @@ describe('searchService', () => {
       ['no-runtime', SONARR, beybladeEpisode({ runtimeSeconds: null })],
     ])('says why an episode was not searched by its title: %s', async (reason, config, episode) => {
       const catalog = episode === undefined ? undefined : resolving(episode);
-      const { service, recentSearches } = recorded({ config, catalog });
+      const { service, saved } = recorded({ config, catalog });
 
       await service.search(request(beybladeQuery), ORIGIN);
 
-      const [entry] = recentSearches.list();
+      const [entry] = saved;
       expect(entry.titleStageSkipped).toBe(reason);
       expect(entry.stages.map(({ matcher }) => matcher)).toEqual(['episode-code']);
     });
 
     test('a season, daily or movie request carries no title-stage reason', async () => {
-      const { service, recentSearches } = recorded();
+      const { service, saved } = recorded();
 
       await service.search(request({ t: 'search', cat: RADARR_CATS, q: 'Matrix 1999' }), ORIGIN);
 
-      expect(recentSearches.list()[0]).toMatchObject({
+      expect(saved[0]).toMatchObject({
         kind: 'movie', shape: 'movie', asked: { text: 'Matrix', year: 1999 }, titleStageSkipped: null,
       });
-      expect(recentSearches.list()[0].stages[0]).toMatchObject({ matcher: 'movie', query: 'Matrix 1999' });
+      expect(saved[0].stages[0]).toMatchObject({ matcher: 'movie', query: 'Matrix 1999' });
     });
 
     test('never holds the bridge key, a feed link or the address Sonarr used', async () => {
-      const { service, recentSearches } = recorded({ results: [video('The Office US S01E02')] });
+      const { service, saved } = recorded({ results: [video('The Office US S01E02')] });
 
       const items = await service.search(request(episodeQuery()), ORIGIN);
       await service.search(request({ t: 'tvsearch', cat: SONARR_CATS }), ORIGIN);
 
       expect(items[0].link).toContain(KEY);
-      const stored = JSON.stringify(recentSearches.list());
+      const stored = JSON.stringify(saved);
       expect(stored).not.toContain(KEY);
       expect(stored).not.toContain('apikey');
       expect(stored).not.toContain(ORIGIN);

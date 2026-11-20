@@ -334,34 +334,40 @@ describe('arrBridgeService', () => {
       removed_at: REMOVED,
     };
 
-    function withRows(grabs, videos) {
-      const ArrBridgeGrab = { findAll: jest.fn().mockResolvedValue(grabs) };
-      const Video = { findAll: jest.fn().mockResolvedValue(videos) };
-      const { service } = setup({ arrBridgeEnabled: true }, { models: { ArrBridgeGrab, Video, ChannelVideo: {}, Job: {} } });
-      return { service, ArrBridgeGrab, Video };
+    function withRows(rows, count = rows.length) {
+      const ArrBridgeGrab = { findAndCountAll: jest.fn().mockResolvedValue({ rows, count }) };
+      const { service } = setup(
+        { arrBridgeEnabled: true },
+        { models: { ArrBridgeGrab, ArrBridgeSearch: {}, Video: {}, ChannelVideo: {}, Job: {} } }
+      );
+      return { service, ArrBridgeGrab };
     }
 
-    test('describes each grab with its state and the title of the video Youtarr holds', async () => {
-      const { service, ArrBridgeGrab } = withRows([grabRow], [
-        { youtubeId: 'g7VYYfoNaf0', youTubeVideoName: 'BEYBLADE EN Episode 29', youTubeChannelName: 'BEYBLADE Official' },
-      ]);
+    test('describes each grab of the page with its state and the title of the video Youtarr holds', async () => {
+      const video = { youTubeVideoName: 'BEYBLADE EN Episode 29', youTubeChannelName: 'BEYBLADE Official' };
+      const { service, ArrBridgeGrab } = withRows([{ ...grabRow, video }], 31);
 
-      expect(await service.listRecentGrabs('20')).toEqual([{
-        id: grabRow.id,
-        releaseTitle: grabRow.release_title,
-        youtubeId: 'g7VYYfoNaf0',
-        videoTitle: 'BEYBLADE EN Episode 29',
-        channelName: 'BEYBLADE Official',
-        kind: 'tv',
-        category: 'tv',
-        state: 'handed-off',
-        failMessage: null,
-        libraryCopy: null,
-        createdAt: CREATED,
-        completedAt: COMPLETED,
-        removedAt: REMOVED,
-      }]);
-      expect(ArrBridgeGrab.findAll.mock.calls[0][0].limit).toBe(20);
+      expect(await service.listRecentGrabs({ page: '2', pageSize: '20', q: 'beyblade' })).toEqual({
+        grabs: [{
+          id: grabRow.id,
+          releaseTitle: grabRow.release_title,
+          youtubeId: 'g7VYYfoNaf0',
+          videoTitle: 'BEYBLADE EN Episode 29',
+          channelName: 'BEYBLADE Official',
+          kind: 'tv',
+          category: 'tv',
+          state: 'handed-off',
+          failMessage: null,
+          libraryCopy: null,
+          createdAt: CREATED,
+          completedAt: COMPLETED,
+          removedAt: REMOVED,
+        }],
+        total: 31,
+        page: 2,
+        pageSize: 20,
+      });
+      expect(ArrBridgeGrab.findAndCountAll.mock.calls[0][0]).toMatchObject({ limit: 20, offset: 20 });
     });
 
     test.each([
@@ -371,63 +377,93 @@ describe('arrBridgeService', () => {
       ['owned', null],
       [null, null],
     ])('reports a library copy stored as %p as %p', async (stored, shown) => {
-      const { service } = withRows([{ ...grabRow, library_copy: stored }], []);
+      const { service } = withRows([{ ...grabRow, library_copy: stored }]);
 
-      const [grab] = await service.listRecentGrabs();
+      const { grabs: [grab] } = await service.listRecentGrabs();
 
       expect(grab.libraryCopy).toBe(shown);
     });
 
     test('leaves the titles empty for a video Youtarr does not hold', async () => {
-      const { service } = withRows([{ ...grabRow, status: 'failed', fail_message: 'Video unavailable' }], []);
+      const { service } = withRows([{ ...grabRow, status: 'failed', fail_message: 'Video unavailable', video: null }]);
 
-      const [grab] = await service.listRecentGrabs();
+      const { grabs: [grab] } = await service.listRecentGrabs();
 
       expect(grab).toMatchObject({ videoTitle: null, channelName: null, state: 'failed', failMessage: 'Video unavailable' });
     });
 
-    test('asks for no titles when nothing was grabbed', async () => {
-      const { service, Video } = withRows([], []);
+    test('lists nothing when nothing was grabbed', async () => {
+      const { service } = withRows([]);
 
-      expect(await service.listRecentGrabs()).toEqual([]);
-      expect(Video.findAll).not.toHaveBeenCalled();
+      expect(await service.listRecentGrabs()).toEqual({ grabs: [], total: 0, page: 1, pageSize: 10 });
     });
   });
 
   describe('listRecentSearches', () => {
     const ORIGIN = 'http://youtarr:3011';
     const episode = { t: 'tvsearch', cat: '5030,5040', title: 'Bluey', season: '1', ep: '1' };
+    // Resolves once the stored writes that are under way have finished.
+    const stored = () => new Promise((resolve) => {
+      setImmediate(resolve);
+    });
     const makeService = () => {
       const noRows = { findAll: jest.fn().mockResolvedValue([]) };
-      return setup(
+      const ArrBridgeSearch = {
+        ...noRows,
+        create: jest.fn().mockResolvedValue({}),
+        destroy: jest.fn().mockResolvedValue(0),
+        findAndCountAll: jest.fn().mockResolvedValue({ rows: [], count: 0 }),
+      };
+      const { service } = setup(
         { arrBridgeEnabled: true, arrBridgeApiKey: KEY, preferredResolution: '1080' },
         {
           searchVideos: jest.fn().mockResolvedValue([]),
-          models: { ArrBridgeGrab: noRows, Video: noRows, ChannelVideo: noRows, Job: {} },
+          models: { ArrBridgeGrab: noRows, ArrBridgeSearch, Video: noRows, ChannelVideo: noRows, Job: {} },
         }
-      ).service;
+      );
+      return { service, ArrBridgeSearch };
     };
 
-    test('lists the searches the indexer answered, newest first', async () => {
-      const service = makeService();
-      expect(service.listRecentSearches()).toEqual([]);
+    test('stores each search the indexer answered', async () => {
+      const { service, ArrBridgeSearch } = makeService();
 
       await service.newznab.handleApi({ ...episode, apikey: KEY }, ORIGIN);
       await service.newznab.handleApi({ ...episode, title: 'Peppa', apikey: KEY }, ORIGIN);
+      await stored();
 
-      expect(service.listRecentSearches()).toEqual([
-        expect.objectContaining({ shape: 'episode', outcome: 'nothing', asked: expect.objectContaining({ text: 'Peppa' }) }),
-        expect.objectContaining({ shape: 'episode', outcome: 'nothing', asked: expect.objectContaining({ text: 'Bluey' }) }),
+      expect(ArrBridgeSearch.create.mock.calls.map(([row]) => row)).toEqual([
+        expect.objectContaining({ shape: 'episode', outcome: 'nothing', search_text: 'Bluey S01E01' }),
+        expect.objectContaining({ shape: 'episode', outcome: 'nothing', search_text: 'Peppa S01E01' }),
       ]);
     });
 
-    test('a request with a wrong key, and a caps request, are not listed', async () => {
-      const service = makeService();
+    test('a request with a wrong key, and a caps request, are not stored', async () => {
+      const { service, ArrBridgeSearch } = makeService();
 
       await service.newznab.handleApi({ ...episode, apikey: 'wrong' }, ORIGIN);
       await service.newznab.handleApi({ t: 'caps', apikey: KEY }, ORIGIN);
+      await stored();
 
-      expect(service.listRecentSearches()).toEqual([]);
+      expect(ArrBridgeSearch.create).not.toHaveBeenCalled();
+    });
+
+    test('a search is answered even when it cannot be stored', async () => {
+      const { service, ArrBridgeSearch } = makeService();
+      ArrBridgeSearch.create.mockRejectedValue(new Error('db down'));
+
+      const answer = await service.newznab.handleApi({ ...episode, apikey: KEY }, ORIGIN);
+      await stored();
+
+      expect(answer.status).toBe(200);
+    });
+
+    test('reads a page of the stored searches', async () => {
+      const { service, ArrBridgeSearch } = makeService();
+
+      expect(await service.listRecentSearches({ page: '2', q: 'bluey' })).toEqual({
+        searches: [], total: 0, page: 2, pageSize: 10,
+      });
+      expect(ArrBridgeSearch.findAndCountAll.mock.calls[0][0]).toMatchObject({ limit: 10, offset: 10 });
     });
   });
 

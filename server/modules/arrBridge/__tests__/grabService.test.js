@@ -5,6 +5,8 @@ const { createGrabService, grabState } = require('../grabService');
 const NOW = new Date('2025-06-10T12:00:00.000Z');
 const GRAB_ID = '9b89e5bc-8c90-4e72-b245-270fed2eacc2';
 const TITLE = 'The.Office.US.S01E02.1080p.WEB-DL-NBC';
+// Stands for the Video model, which listRecent only passes on.
+const Video = { name: 'Video' };
 
 const fields = (overrides = {}) => ({
   youtubeId: 'abcdefghijk',
@@ -19,11 +21,12 @@ function setup({ existing = null, historyRow = null, updated = 1, failedRows = [
   const ArrBridgeGrab = {
     findOne: jest.fn(async ({ where }) => (where.id ? historyRow : existing)),
     findAll: jest.fn(async ({ where }) => (where.fail_message ? failedRows : [])),
+    findAndCountAll: jest.fn(async () => ({ rows: [], count: 0 })),
     create: jest.fn(async (values) => values),
     update: jest.fn(async () => [updated]),
   };
   const deps = {
-    models: { ArrBridgeGrab },
+    models: { ArrBridgeGrab, Video },
     getSettings: () => ({ categories: [{ name: 'tv', subfolder: null }, { name: 'tv-4k', subfolder: null }] }),
     staging: { remove: jest.fn().mockResolvedValue(undefined) },
     wakeExecutor: jest.fn(),
@@ -254,27 +257,50 @@ describe('grabService', () => {
   });
 
   describe('listRecent', () => {
-    test('reads grabs of every status, newest first', async () => {
+    const VIDEO_TITLES = {
+      model: Video, as: 'video', attributes: ['youTubeVideoName', 'youTubeChannelName'], required: false,
+    };
+
+    test('reads one page of grabs of every status, newest first, each with its video', async () => {
       const { service, ArrBridgeGrab } = setup();
       const rows = [{ id: 'b' }, { id: 'a' }];
-      ArrBridgeGrab.findAll.mockResolvedValue(rows);
+      ArrBridgeGrab.findAndCountAll.mockResolvedValue({ rows, count: 42 });
 
-      expect(await service.listRecent()).toBe(rows);
-      expect(ArrBridgeGrab.findAll).toHaveBeenCalledWith({
+      expect(await service.listRecent()).toEqual({ rows, total: 42, page: 1, pageSize: 10 });
+      expect(ArrBridgeGrab.findAndCountAll).toHaveBeenCalledWith({
+        where: {},
+        include: [VIDEO_TITLES],
         order: [['created_at', 'DESC'], ['id', 'DESC']],
-        limit: 50,
+        limit: 10,
+        offset: 0,
       });
     });
 
-    test.each([
-      [undefined, 50], ['abc', 50], [0, 50], [-3, 50], ['25', 25], [100, 100], [500, 100],
-    ])('a limit of %p reads %p rows', async (limit, expected) => {
+    test('reads the page that was asked for', async () => {
       const { service, ArrBridgeGrab } = setup();
-      ArrBridgeGrab.findAll.mockResolvedValue([]);
 
-      await service.listRecent(limit);
+      const result = await service.listRecent({ page: '3', pageSize: '25' });
 
-      expect(ArrBridgeGrab.findAll.mock.calls[0][0].limit).toBe(expected);
+      expect(result).toMatchObject({ page: 3, pageSize: 25 });
+      expect(ArrBridgeGrab.findAndCountAll.mock.calls[0][0]).toMatchObject({ limit: 25, offset: 50 });
+    });
+
+    test('every word of a search text must be in the release, the video id, the video title or the channel', async () => {
+      const { service, ArrBridgeGrab } = setup();
+      const matching = (pattern) => ({
+        [Op.or]: [
+          { release_title: { [Op.like]: pattern } },
+          { youtube_id: { [Op.like]: pattern } },
+          { '$video.youtube_video_name$': { [Op.like]: pattern } },
+          { '$video.youtube_channel_name$': { [Op.like]: pattern } },
+        ],
+      });
+
+      await service.listRecent({ q: 'office nbc' });
+
+      expect(ArrBridgeGrab.findAndCountAll.mock.calls[0][0].where).toEqual({
+        [Op.and]: [matching('%office%'), matching('%nbc%')],
+      });
     });
   });
 

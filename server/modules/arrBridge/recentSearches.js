@@ -1,8 +1,7 @@
-// The last searches Sonarr and Radarr sent, for the Settings page: what was
-// asked, which YouTube searches ran, and what became of every result. In
-// memory only, so a restart empties it. It is handed request fields, search
-// results and release names, never the origin, a feed link or a key.
-const DEFAULT_MAX_ENTRIES = 50;
+// Records one search Sonarr or Radarr sent, for the Settings page: what was
+// asked, which YouTube searches ran, and what became of every result.
+// searchHistory stores the finished record. It is handed request fields,
+// search results and release names, never the origin, a feed link or a key.
 const MAX_TEXT_LENGTH = 200;
 
 const OUTCOME = Object.freeze({
@@ -60,33 +59,13 @@ function askedOf(request) {
 
 /**
  * @param {Object} [options]
- * @param {number} [options.max] - How many searches are kept
- * @returns {{ start: Function, list: Function }}
+ * @param {Function} [options.save] - (entry) => void; gets each finished record. It must not throw.
+ * @returns {{ start: Function }}
  */
-function createRecentSearches({ max = DEFAULT_MAX_ENTRIES } = {}) {
-  let entries = [];
-  let nextId = 1;
-
-  // Sonarr and Radarr ask the no-query feed on every RSS sync, which would
-  // push every real search out of the list: those requests share one row
-  // per kind, with a count.
-  function add(entry) {
-    const earlier = entry.note === NOTE.NO_QUERY
-      ? entries.find((other) => other.note === NOTE.NO_QUERY && other.kind === entry.kind)
-      : undefined;
-    const stored = {
-      id: nextId,
-      ...entry,
-      count: (earlier?.count ?? 0) + 1,
-      firstAt: earlier?.firstAt ?? entry.at,
-    };
-    nextId += 1;
-    entries = [stored, ...entries.filter((other) => other !== earlier)].slice(0, max);
-  }
-
+function createRecentSearches({ save = () => {} } = {}) {
   /**
-   * Starts the record of one request. Nothing is listed until answered() or
-   * failed() is called; only the first of those counts.
+   * Starts the record of one request. Nothing is handed on until answered()
+   * or failed() is called; only the first of those counts.
    * @param {Object} request - From parseNewznabRequest
    * @param {Date} at - When the request arrived
    * @returns {{ stage: Function, skipTitleStage: Function, notSearched: Function,
@@ -101,8 +80,8 @@ function createRecentSearches({ max = DEFAULT_MAX_ENTRIES } = {}) {
     function finish(outcome, offered) {
       if (finished) return;
       finished = true;
-      add({
-        at: at.toISOString(),
+      save({
+        at,
         kind: request.kind ?? null,
         shape: request.shape,
         asked: askedOf(request),
@@ -156,14 +135,7 @@ function createRecentSearches({ max = DEFAULT_MAX_ENTRIES } = {}) {
     };
   }
 
-  /**
-   * @returns {Array<Object>} The searches, newest first
-   */
-  function list() {
-    return [...entries];
-  }
-
-  return { start, list };
+  return { start };
 }
 
-module.exports = { createRecentSearches, OUTCOME, NOTE, TITLE_STAGE_SKIPPED, DEFAULT_MAX_ENTRIES };
+module.exports = { createRecentSearches, OUTCOME, NOTE, TITLE_STAGE_SKIPPED };

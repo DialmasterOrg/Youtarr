@@ -61,7 +61,28 @@ const mockConnections = (overrides = {}) => {
   return value;
 };
 
-const setupSection = (overrides: Partial<React.ComponentProps<typeof ArrBridgeSection>> = {}) => {
+const SETUP_URL = '/settings/sonarr-radarr';
+const ACTIVITY_URL = '/settings/sonarr-radarr?tab=activity';
+const ACTIVITY_HEADINGS = ['Recent grabs', 'Recent searches'];
+
+const pagedList = (overrides = {}) => ({
+  items: [],
+  total: 0,
+  page: 1,
+  pageSize: 10,
+  query: '',
+  loading: false,
+  error: null,
+  setPage: jest.fn(),
+  setQuery: jest.fn(),
+  refresh: jest.fn(),
+  ...overrides,
+});
+
+const setupSection = (
+  overrides: Partial<React.ComponentProps<typeof ArrBridgeSection>> = {},
+  url: string = SETUP_URL
+) => {
   const config = overrides.config ?? createConfig();
   const props: React.ComponentProps<typeof ArrBridgeSection> = {
     token: 'session',
@@ -71,9 +92,11 @@ const setupSection = (overrides: Partial<React.ComponentProps<typeof ArrBridgeSe
     setSnackbar: jest.fn(),
     ...overrides,
   };
-  renderWithProviders(<ArrBridgeSection {...props} />);
+  renderWithProviders(<ArrBridgeSection {...props} />, { initialEntries: [url] });
   return props;
 };
+
+const tab = (name: string) => screen.getByRole('tab', { name });
 
 describe('ArrBridgeSection', () => {
   beforeEach(() => {
@@ -81,8 +104,8 @@ describe('ArrBridgeSection', () => {
     useArrBridgeKey.mockReturnValue({
       bridgeKey: KEY, loading: false, error: null, regenerating: false, regenerate: jest.fn(),
     });
-    useArrBridgeGrabs.mockReturnValue({ grabs: [], loading: false, error: null, refresh: jest.fn() });
-    useArrBridgeSearches.mockReturnValue({ searches: [], loading: false, error: null, refresh: jest.fn() });
+    useArrBridgeGrabs.mockReturnValue(pagedList());
+    useArrBridgeSearches.mockReturnValue(pagedList());
     useArrBridgeFolderCheck.mockReturnValue({
       results: { sonarr: { ok: true, visible: true, path: IN_YOUTARR } }, checking: false, recheck: jest.fn(),
     });
@@ -98,9 +121,17 @@ describe('ArrBridgeSection', () => {
       expect(screen.getByRole('checkbox', { name: 'Enable the Sonarr / Radarr bridge' })).not.toBeChecked();
       expect(screen.getByText(/does not announce new uploads/)).toBeInTheDocument();
       expect(screen.queryByLabelText('API key')).not.toBeInTheDocument();
-      for (const heading of [...STEP_HEADINGS, 'Downloads', 'Matching', 'Recent grabs', 'Recent searches']) {
+      for (const heading of [...STEP_HEADINGS, 'Downloads', 'Matching', ...ACTIVITY_HEADINGS]) {
         expect(screen.queryByRole('heading', { name: heading })).not.toBeInTheDocument();
       }
+    });
+
+    test('has no tabs, and a link to the activity still shows the switch', () => {
+      setupSection({ config: createConfig({ arrBridgeEnabled: false }) }, ACTIVITY_URL);
+
+      expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: 'Enable the Sonarr / Radarr bridge' })).toBeVisible();
+      expect(screen.queryByRole('heading', { name: 'Recent grabs' })).not.toBeInTheDocument();
     });
 
     test('asks the server for nothing, because the key request would create a key', () => {
@@ -126,45 +157,121 @@ describe('ArrBridgeSection', () => {
     setupSection();
 
     const headings = screen.getAllByRole('heading').map((heading) => heading.textContent);
-    const order = [...STEP_HEADINGS, 'Downloads', 'Matching', 'Recent grabs', 'Recent searches'].map((name) => headings.indexOf(name));
+    const order = [...STEP_HEADINGS, 'Downloads', 'Matching'].map((name) => headings.indexOf(name));
     expect(order.every((index) => index >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(screen.getByText('Step 1: Turn it on and save')).toBeInTheDocument();
   });
 
-  test('lists the recent searches, and Refresh asks for them again', () => {
-    const refresh = jest.fn();
-    useArrBridgeSearches.mockReturnValue({
-      searches: [{
-        id: 1,
-        at: '2025-06-10T10:00:00.000Z',
-        firstAt: '2025-06-10T10:00:00.000Z',
-        count: 1,
-        kind: 'tv',
-        shape: 'episode',
-        asked: {
-          text: 'Beyblade', textSource: 'title', season: 1, episode: 29, year: null, month: null, day: null, limit: 100,
-        },
-        outcome: 'nothing',
-        offered: 0,
-        note: null,
-        titleStageSkipped: null,
-        stages: [],
-      }],
-      loading: false,
-      error: null,
-      refresh,
+  describe('switched on but not saved yet', () => {
+    const unsaved = (url?: string) => {
+      const config = createConfig();
+      return setupSection({ config, savedConfig: { ...config, arrBridgeEnabled: false } }, url);
+    };
+
+    test('has no tabs yet', () => {
+      unsaved();
+
+      expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: STEP_HEADINGS[0] })).toBeVisible();
     });
-    setupSection();
 
-    const list = screen.getByRole('list', { name: 'Recent searches' });
-    expect(within(list).getByText('Beyblade S01E29')).toBeInTheDocument();
-    expect(within(list).getByText('Nothing offered')).toBeInTheDocument();
-    expect(useArrBridgeSearches).toHaveBeenCalledWith('session', true);
+    test('a link to the activity keeps the switch and the steps on screen', () => {
+      unsaved(ACTIVITY_URL);
 
-    const refreshButtons = screen.getAllByRole('button', { name: 'Refresh' });
-    fireEvent.click(refreshButtons[refreshButtons.length - 1]);
-    expect(refresh).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('checkbox', { name: 'Enable the Sonarr / Radarr bridge' })).toBeVisible();
+      expect(screen.getByText('Step 1: Turn it on and save')).toBeVisible();
+      expect(screen.queryByRole('heading', { name: 'Recent grabs' })).not.toBeInTheDocument();
+      expect(useArrBridgeGrabs).toHaveBeenLastCalledWith('session', false);
+    });
+  });
+
+  describe('the Setup and Activity tabs', () => {
+    const SEARCH = {
+      id: 1,
+      at: '2025-06-10T10:00:00.000Z',
+      firstAt: '2025-06-10T10:00:00.000Z',
+      count: 1,
+      kind: 'tv',
+      shape: 'episode',
+      asked: {
+        text: 'Beyblade', textSource: 'title', season: 1, episode: 29, year: null, month: null, day: null, limit: 100,
+      },
+      outcome: 'nothing',
+      offered: 0,
+      note: null,
+      titleStageSkipped: null,
+      stages: [],
+    };
+
+    test('opens on Setup, with the lists neither shown nor loaded', () => {
+      setupSection();
+
+      expect(tab('Setup')).toHaveAttribute('aria-selected', 'true');
+      expect(tab('Activity')).toHaveAttribute('aria-selected', 'false');
+      for (const heading of ACTIVITY_HEADINGS) {
+        expect(screen.queryByRole('heading', { name: heading })).not.toBeInTheDocument();
+      }
+      expect(useArrBridgeGrabs).toHaveBeenLastCalledWith('session', false);
+      expect(useArrBridgeSearches).toHaveBeenLastCalledWith('session', false);
+    });
+
+    test('Activity shows and loads the two lists in place of the setup', async () => {
+      setupSection();
+
+      await userEvent.click(tab('Activity'));
+
+      expect(tab('Activity')).toHaveAttribute('aria-selected', 'true');
+      for (const heading of ACTIVITY_HEADINGS) {
+        expect(screen.getByRole('heading', { name: heading })).toBeVisible();
+      }
+      expect(screen.queryByRole('heading', { name: STEP_HEADINGS[0] })).not.toBeInTheDocument();
+      expect(screen.getByText('Step 1: Turn it on and save')).not.toBeVisible();
+      expect(useArrBridgeGrabs).toHaveBeenLastCalledWith('session', true);
+      expect(useArrBridgeSearches).toHaveBeenLastCalledWith('session', true);
+    });
+
+    test('a link with ?tab=activity opens on the lists', () => {
+      useArrBridgeSearches.mockReturnValue(pagedList({ items: [SEARCH], total: 1 }));
+      setupSection({}, ACTIVITY_URL);
+
+      expect(tab('Activity')).toHaveAttribute('aria-selected', 'true');
+      const list = screen.getByRole('list', { name: 'Recent searches' });
+      expect(within(list).getByText('Beyblade S01E29')).toBeInTheDocument();
+      expect(within(list).getByText('Nothing offered')).toBeInTheDocument();
+    });
+
+    test('Refresh on a list asks for it again', () => {
+      const searches = pagedList({ items: [SEARCH], total: 1 });
+      useArrBridgeSearches.mockReturnValue(searches);
+      setupSection({}, ACTIVITY_URL);
+
+      const refreshButtons = screen.getAllByRole('button', { name: 'Refresh' });
+      fireEvent.click(refreshButtons[refreshButtons.length - 1]);
+
+      expect(searches.refresh).toHaveBeenCalledTimes(1);
+    });
+
+    test('Setup brings the steps back', async () => {
+      setupSection({}, ACTIVITY_URL);
+
+      await userEvent.click(tab('Setup'));
+
+      expect(screen.getByRole('heading', { name: STEP_HEADINGS[0] })).toBeVisible();
+      expect(screen.queryByRole('heading', { name: 'Recent grabs' })).not.toBeInTheDocument();
+    });
+
+    test('a key typed into a connection is still there after a look at the activity', async () => {
+      setupSection();
+      const keyField = () => within(screen.getByRole('group', { name: 'Radarr connection', hidden: true }))
+        .getByLabelText('Radarr API key');
+      fireEvent.change(keyField(), { target: { value: 'typed-key' } });
+
+      await userEvent.click(tab('Activity'));
+      await userEvent.click(tab('Setup'));
+
+      expect(keyField()).toHaveValue('typed-key');
+    });
   });
 
   test('shows every part of the page while the bridge is on', () => {
