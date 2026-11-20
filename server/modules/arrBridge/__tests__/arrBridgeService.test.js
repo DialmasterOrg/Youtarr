@@ -25,7 +25,15 @@ function fakeConfigModule(initial) {
 
 function setup(config, overrides = {}) {
   const configModule = fakeConfigModule(config);
-  const executor = { start: jest.fn(), stop: jest.fn(), wake: jest.fn(), handleJobEnded: jest.fn() };
+  const executor = {
+    start: jest.fn(),
+    stop: jest.fn(),
+    wake: jest.fn(),
+    handleJobEnded: jest.fn(),
+    retryNow: jest.fn().mockResolvedValue('started'),
+    blockStatus: jest.fn(() => ({ active: false, nextTryAt: null })),
+    isRetryRequested: jest.fn(() => false),
+  };
   const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
   const service = createArrBridgeService({
     configModule,
@@ -36,7 +44,7 @@ function setup(config, overrides = {}) {
     ...overrides,
     downloader: jest.fn(),
     jobLookup: jest.fn(),
-    storageGuard: { isPausedError: () => false, getStatus: () => ({ paused: false }) },
+    storageGuard: { isPausedError: () => false, getStatus: () => ({ paused: overrides.paused === true }) },
     isArchived: () => false,
     getActivity: () => null,
     logger,
@@ -315,6 +323,44 @@ describe('arrBridgeService', () => {
     expect(configModule.updateConfig).toHaveBeenCalledTimes(1);
   });
 
+  describe('retryGrab', () => {
+    const GRAB_ID = '9b89e5bc-8c90-4e72-b245-270fed2eacc2';
+
+    test('has the executor try the grab now and passes its answer on', async () => {
+      const { service, executor } = setup({ arrBridgeEnabled: true });
+      executor.retryNow.mockResolvedValue('queued');
+
+      await expect(service.retryGrab(GRAB_ID)).resolves.toBe('queued');
+      expect(executor.retryNow).toHaveBeenCalledWith(GRAB_ID);
+    });
+
+    test.each([['not-a-grab-id'], [undefined], [['a', 'b']]])('answers null for the id %p without asking the executor', async (id) => {
+      const { service, executor } = setup({ arrBridgeEnabled: true });
+
+      await expect(service.retryGrab(id)).resolves.toBeNull();
+      expect(executor.retryNow).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('retryGrab while the bridge is off', () => {
+    test('answers null without asking the executor', async () => {
+      const { service, executor } = setup({ arrBridgeEnabled: false });
+
+      await expect(service.retryGrab('9b89e5bc-8c90-4e72-b245-270fed2eacc2')).resolves.toBeNull();
+      expect(executor.retryNow).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('the grab executor', () => {
+    test('is told which cookie file is in use and whether downloads are paused', () => {
+      const getCookieKey = () => 'cookie-key';
+      const { executor } = setup({ arrBridgeEnabled: true }, { getCookieKey, paused: true });
+
+      expect(executor.deps.getCookieKey).toBe(getCookieKey);
+      expect(executor.deps.isPaused()).toBe(true);
+    });
+  });
+
   describe('listRecentGrabs', () => {
     const CREATED = new Date('2025-06-10T10:00:00.000Z');
     const COMPLETED = new Date('2025-06-10T10:05:00.000Z');
@@ -334,13 +380,13 @@ describe('arrBridgeService', () => {
       removed_at: REMOVED,
     };
 
-    function withRows(rows, count = rows.length) {
+    function withRows(rows, count = rows.length, { paused = false } = {}) {
       const ArrBridgeGrab = { findAndCountAll: jest.fn().mockResolvedValue({ rows, count }) };
-      const { service } = setup(
+      const { service, executor } = setup(
         { arrBridgeEnabled: true },
-        { models: { ArrBridgeGrab, ArrBridgeSearch: {}, Video: {}, ChannelVideo: {}, Job: {} } }
+        { models: { ArrBridgeGrab, ArrBridgeSearch: {}, Video: {}, ChannelVideo: {}, Job: {} }, paused }
       );
-      return { service, ArrBridgeGrab };
+      return { service, ArrBridgeGrab, executor };
     }
 
     test('describes each grab of the page with its state and the title of the video Youtarr holds', async () => {
@@ -358,6 +404,11 @@ describe('arrBridgeService', () => {
           category: 'tv',
           state: 'handed-off',
           failMessage: null,
+          blockedAt: null,
+          nextTryAt: null,
+          retryRequested: false,
+          downloadsPaused: false,
+          hiddenUntil: null,
           libraryCopy: null,
           createdAt: CREATED,
           completedAt: COMPLETED,
@@ -390,6 +441,77 @@ describe('arrBridgeService', () => {
       const { grabs: [grab] } = await service.listRecentGrabs();
 
       expect(grab).toMatchObject({ videoTitle: null, channelName: null, state: 'failed', failMessage: 'Video unavailable' });
+    });
+
+    describe('while YouTube blocks downloads', () => {
+      const BLOCKED = new Date('2025-06-10T10:02:00.000Z');
+      const NEXT_TRY = new Date('2025-06-10T11:02:00.000Z');
+      const waitingRow = { ...grabRow, status: 'pending', completed_at: null, removed_at: null };
+
+      test('shows a grab whose download was blocked as blocked, with the next try', async () => {
+        const { service, executor } = withRows([{ ...waitingRow, blocked_at: BLOCKED }]);
+        executor.blockStatus.mockReturnValue({ active: true, nextTryAt: NEXT_TRY });
+
+        const { grabs: [grab] } = await service.listRecentGrabs();
+
+        expect(grab).toMatchObject({ state: 'blocked', blockedAt: BLOCKED, nextTryAt: NEXT_TRY, failMessage: null });
+      });
+
+      test('shows a grab that waits behind another grab\'s block as blocked, without a block of its own', async () => {
+        const { service, executor } = withRows([{ ...waitingRow, blocked_at: null }]);
+        executor.blockStatus.mockReturnValue({ active: true, nextTryAt: NEXT_TRY });
+
+        const { grabs: [grab] } = await service.listRecentGrabs();
+
+        expect(grab).toMatchObject({ state: 'blocked', blockedAt: null, nextTryAt: NEXT_TRY });
+      });
+
+      test('says which blocked grab has a "Try again" still to be carried out', async () => {
+        const other = { ...waitingRow, id: '3c1d6a52-0d6c-4f0e-9a3b-5f2f7f1f0a11', blocked_at: BLOCKED };
+        const { service, executor } = withRows([{ ...waitingRow, blocked_at: BLOCKED }, other]);
+        executor.blockStatus.mockReturnValue({ active: true, nextTryAt: NEXT_TRY });
+        executor.isRetryRequested.mockImplementation((id) => id === other.id);
+
+        const { grabs } = await service.listRecentGrabs();
+
+        expect(grabs.map((grab) => grab.retryRequested)).toEqual([false, true]);
+      });
+
+      test('says on blocked grabs that downloads are paused, and on no other grab', async () => {
+        const { service, executor } = withRows([{ ...waitingRow, blocked_at: BLOCKED }, grabRow], 2, { paused: true });
+        executor.blockStatus.mockReturnValue({ active: true, nextTryAt: NEXT_TRY });
+        executor.isRetryRequested.mockReturnValue(true);
+
+        const { grabs } = await service.listRecentGrabs();
+
+        expect(grabs.map(({ downloadsPaused, retryRequested }) => ({ downloadsPaused, retryRequested }))).toEqual([
+          { downloadsPaused: true, retryRequested: true },
+          { downloadsPaused: false, retryRequested: false },
+        ]);
+      });
+
+      test('gives the next try only to the grabs that wait for it', async () => {
+        const { service, executor } = withRows([{ ...waitingRow, status: 'queued', blocked_at: BLOCKED }, grabRow]);
+        executor.blockStatus.mockReturnValue({ active: true, nextTryAt: NEXT_TRY });
+
+        const { grabs } = await service.listRecentGrabs();
+
+        expect(grabs.map(({ state, blockedAt, nextTryAt }) => ({ state, blockedAt, nextTryAt }))).toEqual([
+          { state: 'downloading', blockedAt: null, nextTryAt: null },
+          { state: 'handed-off', blockedAt: null, nextTryAt: null },
+        ]);
+      });
+    });
+
+    test('says until when a failed grab\'s video stays hidden from searches', async () => {
+      const failedAt = new Date(Date.now() - 60 * 60 * 1000);
+      const { service } = withRows([{
+        ...grabRow, status: 'failed', fail_message: 'Video unavailable', completed_at: failedAt, video: null,
+      }]);
+
+      const { grabs: [grab] } = await service.listRecentGrabs();
+
+      expect(grab.hiddenUntil).toEqual(new Date(failedAt.getTime() + 7 * 24 * 60 * 60 * 1000));
     });
 
     test('lists nothing when nothing was grabbed', async () => {

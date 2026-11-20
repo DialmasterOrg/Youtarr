@@ -1,6 +1,6 @@
 /* eslint-env jest */
 
-const { adviseFailures, mergeDiagnoses } = require('../failureAdvisor');
+const { adviseFailures, mergeDiagnoses, isYoutubeBlock } = require('../failureAdvisor');
 
 const failedVideo = (overrides = {}) => ({
   youtubeId: 'abc123def45',
@@ -218,6 +218,26 @@ describe('failureAdvisor', () => {
       expect(mergeDiagnoses([diagnosis()], undefined)).toHaveLength(1);
       expect(mergeDiagnoses(null, null)).toEqual([]);
       expect(mergeDiagnoses([null], [diagnosis()])).toHaveLength(1);
+    });
+  });
+
+  describe('isYoutubeBlock', () => {
+    it.each([
+      'http-403-cookies-enabled',
+      'http-403-cookies-disabled',
+      'bot-check-cookies-enabled',
+      'bot-check-cookies-disabled',
+    ])('counts %s as a block', (key) => {
+      expect(isYoutubeBlock(key)).toBe(true);
+    });
+
+    it.each([
+      'http-403-anonymous-retry',
+      'bot-check-anonymous-retry',
+      'temp-out-of-space',
+      undefined,
+    ])('does not count %s as a block', (key) => {
+      expect(isYoutubeBlock(key)).toBe(false);
     });
   });
 

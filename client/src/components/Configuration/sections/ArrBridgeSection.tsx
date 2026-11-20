@@ -6,6 +6,7 @@ import { ConfigState, SnackbarState } from '../types';
 import { useArrBridgeKey } from '../hooks/useArrBridgeKey';
 import { useArrBridgeConnections } from '../hooks/useArrBridgeConnections';
 import { useArrBridgeGrabs } from '../hooks/useArrBridgeGrabs';
+import { useArrBridgeGrabRetry } from '../hooks/useArrBridgeGrabRetry';
 import { useArrBridgeSearches } from '../hooks/useArrBridgeSearches';
 import { useArrBridgeFolderCheck } from '../hooks/useArrBridgeFolderCheck';
 import {
@@ -58,6 +59,7 @@ export const ArrBridgeSection: React.FC<ArrBridgeSectionProps> = ({
   const showTabs = enabled && Boolean(savedConfig?.arrBridgeEnabled);
   const showActivity = showTabs && searchParams.get(TAB_PARAM) === ACTIVITY_TAB;
   const grabs = useArrBridgeGrabs(token, showActivity);
+  const grabRetry = useArrBridgeGrabRetry(token, grabs.refresh);
   const searches = useArrBridgeSearches(token, showActivity);
   const status = connections.status;
   const connected = {
@@ -279,7 +281,7 @@ export const ArrBridgeSection: React.FC<ArrBridgeSectionProps> = ({
       {showActivity && (
         <>
           <ConfigurationCard title="Recent grabs" subtitle="What Sonarr and Radarr grabbed, and what became of each grab.">
-            <ArrBridgeGrabList list={grabs} />
+            <ArrBridgeGrabList list={grabs} retry={grabRetry} />
           </ConfigurationCard>
 
           <ConfigurationCard

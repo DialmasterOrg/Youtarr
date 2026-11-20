@@ -126,6 +126,7 @@ module.exports = {
   isTransient403Failure,
   isCookieVideoUnavailableFailure,
   resolveRetryCount,
+  readJobDataValue,
   MAX_AUTO_RETRY_COUNT,
   DEFAULT_AUTO_RETRY_COUNT,
 };

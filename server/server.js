@@ -297,6 +297,7 @@ const initialize = async () => {
     const scheduledTaskRuns = require('./modules/scheduledTaskRuns');
     const scheduledTaskManager = require('./modules/scheduledTaskManager');
     const storageGuard = require('./modules/storageGuard');
+    const membersAccess = require('./modules/membersAccess');
 
     // Runs left "running" by the previous process never finished; close them
     // out before any timer fires, then start recording this process's runs.
@@ -342,6 +343,8 @@ const initialize = async () => {
       // The downloads folder as the host knows it, as /getconfig reports it:
       // where a Sonarr or Radarr outside Docker may see the staging folder.
       getHostDownloadsFolder: () => process.env.YOUTUBE_OUTPUT_DIR || process.env.DATA_PATH || null,
+      // Changes with the cookie file, which ends the wait of grabs YouTube blocked.
+      getCookieKey: () => membersAccess.getContext().cookieKey,
       logger,
     });
     jobModule.onJobEnded((event) => arrBridge.handleJobEnded(event));

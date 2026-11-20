@@ -4,7 +4,8 @@
 // Radarr. It wakes on a new grab, on every finished job, and on a one-minute
 // sweep that also recovers what a restart interrupted. Nothing here removes
 // a video from Youtarr's library; with "remove after import" on, the sweep
-// hands that to libraryCopyRemover.
+// hands that to libraryCopyRemover. A download YouTube blocked does not fail
+// its grab: the grab waits and is tried again (see blockWait).
 const crypto = require('crypto');
 const fs = require('fs');
 const { Op } = require('sequelize');
@@ -14,6 +15,8 @@ const { parseAuxData } = require('../jobAuxData');
 const {
   OUTPUT_DIR_UNAVAILABLE, DOWNLOAD_PROCESS_ERROR, JOB_NOT_STARTED,
 } = require('../constants/jobOutputPrefixes');
+const { isYoutubeBlock } = require('../download/failureAdvisor');
+const { createBlockWait, BLOCK_GIVE_UP_MS } = require('./blockWait');
 const { LIBRARY_COPY } = require('./libraryCopyRemover');
 
 const SWEEP_INTERVAL_MS = 60 * 1000;
@@ -28,6 +31,7 @@ const RETRY_GIVE_UP_MS = DAY_MS;
 const MAX_FAIL_MESSAGE_LENGTH = 200;
 const FINAL_JOB_STATUSES = new Set(['Complete', 'Complete with Warnings', 'Error', 'Failed', 'Terminated', 'Killed']);
 const STOPPED_JOB_STATUSES = new Set(['Terminated', 'Killed']);
+const WAITING_GRAB_STATUSES = ['pending', 'queued'];
 // jobModule terminates running and pending jobs when the server starts and
 // says so in their output. Such a job did not fail: the video was never tried.
 const RESTART_OUTPUT_PATTERN = /server restart/i;
@@ -44,6 +48,7 @@ const MESSAGES = {
   audioOnly: 'Youtarr downloaded audio only for this video, so there is no video file to import',
   stopped: 'The download was stopped in Youtarr',
   noFile: 'The download finished without a video file (members-only, filtered or unavailable)',
+  stillBlocked: 'YouTube blocked the download, and it was still blocked after a day of retries',
 };
 
 /**
@@ -98,6 +103,8 @@ function endedBeforeTrying({ job, failure }) {
  * @param {Function} deps.getSettings - () => arrBridgeConfig.readSettings(config)
  * @param {Function} [deps.onHandedOff] - (grab) => Promise; a completed grab's staged file expired
  * @param {Function} [deps.settleLibraryCopies] - () => Promise; libraryCopyRemover.run
+ * @param {Function} [deps.getCookieKey] - () => what identifies the cookie file in use, or null
+ * @param {Function} [deps.isPaused] - () => downloads are paused by the storage guard
  * @param {Function} [deps.fileState] - (path) => Promise<'present'|'missing'|'unknown'>
  * @param {Function} [deps.newId] - Makes the id of each download job
  * @param {Function} [deps.now]
@@ -108,6 +115,7 @@ function endedBeforeTrying({ job, failure }) {
 function createGrabExecutor({
   models, downloader, needsRedownload, jobLookup, storageGuard, staging, getSettings,
   onHandedOff = async () => {}, settleLibraryCopies = async () => {},
+  getCookieKey = () => null, isPaused = () => false,
   fileState = statFileState, newId = crypto.randomUUID, now = () => new Date(), logger,
   sweepIntervalMs = SWEEP_INTERVAL_MS, scheduleWake = setImmediate,
 }) {
@@ -119,6 +127,10 @@ function createGrabExecutor({
   // Grab id -> { until, since }: grabs the sweep leaves alone for now. Kept
   // in memory only, so a restart tries each of them again at once.
   const holds = new Map();
+  const block = createBlockWait({ now, getCookieKey });
+  // Grabs whose download is being queued at this moment. While YouTube
+  // blocks, a sweep that finds one queues no other.
+  const admitting = new Set();
   let sweeping = null;
   let sweepAgain = false;
   let wakeScheduled = false;
@@ -148,6 +160,7 @@ function createGrabExecutor({
 
   const fail = (grab, fromStatus, message) => {
     holds.delete(grab.id);
+    block.release(grab.id);
     return transition(grab, fromStatus, { status: 'failed', fail_message: message, completed_at: now() });
   };
 
@@ -178,7 +191,8 @@ function createGrabExecutor({
   // job may be the one that downloads it.
   const requeue = (grab) => transition(grab, 'queued', { status: 'pending', job_id: null, library_copy: null });
   // The grab's own download put the file there; only staging is left to do.
-  const requeueForStaging = (grab) => transition(grab, 'queued', { status: 'pending', job_id: null });
+  // That download got through, so the grab no longer waits out a block.
+  const requeueForStaging = (grab) => transition(grab, 'queued', { status: 'pending', job_id: null, blocked_at: null });
 
   async function findVideo(youtubeId) {
     return Video.findOne({
@@ -198,6 +212,9 @@ function createGrabExecutor({
   }
 
   async function stageAndComplete(grab, fromStatus, sourcePath) {
+    // A queued grab's file came from a download that just finished. A file
+    // that was already in the library says nothing about YouTube.
+    if (fromStatus === 'queued') block.recordSuccess();
     let staged;
     try {
       staged = await staging.stage({
@@ -209,6 +226,8 @@ function createGrabExecutor({
       // can be fixed: the sweep stages the library file again later.
       if (!hold(grab.id)) return fail(grab, fromStatus, MESSAGES.stagingFailed);
       if (fromStatus === 'queued') await requeueForStaging(grab);
+      // The video is here, so this grab must not fail later as blocked for a day.
+      else if (grab.blocked_at) await transition(grab, 'pending', { blocked_at: null });
       return false;
     }
     const completed = await transition(grab, fromStatus, {
@@ -216,6 +235,7 @@ function createGrabExecutor({
     });
     if (completed) {
       holds.delete(grab.id);
+      block.release(grab.id);
       logger.info({ grabId: grab.id, youtubeId: grab.youtube_id, method: staged.method }, 'Sonarr/Radarr grab staged');
       return true;
     }
@@ -225,19 +245,29 @@ function createGrabExecutor({
     return false;
   }
 
-  async function executePending(grabId) {
+  /**
+   * @param {string} grabId
+   * @param {Object} [options]
+   * @param {boolean} [options.mayDownload] - False while YouTube blocks: a file already there is still staged
+   * @param {boolean} [options.quiet] - A block this download runs into was already notified
+   * @param {boolean} [options.force] - The user asked for this try, so no hold applies
+   * @returns {Promise<'queued'|'paused'|undefined>} 'queued' when a download was queued, 'paused'
+   *   when the storage guard refused it; nothing in every other case
+   */
+  async function executePending(grabId, { mayDownload = true, quiet = false, force = false } = {}) {
     const grab = await ArrBridgeGrab.findByPk(grabId);
-    if (!grab || grab.status !== 'pending') return;
+    if (!grab || grab.status !== 'pending') return undefined;
     // Held after the sweep that sent this had already read its rows.
-    if (holds.get(grabId)?.until > now().getTime()) return;
+    if (!force && holds.get(grabId)?.until > now().getTime()) return undefined;
 
     const video = await findVideo(grab.youtube_id);
     const state = await videoFileState(video);
-    if (state === 'unknown') return;
+    if (state === 'unknown') return undefined;
     if (state === 'present') {
       await stageAndComplete(grab, 'pending', video.filePath);
-      return;
+      return undefined;
     }
+    if (!mayDownload) return undefined;
 
     const settings = getSettings();
     const category = settings.categories.find((entry) => entry.name === grab.category);
@@ -252,25 +282,111 @@ function createGrabExecutor({
     // Only a video with no library row is downloaded for the grab alone;
     // "remove after import" never touches any other.
     const libraryCopy = video ? null : LIBRARY_COPY.OWNED;
-    if (!(await transition(grab, 'pending', { status: 'queued', job_id: jobId, library_copy: libraryCopy }))) return;
+    if (!(await transition(grab, 'pending', { status: 'queued', job_id: jobId, library_copy: libraryCopy }))) {
+      return undefined;
+    }
     let admitted;
     try {
       admitted = await downloader({
         urls: [`https://www.youtube.com/watch?v=${grab.youtube_id}`],
         jobLabel: ARR_BRIDGE_JOB_LABEL,
         overrideSettings,
+        // See downloadJobFinalizer: no second notification for the same block.
+        ...(quiet || grab.blocked_at ? { quietBlockedFailure: true } : {}),
       }, { jobId });
     } catch (error) {
       if (storageGuard.isPausedError(error)) {
         await requeue(grab);
-        return;
+        return 'paused';
       }
       logger.warn({ err: error, grabId: grab.id }, 'Sonarr/Radarr grab could not be queued');
       await fail(grab, 'queued', MESSAGES.queueFailed);
+      return undefined;
+    }
+    if (typeof admitted === 'string') return 'queued';
+    // Another job is downloading this video; the sweep tries again.
+    await requeue(grab);
+    return undefined;
+  }
+
+  /**
+   * The sweep's and the user's way to a pending grab. Resolves to what
+   * executePending did; an error there is logged and resolves to nothing.
+   * @param {string} grabId
+   * @param {Object} [options] - executePending's, and:
+   * @param {boolean} [options.dueTry] - This grab was given the one try that is due while YouTube blocks
+   */
+  function runPending(grabId, { dueTry = false, ...options } = {}) {
+    if (!options.mayDownload) return exclusive(grabId, () => executePending(grabId, options));
+    admitting.add(grabId);
+    return exclusive(grabId, () => executePending(grabId, options))
+      .then((outcome) => {
+        // A try the user asked for stays asked for only while downloads are
+        // paused. One that cannot start for another reason must not keep
+        // the other grabs from being tried.
+        if (options.force && outcome !== 'queued' && outcome !== 'paused') block.release(grabId);
+        if (dueTry) settleDueTry(grabId, outcome);
+        return outcome;
+      })
+      .finally(() => admitting.delete(grabId));
+  }
+
+  // The grab that was given the due try took it, or passes it on: the next
+  // sweep offers it to another grab, and this one again only after that.
+  function settleDueTry(grabId, outcome) {
+    if (outcome === 'queued') {
+      block.resetPassedTries();
       return;
     }
-    // Another job is downloading this video; the sweep tries again.
-    if (typeof admitted !== 'string') await requeue(grab);
+    block.passTry(grabId);
+    wake();
+  }
+
+  // Grabs queued before the block was known run into it too. Their jobs
+  // cannot be taken back, but they need not each notify.
+  async function quietQueuedJobs(exceptGrabId) {
+    const others = await ArrBridgeGrab.findAll({ where: { status: 'queued', id: { [Op.ne]: exceptGrabId } } });
+    for (const other of others) {
+      const job = other.job_id ? jobLookup(other.job_id) : null;
+      if (job?.data) job.data.quietBlockedFailure = true;
+    }
+  }
+
+  // YouTube blocked the download, which often passes on its own, so the grab
+  // goes back to waiting instead of failing: a failure gets the release
+  // blocklisted and the video hidden for days. It fails once it has been
+  // blocked for a day.
+  async function waitOutBlock(grab) {
+    block.recordBlocked();
+    block.release(grab.id);
+    const blockedAt = grab.blocked_at ?? now();
+    if (block.isExpired({ blocked_at: blockedAt })) {
+      if (await fail(grab, 'queued', MESSAGES.stillBlocked)) {
+        logger.info({ grabId: grab.id, youtubeId: grab.youtube_id }, 'Sonarr/Radarr grab failed: YouTube blocked it for a day');
+      }
+      return;
+    }
+    const waiting = await transition(grab, 'queued', {
+      status: 'pending', job_id: null, library_copy: null, blocked_at: blockedAt,
+    });
+    if (!waiting) return;
+    block.setActive(true);
+    logger.warn(
+      { grabId: grab.id, youtubeId: grab.youtube_id, nextTryAt: block.nextTryAt() },
+      'Sonarr/Radarr grab will be tried again: YouTube blocked its download'
+    );
+    await quietQueuedJobs(grab.id);
+  }
+
+  async function expireBlocked(grabId) {
+    const grab = await ArrBridgeGrab.findByPk(grabId);
+    if (!grab || grab.status !== 'pending' || !block.isExpired(grab)) return;
+    // Downloads got through since this grab was last tried, so it has been
+    // waiting its turn, not blocked: only its own next try can fail it.
+    if (block.gotThroughSince(grab.updated_at)) return;
+    if (await fail(grab, 'pending', MESSAGES.stillBlocked)) {
+      logger.info({ grabId: grab.id, youtubeId: grab.youtube_id }, 'Sonarr/Radarr grab failed: YouTube blocked it for a day');
+    }
   }
 
   async function loadJob(jobId) {
@@ -335,6 +451,10 @@ function createGrabExecutor({
       }
       return;
     }
+    if (isYoutubeBlock(failure?.diagnosisKey)) {
+      await waitOutBlock(grab);
+      return;
+    }
     const untried = endedBeforeTrying({ job, failure });
     if (untried && hold(grab.id)) {
       if (await requeue(grab)) {
@@ -365,7 +485,64 @@ function createGrabExecutor({
     }
   }
 
+  // While YouTube blocks, waiting grabs download one at a time and only
+  // when a try is due, so a restart, a lifted block or new cookies never
+  // send every waiting grab into the block at once. That lasts until a
+  // download gets through, also when the blocked grab has left the queue.
+  async function readBlockMode() {
+    const blocked = await ArrBridgeGrab.findAll({
+      where: { status: { [Op.in]: WAITING_GRAB_STATUSES }, blocked_at: { [Op.ne]: null } },
+      limit: 1,
+    });
+    const blockMode = blocked.length > 0 || block.isSuspected();
+    block.setActive(blockMode);
+    const due = block.isDue();
+    // A block found again is no news while a blocked grab waits, or within
+    // the hour of the last one. Found later, with nothing waiting on it, it is.
+    return { blockMode, due, quiet: blocked.length > 0 || !due };
+  }
+
+  // The grab the due try goes to: one that was never blocked before one
+  // that was, so that a video YouTube refuses on its own does not keep the
+  // others waiting, and never one that just passed the try on.
+  function pickDueTry(pending) {
+    const able = pending.filter((grab) => !block.hasPassedTry(grab.id));
+    if (able.length === 0) {
+      // Every waiting grab passed: start over at the next sweep.
+      block.resetPassedTries();
+      return null;
+    }
+    return able.find((grab) => !grab.blocked_at) || able[0];
+  }
+
+  // In block mode a grab whose video is in the library by now is still
+  // staged, a grab the user asked for is tried, and one other grab gets the
+  // try when one is due. Nothing here is awaited: a slow disk must not hold
+  // up the sweep.
+  function runPendingWhileBlocked(pending, { tryDue, quiet }) {
+    const forced = pending.filter((grab) => block.isForced(grab.id));
+    forced.forEach((grab) => runPending(grab.id, { mayDownload: true, quiet: true, force: true }));
+    // Read again at this point: a "Try again" may have come in while the sweep read its rows.
+    const tryOpen = tryDue && forced.length === 0 && admitting.size === 0;
+    const dueTry = tryOpen ? pickDueTry(pending) : null;
+    for (const grab of pending) {
+      if (block.isForced(grab.id)) continue;
+      if (grab === dueTry) runPending(grab.id, { mayDownload: true, quiet, dueTry: true });
+      else runPending(grab.id, { mayDownload: false });
+    }
+  }
+
+  async function failExpiredBlocks() {
+    const expired = await ArrBridgeGrab.findAll({
+      where: { status: 'pending', blocked_at: { [Op.lt]: new Date(now().getTime() - BLOCK_GIVE_UP_MS) } },
+      limit: SWEEP_BATCH_SIZE,
+    });
+    expired.forEach((grab) => exclusive(grab.id, () => expireBlocked(grab.id)));
+  }
+
   async function runSweep() {
+    // Read before the rows: an admission that ended since shows in them as queued.
+    const admissionBusy = admitting.size > 0;
     try {
       await staging.ensureCategoryFolders();
     } catch (error) {
@@ -380,7 +557,16 @@ function createGrabExecutor({
       order: [['updated_at', 'ASC'], ['id', 'ASC']],
       limit: SWEEP_BATCH_SIZE,
     });
-    pending.forEach((grab) => exclusive(grab.id, () => executePending(grab.id)));
+    const { blockMode, due, quiet } = await readBlockMode();
+    if (blockMode) {
+      // A grab only gives up while the block is known to hold: a lifted one
+      // lets the waiting grabs through one after another, which takes time.
+      if (!due) await failExpiredBlocks();
+      const tryDue = due && !admissionBusy && queued.length === 0 && !isPaused();
+      runPendingWhileBlocked(pending, { tryDue, quiet });
+    } else {
+      pending.forEach((grab) => runPending(grab.id, { mayDownload: true, force: block.isForced(grab.id) }));
+    }
     await removeExpired();
     try {
       await settleLibraryCopies();
@@ -426,6 +612,8 @@ function createGrabExecutor({
       const grabs = await ArrBridgeGrab.findAll({ where: { status: 'queued', job_id: jobId } });
       const ended = new Set([jobId]);
       await Promise.all(grabs.map((grab) => exclusive(grab.id, () => resolveQueued(grab.id, ended))));
+      // A grab waiting its turn behind this one follows without waiting for the timer.
+      if (grabs.length > 0 && block.isActive()) wake();
     } catch (error) {
       logger.error({ err: error, jobId }, 'Sonarr/Radarr grab could not be closed after its job ended');
     }
@@ -451,7 +639,33 @@ function createGrabExecutor({
     }
   }
 
-  return { start, stop, wake, handleJobEnded, runOnce };
+  /**
+   * The Settings page's "Try again": tries a waiting grab now, whatever the
+   * block says. While downloads are paused the request is kept, and a later
+   * sweep starts the try; a try that cannot start for another reason (the
+   * video is busy, its file cannot be checked) is dropped.
+   * @param {string} grabId
+   * @returns {Promise<'started'|'queued'|'paused'|'ready'|'deferred'|null>} null when the grab is not waiting
+   */
+  async function retryNow(grabId) {
+    const grab = await ArrBridgeGrab.findByPk(grabId);
+    if (!grab || grab.status !== 'pending') return null;
+    block.force(grabId);
+    const outcome = await runPending(grabId, { mayDownload: true, quiet: true, force: true });
+    const after = await ArrBridgeGrab.findByPk(grabId);
+    if (after?.status === 'completed') return 'ready';
+    if (after?.status === 'queued') return jobLookup(after.job_id)?.status === 'In Progress' ? 'started' : 'queued';
+    if (after?.status !== 'pending') return null;
+    return outcome === 'paused' ? 'paused' : 'deferred';
+  }
+
+  /** @returns {{active: boolean, nextTryAt: Date|null}} Whether YouTube is blocking, as of the last sweep */
+  const blockStatus = () => ({ active: block.isActive(), nextTryAt: block.nextTryAt() });
+
+  /** Whether the user's "Try again" on this grab is still to be carried out. */
+  const isRetryRequested = (grabId) => block.isForced(grabId);
+
+  return { start, stop, wake, handleJobEnded, runOnce, retryNow, blockStatus, isRetryRequested };
 }
 
 module.exports = { createGrabExecutor, SWEEP_INTERVAL_MS };

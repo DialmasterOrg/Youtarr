@@ -991,6 +991,46 @@ describe('downloadJobFinalizer', () => {
         );
       });
 
+      describe('a quiet repeat try of a blocked Sonarr/Radarr grab', () => {
+        beforeEach(() => {
+          jobModule.getJob.mockReturnValue({ data: { quietBlockedFailure: true } });
+        });
+
+        it('does not notify when the block is the only failure', async () => {
+          primeFailure(make403Failure());
+
+          await finalizeDownloadJob(makeContext({ code: 1 }));
+
+          expect(emittedFinalSummary().diagnoses).toEqual([expect.objectContaining({ key: 'http-403-cookies-disabled' })]);
+          expect(notificationModule.sendDownloadNotification).not.toHaveBeenCalled();
+        });
+
+        it('reads the flag from a queued job, whose data is nested', async () => {
+          jobModule.getJob.mockReturnValue({ data: { data: { quietBlockedFailure: true } } });
+          primeFailure(make403Failure());
+
+          await finalizeDownloadJob(makeContext({ code: 1 }));
+
+          expect(notificationModule.sendDownloadNotification).not.toHaveBeenCalled();
+        });
+
+        it('still notifies for a failure that is not a block', async () => {
+          const failure = make403Failure({ youtubeId: 'bigvideo001', error: 'Conversion failed!' });
+          primeFailure(failure);
+          tempSpaceProbe.findOutOfSpaceFailures.mockResolvedValue(new Set(['bigvideo001']));
+
+          await finalizeDownloadJob(makeContext({ code: 1 }));
+
+          expect(notificationModule.sendDownloadNotification).toHaveBeenCalled();
+        });
+
+        it('still notifies when the download succeeded', async () => {
+          await finalizeDownloadJob(makeContext());
+
+          expect(notificationModule.sendDownloadNotification).toHaveBeenCalled();
+        });
+      });
+
       it('does not notify for an undiagnosed failure-only job', async () => {
         primeFailure(make403Failure({ error: 'Postprocessing failed with exit code 1' }));
 

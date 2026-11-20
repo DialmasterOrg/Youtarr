@@ -9,6 +9,11 @@ import {
   removeAfterImportWarning,
   stagingFolderOnHost,
   GRAB_STATE_LABELS,
+  GRAB_RETRY_NOTES,
+  SERVER_RETRY_OUTCOMES,
+  blockedGrabText,
+  grabRetryNote,
+  requestedRetryNote,
   ArrCategory,
 } from '../arrBridgeSetup';
 
@@ -272,8 +277,94 @@ describe('GRAB_STATE_LABELS', () => {
 
   test('has a label for every state', () => {
     expect(Object.keys(GRAB_STATE_LABELS).sort()).toEqual(
-      ['cancelled', 'downloading', 'failed', 'handed-off', 'ready', 'waiting']
+      ['blocked', 'cancelled', 'downloading', 'failed', 'handed-off', 'ready', 'waiting']
     );
+  });
+});
+
+describe('blockedGrabText', () => {
+  const formatTime = (value: string) => `<${value}>`;
+  const waiting = { blockedAt: '2025-06-10T10:02:00.000Z', nextTryAt: 'T', downloadsPaused: false };
+
+  test('names the grab\'s own block and the next check', () => {
+    expect(blockedGrabText(waiting, formatTime)).toBe('YouTube blocked this download. Youtarr checks again at <T>.');
+  });
+
+  test('names another grab\'s block for a grab that was not blocked itself', () => {
+    expect(blockedGrabText({ ...waiting, blockedAt: null }, formatTime)).toBe(
+      'YouTube blocked another grab, so this one waits too. Youtarr checks again at <T>.'
+    );
+  });
+
+  test.each([
+    ['no next check is set', null, formatTime],
+    ['the time cannot be shown', 'T', () => ''],
+  ])('says soon when %s', (_name, nextTryAt, format) => {
+    expect(blockedGrabText({ ...waiting, nextTryAt }, format)).toBe(
+      'YouTube blocked this download. Youtarr checks again soon.'
+    );
+  });
+
+  test.each([['T'], [null]])('promises no time while downloads are paused (next check %p)', (nextTryAt) => {
+    expect(blockedGrabText({ ...waiting, nextTryAt, downloadsPaused: true }, formatTime)).toBe(
+      'YouTube blocked this download. Youtarr checks again when downloads resume.'
+    );
+  });
+});
+
+describe('requestedRetryNote', () => {
+  test('is null when no try is asked for', () => {
+    expect(requestedRetryNote({ retryRequested: false, downloadsPaused: true })).toBeNull();
+  });
+
+  test('says the try starts when downloads resume, while they are paused', () => {
+    expect(requestedRetryNote({ retryRequested: true, downloadsPaused: true })).toBe(
+      'Downloads are paused, so this will start when they resume.'
+    );
+  });
+
+  test('says the try comes in a moment once downloads run again', () => {
+    expect(requestedRetryNote({ retryRequested: true, downloadsPaused: false })).toBe(
+      'Youtarr will try again in a moment.'
+    );
+  });
+});
+
+describe('grabRetryNote', () => {
+  test('is null for a grab that was not tried', () => {
+    expect(grabRetryNote({ state: 'blocked' }, undefined)).toBeNull();
+  });
+
+  test('is the note of the outcome while the grab is in the state the note is about', () => {
+    expect(grabRetryNote({ state: 'downloading' }, 'started')).toBe('Trying again now.');
+  });
+
+  test('is null once the grab is in another state', () => {
+    expect(grabRetryNote({ state: 'ready' }, 'started')).toBeNull();
+  });
+
+  test('is null for a try that waits for paused downloads: the server reports that one', () => {
+    expect(grabRetryNote({ state: 'blocked' }, 'paused')).toBeNull();
+  });
+
+  test('says a try that could not start waits for the next check', () => {
+    expect(grabRetryNote({ state: 'blocked' }, 'deferred')).toBe(
+      'Youtarr could not start it right now. It waits for the next check.'
+    );
+  });
+});
+
+describe('GRAB_RETRY_NOTES', () => {
+  test('has a note for every answer the server gives, except the one the server reports itself', () => {
+    const noted = SERVER_RETRY_OUTCOMES.filter((outcome) => outcome !== 'paused');
+
+    expect(noted.map((outcome) => grabRetryNote({ state: GRAB_RETRY_NOTES[outcome].state }, outcome))).not.toContain(null);
+  });
+
+  test('ties each note to a state the list knows', () => {
+    const states = Object.keys(GRAB_STATE_LABELS);
+
+    expect(Object.values(GRAB_RETRY_NOTES).every((note) => states.includes(note.state))).toBe(true);
   });
 });
 
