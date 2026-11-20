@@ -147,13 +147,9 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       setChannelVideoCount(defaultVideoCount);
       setAudioFormat(null);
       setProtect(defaultProtect);
-      // Open the custom section too so the user can see the re-download toggle is on.
-      if ((missingVideoCount > 0 || replaceVideoCount > 0) && !hideRedownloadOption) {
-        setAllowRedownload(true);
-        setUseCustomSettings(true);
-      } else {
-        setAllowRedownload(false);
-      }
+      setAllowRedownload(
+        (missingVideoCount > 0 || replaceVideoCount > 0) && !hideRedownloadOption
+      );
     }
   }, [open, hasUserInteracted, mode, missingVideoCount, replaceVideoCount, defaultVideoCount, hideRedownloadOption, defaultProtect]);
 
@@ -333,97 +329,25 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
             </Alert>
           )}
 
-          {/* Summary Box - Only shown when custom settings are OFF */}
-          <Collapse in={!useCustomSettings} timeout={300}>
-            <Paper
-              variant="outlined"
-              className="p-4 mb-4 bg-muted/50 border-border"
-              data-testid="settings-summary"
-            >
-              <Typography variant="subtitle2" className="mb-3 font-semibold">
-                Current Settings
-              </Typography>
-
-              <Box className="flex items-center gap-2 mb-2">
-                <QualityIcon size={16} className="text-muted-foreground" />
-                <Typography variant="body2">
-                  <strong>Quality:</strong>{' '}
-                  {mode === 'channel'
-                    ? `Per channel/playlist (global ${defaultResolution}p)`
-                    : defaultQualityLabel}
-                </Typography>
-              </Box>
-
-              <Box className="flex items-center gap-2 mb-3">
-                <FolderIcon size={16} className="text-muted-foreground" />
-                <Typography variant="body2">
-                  <strong>Destination:</strong> Per channel settings (or global default)
-                </Typography>
-              </Box>
-
-              <Box className="flex items-center gap-2 mb-3">
-                <VideocamIcon size={16} className="text-muted-foreground" />
-                <Typography variant="body2">
-                  <strong>Download Type:</strong> {defaultAudioFormatLabel}
-                  {defaultAudioFormatSource === 'channel' && (
-                    <Typography component="span" variant="caption" color="text.secondary" className="ml-1">
-                      (channel)
-                    </Typography>
-                  )}
-                </Typography>
-              </Box>
-
-              {mode === 'channel' && (
-                <Box className="flex items-center gap-2 mb-3">
-                  <DownloadIcon size={16} data-testid="DownloadIcon" className="text-muted-foreground" />
-                  <Typography variant="body2">
-                    <strong>Videos per channel:</strong> {defaultVideoCount}
-                  </Typography>
-                </Box>
+          {/* These apply whether or not custom settings are on, so they sit outside the settings card. */}
+          {(mode === 'manual' || !hideRedownloadOption) && (
+            <Box className="flex flex-col items-start gap-3 mb-4">
+              {mode === 'manual' && (
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={protect}
+                      onChange={(e) => {
+                        setProtect(e.target.checked);
+                        setHasUserInteracted(true);
+                      }}
+                      color="primary"
+                    />
+                  }
+                  label="Protect this download from auto-removal"
+                />
               )}
 
-              <Typography variant="caption" color="text.secondary" className="block mt-2">
-                Configured channels will use their subfolder settings.
-                Enable custom settings to download MP3 audio.
-              </Typography>
-            </Paper>
-          </Collapse>
-
-          {/* Custom Settings Toggle */}
-          <FormControlLabel
-            control={
-              <Switch
-                checked={useCustomSettings}
-                onChange={handleUseCustomToggle}
-                color="primary"
-              />
-            }
-            label="Use custom settings for this download"
-            className={mode === 'manual' ? 'mb-2' : 'mb-4'}
-          />
-
-          {mode === 'manual' && (
-            <Box className="mb-4">
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={protect}
-                    onChange={(e) => {
-                      setProtect(e.target.checked);
-                      setHasUserInteracted(true);
-                    }}
-                    color="primary"
-                  />
-                }
-                label="Protect this download from auto-removal"
-              />
-            </Box>
-          )}
-
-          {/* Custom Settings - Only shown when toggle is ON */}
-          <Collapse in={useCustomSettings} timeout={300}>
-            <Box data-testid="custom-settings-section" className="mb-4">
-              {/* Allow Re-download Toggle */}
               {!hideRedownloadOption && (
                 <FormControlLabel
                   control={
@@ -437,44 +361,102 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                     />
                   }
                   label="Allow re-downloading previously fetched videos"
-                  className="mb-4 block"
                 />
               )}
+            </Box>
+          )}
 
-              {/* Resolution Selection */}
-              <Typography variant="subtitle2" color="text.secondary" className="mb-2">
-                Maximum Resolution
-              </Typography>
-
-              <ResolutionSelect
-                className="mb-4"
-                value={resolution}
-                emptyLabel="No override (use channel/playlist settings)"
-                onChange={(value) => {
-                  setResolution(value);
-                  setHasUserInteracted(true);
-                }}
-                helperText="YouTube will provide the best available quality up to your selected resolution."
+          {/* Settings card: the switch is the header, the body swaps between the summary and the override fields. */}
+          <Paper variant="outlined" className="border-border">
+            <Box className="px-3 py-2.5 border-b border-border">
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={useCustomSettings}
+                    onChange={handleUseCustomToggle}
+                    color="primary"
+                  />
+                }
+                label="Use custom settings for this download"
               />
+            </Box>
 
-              {(resolution === '2160' || resolution === '1440') && (
-                <Alert severity="warning" className="mb-4">
+            {/* Summary - Only shown when custom settings are OFF */}
+            <Collapse in={!useCustomSettings} timeout={300}>
+              <Box className="p-3" data-testid="settings-summary">
+                <Box className="flex items-center gap-2 mb-3">
+                  <QualityIcon size={16} className="shrink-0 text-muted-foreground" />
                   <Typography variant="body2">
-                    {resolution === '2160'
-                      ? '4K videos may take significantly longer to download and use more storage space. '
-                      : ''}
-                    YouTube only provides H.264 MP4 up to 1080p, so {resolution === '2160' ? '4K' : '1440p'} uses VP9 or AV1 (remuxed into MP4). Older Plex clients without native VP9/AV1 decode (Apple TV HD, iOS, older Rokus) may transcode.
+                    <strong>Quality:</strong>{' '}
+                    {mode === 'channel'
+                      ? `Per channel/playlist (global ${defaultResolution}p)`
+                      : defaultQualityLabel}
                   </Typography>
-                </Alert>
-              )}
+                </Box>
 
-              {/* Videos Per Channel - Channel mode only */}
-              {mode === 'channel' && (
-                <>
-                  <Typography variant="subtitle2" color="text.secondary" className="mb-2">
-                    Videos Per Channel
+                <Box className="flex items-center gap-2 mb-3">
+                  <FolderIcon size={16} className="shrink-0 text-muted-foreground" />
+                  <Typography variant="body2">
+                    <strong>Destination:</strong> Per channel settings (or global default)
                   </Typography>
+                </Box>
 
+                <Box className="flex items-center gap-2 mb-3">
+                  <VideocamIcon size={16} className="shrink-0 text-muted-foreground" />
+                  <Typography variant="body2">
+                    <strong>Download Type:</strong> {defaultAudioFormatLabel}
+                    {defaultAudioFormatSource === 'channel' && (
+                      <Typography component="span" variant="caption" color="text.secondary" className="ml-1">
+                        (channel)
+                      </Typography>
+                    )}
+                  </Typography>
+                </Box>
+
+                {mode === 'channel' && (
+                  <Box className="flex items-center gap-2 mb-3">
+                    <DownloadIcon size={16} data-testid="DownloadIcon" className="shrink-0 text-muted-foreground" />
+                    <Typography variant="body2">
+                      <strong>Videos per channel:</strong> {defaultVideoCount}
+                    </Typography>
+                  </Box>
+                )}
+
+                <Typography variant="caption" color="text.secondary" className="block mt-2">
+                  Configured channels will use their subfolder settings.
+                  Enable custom settings to download MP3 audio.
+                </Typography>
+              </Box>
+            </Collapse>
+
+            {/* Custom Settings - Only shown when toggle is ON */}
+            <Collapse in={useCustomSettings} timeout={300}>
+              <Box data-testid="custom-settings-section" className="px-3 pt-3">
+                {/* Resolution Selection */}
+                <ResolutionSelect
+                  className="mb-4"
+                  value={resolution}
+                  emptyLabel="No override (use channel/playlist settings)"
+                  onChange={(value) => {
+                    setResolution(value);
+                    setHasUserInteracted(true);
+                  }}
+                  helperText="YouTube will provide the best available quality up to your selected resolution."
+                />
+
+                {(resolution === '2160' || resolution === '1440') && (
+                  <Alert severity="warning" className="mb-4">
+                    <Typography variant="body2">
+                      {resolution === '2160'
+                        ? '4K videos may take significantly longer to download and use more storage space. '
+                        : ''}
+                      YouTube only provides H.264 MP4 up to 1080p, so {resolution === '2160' ? '4K' : '1440p'} uses VP9 or AV1 (remuxed into MP4). Older Plex clients without native VP9/AV1 decode (Apple TV HD, iOS, older Rokus) may transcode.
+                    </Typography>
+                  </Alert>
+                )}
+
+                {/* Videos Per Channel - Channel mode only */}
+                {mode === 'channel' && (
                   <FormControl fullWidth className="mb-4">
                     <InputLabel id="video-count-select-label">Number of videos to download per channel</InputLabel>
                     <Select
@@ -491,97 +473,77 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                       ))}
                     </Select>
                   </FormControl>
-                </>
-              )}
+                )}
 
-              {/* Subfolder Override - Manual mode only */}
-              {mode === 'manual' && (
-                <>
-                  <Typography variant="subtitle2" color="text.secondary" className="mb-2">
-                    Destination Override
-                  </Typography>
+                {/* Subfolder Override - Manual mode only */}
+                {mode === 'manual' && (
+                  <>
+                    <Box className="mb-4">
+                      <SubfolderAutocomplete
+                        mode="download"
+                        value={subfolderOverride}
+                        onChange={(newValue) => {
+                          setSubfolderOverride(newValue);
+                          setHasUserInteracted(true);
+                        }}
+                        subfolders={subfolders}
+                        loading={subfoldersLoading}
+                        createSubfolder={createSubfolder}
+                        label="Override Destination"
+                        helperText="Configured channels use their subfolder, unconfigured channels use global default."
+                      />
+                    </Box>
 
-                  <SubfolderAutocomplete
-                    mode="download"
-                    value={subfolderOverride}
-                    onChange={(newValue) => {
-                      setSubfolderOverride(newValue);
-                      setHasUserInteracted(true);
-                    }}
-                    subfolders={subfolders}
-                    loading={subfoldersLoading}
-                    createSubfolder={createSubfolder}
-                    label="Override Destination"
-                    helperText="Configured channels use their subfolder, unconfigured channels use global default."
-                  />
-
-                  <Typography variant="subtitle2" color="text.secondary" className="mb-2 mt-4">
-                    Download Type
-                  </Typography>
-
-                  <OptionSelect
-                    className="mb-4 audio-control audio-control--download-type"
-                    options={DOWNLOAD_TYPE_OPTIONS}
-                    label="Download Type"
-                    emptyLabel={downloadTypeEmptyLabel}
-                    value={audioFormat}
-                    onChange={(value) => {
-                      setAudioFormat(value);
-                      setHasUserInteracted(true);
-                    }}
-                    helperText={downloadTypeHelperText}
-                  />
-                    <Typography variant="subtitle2" color="text.secondary" className="mb-2 mt-4">
-                    Content Rating Override
-                  </Typography>
-
-                  <RatingSelect
-                    className="mb-4"
-                    value={rating}
-                    onChange={(value) => {
-                      setRating(value);
-                      setHasUserInteracted(true);
-                    }}
-                    emptyLabel="No override"
-                    showBadge
-                  />
-
-                  <Typography variant="subtitle2" color="text.secondary" className="mb-2 mt-4">
-                    File Structure Override
-                  </Typography>
-
-                  <FormControl fullWidth className="mb-1">
-                    <InputLabel id="download-file-structure-label">Video File Structure</InputLabel>
-                    <Select
-                      labelId="download-file-structure-label"
-                      value={fileStructure}
-                      onChange={(e: SelectChangeEvent<string>) => {
-                        setFileStructure(e.target.value as FileStructureChoice);
+                    <OptionSelect
+                      className="mb-4 audio-control audio-control--download-type"
+                      options={DOWNLOAD_TYPE_OPTIONS}
+                      label="Download Type"
+                      emptyLabel={downloadTypeEmptyLabel}
+                      value={audioFormat}
+                      onChange={(value) => {
+                        setAudioFormat(value);
                         setHasUserInteracted(true);
                       }}
-                      label="Video File Structure"
-                    >
-                      <MenuItem value="inherit">Use channel/global settings</MenuItem>
-                      <MenuItem value="flat">Force flat (no video subfolders)</MenuItem>
-                      <MenuItem value="subfolders">Force individual video subfolders</MenuItem>
-                    </Select>
-                  </FormControl>
-                  <Typography variant="caption" color="text.secondary" className="mb-4 block">
-                    Flat saves files directly in the channel folder; individual subfolders creates a
-                    folder per video. &quot;Use channel/global settings&quot; applies each channel&apos;s own
-                    setting, or the global default.
-                  </Typography>
-                </>
-              )}
-            </Box>
-          </Collapse>
+                      helperText={downloadTypeHelperText}
+                    />
 
-          {/* Note about YouTube quality */}
-          <Box className="p-4 bg-muted/50 rounded-[var(--radius-ui)]">
-            <Typography variant="caption" color="text.secondary">
-              <strong>Note:</strong> YouTube will provide the best available quality up to your selected resolution.
-            </Typography>
-          </Box>
+                    <RatingSelect
+                      className="mb-4"
+                      value={rating}
+                      onChange={(value) => {
+                        setRating(value);
+                        setHasUserInteracted(true);
+                      }}
+                      emptyLabel="No override"
+                      showBadge
+                    />
+
+                    <FormControl fullWidth className="mb-1">
+                      <InputLabel id="download-file-structure-label">Video File Structure</InputLabel>
+                      <Select
+                        labelId="download-file-structure-label"
+                        value={fileStructure}
+                        onChange={(e: SelectChangeEvent<string>) => {
+                          setFileStructure(e.target.value as FileStructureChoice);
+                          setHasUserInteracted(true);
+                        }}
+                        label="Video File Structure"
+                      >
+                        <MenuItem value="inherit">Use channel/global settings</MenuItem>
+                        <MenuItem value="flat">Force flat (no video subfolders)</MenuItem>
+                        <MenuItem value="subfolders">Force individual video subfolders</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <Typography variant="caption" color="text.secondary" className="mb-4 block">
+                      Flat saves files directly in the channel folder; individual subfolders creates a
+                      folder per video. &quot;Use channel/global settings&quot; applies each channel&apos;s own
+                      setting, or the global default.
+                    </Typography>
+                  </>
+                )}
+              </Box>
+            </Collapse>
+          </Paper>
         </Box>
       </DialogContent>
 
