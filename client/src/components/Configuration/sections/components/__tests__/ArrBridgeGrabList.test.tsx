@@ -3,8 +3,9 @@ import { fireEvent, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { ArrBridgeGrabList } from '../ArrBridgeGrabList';
 import { renderWithProviders } from '../../../../../test-utils';
-import { ArrGrab } from '../../../utils/arrBridgeSetup';
+import { ArrGrab, ArrGrabRetryOutcome } from '../../../utils/arrBridgeSetup';
 import { ArrPagedList } from '../../../hooks/useArrBridgePagedList';
+import { ArrGrabRetry } from '../../../hooks/useArrBridgeGrabRetry';
 
 const grab = (overrides: Partial<ArrGrab> = {}): ArrGrab => ({
   id: 'g1',
@@ -16,6 +17,11 @@ const grab = (overrides: Partial<ArrGrab> = {}): ArrGrab => ({
   category: 'tv',
   state: 'handed-off',
   failMessage: null,
+  blockedAt: null,
+  nextTryAt: null,
+  retryRequested: false,
+  downloadsPaused: false,
+  hiddenUntil: null,
   libraryCopy: null,
   createdAt: '2025-06-10T10:00:00.000Z',
   completedAt: '2025-06-10T10:05:00.000Z',
@@ -23,7 +29,14 @@ const grab = (overrides: Partial<ArrGrab> = {}): ArrGrab => ({
   ...overrides,
 });
 
-const setup = ({ grabs = [grab()], ...overrides }: Partial<ArrPagedList<ArrGrab>> & { grabs?: ArrGrab[] } = {}) => {
+interface SetupOptions extends Partial<ArrPagedList<ArrGrab>> {
+  grabs?: ArrGrab[];
+  busyId?: string | null;
+  outcomes?: Record<string, ArrGrabRetryOutcome>;
+}
+
+const setup = ({ grabs = [grab()], busyId = null, outcomes = {}, ...overrides }: SetupOptions = {}) => {
+  const retry: ArrGrabRetry = { retry: jest.fn().mockResolvedValue(undefined), busyId, outcomes };
   const list: ArrPagedList<ArrGrab> = {
     items: grabs,
     total: grabs.length,
@@ -37,8 +50,8 @@ const setup = ({ grabs = [grab()], ...overrides }: Partial<ArrPagedList<ArrGrab>
     refresh: jest.fn(),
     ...overrides,
   };
-  renderWithProviders(<ArrBridgeGrabList list={list} />);
-  return list;
+  renderWithProviders(<ArrBridgeGrabList list={list} retry={retry} />);
+  return { ...list, retry };
 };
 
 const rows = () => within(screen.getByRole('list', { name: 'Recent grabs' })).getAllByRole('listitem');
@@ -125,6 +138,161 @@ describe('ArrBridgeGrabList', () => {
 
     expect(screen.getByText('Could not load the recent grabs.')).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Recent grabs' })).not.toBeInTheDocument();
+  });
+
+  describe('a grab that waits while YouTube blocks downloads', () => {
+    const NEXT_TRY = '2025-06-10T11:02:00.000Z';
+    const nextTryTime = new Date(NEXT_TRY).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const blocked = (overrides: Partial<ArrGrab> = {}) => grab({
+      state: 'blocked', blockedAt: '2025-06-10T10:02:00.000Z', nextTryAt: NEXT_TRY, completedAt: null, removedAt: null,
+      ...overrides,
+    });
+
+    test('says that YouTube blocked it and when Youtarr checks again', () => {
+      setup({ grabs: [blocked()] });
+
+      const row = within(rows()[0]);
+      expect(row.getByText('Waiting: blocked by YouTube')).toBeInTheDocument();
+      expect(row.getByText(`YouTube blocked this download. Youtarr checks again at ${nextTryTime}.`)).toBeInTheDocument();
+    });
+
+    test('says so when it only waits behind another grab\'s block', () => {
+      setup({ grabs: [blocked({ blockedAt: null })] });
+
+      expect(
+        screen.getByText(`YouTube blocked another grab, so this one waits too. Youtarr checks again at ${nextTryTime}.`)
+      ).toBeInTheDocument();
+    });
+
+    test('says a check is coming soon when one is due', () => {
+      setup({ grabs: [blocked({ nextTryAt: null })] });
+
+      expect(screen.getByText('YouTube blocked this download. Youtarr checks again soon.')).toBeInTheDocument();
+    });
+
+    test('gives the cookie advice and says how to stop the wait', () => {
+      setup({ grabs: [blocked()] });
+
+      expect(screen.getByText(/upload fresh YouTube cookies in Settings -> Cookies/)).toBeInTheDocument();
+      expect(screen.getByText(/To stop, remove it from the queue in Sonarr or Radarr\./)).toBeInTheDocument();
+    });
+
+    test('Try again asks for a try of that grab', () => {
+      const { retry } = setup({ grabs: [blocked({ id: 'g7' })] });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Try again/ }));
+
+      expect(retry.retry).toHaveBeenCalledWith('g7');
+    });
+
+    test('names the release on each Try again button, so they can be told apart', () => {
+      setup({ grabs: [blocked({ id: 'g7', releaseTitle: 'Plan.9.1957.720p.YT.WEB-DL-X' }), blocked({ id: 'g8' })] });
+
+      expect(screen.getByRole('button', { name: 'Try again: Plan.9.1957.720p.YT.WEB-DL-X' })).toHaveTextContent('Try again');
+      expect(
+        screen.getByRole('button', { name: 'Try again: Beyblade.S01E29.1080p.WEB-DL-BEYBLADEOfficial' })
+      ).toBeInTheDocument();
+    });
+
+    test('shows that a try is being asked for, with every Try again off', () => {
+      setup({ grabs: [blocked({ id: 'g7' }), blocked({ id: 'g8' })], busyId: 'g7' });
+
+      const trying = within(rows()[0]).getByRole('button', { name: /^Trying:/ });
+      expect(trying).toBeDisabled();
+      expect(trying).toHaveTextContent('Trying...');
+      expect(within(rows()[1]).getByRole('button', { name: /^Try again/ })).toBeDisabled();
+    });
+
+    test('offers no Try again on a grab that is not blocked', () => {
+      setup({ grabs: [grab({ state: 'waiting' }), grab({ id: 'g2', state: 'downloading' })] });
+
+      expect(screen.queryByRole('button', { name: /^Try again/ })).not.toBeInTheDocument();
+    });
+
+    test.each([
+      ['started', 'downloading', 'Trying again now.'],
+      ['queued', 'downloading', 'Queued. It starts when the current download finishes.'],
+      ['ready', 'ready', 'The video is already in your Youtarr library, so it is ready to import.'],
+      ['deferred', 'blocked', 'Youtarr could not start it right now. It waits for the next check.'],
+      ['not-waiting', 'blocked', 'This grab is no longer waiting. Refresh the list.'],
+      ['failed', 'blocked', 'Could not try again. Try once more in a moment.'],
+    ] as const)('says what a try that ended as "%s" led to', (outcome, state, text) => {
+      setup({ grabs: [blocked({ state })], outcomes: { g1: outcome } });
+
+      expect(within(rows()[0]).getByRole('status')).toHaveTextContent(text);
+    });
+
+    test('drops "Trying again now" once the grab is back to waiting, blocked again', () => {
+      setup({ grabs: [blocked()], outcomes: { g1: 'started' } });
+
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(screen.getByText(`YouTube blocked this download. Youtarr checks again at ${nextTryTime}.`)).toBeInTheDocument();
+    });
+
+    test('shows the outcome only on the grab that was tried', () => {
+      setup({ grabs: [blocked(), blocked({ id: 'g2' })], outcomes: { g2: 'failed' } });
+
+      expect(within(rows()[0]).queryByRole('status')).not.toBeInTheDocument();
+      expect(within(rows()[1]).getByRole('status')).toBeInTheDocument();
+    });
+
+    describe('with a try the server still has to carry out', () => {
+      const PAUSED_NOTE = 'Downloads are paused, so this will start when they resume.';
+
+      test('says the try starts when downloads resume, whatever this browser remembers', () => {
+        setup({ grabs: [blocked({ retryRequested: true, downloadsPaused: true })] });
+
+        expect(screen.getByText(PAUSED_NOTE)).toBeInTheDocument();
+      });
+
+      test('says so once, also right after the click that asked for it', () => {
+        setup({ grabs: [blocked({ retryRequested: true, downloadsPaused: true })], outcomes: { g1: 'paused' } });
+
+        expect(screen.getAllByText(PAUSED_NOTE)).toHaveLength(1);
+      });
+
+      test('says the try comes in a moment once downloads run again', () => {
+        setup({ grabs: [blocked({ retryRequested: true })] });
+
+        expect(screen.getByText('Youtarr will try again in a moment.')).toBeInTheDocument();
+      });
+
+      test('says nothing of it once the try was made and blocked again', () => {
+        setup({ grabs: [blocked({ retryRequested: false })], outcomes: { g1: 'paused' } });
+
+        expect(screen.queryByText(PAUSED_NOTE)).not.toBeInTheDocument();
+      });
+    });
+
+    test('promises no time on any blocked grab while downloads are paused', () => {
+      setup({ grabs: [blocked({ downloadsPaused: true }), blocked({ id: 'g2', blockedAt: null, downloadsPaused: true })] });
+
+      expect(screen.getByText('YouTube blocked this download. Youtarr checks again when downloads resume.')).toBeInTheDocument();
+      expect(screen.getByText(
+        'YouTube blocked another grab, so this one waits too. Youtarr checks again when downloads resume.'
+      )).toBeInTheDocument();
+      expect(screen.queryByText(/checks again at/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('a failed grab', () => {
+    const HIDDEN_UNTIL = '2025-06-17T10:05:00.000Z';
+
+    test('says the release is blocklisted and until when Youtarr will not offer the video', () => {
+      setup({ grabs: [grab({ state: 'failed', failMessage: 'Video unavailable', hiddenUntil: HIDDEN_UNTIL })] });
+
+      expect(screen.getByText(
+        `This release is now blocklisted in Sonarr or Radarr, and Youtarr will not offer this video again until ${
+          new Date(HIDDEN_UNTIL).toLocaleDateString()
+        }.`
+      )).toBeInTheDocument();
+    });
+
+    test('says nothing of that once the video is offered again', () => {
+      setup({ grabs: [grab({ state: 'failed', failMessage: 'Video unavailable', hiddenUntil: null })] });
+
+      expect(screen.queryByText(/blocklisted/)).not.toBeInTheDocument();
+    });
   });
 
   describe('a list of several pages', () => {

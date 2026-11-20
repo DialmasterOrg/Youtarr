@@ -39,7 +39,16 @@ function matches(where) {
 function grabTable(rows) {
   return {
     rows,
-    findAll: jest.fn(async ({ where }) => rows.filter(matches(where))),
+    findAll: jest.fn(async ({ where, order = [], limit = Infinity }) => {
+      const compare = (a, b) => {
+        for (const [column] of order) {
+          if (a[column] < b[column]) return -1;
+          if (a[column] > b[column]) return 1;
+        }
+        return 0;
+      };
+      return rows.filter(matches(where)).sort(compare).slice(0, limit);
+    }),
     findByPk: jest.fn(async (id) => rows.find((row) => row.id === id) || null),
     update: jest.fn(async (values, { where }) => {
       const hits = rows.filter(matches(where));
@@ -62,6 +71,7 @@ function grab(overrides = {}) {
     bytes: null,
     fail_message: null,
     library_copy: null,
+    blocked_at: null,
     created_at: minutesAgo(1),
     updated_at: minutesAgo(1),
     completed_at: null,
@@ -75,6 +85,7 @@ const downloadedVideo = { youtubeId: YOUTUBE_ID, filePath: LIBRARY_FILE, audioFi
 
 function setup({
   rows = [], video = null, jobs = {}, storedJob = null, categories, resolution = null, now = () => NOW,
+  newId = () => JOB_ID,
 } = {}) {
   const state = { video };
   const ArrBridgeGrab = grabTable(rows);
@@ -101,7 +112,9 @@ function setup({
     fileState: jest.fn(async (filePath) => (filePath === LIBRARY_FILE ? 'present' : 'missing')),
     onHandedOff: jest.fn().mockResolvedValue(undefined),
     settleLibraryCopies: jest.fn().mockResolvedValue(undefined),
-    newId: () => JOB_ID,
+    getCookieKey: jest.fn(() => 'cookie-key-1'),
+    isPaused: jest.fn(() => false),
+    newId,
     now,
     logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
     scheduleWake: jest.fn(),
@@ -731,6 +744,694 @@ describe('grabExecutor', () => {
       await expect(executor.runOnce()).resolves.toBeUndefined();
 
       expect(deps.logger.warn).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('a download YouTube blocked', () => {
+    const OTHER_GRAB_ID = '3c1d6a52-0d6c-4f0e-9a3b-5f2f7f1f0a11';
+    const THIRD_GRAB_ID = '7e0b9c1a-4a55-4a0b-8a7e-2b1c3d4e5f60';
+    const OTHER_YOUTUBE_ID = 'bbbbbbbbbbb';
+    const OTHER_JOB_ID = '33333333-4444-4555-8666-777777777777';
+    const STILL_BLOCKED = 'YouTube blocked the download, and it was still blocked after a day of retries';
+    const blockedJob = (key = 'http-403-cookies-disabled') => endedJob({
+      failedVideos: [{ youtubeId: YOUTUBE_ID, error: 'HTTP Error 403: Forbidden', diagnosisKey: key }],
+      diagnoses: [{ key, title: 'YouTube blocked the download', message: 'Long text', count: 1 }],
+    }, 'Error');
+    const otherGrab = (overrides = {}) => grab({
+      id: OTHER_GRAB_ID, youtube_id: OTHER_YOUTUBE_ID, release_title: 'The.Office.US.S01E03.1080p.WEB-DL-NBC', ...overrides,
+    });
+
+    // One grab's download was just blocked; another grab waits beside it.
+    async function setupBlocked({ others = [otherGrab()], ...options } = {}) {
+      const clock = { time: NOW };
+      const jobs = { [JOB_ID]: blockedJob() };
+      const context = setup({
+        rows: [queued(), ...others], jobs, now: () => clock.time, newId: () => OTHER_JOB_ID, ...options,
+      });
+      await context.executor.handleJobEnded({ jobId: JOB_ID });
+      return { ...context, clock, jobs };
+    }
+
+    test.each([
+      'http-403-cookies-enabled',
+      'http-403-cookies-disabled',
+      'bot-check-cookies-enabled',
+      'bot-check-cookies-disabled',
+    ])('sends the grab back to waiting instead of failing it (%s)', async (key) => {
+      const { executor, rows } = setup({ rows: [queued({ library_copy: 'owned' })], jobs: { [JOB_ID]: blockedJob(key) } });
+
+      await executor.handleJobEnded({ jobId: JOB_ID });
+
+      expect(rows[0]).toMatchObject({
+        status: 'pending', job_id: null, blocked_at: NOW, fail_message: null, completed_at: null, library_copy: null,
+      });
+    });
+
+    test('keeps the time of the first block when the grab is blocked again', async () => {
+      const firstBlock = minutesAgo(120);
+      const { executor, rows } = setup({ rows: [queued({ blocked_at: firstBlock })], jobs: { [JOB_ID]: blockedJob() } });
+
+      await executor.handleJobEnded({ jobId: JOB_ID });
+
+      expect(rows[0]).toMatchObject({ status: 'pending', blocked_at: firstBlock });
+    });
+
+    test('fails the grab once it has been blocked for a day', async () => {
+      const { executor, rows } = setup({ rows: [queued({ blocked_at: daysAgo(1) })], jobs: { [JOB_ID]: blockedJob() } });
+
+      await executor.handleJobEnded({ jobId: JOB_ID });
+
+      expect(rows[0]).toMatchObject({ status: 'failed', fail_message: STILL_BLOCKED, completed_at: NOW });
+    });
+
+    test.each(['http-403-anonymous-retry', 'bot-check-anonymous-retry'])(
+      'still fails at once when the no-cookies fallback failed too (%s)',
+      async (key) => {
+        const { executor, rows } = setup({ rows: [queued()], jobs: { [JOB_ID]: blockedJob(key) } });
+
+        await executor.handleJobEnded({ jobId: JOB_ID });
+
+        expect(rows[0]).toMatchObject({ status: 'failed', fail_message: 'YouTube blocked the download', blocked_at: null });
+      }
+    );
+
+    test('does not revive a grab that was removed while its download ran', async () => {
+      const row = queued();
+      const { executor, deps } = setup({ rows: [row], jobs: { [JOB_ID]: blockedJob() } });
+      deps.models.Video.findOne.mockImplementation(async () => {
+        row.status = 'removed';
+        return null;
+      });
+
+      await executor.handleJobEnded({ jobId: JOB_ID });
+
+      expect(row).toMatchObject({ status: 'removed', blocked_at: null });
+    });
+
+    test('downloads nothing while the block holds', async () => {
+      const { executor, deps, rows } = await setupBlocked();
+
+      await executor.runOnce();
+
+      expect(deps.downloader).not.toHaveBeenCalled();
+      expect(rows.map((row) => row.status)).toEqual(['pending', 'pending']);
+    });
+
+    test('tries one waiting grab after an hour, without a second notification', async () => {
+      const { executor, deps, rows, clock } = await setupBlocked({ others: [otherGrab(), grab({ id: THIRD_GRAB_ID })] });
+
+      clock.time = minutesAfter(60);
+      await executor.runOnce();
+
+      expect(deps.downloader).toHaveBeenCalledTimes(1);
+      expect(deps.downloader.mock.calls[0][0]).toMatchObject({
+        urls: [`https://www.youtube.com/watch?v=${OTHER_YOUTUBE_ID}`], quietBlockedFailure: true,
+      });
+      expect(rows.map((row) => row.status)).toEqual(['pending', 'queued', 'pending']);
+    });
+
+    test('queues no second try while one is downloading', async () => {
+      const { executor, deps, clock } = await setupBlocked({ others: [otherGrab(), grab({ id: THIRD_GRAB_ID })] });
+      clock.time = minutesAfter(60);
+      await executor.runOnce();
+
+      await executor.runOnce();
+
+      expect(deps.downloader).toHaveBeenCalledTimes(1);
+    });
+
+    test('lets the next waiting grab follow once a try got through', async () => {
+      const { executor, deps, rows, clock, jobs } = await setupBlocked();
+      clock.time = minutesAfter(60);
+      await executor.runOnce();
+      deps.models.Video.findOne.mockImplementation(async ({ where }) => (
+        where.youtubeId === OTHER_YOUTUBE_ID ? { ...downloadedVideo, youtubeId: OTHER_YOUTUBE_ID } : null
+      ));
+      jobs[OTHER_JOB_ID] = endedJob();
+      await executor.handleJobEnded({ jobId: OTHER_JOB_ID });
+
+      await executor.runOnce();
+
+      expect(rows[1].status).toBe('completed');
+      expect(deps.downloader).toHaveBeenCalledTimes(2);
+      expect(deps.downloader.mock.calls[1][0]).toMatchObject({
+        urls: [`https://www.youtube.com/watch?v=${YOUTUBE_ID}`], quietBlockedFailure: true,
+      });
+    });
+
+    test('wakes the sweep when a job ends while grabs wait their turn', async () => {
+      const { deps } = await setupBlocked();
+
+      expect(deps.scheduleWake).toHaveBeenCalledTimes(1);
+    });
+
+    test('holds a try back another hour when it is blocked too', async () => {
+      const { executor, deps, clock, jobs } = await setupBlocked();
+      clock.time = minutesAfter(60);
+      await executor.runOnce();
+      jobs[OTHER_JOB_ID] = endedJob({
+        failedVideos: [{ youtubeId: OTHER_YOUTUBE_ID, error: 'HTTP Error 403', diagnosisKey: 'http-403-cookies-disabled' }],
+      }, 'Error');
+      await executor.handleJobEnded({ jobId: OTHER_JOB_ID });
+
+      clock.time = minutesAfter(119);
+      await executor.runOnce();
+
+      expect(deps.downloader).toHaveBeenCalledTimes(1);
+      expect(executor.blockStatus()).toEqual({ active: true, nextTryAt: minutesAfter(120) });
+    });
+
+    test('stages a waiting grab whose video was downloaded meanwhile, block or not', async () => {
+      const { executor, deps, rows, state } = await setupBlocked();
+      state.video = downloadedVideo;
+
+      await executor.runOnce();
+
+      expect(deps.downloader).not.toHaveBeenCalled();
+      expect(rows.map((row) => row.status)).toEqual(['completed', 'completed']);
+    });
+
+    test('keeps the block when a waiting grab is staged from a file that was already in the library', async () => {
+      const { executor, deps, rows } = await setupBlocked({ others: [otherGrab(), grab({ id: THIRD_GRAB_ID })] });
+      deps.models.Video.findOne.mockImplementation(async ({ where }) => (
+        where.youtubeId === OTHER_YOUTUBE_ID ? { ...downloadedVideo, youtubeId: OTHER_YOUTUBE_ID } : null
+      ));
+      await executor.runOnce();
+
+      await executor.runOnce();
+
+      expect(rows.map((row) => row.status)).toEqual(['pending', 'completed', 'pending']);
+      expect(deps.downloader).not.toHaveBeenCalled();
+      expect(executor.blockStatus()).toEqual({ active: true, nextTryAt: minutesAfter(60) });
+    });
+
+    test('tries at once when the cookies changed', async () => {
+      const { executor, deps } = await setupBlocked();
+      deps.getCookieKey.mockReturnValue('cookie-key-2');
+
+      await executor.runOnce();
+
+      expect(deps.downloader).toHaveBeenCalledTimes(1);
+    });
+
+    test('tries one grab, not all of them, after a restart', async () => {
+      const { executor, deps } = setup({
+        rows: [
+          grab({ blocked_at: minutesAgo(30) }),
+          otherGrab({ blocked_at: minutesAgo(30) }),
+          grab({ id: THIRD_GRAB_ID }),
+        ],
+      });
+
+      await executor.runOnce();
+
+      expect(deps.downloader).toHaveBeenCalledTimes(1);
+    });
+
+    test('keeps the other grabs held for the hour when the blocked grab was removed', async () => {
+      const { executor, deps, rows } = await setupBlocked();
+      rows[0].status = 'removed';
+
+      await executor.runOnce();
+
+      expect(deps.downloader).not.toHaveBeenCalled();
+    });
+
+    describe('when the blocked grab has left the queue', () => {
+      const held = () => [otherGrab(), grab({ id: THIRD_GRAB_ID, youtube_id: 'ccccccccccc' })];
+
+      test('still tries one of the held grabs first, not all of them', async () => {
+        const { executor, deps, rows, clock } = await setupBlocked({ others: held() });
+        rows[0].status = 'removed';
+
+        clock.time = minutesAfter(60);
+        await executor.runOnce();
+
+        expect(deps.downloader).toHaveBeenCalledTimes(1);
+        expect(rows.map((row) => row.status)).toEqual(['removed', 'queued', 'pending']);
+      });
+
+      test('lets that try notify if it is blocked: nothing that waits was told about a block', async () => {
+        const { executor, deps, rows, clock } = await setupBlocked({ others: held() });
+        rows[0].status = 'removed';
+
+        clock.time = minutesAfter(60);
+        await executor.runOnce();
+
+        expect(deps.downloader.mock.calls[0][0]).not.toHaveProperty('quietBlockedFailure');
+      });
+
+      test('goes back to ordinary downloads once that try got through', async () => {
+        const { executor, deps, rows, clock, jobs } = await setupBlocked({ others: held() });
+        rows[0].status = 'removed';
+        clock.time = minutesAfter(60);
+        await executor.runOnce();
+        deps.models.Video.findOne.mockImplementation(async ({ where }) => (
+          where.youtubeId === OTHER_YOUTUBE_ID ? { ...downloadedVideo, youtubeId: OTHER_YOUTUBE_ID } : null
+        ));
+        jobs[OTHER_JOB_ID] = endedJob();
+        await executor.handleJobEnded({ jobId: OTHER_JOB_ID });
+
+        await executor.runOnce();
+
+        expect(rows.map((row) => row.status)).toEqual(['removed', 'completed', 'queued']);
+        expect(deps.downloader.mock.calls[1][0]).not.toHaveProperty('quietBlockedFailure');
+        expect(executor.blockStatus()).toEqual({ active: false, nextTryAt: null });
+      });
+
+      test('forgets the block a day after the last blocked download', async () => {
+        const { executor, deps, rows, clock } = await setupBlocked({ others: [] });
+        rows[0].status = 'removed';
+        clock.time = minutesAfter(24 * 60);
+        rows.push(...held());
+
+        await executor.runOnce();
+
+        expect(deps.downloader).toHaveBeenCalledTimes(2);
+        expect(deps.downloader.mock.calls[0][0]).not.toHaveProperty('quietBlockedFailure');
+      });
+    });
+
+    test('gives the try to a grab that was never blocked before one that was', async () => {
+      const { executor, deps } = setup({
+        rows: [
+          grab({ blocked_at: minutesAgo(90), updated_at: minutesAgo(90) }),
+          otherGrab({ updated_at: minutesAgo(1) }),
+        ],
+      });
+
+      await executor.runOnce();
+
+      expect(deps.downloader).toHaveBeenCalledTimes(1);
+      expect(deps.downloader.mock.calls[0][0].urls).toEqual([`https://www.youtube.com/watch?v=${OTHER_YOUTUBE_ID}`]);
+    });
+
+    test('gives the try to the next grab when the first one cannot be checked', async () => {
+      const unreadable = '/data/NBC/unreadable.mkv';
+      const { executor, deps, rows } = setup({
+        rows: [
+          grab({ blocked_at: minutesAgo(90), updated_at: minutesAgo(90) }),
+          otherGrab({ blocked_at: minutesAgo(80), updated_at: minutesAgo(80) }),
+        ],
+      });
+      deps.models.Video.findOne.mockImplementation(async ({ where }) => (
+        where.youtubeId === YOUTUBE_ID ? { youtubeId: YOUTUBE_ID, filePath: unreadable, audioFilePath: null } : null
+      ));
+      deps.fileState.mockImplementation(async (filePath) => (filePath === unreadable ? 'unknown' : 'missing'));
+
+      await executor.runOnce();
+      expect(deps.downloader).not.toHaveBeenCalled();
+      expect(deps.scheduleWake).toHaveBeenCalledTimes(1);
+
+      await executor.runOnce();
+
+      expect(deps.downloader).toHaveBeenCalledTimes(1);
+      expect(rows.map((row) => row.status)).toEqual(['pending', 'queued']);
+    });
+
+    test('offers the try to the first grab again once every waiting grab passed it on', async () => {
+      const unreadable = '/data/NBC/unreadable.mkv';
+      const { executor, deps, state } = setup({
+        rows: [
+          grab({ blocked_at: minutesAgo(90), updated_at: minutesAgo(90) }),
+          otherGrab({ blocked_at: minutesAgo(80), updated_at: minutesAgo(80) }),
+        ],
+        video: { youtubeId: YOUTUBE_ID, filePath: unreadable, audioFilePath: null },
+      });
+      deps.fileState.mockResolvedValue('unknown');
+      await executor.runOnce();
+      await executor.runOnce();
+      await executor.runOnce();
+      expect(deps.downloader).not.toHaveBeenCalled();
+
+      state.video = null;
+      deps.fileState.mockResolvedValue('missing');
+      await executor.runOnce();
+
+      expect(deps.downloader).toHaveBeenCalledTimes(1);
+      expect(deps.downloader.mock.calls[0][0].urls).toEqual([`https://www.youtube.com/watch?v=${YOUTUBE_ID}`]);
+    });
+
+    test('does not wait for a slow disk: the sweep ends while a waiting grab is still being checked', async () => {
+      let release;
+      const { executor, deps } = setup({
+        rows: [grab({ blocked_at: minutesAgo(90) })],
+        video: { youtubeId: YOUTUBE_ID, filePath: '/data/NBC/slow.mkv', audioFilePath: null },
+      });
+      deps.fileState.mockReturnValue(new Promise((resolve) => {
+        release = resolve;
+      }));
+      executor.start();
+
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(deps.settleLibraryCopies).toHaveBeenCalledTimes(1);
+      executor.stop();
+      release('missing');
+    });
+
+    test('gives the try to the next grab when the first one is staged from the library', async () => {
+      const { executor, deps, rows } = setup({
+        rows: [
+          grab({ blocked_at: minutesAgo(90), updated_at: minutesAgo(90) }),
+          otherGrab({ blocked_at: minutesAgo(80), updated_at: minutesAgo(80) }),
+        ],
+      });
+      deps.models.Video.findOne.mockImplementation(async ({ where }) => (
+        where.youtubeId === YOUTUBE_ID ? downloadedVideo : null
+      ));
+
+      await executor.runOnce();
+      await executor.runOnce();
+
+      expect(rows.map((row) => row.status)).toEqual(['completed', 'queued']);
+    });
+
+    describe('a grab that waited its turn for a day while downloads got through', () => {
+      const THIRD_YOUTUBE_ID = 'ccccccccccc';
+      const blockedThird = () => endedJob({
+        failedVideos: [{ youtubeId: THIRD_YOUTUBE_ID, error: 'HTTP Error 403', diagnosisKey: 'http-403-cookies-disabled' }],
+      }, 'Error');
+
+      // The first grab was blocked almost a day ago. Another grab then got
+      // through, and a third one is blocked 40 minutes later.
+      async function setupOvertaken() {
+        const context = await setupBlocked({
+          others: [otherGrab(), grab({ id: THIRD_GRAB_ID, youtube_id: THIRD_YOUTUBE_ID })],
+        });
+        const { executor, deps, rows, clock, jobs } = context;
+        const longAgo = minutesAgo(23 * 60 + 30);
+        Object.assign(rows[0], { blocked_at: longAgo, updated_at: longAgo });
+        await executor.retryNow(OTHER_GRAB_ID);
+        deps.models.Video.findOne.mockImplementation(async ({ where }) => (
+          where.youtubeId === OTHER_YOUTUBE_ID ? { ...downloadedVideo, youtubeId: OTHER_YOUTUBE_ID } : null
+        ));
+        jobs[OTHER_JOB_ID] = endedJob();
+        await executor.handleJobEnded({ jobId: OTHER_JOB_ID });
+        await executor.runOnce();
+        clock.time = minutesAfter(40);
+        jobs[OTHER_JOB_ID] = blockedThird();
+        await executor.handleJobEnded({ jobId: OTHER_JOB_ID });
+        return context;
+      }
+
+      test('is not failed by the sweep, although its first block is over a day old', async () => {
+        const { executor, rows, clock } = await setupOvertaken();
+        expect(rows.map((row) => row.status)).toEqual(['pending', 'completed', 'pending']);
+
+        clock.time = minutesAfter(45);
+        await executor.runOnce();
+
+        expect(rows[0]).toMatchObject({ status: 'pending', fail_message: null });
+      });
+
+      test('still fails when its own next try is blocked', async () => {
+        const { executor, rows, clock, jobs } = await setupOvertaken();
+        clock.time = minutesAfter(45);
+        await executor.retryNow(GRAB_ID);
+        jobs[OTHER_JOB_ID] = blockedJob();
+        await executor.handleJobEnded({ jobId: OTHER_JOB_ID });
+
+        expect(rows[0]).toMatchObject({ status: 'failed', fail_message: STILL_BLOCKED });
+      });
+    });
+
+    test('opens no try while downloads are paused', async () => {
+      const { executor, deps, clock } = await setupBlocked();
+      deps.isPaused.mockReturnValue(true);
+
+      clock.time = minutesAfter(60);
+      await executor.runOnce();
+
+      expect(deps.downloader).not.toHaveBeenCalled();
+    });
+
+    describe('a retry that downloaded but could not be staged', () => {
+      async function setupUnstaged({ firstBlockedAt = NOW } = {}) {
+        const context = await setupBlocked();
+        context.rows[0].blocked_at = firstBlockedAt;
+        await context.executor.retryNow(GRAB_ID);
+        context.deps.models.Video.findOne.mockImplementation(async ({ where }) => (
+          where.youtubeId === YOUTUBE_ID ? downloadedVideo : null
+        ));
+        context.deps.staging.stage.mockRejectedValue(Object.assign(new Error('full'), { code: 'ENOSPC' }));
+        context.jobs[OTHER_JOB_ID] = endedJob();
+        await context.executor.handleJobEnded({ jobId: OTHER_JOB_ID });
+        return context;
+      }
+
+      test('no longer counts as blocked', async () => {
+        const { rows } = await setupUnstaged();
+
+        expect(rows[0]).toMatchObject({ status: 'pending', blocked_at: null, fail_message: null });
+      });
+
+      test('ends the block for the other grabs, since its download got through', async () => {
+        const { executor, rows } = await setupUnstaged();
+
+        await executor.runOnce();
+
+        expect(rows[1].status).toBe('queued');
+      });
+
+      test('is not failed as blocked for a day when another grab is blocked later', async () => {
+        const { executor, rows, clock, jobs } = await setupUnstaged({ firstBlockedAt: minutesAgo(23 * 60 + 30) });
+        await executor.runOnce();
+        clock.time = minutesAfter(40);
+        jobs[OTHER_JOB_ID] = endedJob({
+          failedVideos: [{ youtubeId: OTHER_YOUTUBE_ID, error: 'HTTP Error 403', diagnosisKey: 'http-403-cookies-disabled' }],
+        }, 'Error');
+        await executor.handleJobEnded({ jobId: OTHER_JOB_ID });
+
+        clock.time = minutesAfter(45);
+        await executor.runOnce();
+
+        expect(rows[0]).toMatchObject({ status: 'pending', fail_message: null });
+        expect(rows[1]).toMatchObject({ status: 'pending', blocked_at: minutesAfter(40) });
+      });
+    });
+
+    test('stops counting a waiting grab as blocked when its video is in the library but cannot be staged', async () => {
+      const { executor, deps, rows, state } = await setupBlocked();
+      state.video = downloadedVideo;
+      deps.staging.stage.mockRejectedValue(Object.assign(new Error('full'), { code: 'ENOSPC' }));
+
+      await executor.runOnce();
+
+      expect(rows[0]).toMatchObject({ status: 'pending', blocked_at: null, fail_message: null });
+    });
+
+    test('fails a waiting grab a day after its first block, while the block holds', async () => {
+      const { executor, rows, clock } = await setupBlocked({
+        others: [otherGrab({ blocked_at: minutesAgo(24 * 60 - 10) })],
+      });
+
+      clock.time = minutesAfter(20);
+      await executor.runOnce();
+
+      expect(rows[1]).toMatchObject({ status: 'failed', fail_message: STILL_BLOCKED, completed_at: minutesAfter(20) });
+      expect(rows[0].status).toBe('pending');
+    });
+
+    test('tries a grab blocked long ago instead of failing it when a try is due', async () => {
+      const { executor, deps, rows } = setup({ rows: [grab({ blocked_at: daysAgo(2) })] });
+
+      await executor.runOnce();
+
+      expect(deps.downloader).toHaveBeenCalledTimes(1);
+      expect(rows[0]).toMatchObject({ status: 'queued', fail_message: null });
+    });
+
+    test('silences the jobs of grabs that were queued before the block was known', async () => {
+      const jobs = {
+        [JOB_ID]: blockedJob(),
+        [OTHER_JOB_ID]: { jobType: ARR_BRIDGE_JOB_LABEL, status: 'Pending', data: { urls: [] } },
+      };
+      const { executor } = setup({
+        rows: [queued(), otherGrab({ status: 'queued', job_id: OTHER_JOB_ID })], jobs,
+      });
+
+      await executor.handleJobEnded({ jobId: JOB_ID });
+
+      expect(jobs[OTHER_JOB_ID].data.quietBlockedFailure).toBe(true);
+    });
+
+    test('reports no block before one happened', () => {
+      const { executor } = setup();
+
+      expect(executor.blockStatus()).toEqual({ active: false, nextTryAt: null });
+    });
+
+    test('reports the block and its next try', async () => {
+      const { executor } = await setupBlocked();
+
+      expect(executor.blockStatus()).toEqual({ active: true, nextTryAt: minutesAfter(60) });
+    });
+
+    describe('Try again', () => {
+      test('queues a held grab at once, quietly', async () => {
+        const { executor, deps, rows } = await setupBlocked();
+
+        const result = await executor.retryNow(GRAB_ID);
+
+        expect(result).toBe('queued');
+        expect(deps.downloader).toHaveBeenCalledTimes(1);
+        expect(deps.downloader.mock.calls[0][0]).toMatchObject({
+          urls: [`https://www.youtube.com/watch?v=${YOUTUBE_ID}`], quietBlockedFailure: true,
+        });
+        expect(rows.map((row) => row.status)).toEqual(['queued', 'pending']);
+      });
+
+      test('says the download started when no other download is running', async () => {
+        const { executor, jobs } = await setupBlocked();
+        jobs[OTHER_JOB_ID] = { jobType: ARR_BRIDGE_JOB_LABEL, status: 'In Progress', data: {} };
+
+        await expect(executor.retryNow(GRAB_ID)).resolves.toBe('started');
+      });
+
+      test('releases the other waiting grabs when the try gets through, without waiting out the hour', async () => {
+        const { executor, deps, rows, jobs } = await setupBlocked();
+        await executor.retryNow(GRAB_ID);
+        deps.models.Video.findOne.mockImplementation(async ({ where }) => (
+          where.youtubeId === YOUTUBE_ID ? downloadedVideo : null
+        ));
+        jobs[OTHER_JOB_ID] = endedJob();
+        await executor.handleJobEnded({ jobId: OTHER_JOB_ID });
+
+        await executor.runOnce();
+
+        expect(rows.map((row) => row.status)).toEqual(['completed', 'queued']);
+        expect(deps.downloader.mock.calls[1][0]).toMatchObject({
+          urls: [`https://www.youtube.com/watch?v=${OTHER_YOUTUBE_ID}`],
+        });
+        expect(executor.blockStatus()).toEqual({ active: false, nextTryAt: null });
+      });
+
+      test('leaves the other waiting grabs held', async () => {
+        const { executor, deps } = await setupBlocked();
+        await executor.retryNow(GRAB_ID);
+
+        await executor.runOnce();
+
+        expect(deps.downloader).toHaveBeenCalledTimes(1);
+      });
+
+      test('says downloads are paused and starts the grab when they resume', async () => {
+        const { executor, deps, rows } = await setupBlocked();
+        deps.isPaused.mockReturnValue(true);
+        deps.downloader.mockRejectedValueOnce(Object.assign(new Error('paused'), { code: 'DOWNLOADS_PAUSED' }));
+
+        const result = await executor.retryNow(GRAB_ID);
+        expect(result).toBe('paused');
+        expect(rows[0]).toMatchObject({ status: 'pending', fail_message: null });
+
+        await executor.runOnce();
+        expect(rows.map((row) => row.status)).toEqual(['queued', 'pending']);
+      });
+
+      test('says the try is put off when another job is downloading the video', async () => {
+        const { executor, deps, rows } = await setupBlocked();
+        deps.downloader.mockResolvedValueOnce({ queued: 0, acceptedIds: [], alreadyActiveIds: [YOUTUBE_ID] });
+
+        await expect(executor.retryNow(GRAB_ID)).resolves.toBe('deferred');
+        expect(rows[0].status).toBe('pending');
+      });
+
+      test('keeps the request while downloads are paused', async () => {
+        const { executor, deps } = await setupBlocked();
+        deps.downloader.mockRejectedValueOnce(Object.assign(new Error('paused'), { code: 'DOWNLOADS_PAUSED' }));
+
+        await executor.retryNow(GRAB_ID);
+
+        expect(executor.isRetryRequested(GRAB_ID)).toBe(true);
+        expect(executor.isRetryRequested(OTHER_GRAB_ID)).toBe(false);
+      });
+
+      test('drops the request once the try was queued and blocked again', async () => {
+        const { executor, jobs } = await setupBlocked();
+        await executor.retryNow(GRAB_ID);
+        jobs[OTHER_JOB_ID] = blockedJob();
+        await executor.handleJobEnded({ jobId: OTHER_JOB_ID });
+
+        expect(executor.isRetryRequested(GRAB_ID)).toBe(false);
+      });
+
+      describe('on a grab whose library file cannot be checked', () => {
+        async function setupUnreadable() {
+          const context = await setupBlocked();
+          context.deps.models.Video.findOne.mockImplementation(async ({ where }) => (
+            where.youtubeId === YOUTUBE_ID
+              ? { youtubeId: YOUTUBE_ID, filePath: '/data/NBC/unreadable.mkv', audioFilePath: null }
+              : null
+          ));
+          context.deps.fileState.mockImplementation(async (filePath) => (
+            filePath === '/data/NBC/unreadable.mkv' ? 'unknown' : 'missing'
+          ));
+          return context;
+        }
+
+        test('says the try is put off and drops the request', async () => {
+          const { executor } = await setupUnreadable();
+
+          await expect(executor.retryNow(GRAB_ID)).resolves.toBe('deferred');
+          expect(executor.isRetryRequested(GRAB_ID)).toBe(false);
+        });
+
+        test('does not keep the other waiting grabs from being tried', async () => {
+          const { executor, deps, rows, clock } = await setupUnreadable();
+          await executor.retryNow(GRAB_ID);
+
+          clock.time = minutesAfter(60);
+          await executor.runOnce();
+
+          expect(deps.downloader).toHaveBeenCalledTimes(1);
+          expect(rows.map((row) => row.status)).toEqual(['pending', 'queued']);
+        });
+      });
+
+      test('stages the video when it is in the library by now', async () => {
+        const { executor, deps, rows, state } = await setupBlocked();
+        state.video = downloadedVideo;
+
+        await expect(executor.retryNow(GRAB_ID)).resolves.toBe('ready');
+        expect(deps.downloader).not.toHaveBeenCalled();
+        expect(rows[0].status).toBe('completed');
+      });
+
+      test('goes back to waiting, an hour on, when the try is blocked again', async () => {
+        const { executor, deps, rows, clock, jobs } = await setupBlocked();
+        clock.time = minutesAfter(10);
+        await executor.retryNow(GRAB_ID);
+        jobs[OTHER_JOB_ID] = blockedJob();
+        await executor.handleJobEnded({ jobId: OTHER_JOB_ID });
+
+        clock.time = minutesAfter(65);
+        await executor.runOnce();
+
+        expect(rows[0]).toMatchObject({ status: 'pending', blocked_at: NOW });
+        expect(deps.downloader).toHaveBeenCalledTimes(1);
+        expect(executor.blockStatus().nextTryAt).toEqual(minutesAfter(70));
+      });
+
+      test.each([
+        ['a removed grab', 'removed'],
+        ['a grab that is downloading', 'queued'],
+        ['a finished grab', 'completed'],
+      ])('does nothing for %s', async (_name, status) => {
+        const { executor, deps, rows } = setup({ rows: [grab({ status, job_id: JOB_ID })] });
+
+        await expect(executor.retryNow(GRAB_ID)).resolves.toBeNull();
+        expect(deps.downloader).not.toHaveBeenCalled();
+        expect(rows[0].status).toBe(status);
+      });
+
+      test('does nothing for a grab it does not know', async () => {
+        const { executor, deps } = setup();
+
+        await expect(executor.retryNow(GRAB_ID)).resolves.toBeNull();
+        expect(deps.downloader).not.toHaveBeenCalled();
+      });
     });
   });
 

@@ -7,7 +7,7 @@ const { createArrBridgeSettings } = require('./arrBridgeSettings');
 const { createArrCatalog } = require('./arrCatalog');
 const { createArrClient } = require('./arrClient');
 const { createGrabExecutor } = require('./grabExecutor');
-const { createGrabService, grabState } = require('./grabService');
+const { createGrabService, grabState, isGrabId } = require('./grabService');
 const { createLibraryCopyRemover, libraryCopyView } = require('./libraryCopyRemover');
 const { createNewznabApi } = require('./newznabApi');
 const { createRecentSearches } = require('./recentSearches');
@@ -113,18 +113,20 @@ function createLibraryResolutionLookup({ Video }) {
  * @param {Function} deps.removeVideo - (youtubeId, removal) => Promise<boolean>; deletes a library video
  * @param {Function} deps.probeResolution - (youtubeId) => Promise<number|null>; the highest resolution yt-dlp lists
  * @param {Function} [deps.getHostDownloadsFolder] - () => the downloads folder as the host knows it, or null
+ * @param {Function} [deps.getCookieKey] - () => what identifies the cookie file in use, or null
  * @param {Object} deps.logger
  * @param {Function} [deps.createExecutor] - Test seam; defaults to createGrabExecutor
  * @param {Function} [deps.createClient] - Test seam; defaults to createArrClient
  */
 function createArrBridgeService({
   configModule, models, searchVideos, isYoutubeApiAvailable, downloader, jobLookup, storageGuard,
-  isArchived, getActivity, removeVideo, probeResolution, getHostDownloadsFolder, logger,
+  isArchived, getActivity, removeVideo, probeResolution, getHostDownloadsFolder, getCookieKey, logger,
   createExecutor = createGrabExecutor, createClient = createArrClient,
 }) {
   const getConfig = () => configModule.getConfig();
   const getSettings = () => readSettings(getConfig());
   let running = false;
+  const isPaused = () => storageGuard.getStatus()?.paused === true;
 
   const staging = createStaging({ getOutputRoot: () => configModule.directoryPath, getSettings, logger });
   const arrClient = createClient();
@@ -142,6 +144,9 @@ function createArrBridgeService({
     getSettings,
     onHandedOff: libraryCopies.request,
     settleLibraryCopies: libraryCopies.run,
+    // New cookies end the wait of grabs YouTube blocked.
+    getCookieKey,
+    isPaused,
     logger,
   });
   const grabService = createGrabService({
@@ -189,7 +194,7 @@ function createArrBridgeService({
     grabService,
     staging,
     getActivity,
-    isPaused: () => storageGuard.getStatus()?.paused === true,
+    isPaused,
   });
 
   // Applies the current config: creates the key the first time the bridge
@@ -230,7 +235,14 @@ function createArrBridgeService({
    */
   async function listRecentGrabs(query) {
     const { rows, total, page, pageSize } = await grabService.listRecent(query);
-    const grabs = rows.map((row) => ({
+    const block = executor.blockStatus();
+    const grabs = rows.map((row) => toGrabView(row, block));
+    return { grabs, total, page, pageSize };
+  }
+
+  function toGrabView(row, block) {
+    const state = grabState(row, { blockActive: block.active });
+    return {
       id: row.id,
       releaseTitle: row.release_title,
       youtubeId: row.youtube_id,
@@ -238,14 +250,32 @@ function createArrBridgeService({
       channelName: row.video?.youTubeChannelName || null,
       kind: row.kind,
       category: row.category,
-      state: grabState(row),
+      state,
       failMessage: row.fail_message || null,
+      // Set when YouTube blocked this grab's own download; a grab can also
+      // be "blocked" because it waits behind another grab's block.
+      blockedAt: state === 'blocked' ? row.blocked_at || null : null,
+      nextTryAt: state === 'blocked' ? block.nextTryAt : null,
+      // What a blocked grab also waits for: the user's "Try again" that is
+      // still to be carried out, and downloads paused by a storage limit.
+      retryRequested: state === 'blocked' && executor.isRetryRequested(row.id),
+      downloadsPaused: state === 'blocked' && isPaused(),
+      hiddenUntil: grabService.hiddenUntilOf(row),
       libraryCopy: libraryCopyView(row),
       createdAt: row.created_at,
       completedAt: row.completed_at || null,
       removedAt: row.removed_at || null,
-    }));
-    return { grabs, total, page, pageSize };
+    };
+  }
+
+  /**
+   * The Settings page's "Try again" on a waiting grab.
+   * @param {string} id
+   * @returns {Promise<'started'|'queued'|'paused'|'ready'|'deferred'|null>} null when the grab is not waiting
+   */
+  async function retryGrab(id) {
+    if (!isEnabled(getConfig()) || !isGrabId(id)) return null;
+    return executor.retryNow(id);
   }
 
   return {
@@ -253,6 +283,7 @@ function createArrBridgeService({
     sabnzbd,
     settings,
     listRecentGrabs,
+    retryGrab,
     listRecentSearches: (query) => searchHistory.list(query),
     isEnabled: () => isEnabled(getConfig()),
     isAuthorized: (candidate) => isAuthorized(getConfig(), candidate),

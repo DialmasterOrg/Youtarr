@@ -10,6 +10,7 @@ import { DEFAULT_CONFIG } from '../../../../config/configSchema';
 jest.mock('../../hooks/useArrBridgeKey', () => ({ useArrBridgeKey: jest.fn() }));
 jest.mock('../../hooks/useArrBridgeConnections', () => ({ useArrBridgeConnections: jest.fn() }));
 jest.mock('../../hooks/useArrBridgeGrabs', () => ({ useArrBridgeGrabs: jest.fn() }));
+jest.mock('../../hooks/useArrBridgeGrabRetry', () => ({ useArrBridgeGrabRetry: jest.fn() }));
 jest.mock('../../hooks/useArrBridgeSearches', () => ({ useArrBridgeSearches: jest.fn() }));
 jest.mock('../../hooks/useArrBridgeFolderCheck', () => ({ useArrBridgeFolderCheck: jest.fn() }));
 jest.mock('../../../../hooks/useSubfolders', () => ({
@@ -19,6 +20,7 @@ jest.mock('../../../../hooks/useSubfolders', () => ({
 const { useArrBridgeKey } = require('../../hooks/useArrBridgeKey');
 const { useArrBridgeConnections } = require('../../hooks/useArrBridgeConnections');
 const { useArrBridgeGrabs } = require('../../hooks/useArrBridgeGrabs');
+const { useArrBridgeGrabRetry } = require('../../hooks/useArrBridgeGrabRetry');
 const { useArrBridgeSearches } = require('../../hooks/useArrBridgeSearches');
 const { useArrBridgeFolderCheck } = require('../../hooks/useArrBridgeFolderCheck');
 
@@ -105,6 +107,7 @@ describe('ArrBridgeSection', () => {
       bridgeKey: KEY, loading: false, error: null, regenerating: false, regenerate: jest.fn(),
     });
     useArrBridgeGrabs.mockReturnValue(pagedList());
+    useArrBridgeGrabRetry.mockReturnValue({ retry: jest.fn(), busyId: null, outcomes: {} });
     useArrBridgeSearches.mockReturnValue(pagedList());
     useArrBridgeFolderCheck.mockReturnValue({
       results: { sonarr: { ok: true, visible: true, path: IN_YOUTARR } }, checking: false, recheck: jest.fn(),
@@ -239,6 +242,41 @@ describe('ArrBridgeSection', () => {
       const list = screen.getByRole('list', { name: 'Recent searches' });
       expect(within(list).getByText('Beyblade S01E29')).toBeInTheDocument();
       expect(within(list).getByText('Nothing offered')).toBeInTheDocument();
+    });
+
+    test('Try again on a blocked grab tries it, and the grab list is loaded again afterwards', () => {
+      const grabs = pagedList({
+        items: [{
+          id: 'g1',
+          releaseTitle: 'Beyblade.S01E29.1080p.YT.WEB-DL-X',
+          youtubeId: 'g7VYYfoNaf0',
+          videoTitle: null,
+          channelName: null,
+          kind: 'tv',
+          category: 'tv',
+          state: 'blocked',
+          failMessage: null,
+          blockedAt: '2025-06-10T10:02:00.000Z',
+          nextTryAt: null,
+          retryRequested: false,
+          downloadsPaused: false,
+          hiddenUntil: null,
+          libraryCopy: null,
+          createdAt: '2025-06-10T10:00:00.000Z',
+          completedAt: null,
+          removedAt: null,
+        }],
+        total: 1,
+      });
+      useArrBridgeGrabs.mockReturnValue(grabs);
+      const retry = jest.fn();
+      useArrBridgeGrabRetry.mockReturnValue({ retry, busyId: null, outcomes: {} });
+      setupSection({}, ACTIVITY_URL);
+
+      fireEvent.click(screen.getByRole('button', { name: /^Try again/ }));
+
+      expect(retry).toHaveBeenCalledWith('g1');
+      expect(useArrBridgeGrabRetry).toHaveBeenLastCalledWith('session', grabs.refresh);
     });
 
     test('Refresh on a list asks for it again', () => {

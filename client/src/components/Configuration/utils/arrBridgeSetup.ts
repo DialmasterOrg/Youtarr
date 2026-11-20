@@ -45,7 +45,7 @@ export interface ArrConnectionResult {
   connection?: ArrConnectionView;
 }
 
-export type ArrGrabState = 'waiting' | 'downloading' | 'ready' | 'failed' | 'handed-off' | 'cancelled';
+export type ArrGrabState = 'waiting' | 'blocked' | 'downloading' | 'ready' | 'failed' | 'handed-off' | 'cancelled';
 
 export type ArrLibraryCopy = 'checking' | 'removed' | 'kept';
 
@@ -79,6 +79,16 @@ export interface ArrGrab {
   category: string;
   state: ArrGrabState;
   failMessage: string | null;
+  /** When YouTube first blocked this grab's own download; null for a grab that waits behind another grab's block. */
+  blockedAt: string | null;
+  /** For a blocked grab, when Youtarr next tries a waiting grab; null when a try is due. */
+  nextTryAt: string | null;
+  /** For a blocked grab, whether a "Try again" asked for it is still to be carried out. */
+  retryRequested: boolean;
+  /** For a blocked grab, whether downloads are paused by a storage limit. */
+  downloadsPaused: boolean;
+  /** For a failed grab, until when Youtarr leaves its video out of searches; null when it does not. */
+  hiddenUntil: string | null;
   /** What "remove after import" did with Youtarr's copy; null when it was never asked. */
   libraryCopy: ArrLibraryCopy | null;
   createdAt: string;
@@ -92,12 +102,80 @@ type GrabTone = 'default' | 'info' | 'success' | 'warning' | 'error';
 // there, with the same call, so "handed-off" cannot be called "Imported".
 export const GRAB_STATE_LABELS: Record<ArrGrabState, { label: string; tone: GrabTone }> = {
   waiting: { label: 'Waiting to download', tone: 'default' },
+  blocked: { label: 'Waiting: blocked by YouTube', tone: 'warning' },
   downloading: { label: 'Downloading', tone: 'info' },
   ready: { label: 'Ready to import', tone: 'warning' },
   failed: { label: 'Failed', tone: 'error' },
   'handed-off': { label: 'Taken by Sonarr/Radarr', tone: 'success' },
   cancelled: { label: 'Removed before it finished', tone: 'default' },
 };
+
+export const BLOCKED_GRAB_ADVICE =
+  'This is often temporary. If it keeps happening, upload fresh YouTube cookies in Settings -> Cookies. To stop, remove it from the queue in Sonarr or Radarr.';
+
+/**
+ * Why a blocked grab waits and when Youtarr next tests the block. One
+ * waiting grab is tried at a time, so that try may be another grab's: the
+ * text promises a check, not this grab's turn.
+ * @param grab - A grab in the `blocked` state
+ * @param formatTime - How to show the time of the next try
+ */
+export function blockedGrabText(
+  grab: Pick<ArrGrab, 'blockedAt' | 'nextTryAt' | 'downloadsPaused'>,
+  formatTime: (value: string) => string
+): string {
+  const reason = grab.blockedAt
+    ? 'YouTube blocked this download.'
+    : 'YouTube blocked another grab, so this one waits too.';
+  if (grab.downloadsPaused) return `${reason} Youtarr checks again when downloads resume.`;
+  const time = grab.nextTryAt ? formatTime(grab.nextTryAt) : '';
+  return `${reason} ${time ? `Youtarr checks again at ${time}.` : 'Youtarr checks again soon.'}`;
+}
+
+/**
+ * What to say on a blocked grab whose "Try again" is still to be carried
+ * out. The server says so, which keeps the note true after a reload and
+ * drops it once the try was made.
+ * @returns The note, or null when no try is asked for
+ */
+export function requestedRetryNote(grab: Pick<ArrGrab, 'retryRequested' | 'downloadsPaused'>): string | null {
+  if (!grab.retryRequested) return null;
+  return grab.downloadsPaused
+    ? 'Downloads are paused, so this will start when they resume.'
+    : 'Youtarr will try again in a moment.';
+}
+
+/** What "Try again" on a blocked grab led to: the server's answers, plus the two ways the request can fail. */
+export type ArrGrabRetryOutcome = 'started' | 'queued' | 'paused' | 'ready' | 'deferred' | 'not-waiting' | 'failed';
+
+export const SERVER_RETRY_OUTCOMES: ArrGrabRetryOutcome[] = ['started', 'queued', 'paused', 'ready', 'deferred'];
+
+// What the browser says right after a "Try again". `state` is the grab state
+// the note belongs to: once the grab is in another state, the row's own text
+// tells the newer story. "paused" has no note here: the server reports that
+// try as still asked for (see requestedRetryNote).
+export const GRAB_RETRY_NOTES: Record<Exclude<ArrGrabRetryOutcome, 'paused'>, { text: string; state: ArrGrabState }> = {
+  started: { text: 'Trying again now.', state: 'downloading' },
+  queued: { text: 'Queued. It starts when the current download finishes.', state: 'downloading' },
+  ready: { text: 'The video is already in your Youtarr library, so it is ready to import.', state: 'ready' },
+  deferred: { text: 'Youtarr could not start it right now. It waits for the next check.', state: 'blocked' },
+  'not-waiting': { text: 'This grab is no longer waiting. Refresh the list.', state: 'blocked' },
+  failed: { text: 'Could not try again. Try once more in a moment.', state: 'blocked' },
+};
+
+/**
+ * What to say on a grab's row about its last "Try again" in this browser.
+ * @returns The note, or null when there is none for the state the grab is in now
+ */
+export function grabRetryNote(grab: Pick<ArrGrab, 'state'>, outcome: ArrGrabRetryOutcome | undefined): string | null {
+  if (!outcome || outcome === 'paused') return null;
+  const note = GRAB_RETRY_NOTES[outcome];
+  return note.state === grab.state ? note.text : null;
+}
+
+export function hiddenGrabNote(hiddenUntil: string, formatDate: (value: string) => string): string {
+  return `This release is now blocklisted in Sonarr or Radarr, and Youtarr will not offer this video again until ${formatDate(hiddenUntil)}.`;
+}
 
 export interface ArrSetupValues {
   indexerUrl: string;

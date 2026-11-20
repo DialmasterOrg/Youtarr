@@ -96,6 +96,15 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 - `grabExecutor` follows `externalRequestExecutor`, but each attempt gets a new job id stored on the grab: work on one grab is serialized, and every write names the status it expects, so a removed grab is never revived or staged.
 - A grab is failed only on evidence. A job a restart terminated, or one that never existed, queues the grab again at once; a file that cannot be checked waits.
 - A job that errored before trying the video, or a staging error, holds the grab 15 minutes and retries for a day, in memory. A failure makes the app blocklist the release and hides the video 7 days.
+- A download YouTube blocked (`failureAdvisor.isYoutubeBlock`: a 403 or bot check, not the anonymous-retry diagnoses) sends its grab back to `pending` with `blocked_at`, never to failed. It fails once `blocked_at` is a day old and it is blocked still.
+- After a block, grabs download one at a time, and only when `blockWait` says a try is due, until a download gets through or a day passes: restarts, new cookies and removed grabs must not cause bursts.
+- A download that gets through ends the block at once (`recordSuccess`). The sweep fails a day-old grab only while a block holds and no download got through since that grab's last try: waiting its turn is not being blocked.
+- The due try goes to one grab per sweep, never-blocked grabs first; one that cannot take it is skipped until another did. The sweep never awaits a grab: a slow disk or copy would stall everything.
+- A "Try again" stays requested only while downloads are paused (`isRetryRequested`, shown on the row). One that cannot start otherwise is dropped, or it would keep every other grab from the due try.
+- `blocked_at` is cleared once the grab's video is in the library, even when staging then fails: a grab whose download worked must not fail later as blocked for a day.
+- Only `blocked_at` is stored; the next try time, the memory of the block and requested tries are in memory. A grab whose video is in the library by then is staged even while the block holds.
+- A repeat try carries `quietBlockedFailure`, as do jobs already queued when the block was found, so one block notifies once. A try made when no blocked grab waits and the hour is over is not quiet.
+- `recentlyFailedIds` leaves out a video that has a library file: a grab of it stages without a download, which is the user's way around a failed grab.
 - `endedBeforeTrying` matches a job's `Error` output against `constants/jobOutputPrefixes.js`, which `downloadExecutor` and `jobModule` also write from; a new failure before yt-dlp runs needs a prefix there. Any other `Error` job counts as tried, so a finalization error never re-downloads.
 - `grabService.grabState` derives what Settings shows. A removed grab that completed is `handed-off`, never "imported": the app sends the same history delete after an import and after a removal there.
 - A category's name cannot be edited in Settings, only removed and added: existing grabs carry the name and their staging folder is named after it.

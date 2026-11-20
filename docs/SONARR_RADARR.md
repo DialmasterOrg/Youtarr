@@ -186,7 +186,7 @@ Both modes skip:
 - videos whose title has one of the **excluded words** (trailer, clip, reaction, recap and so on; you can edit the list),
 - videos shorter than the **shortest episode** or **shortest movie** length. Sonarr refuses to import an episode under 10 minutes for a series that runs longer than 30 minutes, which is why the default is 10,
 - live and upcoming videos,
-- a video whose grab failed in the last 7 days.
+- a video whose grab failed in the last 7 days, unless the video is in your Youtarr library by then.
 
 Good to know:
 
@@ -308,13 +308,37 @@ The Activity tab lists every grab, newest first, ten to a page. The **Filter gra
 | State | Meaning |
 |---|---|
 | Waiting to download | Youtarr has the grab and will queue the download. A grab also waits here when Youtarr could not start its download or could not put the file in the staging folder: it tries again every 15 minutes, and the grab only fails after a day of that. |
+| Waiting: blocked by YouTube | YouTube blocked the download. See [When YouTube blocks a download](#when-youtube-blocks-a-download). |
 | Downloading | The download is queued or running in Youtarr. |
 | Ready to import | The file is in the staging folder, waiting for Sonarr or Radarr. If it stays here, the app's queue says why. |
 | Taken by Sonarr/Radarr | The app took the file: it imported it, or the item was removed in the app. Youtarr cannot tell the two apart from this alone. With [remove after import](#removing-youtarrs-copy-after-the-import) on, the row also says whether Youtarr removed its own copy or kept it. |
-| Failed | The download failed; the reason is shown. Sonarr or Radarr blocklists the release and searches again. |
+| Failed | The download failed; the reason is shown. Sonarr or Radarr blocklists the release and searches again, and Youtarr does not offer the video again for 7 days. The row says until when. |
 | Removed before it finished | The item was removed in the app before the download ended. The video still finishes downloading into Youtarr. |
 
 A staged file that nobody imports is removed after 7 days (**Remove files nobody imported after**, in step 4). Your library copy stays.
+
+### When YouTube blocks a download
+
+YouTube sometimes refuses a download with an HTTP 403 error or a "Sign in to confirm you're not a bot" check. This is often temporary, and it usually applies to everything Youtarr downloads, not to one video. So Youtarr does not report such a grab as failed, which would get the release blocklisted. The grab stays in the queue of Sonarr or Radarr and shows as **Waiting: blocked by YouTube** in Recent grabs.
+
+- While the block lasts, every waiting grab is held, and Youtarr tries one of them an hour. The time on a row ("Youtarr checks again at ...") is when the next grab is tried, which may be another grab than the row's.
+- A grab that only waits behind another grab's block shows as **Waiting: blocked by YouTube** too, and its row says so.
+- When a download gets through, the block is over and the others follow. Until then grabs download one at a time, also when the blocked item was removed in Sonarr or Radarr. Youtarr forgets a block a day after the last blocked download.
+- A grab that is still blocked a day after its first block fails like any other failed grab. A grab that only waited its turn while other downloads got through does not fail for that: it fails when its own next try is blocked.
+- Only the first blocked download sends a notification. The hourly tries do not. A block found again later, when no blocked grab is waiting, sends a new one.
+- Uploading, replacing or removing cookies (Settings -> Cookies) makes Youtarr try the waiting grabs again within a minute, one at a time.
+- **Try again** on the row tries that grab now. If YouTube blocks it again, the row goes back to waiting and shows when Youtarr checks again.
+- While a storage limit pauses downloads, nothing is tried, and the rows say so. A try you asked for starts when downloads resume.
+- To stop the wait, remove the item from the queue in Sonarr or Radarr.
+- After a restart, Youtarr tries one waiting grab at once instead of waiting out the hour.
+
+**Note:** Sometimes YouTube refuses one video and no other. Youtarr tries a grab that was not blocked before first, so the other grabs still get through. That video is tried again when no other grab waits, and each of those tries can hold new grabs for up to an hour, until its day is over. Remove it in Sonarr or Radarr to end that sooner.
+
+One case still fails at once. When a video is reported unavailable with your cookies, Youtarr tries it again without them. If that attempt is blocked, Youtarr reports "No-cookies fallback also failed" and the grab fails: the video may really be unavailable.
+
+### After a failed grab
+
+A failed grab leaves two things behind: the release is on the blocklist of Sonarr or Radarr, and Youtarr does not offer the video for 7 days. To get the video anyway, download it in Youtarr (paste its link on the Downloads page), remove the release from the app's blocklist, and search again in the app. Youtarr offers a video that is in its library even inside the 7 days, and hands the file over without downloading it again.
 
 ## Recent searches
 
@@ -347,7 +371,7 @@ Under each search is every video YouTube returned, with its channel and length. 
 | A one-word episode title also needs the episode number | A title like "Pilot" appears in unrelated videos. |
 | Not uploaded on the air date | For a daily show: the upload is more than a day from the air date. |
 | The movie's year is not in the title | Strict matching needs it. |
-| Its grab failed in the last 7 days | It is offered again after that. |
+| Its grab failed in the last 7 days | It is offered again after that, or once the video is in your Youtarr library. |
 | A channel closer to the series has this episode | Only the upload of the channel named after the series is offered. |
 | Another video already has this release name | Two videos from one channel would get the same name. The first is offered. |
 | Over the number of results the request asked for | The app asked for fewer results than passed. |
@@ -423,4 +447,4 @@ The staging folder and the app's library are not inside one volume of the app's 
 
 **A grab fails right away**
 
-The reason is in the Recent grabs list. Common ones: the video is members-only or was removed, or Youtarr is set to download audio only.
+The reason is in the Recent grabs list. Common ones: the video is members-only or was removed, or Youtarr is set to download audio only. A download YouTube blocked does not fail right away: see [When YouTube blocks a download](#when-youtube-blocks-a-download).

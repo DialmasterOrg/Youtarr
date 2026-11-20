@@ -1522,6 +1522,20 @@ describe('DownloadModule', () => {
       expect(doSpecificDownloadsSpy.mock.calls[0][0].body.jobLabel).toBe('Auto-retry: 1 video (Sonarr/Radarr grab)');
     });
 
+    it('keeps the retry of a quiet blocked grab quiet', async () => {
+      await downloadModule.enqueueAutoRetryJob({
+        retryVideos: [retryVideo], autoRetryAttempt: 1, sourceJobData: { quietBlockedFailure: true },
+      });
+
+      expect(doSpecificDownloadsSpy.mock.calls[0][0].body.quietBlockedFailure).toBe(true);
+    });
+
+    it('leaves the quiet flag off the retry of any other job', async () => {
+      await downloadModule.enqueueAutoRetryJob({ retryVideos: [retryVideo], autoRetryAttempt: 1, sourceJobData: {} });
+
+      expect(doSpecificDownloadsSpy.mock.calls[0][0].body).not.toHaveProperty('quietBlockedFailure');
+    });
+
     it('leaves the retry of a manual download with the plain label', async () => {
       await downloadModule.enqueueAutoRetryJob({
         retryVideos: [retryVideo], autoRetryAttempt: 1, sourceJobData: { jobLabel: 'Manually Added Urls' },

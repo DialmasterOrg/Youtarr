@@ -30,11 +30,15 @@ const clampHistoryLimit = (limit) => clampLimit(limit, DEFAULT_HISTORY_LIMIT, MA
  * it imported the file and also when the user removed it there, with the
  * same call, so a removed grab that completed is "handed off", not "imported".
  * A failed one is removed within a minute and keeps its failure message.
+ * A pending grab is "blocked" while YouTube blocks downloads: its own was
+ * blocked, or another grab's was and this one waits with it.
  * @param {Object} row - An arr_bridge_grabs row
- * @returns {'waiting'|'downloading'|'ready'|'failed'|'handed-off'|'cancelled'}
+ * @param {Object} [options]
+ * @param {boolean} [options.blockActive] - grabExecutor.blockStatus().active
+ * @returns {'waiting'|'blocked'|'downloading'|'ready'|'failed'|'handed-off'|'cancelled'}
  */
-function grabState(row) {
-  if (row.status === 'pending') return 'waiting';
+function grabState(row, { blockActive = false } = {}) {
+  if (row.status === 'pending') return row.blocked_at || blockActive ? 'blocked' : 'waiting';
   if (row.status === 'queued') return 'downloading';
   if (row.status === 'completed') return 'ready';
   if (row.status === 'failed' || row.fail_message) return 'failed';
@@ -139,7 +143,12 @@ function createGrabService({
     const { page, pageSize, offset, patterns } = readListQuery(query);
     const { rows, count } = await ArrBridgeGrab.findAndCountAll({
       where: patterns.length > 0 ? { [Op.and]: patterns.map(matchesGrab) } : {},
-      include: [{ model: Video, as: 'video', attributes: ['youTubeVideoName', 'youTubeChannelName'], required: false }],
+      include: [{
+        model: Video,
+        as: 'video',
+        attributes: ['youTubeVideoName', 'youTubeChannelName', 'removed', 'filePath'],
+        required: false,
+      }],
       order: [['created_at', 'DESC'], ['id', 'DESC']],
       limit: pageSize,
       offset,
@@ -190,6 +199,8 @@ function createGrabService({
    * Videos whose grab failed lately. Keyed on the failure message, not the
    * status: the app deletes a failed history item within a minute, which
    * turns the row into `removed` before it searches again.
+   * A video that is in the library is left out: a grab hands its file over
+   * without a download, so the user can download it in Youtarr and search again.
    * @param {string[]} youtubeIds
    * @returns {Promise<Set<string>>}
    */
@@ -204,12 +215,33 @@ function createGrabService({
       },
       raw: true,
     });
-    return new Set(rows.map((row) => row.youtube_id));
+    const failedIds = new Set(rows.map((row) => row.youtube_id));
+    if (failedIds.size === 0) return failedIds;
+    const inLibrary = await Video.findAll({
+      attributes: ['youtubeId'],
+      where: { youtubeId: { [Op.in]: [...failedIds] }, removed: false, filePath: { [Op.ne]: null } },
+      raw: true,
+    });
+    inLibrary.forEach((video) => failedIds.delete(video.youtubeId));
+    return failedIds;
+  }
+
+  /**
+   * Until when recentlyFailedIds keeps a grab's video out of searches.
+   * @param {Object} row - A grab row with its `video`, as listRecent returns it
+   * @returns {Date|null} null when the video is not hidden
+   */
+  function hiddenUntilOf(row) {
+    if (!row.fail_message || !row.completed_at) return null;
+    const until = new Date(new Date(row.completed_at).getTime() + FAILED_GRAB_GUARD_DAYS * DAY_MS);
+    if (until <= now()) return null;
+    const inLibrary = Boolean(row.video) && !row.video.removed && Boolean(row.video.filePath);
+    return inLibrary ? null : until;
   }
 
   return {
-    addGrab, listQueue, listHistory, listRecent, removeFromQueue, removeFromHistory, recentlyFailedIds,
+    addGrab, listQueue, listHistory, listRecent, removeFromQueue, removeFromHistory, recentlyFailedIds, hiddenUntilOf,
   };
 }
 
-module.exports = { createGrabService, grabState };
+module.exports = { createGrabService, grabState, isGrabId };

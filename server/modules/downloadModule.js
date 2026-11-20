@@ -236,6 +236,8 @@ class DownloadModule {
     if (this.getJobDataValue(sourceJobData, 'structurePerVideo')) body.structurePerVideo = true;
     // The retry's label no longer names the External API, so the flag carries it.
     if (this.isExternalRequestJob(sourceJobData, sourceLabel)) body.externalRequest = true;
+    // A repeat try of a blocked Sonarr/Radarr grab stays quiet through its retries.
+    if (this.getJobDataValue(sourceJobData, 'quietBlockedFailure') === true) body.quietBlockedFailure = true;
 
     logger.info(
       { videoCount: retryVideos.length, autoRetryAttempt, channelId, runId },

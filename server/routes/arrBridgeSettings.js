@@ -1,4 +1,5 @@
 const express = require('express');
+const { isGrabId } = require('../modules/arrBridge/grabService');
 
 const UNKNOWN_APP = { error: 'Unknown app' };
 
@@ -374,10 +375,32 @@ function createArrBridgeSettingsRoutes({ verifyToken, arrBridgeConnectionLimiter
    *                         type: string
    *                       state:
    *                         type: string
-   *                         enum: [waiting, downloading, ready, failed, handed-off, cancelled]
+   *                         enum: [waiting, blocked, downloading, ready, failed, handed-off, cancelled]
+   *                         description: "`blocked` is a waiting grab while YouTube blocks downloads: Youtarr tries one waiting grab an hour, for up to a day, instead of failing it."
    *                       failMessage:
    *                         type: string
    *                         nullable: true
+   *                       blockedAt:
+   *                         type: string
+   *                         format: date-time
+   *                         nullable: true
+   *                         description: When YouTube first blocked this grab's own download. Null for a `blocked` grab that only waits behind another grab's block, and for every other state.
+   *                       nextTryAt:
+   *                         type: string
+   *                         format: date-time
+   *                         nullable: true
+   *                         description: For a `blocked` grab, when Youtarr next tries a waiting grab. Null when a try is due.
+   *                       retryRequested:
+   *                         type: boolean
+   *                         description: For a `blocked` grab, whether a "Try again" asked for it is still to be carried out, which is the case while downloads are paused.
+   *                       downloadsPaused:
+   *                         type: boolean
+   *                         description: For a `blocked` grab, whether downloads are paused by a storage limit. Nothing is tried until they resume.
+   *                       hiddenUntil:
+   *                         type: string
+   *                         format: date-time
+   *                         nullable: true
+   *                         description: For a failed grab, until when Youtarr leaves its video out of searches. Null once that is over, and for a video that is in the Youtarr library.
    *                       libraryCopy:
    *                         type: string
    *                         nullable: true
@@ -403,6 +426,51 @@ function createArrBridgeSettingsRoutes({ verifyToken, arrBridgeConnectionLimiter
     } catch (err) {
       req.log.error({ err }, 'Failed to read the Sonarr/Radarr grabs');
       return res.status(500).json({ error: 'Could not read the grabs' });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/arr-bridge/grabs/{id}/retry:
+   *   post:
+   *     summary: Try a waiting Sonarr/Radarr grab again now
+   *     description: Downloads a waiting grab now instead of at the next automatic try, which matters while YouTube blocks downloads. If YouTube blocks it again, the grab goes back to waiting.
+   *     tags: [Sonarr/Radarr bridge]
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *     responses:
+   *       200:
+   *         description: What became of the try
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 result:
+   *                   type: string
+   *                   enum: [started, queued, paused, ready, deferred]
+   *                   description: "`started`: downloading now. `queued`: it starts when the current download finishes. `paused`: downloads are paused by a storage limit, and it starts when they resume. `ready`: the video was already in the library and is staged for import. `deferred`: it could not start now (another job is downloading the video, or its library file cannot be checked) and waits for the next check."
+   *       400:
+   *         description: The id is not a grab id
+   *       409:
+   *         description: The grab is not waiting (it is downloading, finished or removed), no grab has this id, or the bridge is off
+   *       500:
+   *         description: The grab could not be tried
+   */
+  router.post('/api/arr-bridge/grabs/:id/retry', verifyToken, async (req, res) => {
+    if (!isGrabId(req.params.id)) return res.status(400).json({ error: 'Invalid grab id' });
+    try {
+      const result = await arrBridge.retryGrab(req.params.id);
+      if (!result) return res.status(409).json({ error: 'This grab is not waiting to be downloaded' });
+      return res.json({ result });
+    } catch (err) {
+      req.log.error({ err }, 'Failed to try a Sonarr/Radarr grab again');
+      return res.status(500).json({ error: 'Could not try the grab again' });
     }
   });
 
