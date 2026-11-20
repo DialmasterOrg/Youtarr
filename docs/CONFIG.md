@@ -167,6 +167,15 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
   - **"Video subfolders"** (`false`): channel always uses per-video subfolders, even when the global default is flat
 - **Note**: Only affects new downloads; existing files are not moved. The manual download dialog can override the structure for a single download ("Force flat" or "Force individual video subfolders"); its default option ("Use channel/global settings") follows the channel setting and this global default.
 
+### Protect Manual Downloads
+- **Config Key**: `protectManualDownloads`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Description**: The download dialog has a **Protect this download from auto-removal** switch. When it is on, every video that download brings in is marked Protected, so [auto-removal](#auto-removal-settings) never deletes it. This setting decides whether that switch starts on or off; you can still change it for each download.
+- **Applies to**: downloads you start yourself through the download dialog (pasted URLs, videos picked on a channel, playlist, Videos or Find Videos page, a single video's download button, and a channel's Download All). Scheduled automatic downloads, the **Download new from all channels** run, and downloads sent with an API key are never protected by it.
+- **Note**: Protection is only ever added. Re-downloading a video that is already Protected with the switch off leaves it Protected, and a video that was skipped because it is already downloaded is not changed. Remove protection from the video itself.
+- **UI**: Settings -> Core -> **Downloads** -> **Protect manual downloads**.
+
 ### Video Filename Template
 - **Config Key**: `videoFilenamePrefix`
 - **Type**: `string`

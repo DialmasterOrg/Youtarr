@@ -388,6 +388,7 @@ class DownloadExecutor {
             cookiesPassed: proc.cookiesPassed === true,
             anonymousRetry,
             stdioClosed,
+            protectVideos: postProcessDirectives.protectVideos === true,
           });
           resolve();
         } catch (err) {

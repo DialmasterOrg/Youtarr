@@ -153,12 +153,13 @@ jest.mock('../../DeleteVideosDialog', () => ({
 
 jest.mock('../../../DownloadManager/ManualDownload/DownloadSettingsDialog', () => ({
   __esModule: true,
-  default: function MockDownloadDialog(props: { open: boolean; onConfirm: (settings: null) => void; onClose: () => void; missingVideoCount?: number }) {
+  default: function MockDownloadDialog(props: { open: boolean; onConfirm: (settings: { protect: boolean } | null) => void; onClose: () => void; missingVideoCount?: number }) {
     const React = require('react');
     if (!props.open) return null;
     return React.createElement('div', { 'data-testid': 'download-dialog' },
       React.createElement('div', { 'data-testid': 'download-dialog-missing-count' }, String(props.missingVideoCount)),
       React.createElement('button', { 'data-testid': 'confirm-download', onClick: () => props.onConfirm(null) }, 'Confirm Download'),
+      React.createElement('button', { 'data-testid': 'confirm-protected-download', onClick: () => props.onConfirm({ protect: true }) }, 'Confirm Protected Download'),
     );
   },
 }));
@@ -576,6 +577,17 @@ describe('VideoModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /download video/i }));
 
     expect(screen.getByTestId('download-dialog-missing-count')).toHaveTextContent('0');
+  });
+
+  test('sends the protect choice from the download dialog', async () => {
+    renderModal({ video: neverDownloadedVideo });
+
+    fireEvent.click(screen.getByRole('button', { name: /download video/i }));
+    fireEvent.click(screen.getByTestId('confirm-protected-download'));
+
+    await waitFor(() => expect(mockTriggerDownloads).toHaveBeenCalledWith(
+      expect.objectContaining({ overrideSettings: expect.objectContaining({ protect: true }) })
+    ));
   });
 
   test('passes missingVideoCount 1 to the download dialog when the page reports the video is in the download archive', () => {

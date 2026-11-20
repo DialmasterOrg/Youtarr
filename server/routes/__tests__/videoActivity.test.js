@@ -65,6 +65,19 @@ describe('video activity endpoints', () => {
     expect(response.body).toEqual({ error: 'Downloads are paused: over the limit' });
   });
 
+  it('passes the protect choice of a manual download through to the queue', async () => {
+    await request(app).post('/triggerspecificdownloads').set('x-access-token', 'token')
+      .send({ urls: ['https://youtu.be/aaaaaaaaaaa'], overrideSettings: { protect: true } }).expect(200);
+    expect(enqueue.mock.calls[0][0].body.overrideSettings).toEqual({ protect: true });
+  });
+
+  it('rejects a manual download whose protect choice is not a boolean', async () => {
+    const response = await request(app).post('/triggerspecificdownloads').set('x-access-token', 'token')
+      .send({ urls: ['https://youtu.be/aaaaaaaaaaa'], overrideSettings: { protect: 'yes' } }).expect(400);
+    expect(response.body).toEqual({ error: 'protect must be a boolean' });
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
   it('returns the download pause state', async () => {
     const status = { paused: true, reasons: [{ type: 'usage', text: 'over the limit' }] };
     storageGuard.refresh.mockResolvedValue(status);

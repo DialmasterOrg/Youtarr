@@ -26,6 +26,8 @@ export interface DownloadSettings {
   audioFormat?: string | null;
   rating?: string | null;
   skipVideoFolder?: boolean;
+  // Protect the downloaded videos from automatic removal.
+  protect?: boolean;
 }
 
 export interface ValidationResponse {

@@ -44,6 +44,13 @@ describe('CoreSettingsSection', () => {
     );
   });
 
+  test('the protect manual downloads switch saves its setting', async () => {
+    const onConfigChange = jest.fn();
+    renderCore({ onConfigChange });
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Protect manual downloads' }));
+    expect(onConfigChange).toHaveBeenCalledWith({ protectManualDownloads: true });
+  });
+
   test('the flat structure switch only changes after confirming', async () => {
     mockFlatCount({ count: 2, channelNames: ['A', 'B'] });
     const onConfigChange = jest.fn();

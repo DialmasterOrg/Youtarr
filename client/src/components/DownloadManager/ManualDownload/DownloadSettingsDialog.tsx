@@ -66,6 +66,9 @@ interface DownloadSettingsDialogProps {
   // Hides the "Allow re-downloading" switch and guarantees allowRedownload is
   // never emitted.
   hideRedownloadOption?: boolean;
+  // Starting state of the "Protect this download" switch (manual mode only),
+  // from the global protectManualDownloads setting.
+  defaultProtect?: boolean;
 }
 
 const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
@@ -83,7 +86,8 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   defaultAudioFormat = null,
   defaultAudioFormatSource = 'global',
   token = null,
-  hideRedownloadOption = false
+  hideRedownloadOption = false,
+  defaultProtect = false
 }) => {
   const [useCustomSettings, setUseCustomSettings] = useState(false);
   // Override controls default to "no override" (null) so that simply opening
@@ -96,6 +100,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   const [audioFormat, setAudioFormat] = useState<string | null>(null);
   const [rating, setRating] = useState<string | null>(null);
   const [fileStructure, setFileStructure] = useState<FileStructureChoice>('inherit');
+  const [protect, setProtect] = useState(false);
 
   // Fetch available subfolders
   const { subfolders, loading: subfoldersLoading, createSubfolder } = useSubfolders(token);
@@ -141,6 +146,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       setResolution(null);
       setChannelVideoCount(defaultVideoCount);
       setAudioFormat(null);
+      setProtect(defaultProtect);
       // Open the custom section too so the user can see the re-download toggle is on.
       if ((missingVideoCount > 0 || replaceVideoCount > 0) && !hideRedownloadOption) {
         setAllowRedownload(true);
@@ -149,7 +155,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
         setAllowRedownload(false);
       }
     }
-  }, [open, hasUserInteracted, mode, missingVideoCount, replaceVideoCount, defaultVideoCount, hideRedownloadOption]);
+  }, [open, hasUserInteracted, mode, missingVideoCount, replaceVideoCount, defaultVideoCount, hideRedownloadOption, defaultProtect]);
 
   useEffect(() => {
     if (!open) {
@@ -238,6 +244,10 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
 
     if (allowRedownload && !hideRedownloadOption) {
       override.allowRedownload = true;
+    }
+
+    if (protect && mode === 'manual') {
+      override.protect = true;
     }
 
     onConfirm(Object.keys(override).length === 0 ? null : override);
@@ -389,8 +399,26 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
               />
             }
             label="Use custom settings for this download"
-            className="mb-4"
+            className={mode === 'manual' ? 'mb-2' : 'mb-4'}
           />
+
+          {mode === 'manual' && (
+            <Box className="mb-4">
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={protect}
+                    onChange={(e) => {
+                      setProtect(e.target.checked);
+                      setHasUserInteracted(true);
+                    }}
+                    color="primary"
+                  />
+                }
+                label="Protect this download from auto-removal"
+              />
+            </Box>
+          )}
 
           {/* Custom Settings - Only shown when toggle is ON */}
           <Collapse in={useCustomSettings} timeout={300}>

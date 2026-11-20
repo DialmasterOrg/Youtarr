@@ -60,9 +60,10 @@ interface ManualDownloadProps {
   ) => Promise<void>;
   token: string | null;
   defaultResolution?: string;
+  defaultProtect?: boolean;
 }
 
-const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token, defaultResolution = '1080' }) => {
+const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token, defaultResolution = '1080', defaultProtect = false }) => {
   const isMobile = useMediaQuery(breakpoints.down('sm'));
   const [validatedVideos, setValidatedVideos] = useState<VideoInfo[]>([]);
   const [isValidating, setIsValidating] = useState(false);
@@ -368,6 +369,7 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
         videoCount={validatedVideos.length}
         missingVideoCount={previouslyDownloadedCount}
         defaultResolution={defaultResolution}
+        defaultProtect={defaultProtect}
         mode="manual"
         defaultResolutionSource="global"
         token={token}

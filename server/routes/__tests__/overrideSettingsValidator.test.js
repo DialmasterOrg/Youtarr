@@ -63,6 +63,14 @@ describe('createOverrideSettingsValidator', () => {
     expect(validate({ skipVideoFolder: 1 }).ok).toBe(false);
   });
 
+  test('accepts a boolean protect flag', () => {
+    expect(validate({ protect: true })).toEqual({ ok: true, value: { protect: true } });
+  });
+
+  test('rejects a non-boolean protect flag', () => {
+    expect(validate({ protect: 'true' }).ok).toBe(false);
+  });
+
   test('allows a null subfolder but rejects one that fails subfolder validation', () => {
     expect(validate({ subfolder: null })).toEqual({ ok: true, value: { subfolder: null } });
 

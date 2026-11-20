@@ -97,10 +97,10 @@ jest.mock('../BulkImportDialog', () => {
 });
 
 jest.mock('../DownloadSettingsDialog', () => {
-  return function MockDownloadSettingsDialog({ open, onClose, onConfirm }: any) {
+  return function MockDownloadSettingsDialog({ open, onClose, onConfirm, defaultProtect }: any) {
     if (!open) return null;
     return (
-      <div data-testid="download-settings-dialog">
+      <div data-testid="download-settings-dialog" data-default-protect={String(defaultProtect)}>
         <button
           onClick={() => onConfirm(null)} // Use default settings
           data-testid="confirm-download"
@@ -494,6 +494,18 @@ describe('ManualDownload', () => {
     await waitFor(() => {
       expect(mockOnStartDownload).toHaveBeenCalledWith(['https://youtube.com/watch?v=test123'], null, undefined);
     });
+  });
+
+  test('opens the settings dialog with the protect default it was given', async () => {
+    mockedAxios.post.mockResolvedValueOnce({ data: mockValidationResponse });
+
+    render(<ManualDownload onStartDownload={mockOnStartDownload} token={mockToken} defaultProtect />);
+
+    fireEvent.click(screen.getByTestId('validate-button'));
+    await screen.findByTestId('video-chip-test123');
+    fireEvent.click(screen.getByRole('button', { name: /download videos/i }));
+
+    expect(await screen.findByTestId('download-settings-dialog')).toHaveAttribute('data-default-protect', 'true');
   });
 
   test('shows the reason when the download cannot start', async () => {

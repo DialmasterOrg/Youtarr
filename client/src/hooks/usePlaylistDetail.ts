@@ -9,6 +9,7 @@ export interface DownloadOverrideSettings {
   audioFormat?: string | null;
   rating?: string | null;
   skipVideoFolder?: boolean;
+  protect?: boolean;
 }
 
 export type PlaylistSortOrder = 'asc' | 'desc' | 'recent' | 'published' | 'downloaded';

@@ -18,6 +18,7 @@ function buildYtdlpEnv({ jobId, tempBasePath, postProcessDirectives, baseEnv = p
     skipVideoFolderOverride = undefined,
     ownerChannelId = null,
     ownerChannelMap = null,
+    protectVideos = false,
   } = postProcessDirectives || {};
 
   const env = {
@@ -57,6 +58,11 @@ function buildYtdlpEnv({ jobId, tempBasePath, postProcessDirectives, baseEnv = p
   // Soft fallback: post-processor uses it only when the real channel has no default rating
   if (ratingFallback !== null && ratingFallback !== undefined) {
     env.YOUTARR_RATING_FALLBACK = String(ratingFallback);
+  }
+
+  // The post-processor saves each video as protected from automatic removal
+  if (protectVideos) {
+    env.YOUTARR_PROTECT_VIDEOS = 'true';
   }
 
   // The post-processor prefers it over the video's own channel_id when resolving the owner

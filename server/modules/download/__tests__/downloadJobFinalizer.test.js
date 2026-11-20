@@ -219,6 +219,35 @@ describe('downloadJobFinalizer', () => {
       );
     });
 
+    it('saves the downloaded videos as protected when the download was started with protection', async () => {
+      jobModule.getJob.mockReturnValue({ data: {} });
+      downloadResultProcessor.partitionDownloadResults.mockReturnValue({
+        successfulVideos: [{ youtubeId: 'abc123def45', fileSize: '1000' }],
+        failedVideosList: []
+      });
+
+      await finalizeDownloadJob(makeContext({ protectVideos: true }));
+
+      expect(jobModule.saveJobOnly).toHaveBeenCalledWith(mockJobId, expect.objectContaining({
+        data: expect.objectContaining({
+          videos: [{ youtubeId: 'abc123def45', fileSize: '1000', protected: true }]
+        })
+      }));
+    });
+
+    it('never writes a protection value for a download started without protection', async () => {
+      jobModule.getJob.mockReturnValue({ data: {} });
+      downloadResultProcessor.partitionDownloadResults.mockReturnValue({
+        successfulVideos: [{ youtubeId: 'abc123def45', fileSize: '1000' }],
+        failedVideosList: []
+      });
+
+      await finalizeDownloadJob(makeContext());
+
+      const savedVideos = jobModule.saveJobOnly.mock.calls[0][1].data.videos;
+      expect(savedVideos).toEqual([{ youtubeId: 'abc123def45', fileSize: '1000' }]);
+    });
+
     it('marks the job Error with COOKIES_REQUIRED when bot detection was seen', async () => {
       await finalizeDownloadJob(makeContext({ code: 1, router: makeRouter({ botDetected: true }) }));
 

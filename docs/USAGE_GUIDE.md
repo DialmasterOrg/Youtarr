@@ -43,6 +43,7 @@ Scheduled channel sweeps discover videos as they run, so per-video activity appe
 3. **Customize download settings** (optional)
    - Choose a specific resolution for this download, or leave it at the default to use your global quality setting
    - Use the **Video File Structure** select (under **File Structure Override**) to force flat files (no video subfolders) or individual video subfolders for this download; the default applies each channel's own settings
+   - Turn on **Protect this download from auto-removal** to mark every video in this download as Protected, so automatic removal never deletes it. To have the switch start on, enable **Protect manual downloads** in **Settings -> Core -> Downloads**
 
 4. **Click "Start Download"**
    - The download will begin immediately
@@ -298,7 +299,7 @@ Set up automatic downloads on a schedule so Youtarr checks for new videos period
      - **Low disk space**: delete the oldest videos **When free space falls below** a threshold
      - **Total size of downloads**: delete the oldest videos **When downloads total more than** a size, for example to stay under a cloud storage quota
    - Some videos are always kept, no matter which rules match:
-     - Videos you've marked as Protected
+     - Videos you've marked as Protected, including downloads you started with **Protect this download from auto-removal** turned on
      - The newest N downloads, if you set **Keep this many newest downloads**
      - Videos from channels you've shielded in that channel's **Auto-Removal** settings tab (full protection or the channel's own keep-newest count)
    - **Use "Preview Automatic Removal"** to simulate deletions before saving

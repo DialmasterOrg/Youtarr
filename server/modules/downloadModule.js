@@ -1009,6 +1009,7 @@ class DownloadModule {
             ownerChannelMap: this.getJobDataValue(jobData, 'ownerChannelMap') || null,
             cookiesEnabled,
             anonymousRetry,
+            protectVideos: overrideSettings.protect === true,
           }
         )).catch(async err => {
           // Covers failures before the executor installs its own process
@@ -1278,6 +1279,7 @@ class DownloadModule {
       if (routing.subfolderFallback !== undefined) groupOverride.subfolderFallback = routing.subfolderFallback;
       if (routing.ratingOverride !== undefined) groupOverride.rating = routing.ratingOverride;
       if (routing.ratingFallback !== undefined) groupOverride.ratingFallback = routing.ratingFallback;
+      if (overrideSettings.protect === true) groupOverride.protect = true;
       // doSpecificDownloads accepts an Express-request shape (.body). runId ties
       // these jobs into the parent run so its summary aggregates them.
       const admission = await this.doSpecificDownloads({ body: { urls, overrideSettings: groupOverride, jobLabel, runId, ownerChannelMap } });
