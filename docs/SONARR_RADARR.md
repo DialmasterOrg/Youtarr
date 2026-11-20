@@ -301,7 +301,9 @@ A category is the name a Sonarr or Radarr instance gives its download client, an
 
 ## Recent grabs
 
-Near the bottom, the Settings page lists the newest grabs, ten at first:
+Once the bridge is on and saved, the Settings page has two tabs at the top: **Setup**, with the steps of this guide, and **Activity**, with the grabs and the searches. The address `/settings/sonarr-radarr?tab=activity` opens the Activity tab directly.
+
+The Activity tab lists every grab, newest first, ten to a page. The **Filter grabs** box finds a grab by its release name, by the title or channel of the video Youtarr holds, or by its video id; a grab must match every word you type. The states are:
 
 | State | Meaning |
 |---|---|
@@ -316,7 +318,7 @@ A staged file that nobody imports is removed after 7 days (**Remove files nobody
 
 ## Recent searches
 
-Below the recent grabs, the Settings page lists the last 50 searches Sonarr and Radarr sent, ten at first. This is where to look when a search finds nothing, or offers a video you did not expect. Each row shows what was asked for, when, and the answer:
+Below the recent grabs, the Activity tab lists the searches Sonarr and Radarr sent, newest first, ten to a page. This is where to look when a search finds nothing, or offers a video you did not expect. The **Filter searches** box finds a search by what it asked for: the name, an episode (`S01E02`), a season (`S01`), a year or an air date (`2024-05-01`). Each row shows what was asked for, when, and the answer:
 
 | Answer | Meaning |
 |---|---|
@@ -356,7 +358,7 @@ Good to know:
 - Sonarr sends one request for each name of a series, so one search in Sonarr can be several rows.
 - Sonarr and Radarr also ask for "the newest releases" on every RSS sync and on the indexer Test. Youtarr answers those with a placeholder. They share one row for TV and one for movies, with a count.
 - Live and upcoming videos are dropped before the list is made, so they do not appear.
-- The list is kept in memory. A restart of Youtarr empties it, and it never holds your key.
+- Searches are kept for 30 days, and at most the newest 2,000. They survive a restart of Youtarr, and the list never holds your key.
 - The list does not update by itself. Press **Refresh** after a search.
 
 ## Login proxies
@@ -385,7 +387,7 @@ The bridge is off, or it was switched on but not saved yet: Youtarr answers "not
 
 Its title probably has no season and episode marker. Connect your Sonarr ([step 3](#step-3-connect-your-sonarr-and-radarr-recommended)), or turn on loose matching and search interactively.
 
-To see what happened, open the search under [Recent searches](#recent-searches) on the Settings page: it shows the text Youtarr searched YouTube for, every video that came back, and why each one was not offered.
+To see what happened, open the search under [Recent searches](#recent-searches) on the Settings page's Activity tab: it shows the text Youtarr searched YouTube for, every video that came back, and why each one was not offered.
 
 **A search finds nothing for a movie you know is on YouTube**
 

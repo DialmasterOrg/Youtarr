@@ -4,6 +4,7 @@ paths:
   - "server/routes/arrBridge.js"
   - "server/routes/arrBridgeSettings.js"
   - "server/models/arrbridgegrab.js"
+  - "server/models/arrbridgesearch.js"
   - "client/src/components/Configuration/sections/ArrBridgeSection.tsx"
   - "client/src/components/Configuration/sections/components/Arr*.tsx"
   - "client/src/components/Configuration/hooks/useArrBridge*.ts"
@@ -44,9 +45,11 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 - A search that cannot run is held up to 30 s, then answered with Newznab error 900: never 429, which disables the indexer for 5 to 15 minutes, and never an empty page, which reads as "nothing on YouTube".
 - Bridge searches use at most a fixed daily share (5,000 units) of the YouTube API quota, then yt-dlp. Daily-show requests are exempt because only the API gives exact dates. The count is in memory; a restart resets it.
 - The failed-grab guard (7 days) keys on `fail_message` and `completed_at`, not status: Sonarr deletes a failed history item within a minute, turning the row `removed` before it searches again.
-- `recentSearches` keeps the last 50 Newznab requests in memory for Settings. It is handed request fields, results and release names only: never the origin, a feed link or a key, because item links carry the bridge key.
+- `recentSearches` records each Newznab request and `searchHistory` stores it in `arr_bridge_searches` (30 days, 2,000 rows). Both get request fields, results and release names only: never the origin, a feed link or a key.
+- A search is stored after it is answered, never awaited, and a failed write is only logged: the database must not delay or fail an answer to Sonarr or Radarr. Writes are serialized.
 - The filters tell `onReject` the first check a candidate fails, so the reason shown follows the check order. Reporting must never change which candidates pass; a new check needs a `REJECTION` code and a client label.
-- No-query requests (RSS sync, indexer Test) share one counted row per kind in `recentSearches`: both apps ask on every sync, which would push every real search out of the 50 rows.
+- No-query requests (RSS sync, indexer Test) share one counted row per kind in `searchHistory`: both apps ask on every sync, which would bury every real search and fill the table.
+- The grab and search lists are paged and filtered by the server (`listQuery`). `search_text` is what the search filter matches; the grab filter joins Videos, whose `$video.column$` references need table column names.
 
 ## Sonarr/Radarr connection and episode-title matching
 
@@ -60,7 +63,7 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 - When the app does not see the folder, the check also tries the app's Remote Path Mappings and the host's downloads folder. It returns verdicts and a path built from Youtarr's own settings, never a mapping's Local Path, which the app named.
 - A Remote Path Mapping counts only when its Host is the one the app has for its `/arr/sabnzbd` download client, which is the app's own rule; another client's mapping must not pass the check.
 - `arrBridgeStagingPath` may be a Windows drive or share path (`clientPaths.js`): an app outside Docker knows the folder that way. Paths reported to the apps are joined with that path's own separator, never Youtarr's.
-- The connection card never loads a stored key, but keeps a typed one in its field while the page is open, so a mistyped address is corrected without typing the key again.
+- The connection card never loads a stored key, but keeps a typed one in its field while the page is open, so a mistyped address is corrected without typing the key again. The Activity tab therefore hides the Setup tab's content instead of unmounting it.
 - `arrClient` follows no redirect, because axios would send the key header on to the redirect's target. Its abort signal is the real time limit: axios's `timeout` only bounds the wait between bytes.
 - A failed lookup falls back to the episode-code matcher, never an error document. The app is not asked again for 60 s after a failure, so requests do not each wait; remembered answers still serve.
 - Caps advertise no ids, so a search is tied to a series by asking the app to parse the release name offered. The name must still be one of the series' own names (title, title without its tag, aliases).

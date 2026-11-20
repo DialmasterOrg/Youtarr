@@ -4,6 +4,7 @@ import '@testing-library/jest-dom';
 import { ArrBridgeGrabList } from '../ArrBridgeGrabList';
 import { renderWithProviders } from '../../../../../test-utils';
 import { ArrGrab } from '../../../utils/arrBridgeSetup';
+import { ArrPagedList } from '../../../hooks/useArrBridgePagedList';
 
 const grab = (overrides: Partial<ArrGrab> = {}): ArrGrab => ({
   id: 'g1',
@@ -22,16 +23,22 @@ const grab = (overrides: Partial<ArrGrab> = {}): ArrGrab => ({
   ...overrides,
 });
 
-const setup = (overrides: Partial<React.ComponentProps<typeof ArrBridgeGrabList>> = {}) => {
-  const props: React.ComponentProps<typeof ArrBridgeGrabList> = {
-    grabs: [grab()],
+const setup = ({ grabs = [grab()], ...overrides }: Partial<ArrPagedList<ArrGrab>> & { grabs?: ArrGrab[] } = {}) => {
+  const list: ArrPagedList<ArrGrab> = {
+    items: grabs,
+    total: grabs.length,
+    page: 1,
+    pageSize: 10,
+    query: '',
     loading: false,
     error: null,
-    onRefresh: jest.fn(),
+    setPage: jest.fn(),
+    setQuery: jest.fn(),
+    refresh: jest.fn(),
     ...overrides,
   };
-  renderWithProviders(<ArrBridgeGrabList {...props} />);
-  return props;
+  renderWithProviders(<ArrBridgeGrabList list={list} />);
+  return list;
 };
 
 const rows = () => within(screen.getByRole('list', { name: 'Recent grabs' })).getAllByRole('listitem');
@@ -77,11 +84,26 @@ describe('ArrBridgeGrabList', () => {
   });
 
   test('Refresh asks for the list again', () => {
-    const props = setup();
+    const list = setup();
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
 
-    expect(props.onRefresh).toHaveBeenCalledTimes(1);
+    expect(list.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  test('the filter box says what it matches and hands on what is typed', () => {
+    const list = setup();
+
+    fireEvent.change(screen.getByLabelText('Filter grabs'), { target: { value: 'beyblade' } });
+
+    expect(list.setQuery).toHaveBeenCalledWith('beyblade');
+    expect(screen.getByText(/the release name, the video's title, its channel or its video id/)).toBeInTheDocument();
+  });
+
+  test('says so when the filter matches no grab', () => {
+    setup({ grabs: [], query: 'zzz' });
+
+    expect(screen.getByText('No grabs match this filter.')).toBeInTheDocument();
   });
 
   test('says so when nothing was grabbed yet', () => {
@@ -105,31 +127,22 @@ describe('ArrBridgeGrabList', () => {
     expect(screen.queryByRole('list', { name: 'Recent grabs' })).not.toBeInTheDocument();
   });
 
-  describe('a long list', () => {
+  describe('a list of several pages', () => {
     const many = (count: number) => Array.from({ length: count }, (_, index) => grab({ id: `g${index}` }));
 
-    test('shows the newest 10 and offers the rest', () => {
-      setup({ grabs: many(14) });
+    test('shows the page it was given and where that is in the list', () => {
+      setup({ grabs: many(10), total: 34, page: 2 });
 
       expect(rows()).toHaveLength(10);
-      expect(screen.getByRole('button', { name: 'Show all 14' })).toBeInTheDocument();
+      expect(screen.getByText('11 to 20 of 34')).toBeInTheDocument();
     });
 
-    test('shows them all when asked, and can fold them away again', () => {
-      setup({ grabs: many(14) });
+    test('a page button asks for that page', () => {
+      const list = setup({ grabs: many(10), total: 34, page: 2 });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Show all 14' }));
-      expect(rows()).toHaveLength(14);
+      fireEvent.click(screen.getByRole('button', { name: 'go to next page' }));
 
-      fireEvent.click(screen.getByRole('button', { name: 'Show fewer' }));
-      expect(rows()).toHaveLength(10);
-    });
-
-    test('10 or fewer need no button', () => {
-      setup({ grabs: many(10) });
-
-      expect(rows()).toHaveLength(10);
-      expect(screen.queryByRole('button', { name: /Show all/ })).not.toBeInTheDocument();
+      expect(list.setPage).toHaveBeenCalledWith(3);
     });
   });
 

@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
 import { useArrBridgeGrabs } from '../useArrBridgeGrabs';
 
 jest.mock('axios', () => ({
@@ -25,35 +25,19 @@ const GRAB = {
 describe('useArrBridgeGrabs', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    axios.get.mockResolvedValue({ data: { grabs: [GRAB] } });
   });
 
-  test('loads the grabs with the session token', async () => {
+  test('loads a page of grabs and how many there are', async () => {
+    axios.get.mockResolvedValue({ data: { grabs: [GRAB], total: 14, page: 1, pageSize: 10 } });
+
     const { result } = renderHook(() => useArrBridgeGrabs('session', true));
 
-    await waitFor(() => expect(result.current.grabs).toEqual([GRAB]));
-
-    expect(axios.get).toHaveBeenCalledWith('/api/arr-bridge/grabs', { headers: { 'x-access-token': 'session' } });
-    expect(result.current.loading).toBe(false);
-    expect(result.current.error).toBeNull();
-  });
-
-  test('does not load while the bridge is off or without a session', () => {
-    renderHook(() => useArrBridgeGrabs('session', false));
-    renderHook(() => useArrBridgeGrabs(null, true));
-
-    expect(axios.get).not.toHaveBeenCalled();
-  });
-
-  test('refresh loads the list again', async () => {
-    const { result } = renderHook(() => useArrBridgeGrabs('session', true));
-    await waitFor(() => expect(result.current.grabs).toHaveLength(1));
-    axios.get.mockResolvedValue({ data: { grabs: [GRAB, { ...GRAB, id: 'g2' }] } });
-
-    act(() => result.current.refresh());
-
-    await waitFor(() => expect(result.current.grabs).toHaveLength(2));
-    expect(axios.get).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(result.current.items).toEqual([GRAB]));
+    expect(result.current.total).toBe(14);
+    expect(axios.get).toHaveBeenCalledWith('/api/arr-bridge/grabs', {
+      headers: { 'x-access-token': 'session' },
+      params: { page: 1, pageSize: 10 },
+    });
   });
 
   test('reports a list that cannot be loaded', async () => {
@@ -62,28 +46,5 @@ describe('useArrBridgeGrabs', () => {
     const { result } = renderHook(() => useArrBridgeGrabs('session', true));
 
     await waitFor(() => expect(result.current.error).toBe('Could not load the recent grabs.'));
-    expect(result.current.grabs).toEqual([]);
-  });
-
-  test('an answer without a list reads as empty', async () => {
-    axios.get.mockResolvedValue({ data: {} });
-
-    const { result } = renderHook(() => useArrBridgeGrabs('session', true));
-
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.grabs).toEqual([]);
-  });
-
-  test('ignores an answer that arrives after unmounting', async () => {
-    let respond: (value: unknown) => void = () => {};
-    axios.get.mockReturnValue(new Promise((resolve) => { respond = resolve; }));
-    const { result, unmount } = renderHook(() => useArrBridgeGrabs('session', true));
-
-    unmount();
-    await act(async () => {
-      respond({ data: { grabs: [GRAB] } });
-    });
-
-    expect(result.current.grabs).toEqual([]);
   });
 });

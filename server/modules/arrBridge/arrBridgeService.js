@@ -11,6 +11,7 @@ const { createGrabService, grabState } = require('./grabService');
 const { createLibraryCopyRemover, libraryCopyView } = require('./libraryCopyRemover');
 const { createNewznabApi } = require('./newznabApi');
 const { createRecentSearches } = require('./recentSearches');
+const { createSearchHistory } = require('./searchHistory');
 const { createSabnzbdApi } = require('./sabnzbdApi');
 const { createSearchBudget } = require('./searchBudget');
 const { createSearchQueue } = require('./searchQueue');
@@ -101,7 +102,7 @@ function createLibraryResolutionLookup({ Video }) {
 /**
  * @param {Object} deps
  * @param {Object} deps.configModule
- * @param {Object} deps.models - { ArrBridgeGrab, Video, ChannelVideo, Job }
+ * @param {Object} deps.models - { ArrBridgeGrab, ArrBridgeSearch, Video, ChannelVideo, Job }
  * @param {Function} deps.searchVideos - (query, count, { useApi, onApiUnits }) => Promise<Array>
  * @param {Function} deps.isYoutubeApiAvailable - () => boolean
  * @param {Function} deps.downloader - (jobData, { jobId }) => Promise<string|Object>
@@ -157,8 +158,14 @@ function createArrBridgeService({
     useApi: needsApi === true || searchBudget.allowsApi(),
     onApiUnits: searchBudget.spend,
   });
-  // What the Settings page shows under "Recent searches"; lost on a restart.
-  const recentSearches = createRecentSearches();
+  // What the Settings page shows under "Recent searches". A search is stored
+  // after it is answered, so the answer never waits for the database.
+  const searchHistory = createSearchHistory({ models, logger });
+  const recentSearches = createRecentSearches({
+    save: (entry) => {
+      searchHistory.record(entry);
+    },
+  });
   const searchService = createSearchService({
     searchVideos: budgetedSearchVideos,
     isYoutubeApiAvailable,
@@ -215,38 +222,30 @@ function createArrBridgeService({
   }
 
   /**
-   * The newest grabs for the Settings page, with the title of each video
-   * Youtarr holds. Removed grabs are included: the list is a history.
-   * @param {unknown} [limit]
-   * @returns {Promise<Array<Object>>}
+   * One page of grabs for the Settings page, newest first, with the title
+   * of each video Youtarr holds. Removed grabs are included: the list is a
+   * history.
+   * @param {Object} [query] - { page, pageSize, q }
+   * @returns {Promise<{grabs: Array<Object>, total: number, page: number, pageSize: number}>}
    */
-  async function listRecentGrabs(limit) {
-    const rows = await grabService.listRecent(limit);
-    if (rows.length === 0) return [];
-    const videos = await models.Video.findAll({
-      where: { youtubeId: { [Op.in]: [...new Set(rows.map((row) => row.youtube_id))] } },
-      attributes: ['youtubeId', 'youTubeVideoName', 'youTubeChannelName'],
-      raw: true,
-    });
-    const videoById = new Map(videos.map((video) => [video.youtubeId, video]));
-    return rows.map((row) => {
-      const video = videoById.get(row.youtube_id);
-      return {
-        id: row.id,
-        releaseTitle: row.release_title,
-        youtubeId: row.youtube_id,
-        videoTitle: video?.youTubeVideoName || null,
-        channelName: video?.youTubeChannelName || null,
-        kind: row.kind,
-        category: row.category,
-        state: grabState(row),
-        failMessage: row.fail_message || null,
-        libraryCopy: libraryCopyView(row),
-        createdAt: row.created_at,
-        completedAt: row.completed_at || null,
-        removedAt: row.removed_at || null,
-      };
-    });
+  async function listRecentGrabs(query) {
+    const { rows, total, page, pageSize } = await grabService.listRecent(query);
+    const grabs = rows.map((row) => ({
+      id: row.id,
+      releaseTitle: row.release_title,
+      youtubeId: row.youtube_id,
+      videoTitle: row.video?.youTubeVideoName || null,
+      channelName: row.video?.youTubeChannelName || null,
+      kind: row.kind,
+      category: row.category,
+      state: grabState(row),
+      failMessage: row.fail_message || null,
+      libraryCopy: libraryCopyView(row),
+      createdAt: row.created_at,
+      completedAt: row.completed_at || null,
+      removedAt: row.removed_at || null,
+    }));
+    return { grabs, total, page, pageSize };
   }
 
   return {
@@ -254,7 +253,7 @@ function createArrBridgeService({
     sabnzbd,
     settings,
     listRecentGrabs,
-    listRecentSearches: () => recentSearches.list(),
+    listRecentSearches: (query) => searchHistory.list(query),
     isEnabled: () => isEnabled(getConfig()),
     isAuthorized: (candidate) => isAuthorized(getConfig(), candidate),
     start,
