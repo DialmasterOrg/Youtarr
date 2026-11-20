@@ -21,7 +21,7 @@ const ADVICE = {
       'finish this video. Merging the video and audio needs roughly twice ' +
       'the video\'s size. Free up space there, then try again. The server ' +
       'log names the folder and how much space it had; where downloads are ' +
-      'staged depends on "Use external temp directory" in Settings.',
+      'staged depends on "External temp directory" in Settings.',
   },
   'http-403-cookies-enabled': {
     title: 'YouTube blocked the download while using your cookies',
@@ -72,6 +72,18 @@ const ADVICE = {
       'may be genuinely unavailable.',
   },
 };
+
+// The diagnoses that mean YouTube refused this server or these cookies, which
+// often passes on its own. The "anonymous-retry" ones are left out: there the
+// video failed with and without cookies and may really be unavailable.
+const YOUTUBE_BLOCK_KEYS = new Set([
+  'http-403-cookies-enabled',
+  'http-403-cookies-disabled',
+  'bot-check-cookies-enabled',
+  'bot-check-cookies-disabled',
+]);
+
+const isYoutubeBlock = (key) => YOUTUBE_BLOCK_KEYS.has(key);
 
 // Ordered registry; first match wins. Out-of-space comes first: the finalizer
 // measured it for that video (tempSpaceProbe), so it is not a guess from the
@@ -152,6 +164,7 @@ function mergeDiagnoses(existing, incoming) {
 module.exports = {
   adviseFailures,
   mergeDiagnoses,
+  isYoutubeBlock,
   ADVICE,
   REGISTRY,
 };

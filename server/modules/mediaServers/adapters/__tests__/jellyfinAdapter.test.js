@@ -276,6 +276,79 @@ describe('JellyfinAdapter', () => {
     );
   });
 
+  describe('refreshAfterDownload', () => {
+    const scanParams = {
+      Recursive: true,
+      ImageRefreshMode: 'Default',
+      MetadataRefreshMode: 'Default',
+      ReplaceAllImages: false,
+      ReplaceAllMetadata: false,
+    };
+
+    test('refreshes every library when no Video Library IDs are set', async () => {
+      axios.post.mockResolvedValue({ status: 204 });
+      await new JellyfinAdapter(cfg).refreshAfterDownload();
+
+      expect(axios.post).toHaveBeenCalledTimes(1);
+      expect(axios.post).toHaveBeenCalledWith(
+        'http://jf:8096/Library/Refresh',
+        null,
+        expect.objectContaining({ headers: { Authorization: 'MediaBrowser Token="KEY"' } })
+      );
+    });
+
+    test('refreshes only the configured libraries when Video Library IDs are set', async () => {
+      axios.post.mockResolvedValue({ status: 204 });
+      await new JellyfinAdapter({ ...cfg, jellyfinVideoLibraryIds: ['lib-a', ' lib-b '] }).refreshAfterDownload();
+
+      expect(axios.post).toHaveBeenCalledTimes(2);
+      for (const id of ['lib-a', 'lib-b']) {
+        expect(axios.post).toHaveBeenCalledWith(
+          `http://jf:8096/Items/${id}/Refresh`,
+          null,
+          expect.objectContaining({
+            headers: { Authorization: 'MediaBrowser Token="KEY"' },
+            params: scanParams,
+            timeout: expect.any(Number),
+          })
+        );
+      }
+    });
+
+    test('URL-encodes a library id', async () => {
+      axios.post.mockResolvedValue({ status: 204 });
+      await new JellyfinAdapter({ ...cfg, jellyfinVideoLibraryIds: ['a/b'] }).refreshAfterDownload();
+
+      expect(axios.post.mock.calls[0][0]).toBe('http://jf:8096/Items/a%2Fb/Refresh');
+    });
+
+    test('warns about a library that fails and still refreshes the others', async () => {
+      const logger = require('../../../../logger');
+      axios.post
+        .mockRejectedValueOnce({ isAxiosError: true, response: { status: 400 }, message: 'Request failed with status code 400' })
+        .mockResolvedValueOnce({ status: 204 });
+
+      await expect(
+        new JellyfinAdapter({ ...cfg, jellyfinVideoLibraryIds: ['bad', 'good'] }).refreshAfterDownload()
+      ).resolves.toBeUndefined();
+
+      expect(axios.post).toHaveBeenCalledTimes(2);
+      expect(logger.warn).toHaveBeenCalledTimes(1);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 400, libraryId: 'bad' }),
+        expect.stringMatching(/Video Library IDs/)
+      );
+    });
+
+    test('does not reject when the full refresh fails', async () => {
+      const logger = require('../../../../logger');
+      axios.post.mockRejectedValueOnce({ isAxiosError: true, code: 'ECONNREFUSED', message: 'connect ECONNREFUSED' });
+
+      await expect(new JellyfinAdapter(cfg).refreshAfterDownload()).resolves.toBeUndefined();
+      expect(logger.warn).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('fetchWatchStates', () => {
     const singleUserCfg = { ...cfg, jellyfinWatchStatusAllUsers: false };
     const isWatchedQuery = (params) => params.isPlayed === true;

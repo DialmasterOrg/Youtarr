@@ -152,6 +152,70 @@ describe('NavSidebar – sub-item visibility', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────
+// SECTION: Grouped sub-items
+// ─────────────────────────────────────────────────────────────────
+
+const GROUPED_SETTINGS_ITEM = {
+  ...SETTINGS_ITEM,
+  hideSubItemsOnMobile: true,
+  subItems: [
+    { key: 'core', label: 'Core', to: '/settings/core', group: 'Downloads & library' },
+    { key: 'cookies', label: 'Cookies', to: '/settings/cookies', group: 'Downloads & library' },
+    { key: 'appearance', label: 'Appearance', to: '/settings/appearance', group: 'System' },
+  ],
+};
+const GROUPED_NAV_ITEMS = [CHANNELS_ITEM, DOWNLOADS_ITEM, GROUPED_SETTINGS_ITEM];
+
+describe('NavSidebar – grouped sub-items', () => {
+  it('prints each group heading once, above its first sub-item', () => {
+    renderSidebar('/settings/core', { navItems: GROUPED_NAV_ITEMS });
+
+    const rows = screen.getAllByText(/^(Downloads & library|Core|Cookies|System|Appearance)$/);
+    expect(rows.map((row) => row.textContent)).toEqual(['Downloads & library', 'Core', 'Cookies', 'System', 'Appearance']);
+  });
+
+  it('scrolls the current page\'s sub-item into view', () => {
+    // jest.setup.ts stubs scrollIntoView on HTMLElement.prototype
+    const scrollIntoView = jest.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => {});
+    try {
+      renderSidebar('/settings/appearance', { navItems: GROUPED_NAV_ITEMS });
+
+      expect(scrollIntoView.mock.instances).toEqual([screen.getByRole('link', { name: 'Appearance' })]);
+    } finally {
+      scrollIntoView.mockRestore();
+    }
+  });
+
+  it('links grouped sub-items like any other', () => {
+    renderSidebar('/settings/core', { navItems: GROUPED_NAV_ITEMS });
+
+    expect(screen.getByRole('link', { name: 'Cookies' })).toHaveAttribute('href', '/settings/cookies');
+    expect(screen.queryByRole('link', { name: 'System' })).not.toBeInTheDocument();
+  });
+});
+
+describe('NavSidebar – phone sub-item strip', () => {
+  afterEach(() => {
+    document.documentElement.style.removeProperty('--mobile-nav-total-offset-px');
+  });
+
+  it('shows the strip for a section that keeps its sub-items on phones', () => {
+    renderSidebar('/downloads/activity', { navItems: GROUPED_NAV_ITEMS, isMobile: true });
+
+    expect(screen.getByTestId('mobile-subnav')).toBeInTheDocument();
+    expect(document.documentElement.style.getPropertyValue('--mobile-nav-total-offset-px')).toBe('112');
+  });
+
+  it('shows no strip, and reserves no room for one, on a section that hides its sub-items on phones', () => {
+    renderSidebar('/settings/core', { navItems: GROUPED_NAV_ITEMS, isMobile: true });
+
+    expect(screen.queryByTestId('mobile-subnav')).not.toBeInTheDocument();
+    expect(document.documentElement.style.getPropertyValue('--mobile-nav-total-offset-px')).toBe('64');
+    expect(screen.getByRole('button', { name: /Settings/ })).toBeInTheDocument();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────
 // SECTION: Sub-items re-appear after navigating away and back
 // This covers a regression where sub-items were hidden after the
 // Collapse component unmounted and then re-mounted (unmountOnExit bug).

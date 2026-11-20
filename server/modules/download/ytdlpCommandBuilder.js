@@ -352,6 +352,8 @@ class YtdlpCommandBuilder {
    * @param {boolean} options.cookiesEnabled - Pass the configured cookies (default true)
    * @param {boolean} options.streamEntries - Print one JSON line per playlist entry as each page
    *   arrives instead of a single JSON document at exit (no playlist-level fields)
+   * @param {boolean} options.entryPerLine - Print one JSON line per playlist entry after the whole
+   *   playlist is resolved, so each entry still carries the playlist's counts
    * @returns {string[]} - Complete args array
    */
   static buildMetadataFetchArgs(url, options = {}) {
@@ -364,6 +366,8 @@ class YtdlpCommandBuilder {
     args.push('--skip-download');
     if (options.streamEntries) {
       args.push('--dump-json', '--lazy-playlist');
+    } else if (options.entryPerLine) {
+      args.push('--dump-json');
     } else {
       args.push('--dump-single-json');
     }

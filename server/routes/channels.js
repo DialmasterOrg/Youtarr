@@ -1243,6 +1243,9 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *                   rating:
    *                     type: string
    *                     nullable: true
+   *                   protect:
+   *                     type: boolean
+   *                     description: Protect the downloaded videos from automatic removal
    *     responses:
    *       202:
    *         description: Download job queued

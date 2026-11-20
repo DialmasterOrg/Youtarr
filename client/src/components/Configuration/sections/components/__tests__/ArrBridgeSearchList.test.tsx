@@ -4,6 +4,7 @@ import '@testing-library/jest-dom';
 import { ArrBridgeSearchList } from '../ArrBridgeSearchList';
 import { renderWithProviders } from '../../../../../test-utils';
 import { ArrSearch, ArrSearchCandidate, ArrSearchStage } from '../../../utils/arrBridgeSearches';
+import { ArrPagedList } from '../../../hooks/useArrBridgePagedList';
 
 const candidate = (overrides: Partial<ArrSearchCandidate> = {}): ArrSearchCandidate => ({
   youtubeId: 'g7VYYfoNaf0',
@@ -61,16 +62,24 @@ const notSearched = (overrides: Partial<ArrSearch> = {}): ArrSearch => search({
   ...overrides,
 });
 
-const setup = (overrides: Partial<React.ComponentProps<typeof ArrBridgeSearchList>> = {}) => {
-  const props: React.ComponentProps<typeof ArrBridgeSearchList> = {
-    searches: [search()],
+const setup = (
+  { searches = [search()], ...overrides }: Partial<ArrPagedList<ArrSearch>> & { searches?: ArrSearch[] } = {}
+) => {
+  const list: ArrPagedList<ArrSearch> = {
+    items: searches,
+    total: searches.length,
+    page: 1,
+    pageSize: 10,
+    query: '',
     loading: false,
     error: null,
-    onRefresh: jest.fn(),
+    setPage: jest.fn(),
+    setQuery: jest.fn(),
+    refresh: jest.fn(),
     ...overrides,
   };
-  renderWithProviders(<ArrBridgeSearchList {...props} />);
-  return props;
+  renderWithProviders(<ArrBridgeSearchList list={list} />);
+  return list;
 };
 
 // Counts searches only while no row is open: an open row holds a list of its own.
@@ -174,17 +183,39 @@ describe('ArrBridgeSearchList', () => {
   });
 
   test('Refresh asks for the list again', () => {
-    const props = setup();
+    const list = setup();
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
 
-    expect(props.onRefresh).toHaveBeenCalledTimes(1);
+    expect(list.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  test('the filter box says what it matches and hands on what is typed', () => {
+    const list = setup();
+
+    fireEvent.change(screen.getByLabelText('Filter searches'), { target: { value: 'beyblade s01e29' } });
+
+    expect(list.setQuery).toHaveBeenCalledWith('beyblade s01e29');
+    expect(screen.getByText(/Matches what was asked for/)).toBeInTheDocument();
+  });
+
+  test('says so when the filter matches no search', () => {
+    setup({ searches: [], query: 'zzz' });
+
+    expect(screen.getByText('No searches match this filter.')).toBeInTheDocument();
+  });
+
+  test('says how long searches are kept, and no longer that a restart empties the list', () => {
+    setup();
+
+    expect(screen.getByText(/kept for 30 days/)).toBeInTheDocument();
+    expect(screen.queryByText(/restart/)).not.toBeInTheDocument();
   });
 
   test('says so when nothing was searched yet', () => {
     setup({ searches: [] });
 
-    expect(screen.getByText('No searches since Youtarr started.')).toBeInTheDocument();
+    expect(screen.getByText('No searches yet.')).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Recent searches' })).not.toBeInTheDocument();
   });
 
@@ -202,31 +233,22 @@ describe('ArrBridgeSearchList', () => {
     expect(screen.queryByRole('list', { name: 'Recent searches' })).not.toBeInTheDocument();
   });
 
-  describe('a long list', () => {
+  describe('a list of several pages', () => {
     const many = (count: number) => Array.from({ length: count }, (_, index) => notSearched({ id: index + 1 }));
 
-    test('shows the newest 10 and offers the rest', () => {
-      setup({ searches: many(14) });
+    test('shows the page it was given and where that is in the list', () => {
+      setup({ searches: many(10), total: 34, page: 2 });
 
       expect(rows()).toHaveLength(10);
-      expect(screen.getByRole('button', { name: 'Show all 14' })).toBeInTheDocument();
+      expect(screen.getByText('11 to 20 of 34')).toBeInTheDocument();
     });
 
-    test('shows them all when asked, and can fold them away again', () => {
-      setup({ searches: many(14) });
+    test('a page button asks for that page', () => {
+      const list = setup({ searches: many(10), total: 34, page: 2 });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Show all 14' }));
-      expect(rows()).toHaveLength(14);
+      fireEvent.click(screen.getByRole('button', { name: 'go to page 4' }));
 
-      fireEvent.click(screen.getByRole('button', { name: 'Show fewer' }));
-      expect(rows()).toHaveLength(10);
-    });
-
-    test('10 or fewer need no button', () => {
-      setup({ searches: many(10) });
-
-      expect(rows()).toHaveLength(10);
-      expect(screen.queryByRole('button', { name: /Show all/ })).not.toBeInTheDocument();
+      expect(list.setPage).toHaveBeenCalledWith(4);
     });
   });
 });

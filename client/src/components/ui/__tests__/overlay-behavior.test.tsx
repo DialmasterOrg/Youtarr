@@ -1,7 +1,7 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Menu, MenuItem as PlainMenuItem } from '../menu';
+import { Menu, Popover, MenuItem as PlainMenuItem } from '../menu';
 import { Select, MenuItem } from '../select';
 import { Tooltip } from '../tooltip';
 import { Dialog, DialogTitle, DialogContent } from '../dialog';
@@ -127,6 +127,60 @@ describe('overlay positioning guards', () => {
     );
 
     expect(screen.getByRole('menu').style.maxHeight).toBe('544px');
+  });
+
+  // A transformed ancestor (a Card's hover lift) becomes the containing block
+  // for position: fixed descendants, so these overlays must not render inside it.
+  test('menu renders outside its parent so a transformed ancestor cannot offset it', () => {
+    anchor = document.createElement('button');
+    document.body.appendChild(anchor);
+
+    render(
+      <div data-testid="transformed-card" style={{ transform: 'translateY(-2px)' }}>
+        <Menu open anchorEl={anchor} onClose={jest.fn()}>
+          <PlainMenuItem>First</PlainMenuItem>
+        </Menu>
+      </div>
+    );
+
+    const card = within(screen.getByTestId('transformed-card'));
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    expect(card.queryByRole('menu')).not.toBeInTheDocument();
+    expect(screen.getByTestId('menu-backdrop')).toBeInTheDocument();
+    expect(card.queryByTestId('menu-backdrop')).not.toBeInTheDocument();
+  });
+
+  test('popover renders outside its parent so a transformed ancestor cannot offset it', () => {
+    anchor = document.createElement('button');
+    document.body.appendChild(anchor);
+
+    render(
+      <div data-testid="transformed-card" style={{ transform: 'translateY(-2px)' }}>
+        <Popover open anchorEl={anchor} onClose={jest.fn()}>
+          Popover body
+        </Popover>
+      </div>
+    );
+
+    expect(screen.getByText('Popover body')).toBeInTheDocument();
+    expect(within(screen.getByTestId('transformed-card')).queryByText('Popover body')).not.toBeInTheDocument();
+  });
+
+  test('portaled menu still closes when its backdrop is clicked', async () => {
+    const user = userEvent.setup();
+    const onClose = jest.fn();
+    anchor = document.createElement('button');
+    document.body.appendChild(anchor);
+
+    render(
+      <Menu open anchorEl={anchor} onClose={onClose}>
+        <PlainMenuItem>First</PlainMenuItem>
+      </Menu>
+    );
+
+    await user.click(screen.getByTestId('menu-backdrop'));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   test('select content uses trigger min width and viewport-safe max height', async () => {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import { Playlist, PlaylistVideo } from '../types/playlist';
+import { Playlist, PlaylistSyncStatus, PlaylistVideo } from '../types/playlist';
 
 export interface DownloadOverrideSettings {
   resolution?: string;
@@ -9,6 +9,7 @@ export interface DownloadOverrideSettings {
   audioFormat?: string | null;
   rating?: string | null;
   skipVideoFolder?: boolean;
+  protect?: boolean;
 }
 
 export type PlaylistSortOrder = 'asc' | 'desc' | 'recent' | 'published' | 'downloaded';
@@ -36,6 +37,7 @@ interface PlaylistDetailResponse {
   // Downloaded items lacking the file type the playlist syncs as (mp3 for
   // MP3 Only playlists, video otherwise); media server sync leaves them out.
   unsyncable_count?: number;
+  sync_status?: PlaylistSyncStatus;
 }
 
 interface PlaylistVideosResponse {
@@ -74,6 +76,7 @@ export const usePlaylistDetail = ({
   const [followingExistingCount, setFollowingExistingCount] = useState<number | null>(null);
   const [followingRequestedCount, setFollowingRequestedCount] = useState<number | null>(null);
   const [unsyncableCount, setUnsyncableCount] = useState<number | null>(null);
+  const [syncStatus, setSyncStatus] = useState<PlaylistSyncStatus | null>(null);
   const [loading, setLoading] = useState(!!(token && playlistId));
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +93,7 @@ export const usePlaylistDetail = ({
       setVideoTotal(0);
       setNotDownloadedCount(null);
       setUnsyncableCount(null);
+      setSyncStatus(null);
       setFollowingExistingCount(null);
       setFollowingRequestedCount(null);
       setLoading(false);
@@ -138,6 +142,7 @@ export const usePlaylistDetail = ({
           ? playlistRes.data.unsyncable_count
           : null
       );
+      setSyncStatus(playlistRes.data.sync_status ?? null);
       setVideos(videosRes.data.videos || []);
       setVideoTotal(videosRes.data.total || 0);
     } catch (err: unknown) {
@@ -224,6 +229,7 @@ export const usePlaylistDetail = ({
           ? res.data.unsyncable_count
           : null
       );
+      setSyncStatus(res.data.sync_status ?? null);
     } catch {
       // Keep existing meta on failure.
     }
@@ -311,6 +317,7 @@ export const usePlaylistDetail = ({
     followingExistingCount,
     followingRequestedCount,
     unsyncableCount,
+    syncStatus,
     loading,
     loadingMore,
     hasMore,

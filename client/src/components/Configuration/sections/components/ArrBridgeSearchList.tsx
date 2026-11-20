@@ -1,5 +1,7 @@
 import React, { useId, useState } from 'react';
-import { Alert, Box, Button, Chip, Typography } from '../../../ui';
+import { Box, Button, Chip, Typography } from '../../../ui';
+import { ArrPagedList } from '../../hooks/useArrBridgePagedList';
+import { ArrBridgeListFrame } from './ArrBridgeListFrame';
 import {
   ArrSearch,
   ArrSearchCandidate,
@@ -15,19 +17,13 @@ import {
   searchOutcome,
 } from '../../utils/arrBridgeSearches';
 
-// The page stays short; the rest of the list is one click away.
-const COLLAPSED_ROWS = 10;
-
 // The last column is a fixed width: with "auto", a row with the button and
 // a row without one would put their other columns in different places.
 const ROW_COLUMNS = 'md:grid-cols-[minmax(0,3fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_9rem]';
 const CANDIDATE_COLUMNS = 'md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]';
 
 interface ArrBridgeSearchListProps {
-  searches: ArrSearch[];
-  loading: boolean;
-  error: string | null;
-  onRefresh: () => void;
+  list: ArrPagedList<ArrSearch>;
 }
 
 const formatWhen = (value: string): string => {
@@ -142,55 +138,31 @@ const SearchRow: React.FC<{ search: ArrSearch }> = ({ search }) => {
 };
 
 /**
- * What Sonarr and Radarr searched for lately, and what became of each video
- * YouTube returned.
+ * What Sonarr and Radarr searched for, and what became of each video
+ * YouTube returned, one page at a time.
  */
-export const ArrBridgeSearchList: React.FC<ArrBridgeSearchListProps> = ({ searches, loading, error, onRefresh }) => {
-  const [showAll, setShowAll] = useState(false);
-  const shown = showAll ? searches : searches.slice(0, COLLAPSED_ROWS);
-
-  return (
-    <Box className="flex flex-col gap-2">
-      <Box className="flex flex-wrap items-center justify-between gap-2">
-        <Typography variant="body2" color="text.secondary">
-          The newest searches first, up to 50. The list is emptied when Youtarr restarts and does not update by
-          itself.
-        </Typography>
-        <Button variant="outlined" disabled={loading} onClick={onRefresh}>
-          Refresh
-        </Button>
-      </Box>
-
-      {error && <Alert severity="error">{error}</Alert>}
-      {!error && searches.length === 0 && (
-        <Typography variant="body2" color="text.secondary">
-          {loading ? 'Loading the recent searches...' : 'No searches since Youtarr started.'}
-        </Typography>
-      )}
-      {!error && searches.length > 0 && (
-        <>
-          <Box className={`hidden gap-2 text-sm font-semibold text-muted-foreground md:grid ${ROW_COLUMNS}`} aria-hidden="true">
-            <span>Asked for</span>
-            <span>Answer</span>
-            <span>When</span>
-            <span />
-          </Box>
-          <ul className="m-0 list-none p-0" aria-label="Recent searches">
-            {shown.map((search) => (
-              <SearchRow key={search.id} search={search} />
-            ))}
-          </ul>
-          {searches.length > COLLAPSED_ROWS && (
-            <Box>
-              <Button variant="text" onClick={() => setShowAll((all) => !all)}>
-                {showAll ? 'Show fewer' : `Show all ${searches.length}`}
-              </Button>
-            </Box>
-          )}
-        </>
-      )}
+export const ArrBridgeSearchList: React.FC<ArrBridgeSearchListProps> = ({ list }) => (
+  <ArrBridgeListFrame
+    list={list}
+    intro="The newest searches first, kept for 30 days. This list does not update by itself."
+    searchLabel="Filter searches"
+    searchHint="Matches what was asked for: the name, an episode (S01E02), a season (S01), a year or an air date (2024-05-01)."
+    loadingText="Loading the recent searches..."
+    emptyText="No searches yet."
+    noMatchText="No searches match this filter."
+  >
+    <Box className={`hidden gap-2 text-sm font-semibold text-muted-foreground md:grid ${ROW_COLUMNS}`} aria-hidden="true">
+      <span>Asked for</span>
+      <span>Answer</span>
+      <span>When</span>
+      <span />
     </Box>
-  );
-};
+    <ul className="m-0 list-none p-0" aria-label="Recent searches">
+      {list.items.map((search) => (
+        <SearchRow key={search.id} search={search} />
+      ))}
+    </ul>
+  </ArrBridgeListFrame>
+);
 
 export default ArrBridgeSearchList;

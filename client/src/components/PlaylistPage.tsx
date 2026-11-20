@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import axios from 'axios';
 import { useVideoActivity } from '../providers/VideoActivityProvider';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -36,6 +37,7 @@ import PlaylistFollowingDialog, { FollowingDialogMode } from './PlaylistPage/com
 import PlaylistSettingsDialog from './PlaylistPage/components/PlaylistSettingsDialog';
 import { isDeletable, isDownloadable, toModalData } from './PlaylistPage/components/playlistVideoHelpers';
 import { usePlaylistVideoDeletion } from './PlaylistPage/hooks/usePlaylistVideoDeletion';
+import { usePlaylistSyncUpdates } from './PlaylistPage/hooks/usePlaylistSyncUpdates';
 import DeleteVideosDialog from './shared/DeleteVideosDialog';
 import DownloadSettingsDialog from './DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from './DownloadManager/ManualDownload/types';
@@ -70,6 +72,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     followingExistingCount,
     followingRequestedCount,
     unsyncableCount,
+    syncStatus,
     loading,
     loadingMore,
     hasMore,
@@ -106,6 +109,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
   );
 
   useDownloadListingsRefresh(refetch);
+  usePlaylistSyncUpdates(playlist?.id ?? null, refetchMeta);
 
   const {
     status: serverStatus,
@@ -165,8 +169,9 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         showSnackbar(successMessage ?? `${label} succeeded`);
         return true;
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : `${label} failed`;
-        showSnackbar(msg, 'error');
+        const serverMessage: unknown = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
+        const fallback = err instanceof Error ? err.message : `${label} failed`;
+        showSnackbar(typeof serverMessage === 'string' && serverMessage ? serverMessage : fallback, 'error');
         return false;
       } finally {
         setRunningAction(null);
@@ -210,6 +215,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
             audioFormat: settings.audioFormat,
             rating: settings.rating,
             skipVideoFolder: settings.skipVideoFolder,
+            protect: settings.protect,
           }
         : undefined;
       const ids = pendingDownload.mode === 'selected' ? pendingDownload.ids.filter(id => !snapshot.videos[id]?.state) : undefined;
@@ -448,6 +454,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         followingRequestedCount={followingRequestedCount}
         onChooseExisting={() => setFollowingMode('batch')}
         unsyncableCount={unsyncableCount}
+        syncStatus={syncStatus}
         togglePending={pending}
         actionRunning={actionRunning}
         refreshing={runningAction === 'Refresh'}
@@ -550,6 +557,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         defaultResolution={playlist.video_quality || config.preferredResolution || '1080'}
         defaultAudioFormat={playlist.audio_format}
         defaultAudioFormatSource="playlist"
+        defaultProtect={config.protectManualDownloads}
       />
 
       <Dialog

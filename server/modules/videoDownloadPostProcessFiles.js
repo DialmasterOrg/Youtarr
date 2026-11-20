@@ -976,7 +976,11 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
     // must not fail the download.
     if (activeJobId) {
       try {
-        const persisted = await videoPersistence.persistDownloadedVideoForJob({ jobId: activeJobId, youtubeId: id });
+        const persisted = await videoPersistence.persistDownloadedVideoForJob({
+          jobId: activeJobId,
+          youtubeId: id,
+          protect: process.env.YOUTARR_PROTECT_VIDEOS === 'true',
+        });
         if (persisted) {
           // Control marker, not a log line: stdout flows through yt-dlp to
           // YtdlpOutputRouter, which broadcasts videosUpdated to the listing pages.

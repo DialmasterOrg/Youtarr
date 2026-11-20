@@ -31,6 +31,7 @@ Jest on both sides, React Testing Library on the client. Test files in shared fo
 - All `jest.mock()` calls before `require()`. `jest.resetModules()` and `jest.clearAllMocks()` in `beforeEach`, then re-require the module under test.
 - Mock only external dependencies (db, fs, HTTP, logger); consult an existing test under `server/modules/__tests__/` or `client/src/**/__tests__/` before mocking a new dependency. Needing to mock internal module methods usually means a design issue.
 - `downloadModule.test.js` replaces model files with plain objects, so a module it loads must not require the models index: its association setup throws on them.
+- The `server/__tests__/server.*.test.js` harnesses load `routes/index.js` with `fs` stubbed, so `fs-extra` cannot load there: a route-wired module that starts requiring it (through `tempPathManager`, for example) needs a `jest.doMock` in each harness.
 - A module that requires `membersAccess` loads a model at require time, which fails against a mocked `db`; such tests add `jest.mock('<path>/membersAccess')`, which picks up `server/modules/__mocks__/membersAccess.js` (no cookies by default).
 
 ## Hook tests

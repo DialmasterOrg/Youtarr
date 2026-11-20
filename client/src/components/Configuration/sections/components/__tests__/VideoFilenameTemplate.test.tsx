@@ -75,6 +75,12 @@ describe('VideoFilenameTemplate', () => {
     });
   });
 
+  test('presets are toggle buttons pressed for the current value', () => {
+    render(<VideoFilenameTemplate value="%(title).64B" onChange={() => {}} token="tok" />);
+    expect(screen.getByRole('button', { name: /title only/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /date prefix/i })).toHaveAttribute('aria-pressed', 'false');
+  });
+
   it('does not show preview lines until the user clicks Preview', () => {
     render(<VideoFilenameTemplate value={defaultPrefix} onChange={() => {}} token="tok" />);
     expect(screen.queryByTestId('filename-preview-file')).not.toBeInTheDocument();

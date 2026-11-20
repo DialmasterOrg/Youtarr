@@ -18,6 +18,12 @@ const createResponse = () => {
   return res;
 };
 
+const NOT_FOUND_WITHOUT_COOKIES = 'YouTube says this playlist does not exist. If it is private (Watch Later, Liked videos or a private playlist), enable cookies from the account that owns it in Settings, then try again.';
+const NOT_FOUND_WITH_COOKIES = 'YouTube says this playlist does not exist. If it is private, your cookies may have expired or belong to a different account. Use "Test cookies" in Settings to check them.';
+const SIGN_IN_DEMANDED_WITH_COOKIES = 'YouTube asked for a sign-in even though cookies were sent. They may have expired. Use "Test cookies" in Settings to check them.';
+
+const playlistFetchError = (code, usedCookies) => Object.assign(new Error(code), { usedCookies });
+
 const makePlaylist = (overrides = {}) => ({
   id: 1,
   playlist_id: 'PLtest123',
@@ -55,6 +61,7 @@ const buildDeps = (overrides = {}) => ({
   mediaServers: {
     mediaServerSync: {
       syncPlaylist: jest.fn().mockResolvedValue(undefined),
+      getSyncStatus: jest.fn().mockResolvedValue({ syncing: false, servers: {} }),
     },
     watchStatusQueries: {
       getWatchedByMap: jest.fn().mockResolvedValue(new Map()),
@@ -220,6 +227,26 @@ describe('GET /api/playlists/:playlistId', () => {
       where: { playlist_id: 'PLtest123', enabled: true },
     });
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ playlist }));
+  });
+
+  test('returns the media server sync status for the playlist', async () => {
+    const syncStatus = {
+      syncing: false,
+      servers: { jellyfin: { last_synced_at: null, last_error: 'No downloaded items to sync yet.' } },
+    };
+    const deps = buildDeps();
+    deps.mediaServers.mediaServerSync.getSyncStatus.mockResolvedValue(syncStatus);
+    const playlist = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(playlist);
+
+    const handler = getHandler('get', '/api/playlists/:playlistId', deps);
+    const req = { params: { playlistId: 'PLtest123' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.mediaServers.mediaServerSync.getSyncStatus).toHaveBeenCalledWith(playlist);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ sync_status: syncStatus }));
   });
 
   test('is not found when the playlist is soft-deleted', async () => {
@@ -437,7 +464,35 @@ describe('POST /api/playlists/addplaylistinfo', () => {
     await handler(req, res);
 
     expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Playlist not found' });
+    expect(res.json).toHaveBeenCalledWith({ error: NOT_FOUND_WITHOUT_COOKIES });
+  });
+
+  test('returns 404 pointing at the cookies when they were sent and the playlist was not found', async () => {
+    const deps = buildDeps();
+    deps.playlistModule.getPlaylistInfo.mockRejectedValue(playlistFetchError('PLAYLIST_NOT_FOUND', true));
+
+    const handler = getHandler('post', '/api/playlists/addplaylistinfo', deps);
+    const req = { body: { url: 'https://youtube.com/playlist?list=WL' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: NOT_FOUND_WITH_COOKIES });
+  });
+
+  test('returns 403 pointing at the cookies when they were sent and a sign-in was still demanded', async () => {
+    const deps = buildDeps();
+    deps.playlistModule.getPlaylistInfo.mockRejectedValue(playlistFetchError('COOKIES_REQUIRED', true));
+
+    const handler = getHandler('post', '/api/playlists/addplaylistinfo', deps);
+    const req = { body: { url: 'https://youtube.com/playlist?list=private' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({ error: SIGN_IN_DEMANDED_WITH_COOKIES });
   });
 
   test('returns 403 when cookies required', async () => {
@@ -652,6 +707,36 @@ describe('POST /api/playlists', () => {
 
     await expect(handler(req, res)).resolves.not.toThrow();
     expect(res.status).toHaveBeenCalledWith(500);
+  });
+
+  test('returns 404 without saving when YouTube says the playlist does not exist', async () => {
+    const deps = buildDeps();
+    deps.playlistModule.getPlaylistInfo.mockRejectedValue(playlistFetchError('PLAYLIST_NOT_FOUND', false));
+
+    const handler = getHandler('post', '/api/playlists', deps);
+    const req = { body: { url: 'https://youtube.com/playlist?list=WL' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: NOT_FOUND_WITHOUT_COOKIES });
+    expect(deps.playlistModule.upsertPlaylist).not.toHaveBeenCalled();
+  });
+
+  test('returns 503 without saving when YouTube cannot be reached', async () => {
+    const deps = buildDeps();
+    deps.playlistModule.getPlaylistInfo.mockRejectedValue(new Error('NETWORK_ERROR'));
+
+    const handler = getHandler('post', '/api/playlists', deps);
+    const req = { body: { url: 'https://youtube.com/playlist?list=net' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Unable to reach YouTube' });
+    expect(deps.playlistModule.upsertPlaylist).not.toHaveBeenCalled();
   });
 
   test('returns 500 on subscribe failure', async () => {
@@ -1723,6 +1808,20 @@ describe('POST /api/playlists/:playlistId/refresh', () => {
 
     expect(res.status).toHaveBeenCalledWith(409);
     expect(res.json).toHaveBeenCalledWith({ error: 'A refresh is already in progress for this playlist. Wait for it to finish, then try again.' });
+  });
+
+  test('returns 404 pointing at the cookies when YouTube says the playlist does not exist', async () => {
+    const deps = buildDeps();
+    deps.playlistModule.fetchAllPlaylistVideos.mockRejectedValue(playlistFetchError('PLAYLIST_NOT_FOUND', true));
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/refresh', deps);
+    const req = { params: { playlistId: 'PLtest123' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: NOT_FOUND_WITH_COOKIES });
   });
 
   test('returns 500 on fetch error', async () => {

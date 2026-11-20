@@ -34,8 +34,9 @@ jest.mock('../../shared/AddChannelDialog', () => ({
   },
 }));
 
+const mockConfig: { preferredResolution: string; protectManualDownloads?: boolean } = { preferredResolution: '1080' };
 jest.mock('../../../hooks/useConfig', () => ({
-  useConfig: () => ({ config: { preferredResolution: '1080' } }),
+  useConfig: () => ({ config: mockConfig }),
 }));
 
 const mockTriggerDownloads = jest.fn().mockResolvedValue(true);
@@ -51,12 +52,14 @@ jest.mock('../../DownloadManager/ManualDownload/DownloadSettingsDialog', () => (
     onClose: () => void;
     videoCount?: number;
     missingVideoCount?: number;
+    defaultProtect?: boolean;
   }) {
     const React = require('react');
     if (!props.open) return null;
     return React.createElement(
       'div',
       { 'data-testid': 'mock-download-dialog' },
+      React.createElement('div', { 'data-testid': 'dialog-default-protect' }, String(props.defaultProtect)),
       React.createElement('div', { 'data-testid': 'dialog-video-count' }, String(props.videoCount ?? 0)),
       React.createElement('div', { 'data-testid': 'dialog-missing-count' }, String(props.missingVideoCount ?? 0)),
       React.createElement(
@@ -310,6 +313,20 @@ describe('FindVideos page', () => {
       ],
       overrideSettings: undefined,
     });
+  });
+
+  test('opens the download dialog with protection on when protecting manual downloads is the default', async () => {
+    mockConfig.protectManualDownloads = true;
+    try {
+      renderWithRouter(<FindVideos token="t" />);
+      await searchFor('q', [result({ youtubeId: 'first000001', title: 'First', duration: 600 })]);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Download First' }));
+
+      expect(await screen.findByTestId('dialog-default-protect')).toHaveTextContent('true');
+    } finally {
+      delete mockConfig.protectManualDownloads;
+    }
   });
 
   test('the row download button queues that one video and leaves the selection alone', async () => {

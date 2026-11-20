@@ -26,6 +26,8 @@ paths:
 - `/getconfig` carries `customArgsCheck` for the saved value, and the client renders the blocked, unreadable and warning notices from the server (`sections/components/CustomArgsCheckAlerts`); the yt-dlp option list never reaches the client.
 - `hooks/useConfig.ts` is a legacy raw-`fetch` hook; do not copy it (new hooks use axios). `useConfig().loggingStatus` exposes `/getconfig`'s `logging` block.
 - `CONFIG_UPDATED_EVENT` is the one sanctioned custom event for decoupled config refresh. Settings sections live under `Configuration/sections/` (routed as `/settings/<key>` from `Settings/SettingsIndex.tsx`), reusable settings UI in `Configuration/common/`, feature hooks in `Configuration/hooks/`.
+- `SETTINGS_PAGES` keeps each group's pages adjacent, in `SETTINGS_GROUPS` order: the sidebar and top-nav menus print a group heading wherever the group changes, and the Settings index lists the same groups.
+- Phones get no sub-item strip on Settings pages (`hideSubItemsOnMobile` in `AppShell.tsx`): 21 chips were unusable, so the bottom bar's Settings tab opens the index, which is the menu.
 - `supportPromptShownAt` is server-owned: `supportPromptModule` stamps it when the one-time donation prompt is displayed (not on dismissal), and `/updateconfig` keeps the stored value, because a save from a stale tab would otherwise bring the prompt back.
 - The donation prompt is never shown on Elfhosted, whose users already pay through their host; the About page links show everywhere. `?supportPrompt=preview` displays it without asking the server or recording anything.
 - Storage limits (`/settings/storage-limits`, `StorageLimitsSection.tsx`) read the pause status through `hooks/useDownloadPauseStatus`; the pause rules are in `.claude/rules/downloads.md`.

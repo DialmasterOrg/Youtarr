@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useId, useEffect } from 'react';
 import {
+  InputLabel,
   Select,
   MenuItem,
   Typography,
@@ -299,9 +300,9 @@ export function SubfolderAutocomplete({
           for test queries (getByLabelText, getByRole, toHaveValue). */}
       <div style={{ position: 'relative', width: '100%' }}>
         {/* Accessible label – found by getByLabelText */}
-        <label htmlFor={inputId} style={{ display: 'block', fontSize: '0.75rem', marginBottom: 2, color: 'var(--muted-foreground)' }}>
+        <InputLabel htmlFor={inputId} className="mb-1 block">
           {label}
-        </label>
+        </InputLabel>
 
         {/* Visually-hidden accessible input: role="combobox", holds the display
             value when the dropdown is closed (cleared when open so that the option

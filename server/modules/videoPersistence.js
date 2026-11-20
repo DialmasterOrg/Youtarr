@@ -225,8 +225,11 @@ class VideoPersistence {
    * Reuses VideoMetadataProcessor so the channelvideos row gets the info.json
    * channel_id, same as the batch path; otherwise VEVO/Topic uploads would
    * get two divergent rows.
+   *
+   * protect marks the video protected from automatic removal. It is never
+   * written false, so a re-download keeps existing protection.
    */
-  async persistDownloadedVideoForJob({ jobId, youtubeId }) {
+  async persistDownloadedVideoForJob({ jobId, youtubeId, protect = false }) {
     if (!jobId || !youtubeId) {
       return null;
     }
@@ -242,7 +245,10 @@ class VideoPersistence {
       return null;
     }
 
-    const videoInstance = await this.upsertVideoForJob(metadata, jobInstance);
+    const videoInstance = await this.upsertVideoForJob(
+      protect ? { ...metadata, protected: true } : metadata,
+      jobInstance
+    );
     // yt-dlp runs the post-processor only for videos this job actually
     // downloaded (never archive skips), so link it to the job even when the
     // row already existed; otherwise a re-download vanishes from the job's

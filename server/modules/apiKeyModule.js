@@ -6,6 +6,7 @@ const {
   roleForExternalPermissions,
 } = require('./externalApi/externalPermissions');
 const { getEffectiveChannelGrantCounts } = require('./externalApi/apiKeyChannelGrantModule');
+const { STATUS_READ_ROLE } = require('./constants/apiKeyRoles');
 
 const MAX_API_KEYS = 20;
 const ROLES = ['legacy_download', 'view', 'request', 'delete', 'admin'];
@@ -102,7 +103,12 @@ class ApiKeyModule {
    * @param {string} name - Human-readable name for the key
    * @returns {Object} { id, name, key, prefix } - key is only returned once!
    */
-  async createApiKey(name, policy, { transaction, logEvent = true } = {}) {
+  async createApiKey(name, policy, { transaction, logEvent = true, role } = {}) {
+    // `role` creates a status key; external roles always come with a policy.
+    if (role !== undefined && (role !== STATUS_READ_ROLE || policy !== undefined)) {
+      throw new Error('Invalid API key role');
+    }
+
     // Check max keys limit
     const existingCount = await ApiKey.count({
       where: { is_active: true },
@@ -123,6 +129,7 @@ class ApiKeyModule {
       key_prefix: prefix,
       created_at: new Date(),
       is_active: true,
+      ...(role === undefined ? {} : { role }),
       ...(policy === undefined ? {} : validatePolicy(policy)),
     };
     const apiKey = transaction
@@ -234,7 +241,8 @@ class ApiKeyModule {
       ? await ApiKey.findByPk(id, { transaction, lock: transaction.LOCK.UPDATE })
       : await ApiKey.findByPk(id);
     if (!apiKey || !apiKey.is_active || apiKey.revoked_at) return null;
-    if (apiKey.role === 'legacy_download' || policy?.role === 'legacy_download') {
+    if (apiKey.role === 'legacy_download' || apiKey.role === STATUS_READ_ROLE ||
+        policy?.role === 'legacy_download') {
       throw new Error('Legacy and external API key types cannot be converted');
     }
     const values = validatePolicy(policy);

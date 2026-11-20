@@ -20,6 +20,8 @@ ArrBridgeGrab.init({
   fail_message: { type: DataTypes.STRING(500), allowNull: true },
   // See modules/arrBridge/libraryCopyRemover.
   library_copy: { type: DataTypes.STRING(20), allowNull: true },
+  // When YouTube first blocked this grab's download; see modules/arrBridge/blockWait.
+  blocked_at: { type: DataTypes.DATE, allowNull: true },
   created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   completed_at: { type: DataTypes.DATE, allowNull: true },

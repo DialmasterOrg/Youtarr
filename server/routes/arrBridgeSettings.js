@@ -1,6 +1,12 @@
 const express = require('express');
+const { isGrabId } = require('../modules/arrBridge/grabService');
 
 const UNKNOWN_APP = { error: 'Unknown app' };
+
+// A repeated parameter arrives as an array and reads as not given. The
+// bridge service turns the rest into a page, a size and search words.
+const textOf = (value) => (typeof value === 'string' ? value : undefined);
+const listQueryOf = (query) => ({ page: textOf(query.page), pageSize: textOf(query.pageSize), q: textOf(query.q) });
 
 /**
  * Creates the Settings endpoints of the Sonarr/Radarr bridge. Unlike the
@@ -309,24 +315,42 @@ function createArrBridgeSettingsRoutes({ verifyToken, arrBridgeConnectionLimiter
    * /api/arr-bridge/grabs:
    *   get:
    *     summary: List recent Sonarr/Radarr grabs
-   *     description: The newest grabs, removed ones included, each with a state. "handed-off" means Sonarr or Radarr took the file, by importing it or because it was removed there; the two cannot be told apart.
+   *     description: One page of the grabs, newest first, removed ones included, each with a state. "handed-off" means Sonarr or Radarr took the file, by importing it or because it was removed there; the two cannot be told apart.
    *     tags: [Sonarr/Radarr bridge]
    *     parameters:
    *       - in: query
-   *         name: limit
+   *         name: page
    *         schema:
    *           type: integer
    *           minimum: 1
-   *           maximum: 100
-   *           default: 50
+   *           default: 1
+   *       - in: query
+   *         name: pageSize
+   *         schema:
+   *           type: integer
+   *           minimum: 1
+   *           maximum: 50
+   *           default: 10
+   *       - in: query
+   *         name: q
+   *         description: Search text, at most 100 characters and 5 words. A grab must have every word in its release name, its video id, or the title or channel of the video Youtarr holds.
+   *         schema:
+   *           type: string
    *     responses:
    *       200:
-   *         description: The grabs, newest first
+   *         description: The page of grabs, newest first
    *         content:
    *           application/json:
    *             schema:
    *               type: object
    *               properties:
+   *                 total:
+   *                   type: integer
+   *                   description: How many grabs match, on all pages
+   *                 page:
+   *                   type: integer
+   *                 pageSize:
+   *                   type: integer
    *                 grabs:
    *                   type: array
    *                   items:
@@ -351,10 +375,32 @@ function createArrBridgeSettingsRoutes({ verifyToken, arrBridgeConnectionLimiter
    *                         type: string
    *                       state:
    *                         type: string
-   *                         enum: [waiting, downloading, ready, failed, handed-off, cancelled]
+   *                         enum: [waiting, blocked, downloading, ready, failed, handed-off, cancelled]
+   *                         description: "`blocked` is a waiting grab while YouTube blocks downloads: Youtarr tries one waiting grab an hour, for up to a day, instead of failing it."
    *                       failMessage:
    *                         type: string
    *                         nullable: true
+   *                       blockedAt:
+   *                         type: string
+   *                         format: date-time
+   *                         nullable: true
+   *                         description: When YouTube first blocked this grab's own download. Null for a `blocked` grab that only waits behind another grab's block, and for every other state.
+   *                       nextTryAt:
+   *                         type: string
+   *                         format: date-time
+   *                         nullable: true
+   *                         description: For a `blocked` grab, when Youtarr next tries a waiting grab. Null when a try is due.
+   *                       retryRequested:
+   *                         type: boolean
+   *                         description: For a `blocked` grab, whether a "Try again" asked for it is still to be carried out, which is the case while downloads are paused.
+   *                       downloadsPaused:
+   *                         type: boolean
+   *                         description: For a `blocked` grab, whether downloads are paused by a storage limit. Nothing is tried until they resume.
+   *                       hiddenUntil:
+   *                         type: string
+   *                         format: date-time
+   *                         nullable: true
+   *                         description: For a failed grab, until when Youtarr leaves its video out of searches. Null once that is over, and for a video that is in the Youtarr library.
    *                       libraryCopy:
    *                         type: string
    *                         nullable: true
@@ -376,8 +422,7 @@ function createArrBridgeSettingsRoutes({ verifyToken, arrBridgeConnectionLimiter
    */
   router.get('/api/arr-bridge/grabs', verifyToken, async (req, res) => {
     try {
-      const limit = typeof req.query.limit === 'string' ? req.query.limit : undefined;
-      return res.json({ grabs: await arrBridge.listRecentGrabs(limit) });
+      return res.json(await arrBridge.listRecentGrabs(listQueryOf(req.query)));
     } catch (err) {
       req.log.error({ err }, 'Failed to read the Sonarr/Radarr grabs');
       return res.status(500).json({ error: 'Could not read the grabs' });
@@ -386,19 +431,90 @@ function createArrBridgeSettingsRoutes({ verifyToken, arrBridgeConnectionLimiter
 
   /**
    * @swagger
-   * /api/arr-bridge/searches:
-   *   get:
-   *     summary: List recent Sonarr/Radarr searches
-   *     description: The last 50 searches Sonarr and Radarr sent, newest first, with the YouTube searches each one ran and what became of every result. Kept in memory, so a restart empties the list. It never holds a key or a feed link.
+   * /api/arr-bridge/grabs/{id}/retry:
+   *   post:
+   *     summary: Try a waiting Sonarr/Radarr grab again now
+   *     description: Downloads a waiting grab now instead of at the next automatic try, which matters while YouTube blocks downloads. If YouTube blocks it again, the grab goes back to waiting.
    *     tags: [Sonarr/Radarr bridge]
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
    *     responses:
    *       200:
-   *         description: The searches, newest first
+   *         description: What became of the try
    *         content:
    *           application/json:
    *             schema:
    *               type: object
    *               properties:
+   *                 result:
+   *                   type: string
+   *                   enum: [started, queued, paused, ready, deferred]
+   *                   description: "`started`: downloading now. `queued`: it starts when the current download finishes. `paused`: downloads are paused by a storage limit, and it starts when they resume. `ready`: the video was already in the library and is staged for import. `deferred`: it could not start now (another job is downloading the video, or its library file cannot be checked) and waits for the next check."
+   *       400:
+   *         description: The id is not a grab id
+   *       409:
+   *         description: The grab is not waiting (it is downloading, finished or removed), no grab has this id, or the bridge is off
+   *       500:
+   *         description: The grab could not be tried
+   */
+  router.post('/api/arr-bridge/grabs/:id/retry', verifyToken, async (req, res) => {
+    if (!isGrabId(req.params.id)) return res.status(400).json({ error: 'Invalid grab id' });
+    try {
+      const result = await arrBridge.retryGrab(req.params.id);
+      if (!result) return res.status(409).json({ error: 'This grab is not waiting to be downloaded' });
+      return res.json({ result });
+    } catch (err) {
+      req.log.error({ err }, 'Failed to try a Sonarr/Radarr grab again');
+      return res.status(500).json({ error: 'Could not try the grab again' });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/arr-bridge/searches:
+   *   get:
+   *     summary: List recent Sonarr/Radarr searches
+   *     description: One page of the searches Sonarr and Radarr sent, newest first, with the YouTube searches each one ran and what became of every result. Searches are kept for 30 days, and at most the newest 2,000. The list never holds a key or a feed link.
+   *     tags: [Sonarr/Radarr bridge]
+   *     parameters:
+   *       - in: query
+   *         name: page
+   *         schema:
+   *           type: integer
+   *           minimum: 1
+   *           default: 1
+   *       - in: query
+   *         name: pageSize
+   *         schema:
+   *           type: integer
+   *           minimum: 1
+   *           maximum: 50
+   *           default: 10
+   *       - in: query
+   *         name: q
+   *         description: Search text, at most 100 characters and 5 words. A search must have every word in what it asked for - the name with its episode (S01E02), season (S01), air date (2024-05-01) or year.
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: The page of searches, newest first
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 total:
+   *                   type: integer
+   *                   description: How many searches match, on all pages
+   *                 page:
+   *                   type: integer
+   *                 pageSize:
+   *                   type: integer
    *                 searches:
    *                   type: array
    *                   items:
@@ -482,9 +598,9 @@ function createArrBridgeSettingsRoutes({ verifyToken, arrBridgeConnectionLimiter
    *       500:
    *         description: The searches could not be read
    */
-  router.get('/api/arr-bridge/searches', verifyToken, (req, res) => {
+  router.get('/api/arr-bridge/searches', verifyToken, async (req, res) => {
     try {
-      return res.json({ searches: arrBridge.listRecentSearches() });
+      return res.json(await arrBridge.listRecentSearches(listQueryOf(req.query)));
     } catch (err) {
       req.log.error({ err }, 'Failed to read the Sonarr/Radarr searches');
       return res.status(500).json({ error: 'Could not read the searches' });

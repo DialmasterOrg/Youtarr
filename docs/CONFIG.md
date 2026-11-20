@@ -167,6 +167,15 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
   - **"Video subfolders"** (`false`): channel always uses per-video subfolders, even when the global default is flat
 - **Note**: Only affects new downloads; existing files are not moved. The manual download dialog can override the structure for a single download ("Force flat" or "Force individual video subfolders"); its default option ("Use channel/global settings") follows the channel setting and this global default.
 
+### Protect Manual Downloads
+- **Config Key**: `protectManualDownloads`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Description**: The download dialog has a **Protect this download from auto-removal** switch. When it is on, every video that download brings in is marked Protected, so [auto-removal](#auto-removal-settings) never deletes it. This setting decides whether that switch starts on or off; you can still change it for each download.
+- **Applies to**: downloads you start yourself through the download dialog (pasted URLs, videos picked on a channel, playlist, Videos or Find Videos page, a single video's download button, and a channel's Download All). Scheduled automatic downloads, the **Download new from all channels** run, and downloads sent with an API key are never protected by it.
+- **Note**: Protection is only ever added. Re-downloading a video that is already Protected with the switch off leaves it Protected, and a video that was skipped because it is already downloaded is not changed. Remove protection from the video itself.
+- **UI**: Settings -> Core -> **Downloads** -> **Protect manual downloads**.
+
 ### Video Filename Template
 - **Config Key**: `videoFilenamePrefix`
 - **Type**: `string`
@@ -180,7 +189,7 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
   - **Date prefix** (`%(upload_date>%Y-%m-%d)s - %(title).64B`): `2025-10-17 - ESCAPING 99 Nights ... [Cbq15X05wyY].mp4`
   - **Plex YouTube-Agent** (`%(upload_date>%Y_%m_%d)s %(title).64B`): `2025_10_17 ESCAPING 99 Nights ... [Cbq15X05wyY].mp4` (compatible with [Absolute-Series-Scanner](https://github.com/ZeroQI/Absolute-Series-Scanner) and [YouTube-Agent.bundle](https://github.com/ZeroQI/YouTube-Agent.bundle))
   - **Title only** (`%(title).64B`): `ESCAPING 99 Nights ... [Cbq15X05wyY].mp4`
-- **UI**: A live preview in **Settings -> Core Settings -> File Structure Settings** shows the rendered folder and file names against a sample video, with length warnings (yellow > 110 chars, red > 130 chars on the rendered name).
+- **UI**: A live preview under **Video filename template** in Settings -> Core -> **Naming** shows the rendered folder and file names against a sample video, with length warnings (yellow > 110 chars, red > 130 chars on the rendered name).
 
 ### Enable Subtitles
 - **Config Key**: `subtitlesEnabled`
@@ -278,7 +287,7 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
 
 ## Jellyfin Integration
 
-These fields are required only when you want Youtarr to mirror playlists to Jellyfin as native playlists. Channel downloads work without them.
+These fields are required only when you want Youtarr to refresh your Jellyfin libraries after downloads, mirror playlists to Jellyfin as native playlists, or sync watch status. Channel downloads work without them.
 
 ### Enable Jellyfin
 - **Config Key**: `jellyfinEnabled`
@@ -307,19 +316,19 @@ These fields are required only when you want Youtarr to mirror playlists to Jell
 - **Config Key**: `jellyfinVideoLibraryIds`
 - **Type**: `array<string>`
 - **Default**: `[]`
-- **Description**: Library IDs that contain your Youtarr videos. Optional and safe to leave blank; Youtarr matches downloaded videos to Jellyfin items across all of your libraries.
+- **Description**: Library IDs that contain your Youtarr videos. Optional. When set, Youtarr refreshes only these libraries after a download job adds videos; when blank, it asks Jellyfin to refresh every library. To find an ID, open the library from Jellyfin's home screen and copy the `topParentId` value from the address bar. Playlist and watch status sync ignore this field and match videos across all of your libraries.
 
 ## Emby Integration
 
-These fields work like the Jellyfin fields above, with `emby*` names. They're required only when you want Youtarr to mirror playlists to Emby as native playlists; channel downloads work without them. See [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md) for setup details.
+These fields work like the Jellyfin fields above, with `emby*` names. They're required only when you want Youtarr to refresh your Emby libraries after downloads, mirror playlists to Emby as native playlists, or sync watch status; channel downloads work without them. See [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md) for setup details.
 
 | Config Key | Type | Default | Description |
 | :--------- | :--- | :------ | :---------- |
-| `embyEnabled` | `boolean` | `false` | Turn Emby playlist sync on or off. |
+| `embyEnabled` | `boolean` | `false` | Turn the Emby connection (library refresh after downloads, playlist sync, watch status sync) on or off. |
 | `embyUrl` | `string` | `""` | Base URL of your Emby server (e.g., `http://192.168.1.100:8096`). |
 | `embyApiKey` | `string` | `""` | Created in Emby under **Settings -> Advanced -> API Keys**. Redacted in logs. |
 | `embyUserId` | `string` | `""` | User account that will own Youtarr-managed playlists. Open the **Emby User** dropdown in the UI to load accounts from your server and pick one. |
-| `embyVideoLibraryIds` | `array<string>` | `[]` | Library IDs that contain your Youtarr videos. Optional and safe to leave blank; Youtarr matches videos across all of your libraries. |
+| `embyVideoLibraryIds` | `array<string>` | `[]` | Library IDs that contain your Youtarr videos. Optional. When set, Youtarr refreshes only these libraries after a download job adds videos; when blank, it asks Emby to refresh every library. To find an ID, open the library from Emby's home screen and copy the `parentId` value from the address bar (a short number, not the longer `serverId`). Playlist and watch status sync ignore this field. |
 
 ## Watch Status Sync
 

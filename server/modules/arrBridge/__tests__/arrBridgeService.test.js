@@ -25,7 +25,15 @@ function fakeConfigModule(initial) {
 
 function setup(config, overrides = {}) {
   const configModule = fakeConfigModule(config);
-  const executor = { start: jest.fn(), stop: jest.fn(), wake: jest.fn(), handleJobEnded: jest.fn() };
+  const executor = {
+    start: jest.fn(),
+    stop: jest.fn(),
+    wake: jest.fn(),
+    handleJobEnded: jest.fn(),
+    retryNow: jest.fn().mockResolvedValue('started'),
+    blockStatus: jest.fn(() => ({ active: false, nextTryAt: null })),
+    isRetryRequested: jest.fn(() => false),
+  };
   const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
   const service = createArrBridgeService({
     configModule,
@@ -36,7 +44,7 @@ function setup(config, overrides = {}) {
     ...overrides,
     downloader: jest.fn(),
     jobLookup: jest.fn(),
-    storageGuard: { isPausedError: () => false, getStatus: () => ({ paused: false }) },
+    storageGuard: { isPausedError: () => false, getStatus: () => ({ paused: overrides.paused === true }) },
     isArchived: () => false,
     getActivity: () => null,
     logger,
@@ -315,6 +323,44 @@ describe('arrBridgeService', () => {
     expect(configModule.updateConfig).toHaveBeenCalledTimes(1);
   });
 
+  describe('retryGrab', () => {
+    const GRAB_ID = '9b89e5bc-8c90-4e72-b245-270fed2eacc2';
+
+    test('has the executor try the grab now and passes its answer on', async () => {
+      const { service, executor } = setup({ arrBridgeEnabled: true });
+      executor.retryNow.mockResolvedValue('queued');
+
+      await expect(service.retryGrab(GRAB_ID)).resolves.toBe('queued');
+      expect(executor.retryNow).toHaveBeenCalledWith(GRAB_ID);
+    });
+
+    test.each([['not-a-grab-id'], [undefined], [['a', 'b']]])('answers null for the id %p without asking the executor', async (id) => {
+      const { service, executor } = setup({ arrBridgeEnabled: true });
+
+      await expect(service.retryGrab(id)).resolves.toBeNull();
+      expect(executor.retryNow).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('retryGrab while the bridge is off', () => {
+    test('answers null without asking the executor', async () => {
+      const { service, executor } = setup({ arrBridgeEnabled: false });
+
+      await expect(service.retryGrab('9b89e5bc-8c90-4e72-b245-270fed2eacc2')).resolves.toBeNull();
+      expect(executor.retryNow).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('the grab executor', () => {
+    test('is told which cookie file is in use and whether downloads are paused', () => {
+      const getCookieKey = () => 'cookie-key';
+      const { executor } = setup({ arrBridgeEnabled: true }, { getCookieKey, paused: true });
+
+      expect(executor.deps.getCookieKey).toBe(getCookieKey);
+      expect(executor.deps.isPaused()).toBe(true);
+    });
+  });
+
   describe('listRecentGrabs', () => {
     const CREATED = new Date('2025-06-10T10:00:00.000Z');
     const COMPLETED = new Date('2025-06-10T10:05:00.000Z');
@@ -334,34 +380,45 @@ describe('arrBridgeService', () => {
       removed_at: REMOVED,
     };
 
-    function withRows(grabs, videos) {
-      const ArrBridgeGrab = { findAll: jest.fn().mockResolvedValue(grabs) };
-      const Video = { findAll: jest.fn().mockResolvedValue(videos) };
-      const { service } = setup({ arrBridgeEnabled: true }, { models: { ArrBridgeGrab, Video, ChannelVideo: {}, Job: {} } });
-      return { service, ArrBridgeGrab, Video };
+    function withRows(rows, count = rows.length, { paused = false } = {}) {
+      const ArrBridgeGrab = { findAndCountAll: jest.fn().mockResolvedValue({ rows, count }) };
+      const { service, executor } = setup(
+        { arrBridgeEnabled: true },
+        { models: { ArrBridgeGrab, ArrBridgeSearch: {}, Video: {}, ChannelVideo: {}, Job: {} }, paused }
+      );
+      return { service, ArrBridgeGrab, executor };
     }
 
-    test('describes each grab with its state and the title of the video Youtarr holds', async () => {
-      const { service, ArrBridgeGrab } = withRows([grabRow], [
-        { youtubeId: 'g7VYYfoNaf0', youTubeVideoName: 'BEYBLADE EN Episode 29', youTubeChannelName: 'BEYBLADE Official' },
-      ]);
+    test('describes each grab of the page with its state and the title of the video Youtarr holds', async () => {
+      const video = { youTubeVideoName: 'BEYBLADE EN Episode 29', youTubeChannelName: 'BEYBLADE Official' };
+      const { service, ArrBridgeGrab } = withRows([{ ...grabRow, video }], 31);
 
-      expect(await service.listRecentGrabs('20')).toEqual([{
-        id: grabRow.id,
-        releaseTitle: grabRow.release_title,
-        youtubeId: 'g7VYYfoNaf0',
-        videoTitle: 'BEYBLADE EN Episode 29',
-        channelName: 'BEYBLADE Official',
-        kind: 'tv',
-        category: 'tv',
-        state: 'handed-off',
-        failMessage: null,
-        libraryCopy: null,
-        createdAt: CREATED,
-        completedAt: COMPLETED,
-        removedAt: REMOVED,
-      }]);
-      expect(ArrBridgeGrab.findAll.mock.calls[0][0].limit).toBe(20);
+      expect(await service.listRecentGrabs({ page: '2', pageSize: '20', q: 'beyblade' })).toEqual({
+        grabs: [{
+          id: grabRow.id,
+          releaseTitle: grabRow.release_title,
+          youtubeId: 'g7VYYfoNaf0',
+          videoTitle: 'BEYBLADE EN Episode 29',
+          channelName: 'BEYBLADE Official',
+          kind: 'tv',
+          category: 'tv',
+          state: 'handed-off',
+          failMessage: null,
+          blockedAt: null,
+          nextTryAt: null,
+          retryRequested: false,
+          downloadsPaused: false,
+          hiddenUntil: null,
+          libraryCopy: null,
+          createdAt: CREATED,
+          completedAt: COMPLETED,
+          removedAt: REMOVED,
+        }],
+        total: 31,
+        page: 2,
+        pageSize: 20,
+      });
+      expect(ArrBridgeGrab.findAndCountAll.mock.calls[0][0]).toMatchObject({ limit: 20, offset: 20 });
     });
 
     test.each([
@@ -371,63 +428,164 @@ describe('arrBridgeService', () => {
       ['owned', null],
       [null, null],
     ])('reports a library copy stored as %p as %p', async (stored, shown) => {
-      const { service } = withRows([{ ...grabRow, library_copy: stored }], []);
+      const { service } = withRows([{ ...grabRow, library_copy: stored }]);
 
-      const [grab] = await service.listRecentGrabs();
+      const { grabs: [grab] } = await service.listRecentGrabs();
 
       expect(grab.libraryCopy).toBe(shown);
     });
 
     test('leaves the titles empty for a video Youtarr does not hold', async () => {
-      const { service } = withRows([{ ...grabRow, status: 'failed', fail_message: 'Video unavailable' }], []);
+      const { service } = withRows([{ ...grabRow, status: 'failed', fail_message: 'Video unavailable', video: null }]);
 
-      const [grab] = await service.listRecentGrabs();
+      const { grabs: [grab] } = await service.listRecentGrabs();
 
       expect(grab).toMatchObject({ videoTitle: null, channelName: null, state: 'failed', failMessage: 'Video unavailable' });
     });
 
-    test('asks for no titles when nothing was grabbed', async () => {
-      const { service, Video } = withRows([], []);
+    describe('while YouTube blocks downloads', () => {
+      const BLOCKED = new Date('2025-06-10T10:02:00.000Z');
+      const NEXT_TRY = new Date('2025-06-10T11:02:00.000Z');
+      const waitingRow = { ...grabRow, status: 'pending', completed_at: null, removed_at: null };
 
-      expect(await service.listRecentGrabs()).toEqual([]);
-      expect(Video.findAll).not.toHaveBeenCalled();
+      test('shows a grab whose download was blocked as blocked, with the next try', async () => {
+        const { service, executor } = withRows([{ ...waitingRow, blocked_at: BLOCKED }]);
+        executor.blockStatus.mockReturnValue({ active: true, nextTryAt: NEXT_TRY });
+
+        const { grabs: [grab] } = await service.listRecentGrabs();
+
+        expect(grab).toMatchObject({ state: 'blocked', blockedAt: BLOCKED, nextTryAt: NEXT_TRY, failMessage: null });
+      });
+
+      test('shows a grab that waits behind another grab\'s block as blocked, without a block of its own', async () => {
+        const { service, executor } = withRows([{ ...waitingRow, blocked_at: null }]);
+        executor.blockStatus.mockReturnValue({ active: true, nextTryAt: NEXT_TRY });
+
+        const { grabs: [grab] } = await service.listRecentGrabs();
+
+        expect(grab).toMatchObject({ state: 'blocked', blockedAt: null, nextTryAt: NEXT_TRY });
+      });
+
+      test('says which blocked grab has a "Try again" still to be carried out', async () => {
+        const other = { ...waitingRow, id: '3c1d6a52-0d6c-4f0e-9a3b-5f2f7f1f0a11', blocked_at: BLOCKED };
+        const { service, executor } = withRows([{ ...waitingRow, blocked_at: BLOCKED }, other]);
+        executor.blockStatus.mockReturnValue({ active: true, nextTryAt: NEXT_TRY });
+        executor.isRetryRequested.mockImplementation((id) => id === other.id);
+
+        const { grabs } = await service.listRecentGrabs();
+
+        expect(grabs.map((grab) => grab.retryRequested)).toEqual([false, true]);
+      });
+
+      test('says on blocked grabs that downloads are paused, and on no other grab', async () => {
+        const { service, executor } = withRows([{ ...waitingRow, blocked_at: BLOCKED }, grabRow], 2, { paused: true });
+        executor.blockStatus.mockReturnValue({ active: true, nextTryAt: NEXT_TRY });
+        executor.isRetryRequested.mockReturnValue(true);
+
+        const { grabs } = await service.listRecentGrabs();
+
+        expect(grabs.map(({ downloadsPaused, retryRequested }) => ({ downloadsPaused, retryRequested }))).toEqual([
+          { downloadsPaused: true, retryRequested: true },
+          { downloadsPaused: false, retryRequested: false },
+        ]);
+      });
+
+      test('gives the next try only to the grabs that wait for it', async () => {
+        const { service, executor } = withRows([{ ...waitingRow, status: 'queued', blocked_at: BLOCKED }, grabRow]);
+        executor.blockStatus.mockReturnValue({ active: true, nextTryAt: NEXT_TRY });
+
+        const { grabs } = await service.listRecentGrabs();
+
+        expect(grabs.map(({ state, blockedAt, nextTryAt }) => ({ state, blockedAt, nextTryAt }))).toEqual([
+          { state: 'downloading', blockedAt: null, nextTryAt: null },
+          { state: 'handed-off', blockedAt: null, nextTryAt: null },
+        ]);
+      });
+    });
+
+    test('says until when a failed grab\'s video stays hidden from searches', async () => {
+      const failedAt = new Date(Date.now() - 60 * 60 * 1000);
+      const { service } = withRows([{
+        ...grabRow, status: 'failed', fail_message: 'Video unavailable', completed_at: failedAt, video: null,
+      }]);
+
+      const { grabs: [grab] } = await service.listRecentGrabs();
+
+      expect(grab.hiddenUntil).toEqual(new Date(failedAt.getTime() + 7 * 24 * 60 * 60 * 1000));
+    });
+
+    test('lists nothing when nothing was grabbed', async () => {
+      const { service } = withRows([]);
+
+      expect(await service.listRecentGrabs()).toEqual({ grabs: [], total: 0, page: 1, pageSize: 10 });
     });
   });
 
   describe('listRecentSearches', () => {
     const ORIGIN = 'http://youtarr:3011';
     const episode = { t: 'tvsearch', cat: '5030,5040', title: 'Bluey', season: '1', ep: '1' };
+    // Resolves once the stored writes that are under way have finished.
+    const stored = () => new Promise((resolve) => {
+      setImmediate(resolve);
+    });
     const makeService = () => {
       const noRows = { findAll: jest.fn().mockResolvedValue([]) };
-      return setup(
+      const ArrBridgeSearch = {
+        ...noRows,
+        create: jest.fn().mockResolvedValue({}),
+        destroy: jest.fn().mockResolvedValue(0),
+        findAndCountAll: jest.fn().mockResolvedValue({ rows: [], count: 0 }),
+      };
+      const { service } = setup(
         { arrBridgeEnabled: true, arrBridgeApiKey: KEY, preferredResolution: '1080' },
         {
           searchVideos: jest.fn().mockResolvedValue([]),
-          models: { ArrBridgeGrab: noRows, Video: noRows, ChannelVideo: noRows, Job: {} },
+          models: { ArrBridgeGrab: noRows, ArrBridgeSearch, Video: noRows, ChannelVideo: noRows, Job: {} },
         }
-      ).service;
+      );
+      return { service, ArrBridgeSearch };
     };
 
-    test('lists the searches the indexer answered, newest first', async () => {
-      const service = makeService();
-      expect(service.listRecentSearches()).toEqual([]);
+    test('stores each search the indexer answered', async () => {
+      const { service, ArrBridgeSearch } = makeService();
 
       await service.newznab.handleApi({ ...episode, apikey: KEY }, ORIGIN);
       await service.newznab.handleApi({ ...episode, title: 'Peppa', apikey: KEY }, ORIGIN);
+      await stored();
 
-      expect(service.listRecentSearches()).toEqual([
-        expect.objectContaining({ shape: 'episode', outcome: 'nothing', asked: expect.objectContaining({ text: 'Peppa' }) }),
-        expect.objectContaining({ shape: 'episode', outcome: 'nothing', asked: expect.objectContaining({ text: 'Bluey' }) }),
+      expect(ArrBridgeSearch.create.mock.calls.map(([row]) => row)).toEqual([
+        expect.objectContaining({ shape: 'episode', outcome: 'nothing', search_text: 'Bluey S01E01' }),
+        expect.objectContaining({ shape: 'episode', outcome: 'nothing', search_text: 'Peppa S01E01' }),
       ]);
     });
 
-    test('a request with a wrong key, and a caps request, are not listed', async () => {
-      const service = makeService();
+    test('a request with a wrong key, and a caps request, are not stored', async () => {
+      const { service, ArrBridgeSearch } = makeService();
 
       await service.newznab.handleApi({ ...episode, apikey: 'wrong' }, ORIGIN);
       await service.newznab.handleApi({ t: 'caps', apikey: KEY }, ORIGIN);
+      await stored();
 
-      expect(service.listRecentSearches()).toEqual([]);
+      expect(ArrBridgeSearch.create).not.toHaveBeenCalled();
+    });
+
+    test('a search is answered even when it cannot be stored', async () => {
+      const { service, ArrBridgeSearch } = makeService();
+      ArrBridgeSearch.create.mockRejectedValue(new Error('db down'));
+
+      const answer = await service.newznab.handleApi({ ...episode, apikey: KEY }, ORIGIN);
+      await stored();
+
+      expect(answer.status).toBe(200);
+    });
+
+    test('reads a page of the stored searches', async () => {
+      const { service, ArrBridgeSearch } = makeService();
+
+      expect(await service.listRecentSearches({ page: '2', q: 'bluey' })).toEqual({
+        searches: [], total: 0, page: 2, pageSize: 10,
+      });
+      expect(ArrBridgeSearch.findAndCountAll.mock.calls[0][0]).toMatchObject({ limit: 10, offset: 10 });
     });
   });
 

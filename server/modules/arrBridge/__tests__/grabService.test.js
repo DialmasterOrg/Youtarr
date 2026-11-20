@@ -5,6 +5,8 @@ const { createGrabService, grabState } = require('../grabService');
 const NOW = new Date('2025-06-10T12:00:00.000Z');
 const GRAB_ID = '9b89e5bc-8c90-4e72-b245-270fed2eacc2';
 const TITLE = 'The.Office.US.S01E02.1080p.WEB-DL-NBC';
+// Stands for the Video model: listRecent passes it on, the failed-grab guard asks it for library videos.
+const Video = { name: 'Video', findAll: jest.fn() };
 
 const fields = (overrides = {}) => ({
   youtubeId: 'abcdefghijk',
@@ -15,15 +17,17 @@ const fields = (overrides = {}) => ({
   ...overrides,
 });
 
-function setup({ existing = null, historyRow = null, updated = 1, failedRows = [] } = {}) {
+function setup({ existing = null, historyRow = null, updated = 1, failedRows = [], libraryRows = [] } = {}) {
+  Video.findAll.mockReset().mockResolvedValue(libraryRows);
   const ArrBridgeGrab = {
     findOne: jest.fn(async ({ where }) => (where.id ? historyRow : existing)),
     findAll: jest.fn(async ({ where }) => (where.fail_message ? failedRows : [])),
+    findAndCountAll: jest.fn(async () => ({ rows: [], count: 0 })),
     create: jest.fn(async (values) => values),
     update: jest.fn(async () => [updated]),
   };
   const deps = {
-    models: { ArrBridgeGrab },
+    models: { ArrBridgeGrab, Video },
     getSettings: () => ({ categories: [{ name: 'tv', subfolder: null }, { name: 'tv-4k', subfolder: null }] }),
     staging: { remove: jest.fn().mockResolvedValue(undefined) },
     wakeExecutor: jest.fn(),
@@ -254,27 +258,53 @@ describe('grabService', () => {
   });
 
   describe('listRecent', () => {
-    test('reads grabs of every status, newest first', async () => {
+    const VIDEO_TITLES = {
+      model: Video,
+      as: 'video',
+      attributes: ['youTubeVideoName', 'youTubeChannelName', 'removed', 'filePath'],
+      required: false,
+    };
+
+    test('reads one page of grabs of every status, newest first, each with its video', async () => {
       const { service, ArrBridgeGrab } = setup();
       const rows = [{ id: 'b' }, { id: 'a' }];
-      ArrBridgeGrab.findAll.mockResolvedValue(rows);
+      ArrBridgeGrab.findAndCountAll.mockResolvedValue({ rows, count: 42 });
 
-      expect(await service.listRecent()).toBe(rows);
-      expect(ArrBridgeGrab.findAll).toHaveBeenCalledWith({
+      expect(await service.listRecent()).toEqual({ rows, total: 42, page: 1, pageSize: 10 });
+      expect(ArrBridgeGrab.findAndCountAll).toHaveBeenCalledWith({
+        where: {},
+        include: [VIDEO_TITLES],
         order: [['created_at', 'DESC'], ['id', 'DESC']],
-        limit: 50,
+        limit: 10,
+        offset: 0,
       });
     });
 
-    test.each([
-      [undefined, 50], ['abc', 50], [0, 50], [-3, 50], ['25', 25], [100, 100], [500, 100],
-    ])('a limit of %p reads %p rows', async (limit, expected) => {
+    test('reads the page that was asked for', async () => {
       const { service, ArrBridgeGrab } = setup();
-      ArrBridgeGrab.findAll.mockResolvedValue([]);
 
-      await service.listRecent(limit);
+      const result = await service.listRecent({ page: '3', pageSize: '25' });
 
-      expect(ArrBridgeGrab.findAll.mock.calls[0][0].limit).toBe(expected);
+      expect(result).toMatchObject({ page: 3, pageSize: 25 });
+      expect(ArrBridgeGrab.findAndCountAll.mock.calls[0][0]).toMatchObject({ limit: 25, offset: 50 });
+    });
+
+    test('every word of a search text must be in the release, the video id, the video title or the channel', async () => {
+      const { service, ArrBridgeGrab } = setup();
+      const matching = (pattern) => ({
+        [Op.or]: [
+          { release_title: { [Op.like]: pattern } },
+          { youtube_id: { [Op.like]: pattern } },
+          { '$video.youtube_video_name$': { [Op.like]: pattern } },
+          { '$video.youtube_channel_name$': { [Op.like]: pattern } },
+        ],
+      });
+
+      await service.listRecent({ q: 'office nbc' });
+
+      expect(ArrBridgeGrab.findAndCountAll.mock.calls[0][0].where).toEqual({
+        [Op.and]: [matching('%office%'), matching('%nbc%')],
+      });
     });
   });
 
@@ -292,6 +322,18 @@ describe('grabService', () => {
       ['cancelled', { status: 'removed', completed_at: null, fail_message: null }],
     ])('is %s for %p', (state, row) => {
       expect(grabState(row)).toBe(state);
+    });
+
+    test('is blocked for a waiting grab whose download YouTube blocked', () => {
+      expect(grabState({ status: 'pending', blocked_at: DONE })).toBe('blocked');
+    });
+
+    test('is blocked for a waiting grab held by another grab\'s block', () => {
+      expect(grabState({ status: 'pending', blocked_at: null }, { blockActive: true })).toBe('blocked');
+    });
+
+    test('is downloading for a blocked grab that is being tried again', () => {
+      expect(grabState({ status: 'queued', blocked_at: DONE }, { blockActive: true })).toBe('downloading');
     });
   });
 
@@ -317,6 +359,75 @@ describe('grabService', () => {
       const { service, ArrBridgeGrab } = setup();
       expect(await service.recentlyFailedIds([])).toEqual(new Set());
       expect(ArrBridgeGrab.findAll).not.toHaveBeenCalled();
+    });
+
+    test('leaves out a failed video that is in the library, which a grab hands over without a download', async () => {
+      const { service } = setup({
+        failedRows: [{ youtube_id: 'abcdefghijk' }, { youtube_id: 'zzzzzzzzzzz' }],
+        libraryRows: [{ youtubeId: 'abcdefghijk' }],
+      });
+
+      const result = await service.recentlyFailedIds(['abcdefghijk', 'zzzzzzzzzzz']);
+
+      expect(result).toEqual(new Set(['zzzzzzzzzzz']));
+      expect(Video.findAll).toHaveBeenCalledWith({
+        attributes: ['youtubeId'],
+        where: {
+          youtubeId: { [Op.in]: ['abcdefghijk', 'zzzzzzzzzzz'] },
+          removed: false,
+          filePath: { [Op.ne]: null },
+        },
+        raw: true,
+      });
+    });
+
+    test('does not ask for library videos when no grab failed', async () => {
+      const { service } = setup();
+
+      await service.recentlyFailedIds(['abcdefghijk']);
+
+      expect(Video.findAll).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('hiddenUntilOf', () => {
+    const FAILED_AT = new Date('2025-06-08T12:00:00.000Z');
+    const failedRow = (overrides = {}) => ({
+      status: 'removed', fail_message: 'Video unavailable', completed_at: FAILED_AT, video: null, ...overrides,
+    });
+
+    test('is 7 days after the failure for a video Youtarr does not hold', () => {
+      const { service } = setup();
+
+      expect(service.hiddenUntilOf(failedRow())).toEqual(new Date('2025-06-15T12:00:00.000Z'));
+    });
+
+    test('is null once the 7 days are over', () => {
+      const { service } = setup();
+
+      expect(service.hiddenUntilOf(failedRow({ completed_at: new Date('2025-06-03T12:00:00.000Z') }))).toBeNull();
+    });
+
+    test('is null for a video that is in the library', () => {
+      const { service } = setup();
+      const video = { removed: false, filePath: '/data/NBC/The Office [abcdefghijk].mkv' };
+
+      expect(service.hiddenUntilOf(failedRow({ video }))).toBeNull();
+    });
+
+    test.each([
+      ['was removed from the library', { removed: true, filePath: '/data/NBC/The Office [abcdefghijk].mkv' }],
+      ['has no file', { removed: false, filePath: null }],
+    ])('still counts for a video that %s', (_name, video) => {
+      const { service } = setup();
+
+      expect(service.hiddenUntilOf(failedRow({ video }))).toEqual(new Date('2025-06-15T12:00:00.000Z'));
+    });
+
+    test('is null for a grab that did not fail', () => {
+      const { service } = setup();
+
+      expect(service.hiddenUntilOf(failedRow({ fail_message: null }))).toBeNull();
     });
   });
 });

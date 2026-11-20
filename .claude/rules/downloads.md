@@ -73,11 +73,14 @@ yt-dlp runs, the job queue, the download archive, storage limits, and the activi
 
 ## Finalizer, retries, diagnoses
 
-- `downloadJobFinalizer` persists the terminal status, broadcasts the final state, reports to the run tracker and dispatches notifications; `downloadCompletionEffects` owns the side effects after completion (temp cleanup, poster backfill, playlist hooks, Plex refresh, next-job kickoff).
+- `downloadJobFinalizer` persists the terminal status, broadcasts the final state, reports to the run tracker and dispatches notifications; `downloadCompletionEffects` owns the side effects after completion (temp cleanup, poster backfill, playlist hooks, media server refresh, next-job kickoff).
+- `overrideSettings.protect` (manual, playlist and download-all dialogs) becomes the `protectVideos` directive: the per-video post-processor (`YOUTARR_PROTECT_VIDEOS`) and the finalizer's end-of-batch save both mark videos `protected`. Never written false, so a re-download keeps protection.
+- Media servers are refreshed once per job: by `downloadCompletionEffects` for single jobs and by `doGroupedChannelDownloads`' wrap-up for grouped ones (intermediate groups skip it). A job that downloaded nothing refreshes no server.
 - `transient403RetryPlanner` (pure) picks failures to auto-retry: transient mid-stream 403s and cookie-specific `Video unavailable`. The finalizer enqueues an "Auto-retry" URL-list job through a callback injected from downloadModule, capped by `downloadAutoRetryCount`.
 - Handed-off failures are tagged `autoRetryQueued` so run summaries report the post-retry outcome instead of the first failure.
 - `failureAdvisor` (pure) maps known failure signatures (temp space, 403 with or without cookies, bot check) to plain-language diagnoses; the finalizer stamps `diagnosisKey` on failed videos and emits a deduped `diagnoses` list.
 - That list flows into job data, run summaries, the Download History UI and the notification "Likely cause" lines.
+- `quietBlockedFailure` in job data (set by the Sonarr/Radarr bridge, copied to auto-retry jobs) skips the failure-only notification when every diagnosis is a YouTube block (`failureAdvisor.isYoutubeBlock`); any other outcome still notifies.
 - `failedVideoEnricher` backfills title and channel onto failed-video records from videos, channelvideos + channels, and playlistvideos, once, right after result partitioning; ids still untitled (brand-new uploads) go to `videoOembedEnricher`, capped at 20 per job; the client falls back to a linked YouTube ID.
 
 ## Run tracker (sweep summaries)

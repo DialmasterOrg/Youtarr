@@ -41,6 +41,7 @@ function toOverrideSettings(settings: DownloadSettings | null) {
     audioFormat: settings.audioFormat,
     rating: settings.rating,
     skipVideoFolder: settings.skipVideoFolder,
+    protect: settings.protect,
   };
 }
 

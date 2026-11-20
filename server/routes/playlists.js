@@ -6,6 +6,16 @@ const { createSubscribeSettingsValidator } = require('./playlistSubscribeSetting
 // Saved settings the Add Playlist dialog shows when a removed playlist is restored.
 const RESTORE_PREVIEW_SETTING_KEYS = ['auto_download', 'default_sub_folder', 'video_quality', 'audio_format'];
 
+// YouTube reports a private playlist as nonexistent to a signed-out request
+// and to expired cookies alike, so the advice depends on whether cookies
+// reached yt-dlp (err.usedCookies).
+const NOT_FOUND_WITHOUT_COOKIES = 'YouTube says this playlist does not exist. If it is private (Watch Later, Liked videos or a private playlist), enable cookies from the account that owns it in Settings, then try again.';
+const NOT_FOUND_WITH_COOKIES = 'YouTube says this playlist does not exist. If it is private, your cookies may have expired or belong to a different account. Use "Test cookies" in Settings to check them.';
+const SIGN_IN_DEMANDED_WITHOUT_COOKIES = 'This playlist requires authentication (cookies)';
+const SIGN_IN_DEMANDED_WITH_COOKIES = 'YouTube asked for a sign-in even though cookies were sent. They may have expired. Use "Test cookies" in Settings to check them.';
+
+const playlistNotFoundMessage = (err) => (err.usedCookies ? NOT_FOUND_WITH_COOKIES : NOT_FOUND_WITHOUT_COOKIES);
+
 function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard, membersAccess = null }) {
   const router = express.Router();
   const { Playlist, PlaylistVideo, Video } = models;
@@ -16,6 +26,18 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       FETCH_IN_PROGRESS: [409, FETCH_IN_PROGRESS_MESSAGE],
       PLAYLIST_TOO_LARGE: [422, `Automatic following supports playlists with up to ${MAX_PLAYLIST_VIDEOS.toLocaleString('en-US')} entries. This playlist exceeds that limit.`],
       PLAYLIST_REFRESH_INCOMPLETE: [503, 'YouTube did not provide a verifiably complete playlist. Your starting point was not changed. Try refreshing again later.'],
+    };
+    const response = Object.hasOwn(errors, err.message) ? errors[err.message] : null;
+    if (!response) return false;
+    res.status(response[0]).json({ error: response[1] });
+    return true;
+  };
+
+  const respondToPlaylistInfoError = (res, err) => {
+    const errors = {
+      PLAYLIST_NOT_FOUND: [404, playlistNotFoundMessage(err)],
+      COOKIES_REQUIRED: [403, err.usedCookies ? SIGN_IN_DEMANDED_WITH_COOKIES : SIGN_IN_DEMANDED_WITHOUT_COOKIES],
+      NETWORK_ERROR: [503, 'Unable to reach YouTube'],
     };
     const response = Object.hasOwn(errors, err.message) ? errors[err.message] : null;
     if (!response) return false;
@@ -115,7 +137,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    * /api/playlists/{playlistId}:
    *   get:
    *     summary: Get a playlist with download and sync counts
-   *     description: Includes downloaded_count (videos with a file on disk now; downloaded and later deleted videos are not counted), not_downloaded_count, unsyncable_count, following_existing_count (older eligible entries needing explicit selection), and following_requested_count (eligible saved selections not yet downloaded) alongside the playlist row.
+   *     description: Includes downloaded_count (videos with a file on disk now; downloaded and later deleted videos are not counted), not_downloaded_count, unsyncable_count, following_existing_count (older eligible entries needing explicit selection), and following_requested_count (eligible saved selections not yet downloaded) alongside the playlist row. sync_status holds syncing (a media server sync is running now) and servers, keyed by plex, jellyfin or emby, each with last_synced_at and last_error (why the last sync changed nothing on that server, null after a successful one). A server that never synced has no entry.
    *     tags: [Playlists]
    *     parameters:
    *       - in: path
@@ -138,7 +160,8 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
 
       const counts = await playlistDownloadModule.getCounts(p, downloadDeps);
-      res.json({ playlist: p, ...counts });
+      const syncStatus = await mediaServers.mediaServerSync.getSyncStatus(p);
+      res.json({ playlist: p, ...counts, sync_status: syncStatus });
     } catch (err) {
       req.log.error({ err }, 'GET /api/playlists/:playlistId failed');
       res.status(500).json({ error: 'Failed to fetch playlist' });
@@ -168,9 +191,9 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *       400:
    *         description: url is required
    *       403:
-   *         description: Playlist requires authentication (cookies)
+   *         description: YouTube demanded a sign-in. The message says whether cookies were sent.
    *       404:
-   *         description: Playlist not found
+   *         description: YouTube reports that the playlist does not exist, which is also its answer for a private playlist without valid cookies. The message says whether cookies were sent.
    *       503:
    *         description: Unable to reach YouTube
    *       500:
@@ -190,9 +213,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
         : null;
       res.json({ ...info, existing_subscription: existingSubscription });
     } catch (err) {
-      if (err.message === 'PLAYLIST_NOT_FOUND') return res.status(404).json({ error: 'Playlist not found' });
-      if (err.message === 'COOKIES_REQUIRED') return res.status(403).json({ error: 'This playlist requires authentication (cookies)' });
-      if (err.message === 'NETWORK_ERROR') return res.status(503).json({ error: 'Unable to reach YouTube' });
+      if (respondToPlaylistInfoError(res, err)) return;
       req.log.error({ err }, 'addplaylistinfo failed');
       res.status(500).json({ error: 'Failed to fetch playlist info' });
     }
@@ -224,6 +245,12 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *         description: Saved playlist, restored flag, and optional following setup warning
    *       400:
    *         description: Missing url or an invalid settings value
+   *       403:
+   *         description: YouTube demanded a sign-in. Nothing is saved.
+   *       404:
+   *         description: YouTube reports that the playlist does not exist, which is also its answer for a private playlist without valid cookies. Nothing is saved.
+   *       503:
+   *         description: Unable to reach YouTube. Nothing is saved.
    *       500:
    *         description: Internal server error
    */
@@ -234,7 +261,13 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       const validated = validateSubscribeSettings(req.body.settings);
       if (!validated.ok) return res.status(400).json({ error: validated.error });
       const settings = validated.value;
-      const info = await playlistModule.getPlaylistInfo(url);
+      let info;
+      try {
+        info = await playlistModule.getPlaylistInfo(url);
+      } catch (err) {
+        if (respondToPlaylistInfoError(res, err)) return;
+        throw err;
+      }
       const { playlist: created, restored } = await playlistModule.upsertPlaylist(info, { enabled: true, settings });
       // On restore the submitted settings are discarded in favor of the saved
       // ones, so the submitted subfolder must not enter the registry.
@@ -642,7 +675,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *       200:
    *         description: Number of videos fetched
    *       404:
-   *         description: Playlist not found
+   *         description: Playlist not subscribed, or YouTube reports that it does not exist (also its answer for a private playlist without valid cookies)
    *       409:
    *         description: A fetch is already in progress for this playlist
    *       500:
@@ -659,6 +692,9 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     } catch (err) {
       if (err.message === 'FETCH_IN_PROGRESS') {
         return res.status(409).json({ error: FETCH_IN_PROGRESS_MESSAGE });
+      }
+      if (err.message === 'PLAYLIST_NOT_FOUND') {
+        return res.status(404).json({ error: playlistNotFoundMessage(err) });
       }
       req.log.error({ err }, 'refresh failed');
       res.status(500).json({ error: 'Failed to refresh playlist' });

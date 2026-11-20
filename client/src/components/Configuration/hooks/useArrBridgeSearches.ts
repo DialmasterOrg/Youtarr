@@ -1,49 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
-import axios from 'axios';
 import { ArrSearch } from '../utils/arrBridgeSearches';
+import { ArrPagedList, ArrPagedListSource, useArrBridgePagedList } from './useArrBridgePagedList';
 
-const SEARCHES_URL = '/api/arr-bridge/searches';
-
-interface SearchesResponse {
-  searches: ArrSearch[];
-}
+const SEARCHES: ArrPagedListSource = {
+  url: '/api/arr-bridge/searches',
+  itemsKey: 'searches',
+  errorMessage: 'Could not load the recent searches.',
+};
 
 /**
- * The latest searches Sonarr and Radarr sent. Loaded when the list opens and
- * on refresh; it does not poll.
+ * The searches Sonarr and Radarr sent, newest first, one page at a time.
  * @param token - Session token
  * @param enabled - Whether to load it
  */
-export function useArrBridgeSearches(token: string | null, enabled: boolean) {
-  const [searches, setSearches] = useState<ArrSearch[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [reloadCount, setReloadCount] = useState(0);
-
-  useEffect(() => {
-    if (!token || !enabled) return undefined;
-
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    axios
-      .get<SearchesResponse>(SEARCHES_URL, { headers: { 'x-access-token': token } })
-      .then((response) => {
-        if (!cancelled) setSearches(Array.isArray(response.data.searches) ? response.data.searches : []);
-      })
-      .catch(() => {
-        if (!cancelled) setError('Could not load the recent searches.');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [token, enabled, reloadCount]);
-
-  const refresh = useCallback(() => setReloadCount((count) => count + 1), []);
-
-  return { searches, loading, error, refresh };
+export function useArrBridgeSearches(token: string | null, enabled: boolean): ArrPagedList<ArrSearch> {
+  return useArrBridgePagedList<ArrSearch>(SEARCHES, token, enabled);
 }

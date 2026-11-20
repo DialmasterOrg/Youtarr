@@ -288,6 +288,8 @@ const createServerModule = ({
           run: jest.fn(),
           isBusyError: jest.fn(() => false)
         }));
+        // Same reason: playlistModule loads ytdlpCommandBuilder.
+        jest.doMock('../modules/playlistModule', () => ({}));
         // ChannelVideo mock - use provided mock or default
         jest.doMock('../modules/membersAccess');
         jest.doMock('../models/channelvideo', () => channelVideoMock || {

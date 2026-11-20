@@ -174,6 +174,8 @@ async function finalizeDownloadJob({
   cookiesPassed = cookiesEnabled,
   anonymousRetry = false,
   stdioClosed = true,
+  // The user chose to protect this download from automatic removal.
+  protectVideos = false,
 }) {
   // True once the job's terminal status has been persisted; the catch
   // below must not overwrite it with 'Error' for failures that happen
@@ -221,7 +223,12 @@ async function finalizeDownloadJob({
       router.archiveSkippedIds
     );
     // Use successful videos for further processing (archive, database, etc.)
-    videoData = successfulVideos;
+    // The per-video post-processor already saved each video as protected; the
+    // end-of-batch save repeats it for any video that save missed. The flag is
+    // only ever set, never cleared, so a re-download keeps existing protection.
+    videoData = protectVideos
+      ? successfulVideos.map((video) => ({ ...video, protected: true }))
+      : successfulVideos;
 
     // Best-effort: name failed videos from what the DB already knows so
     // history, notifications, and run summaries can identify them.
@@ -248,6 +255,14 @@ async function finalizeDownloadJob({
     for (const video of failedVideosList) {
       videoActivity.finish(jobId, video.youtubeId);
     }
+
+    // Set by the Sonarr/Radarr bridge on a repeat try of a grab YouTube
+    // blocked: the first blocked attempt already notified. Read here, before
+    // the terminal update replaces the job's data.
+    const quietBlockedFailure = transient403RetryPlanner.readJobDataValue(
+      jobModule.getJob(jobId)?.data,
+      'quietBlockedFailure'
+    ) === true;
 
     // Auto-retry eligible download failures. Enqueue while this job is still
     // In Progress so the retry queues as Pending behind it, and read job data
@@ -687,7 +702,10 @@ async function finalizeDownloadJob({
     // manual/timeout terminations where the user was already acting.
     const successOutcome = (finalState === 'complete' || finalState === 'warning') && !isFinalError;
     const diagnosedFailureOutcome = diagnoses.length > 0 && finalState !== 'terminated';
-    if ((successOutcome || diagnosedFailureOutcome) && !skipJobTransition && !runActive) {
+    // Only a failure that is nothing but the block stays quiet.
+    const quietOutcome = quietBlockedFailure && !successOutcome
+      && diagnoses.every((diagnosis) => failureAdvisor.isYoutubeBlock(diagnosis.key));
+    if ((successOutcome || diagnosedFailureOutcome) && !quietOutcome && !skipJobTransition && !runActive) {
       notificationModule.sendDownloadNotification({
         finalSummary: finalPayload.finalSummary,
         videoData: videoData,

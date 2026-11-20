@@ -3,6 +3,7 @@ const { normalizeUrlToVideoId } = require('./youtubeUrlParser');
 const configModule = require('./configModule');
 const jobModule = require('./jobModule');
 const plexModule = require('./plexModule');
+const libraryRefresh = require('./mediaServers/libraryRefresh');
 const DownloadExecutor = require('./download/downloadExecutor');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const tempPathManager = require('./download/tempPathManager');
@@ -235,6 +236,8 @@ class DownloadModule {
     if (this.getJobDataValue(sourceJobData, 'structurePerVideo')) body.structurePerVideo = true;
     // The retry's label no longer names the External API, so the flag carries it.
     if (this.isExternalRequestJob(sourceJobData, sourceLabel)) body.externalRequest = true;
+    // A repeat try of a blocked Sonarr/Radarr grab stays quiet through its retries.
+    if (this.getJobDataValue(sourceJobData, 'quietBlockedFailure') === true) body.quietBlockedFailure = true;
 
     logger.info(
       { videoCount: retryVideos.length, autoRetryAttempt, channelId, runId },
@@ -672,14 +675,23 @@ class DownloadModule {
       }
     }
 
-    // Refresh each distinct Plex library mapped to the downloaded subfolders.
-    // Pre-condition: g.subFolder must already be a resolved effective subfolder
-    // (clean name, no __ prefix, no ##USE_GLOBAL_DEFAULT## sentinel) as produced
-    // by channelDownloadGrouper. null means root (no subfolder).
-    // Defensive: refreshLibrary currently swallows errors internally
-    plexModule.refreshLibrariesForSubfolders(groups.map(g => g.subFolder ?? null)).catch(err => {
-      logger.error({ err }, 'Failed to refresh Plex libraries after grouped download');
-    });
+    // Refresh media servers once for the whole job, and only when a group
+    // downloaded something (most scheduled checks find nothing new).
+    if ((completedJob?.data?.videos?.length || 0) > 0) {
+      // Each distinct Plex library mapped to the groups' subfolders.
+      // Pre-condition: g.subFolder must already be a resolved effective subfolder
+      // (clean name, no __ prefix, no ##USE_GLOBAL_DEFAULT## sentinel) as produced
+      // by channelDownloadGrouper. null means root (no subfolder).
+      // Defensive: refreshLibrary currently swallows errors internally
+      plexModule.refreshLibrariesForSubfolders(groups.map(g => g.subFolder ?? null)).catch(err => {
+        logger.error({ err }, 'Failed to refresh Plex libraries after grouped download');
+      });
+
+      // Jellyfin and Emby; also swallows its own errors.
+      libraryRefresh.refreshAfterDownload().catch(err => {
+        logger.error({ err }, 'Failed to refresh Jellyfin/Emby libraries after grouped download');
+      });
+    }
 
     // Now start the next job in the queue
     await jobModule.startNextJob();
@@ -999,6 +1011,7 @@ class DownloadModule {
             ownerChannelMap: this.getJobDataValue(jobData, 'ownerChannelMap') || null,
             cookiesEnabled,
             anonymousRetry,
+            protectVideos: overrideSettings.protect === true,
           }
         )).catch(async err => {
           // Covers failures before the executor installs its own process
@@ -1268,6 +1281,7 @@ class DownloadModule {
       if (routing.subfolderFallback !== undefined) groupOverride.subfolderFallback = routing.subfolderFallback;
       if (routing.ratingOverride !== undefined) groupOverride.rating = routing.ratingOverride;
       if (routing.ratingFallback !== undefined) groupOverride.ratingFallback = routing.ratingFallback;
+      if (overrideSettings.protect === true) groupOverride.protect = true;
       // doSpecificDownloads accepts an Express-request shape (.body). runId ties
       // these jobs into the parent run so its summary aggregates them.
       const admission = await this.doSpecificDownloads({ body: { urls, overrideSettings: groupOverride, jobLabel, runId, ownerChannelMap } });

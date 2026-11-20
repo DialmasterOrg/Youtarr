@@ -32,4 +32,12 @@ describe('Swagger contract', () => {
       '/api/mediaservers/watch-status': expect.any(Object),
     }));
   });
+
+  // An annotation whose YAML does not parse is dropped with only a console
+  // message, so the operation silently leaves the document.
+  test('documents the sync status on the playlist detail route', () => {
+    const detail = swaggerSpec.paths['/api/playlists/{playlistId}'];
+
+    expect(detail.get.description).toContain('sync_status');
+  });
 });

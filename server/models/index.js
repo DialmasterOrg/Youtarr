@@ -20,6 +20,7 @@ const ExternalRequest = require('./externalrequest');
 const ExternalApiUsageBucket = require('./externalapiusagebucket');
 const VideoMembersAccess = require('./videomembersaccess');
 const ArrBridgeGrab = require('./arrbridgegrab');
+const ArrBridgeSearch = require('./arrbridgesearch');
 
 Job.hasMany(JobVideo, { foreignKey: 'job_id', as: 'jobVideos' });
 Job.hasMany(JobVideoDownload, { foreignKey: 'job_id', as: 'jobVideoDownloads' });
@@ -52,6 +53,8 @@ Job.hasMany(ExternalRequest, { foreignKey: 'job_id', as: 'externalRequests' });
 ExternalRequest.belongsTo(Job, { foreignKey: 'job_id', as: 'job' });
 ApiKey.hasMany(ExternalApiUsageBucket, { foreignKey: 'api_key_id', as: 'usageBuckets' });
 ExternalApiUsageBucket.belongsTo(ApiKey, { foreignKey: 'api_key_id', as: 'apiKey' });
+// For reading a grab's video title only: a grab outlives its video, so no constraint.
+ArrBridgeGrab.belongsTo(Video, { foreignKey: 'youtube_id', targetKey: 'youtubeId', as: 'video', constraints: false });
 
 module.exports = {
   Job,
@@ -75,4 +78,5 @@ module.exports = {
   ExternalApiUsageBucket,
   VideoMembersAccess,
   ArrBridgeGrab,
+  ArrBridgeSearch,
 };

@@ -610,6 +610,7 @@ function ChannelVideos({
           audioFormat: settings.audioFormat,
           rating: settings.rating,
           skipVideoFolder: settings.skipVideoFolder,
+          protect: settings.protect,
         }
       : undefined;
     const success = await triggerDownloads({ urls, overrideSettings, channelId });
@@ -1372,6 +1373,7 @@ function ChannelVideos({
         defaultResolutionSource={defaultResolutionSource}
         defaultAudioFormat={defaultAudioFormat}
         defaultAudioFormatSource={defaultAudioFormatSource}
+        defaultProtect={config.protectManualDownloads}
         selectedTab={selectedTab || 'videos'}
         tabLabel={getTabLabel(selectedTab || 'videos')}
         tabStats={selectedTabStats}
@@ -1398,6 +1400,7 @@ function ChannelVideos({
         defaultResolutionSource={defaultResolutionSource}
         defaultAudioFormat={defaultAudioFormat}
         defaultAudioFormatSource={defaultAudioFormatSource}
+        defaultProtect={config.protectManualDownloads}
         runMetadataFetch={refreshVideos}
         onStarted={handleDownloadAllStarted}
       />

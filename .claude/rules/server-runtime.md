@@ -16,6 +16,9 @@ paths:
   - "server/routes/logs.js"
   - "server/routes/auth.js"
   - "server/routes/health.js"
+  - "server/routes/status.js"
+  - "server/modules/statusSummaryModule.js"
+  - "server/modules/constants/apiKeyRoles.js"
   - "client/src/App.tsx"
   - "client/src/providers/WebSocketProvider.tsx"
   - "client/src/contexts/WebSocketContext.ts"
@@ -26,7 +29,15 @@ paths:
 
 # Server runtime
 
-Process lifecycle, logging, DNS and database connections, the WebSocket, and sessions.
+Process lifecycle, logging, DNS and database connections, the WebSocket, sessions, and the status summary.
+
+## Status summary
+
+- Dashboards poll `GET /api/status/summary`, so `statusSummaryModule` reads only the database (shared for 30 s) and in-memory state: never yt-dlp, the disk or another service, and it returns no filesystem paths.
+- A `status_read` key exists so the key a dashboard stores cannot start downloads. `apiKeyChannelGrantModule` and `apiKeyModule.updateApiKey` treat any role they do not name as external, so a new role must be refused in both.
+- Its `lastRun` reads `messageEmitter.getLastFinishedRun()`, not `getLastFinalActivity()`: the latter is cleared when the next download starts, which blanked the last run during every download.
+- `getLastFinishedRun()` pairs a summary with the `error`/`warning` of the run it describes: a clean check that found nothing re-shows the earlier result, and taking that check's flags turned a failed run into `success`.
+- After a restart, or while runs since then found nothing new, `lastRun` falls back to the newest finished job in `jobModule`'s history that downloaded or failed something (no end time; a sweep shows as its last job).
 
 ## Process, DNS, database (issue #921)
 
@@ -57,4 +68,4 @@ Process lifecycle, logging, DNS and database connections, the WebSocket, and ses
 - Clients never send data (`maxPayload` 1 KB), and every socket has an `error` listener, because ws rethrows an invalid frame's `error` without one and that crashed the process.
 - The server pings clients every 30 s and terminates unresponsive ones (proxy idle-timeout guard).
 - On connect the server replays only the last stored final-state message, never in-flight progress; the activity page seeds over REST instead (`.claude/rules/downloads.md`). The provider emits a local `connectionRestored` message after every reconnect.
-- Broadcast types: `videoActivityUpdated`, `downloadProgress`, `downloadComplete`, `jobsUpdated` (a job is enqueued or flips to In Progress), `videosUpdated` (per video mid-batch, after its rows persist), `rescanStatus`, `scheduledTaskStatus`, `downloadPauseChanged`. Listing pages refetch through `client/src/hooks/useDownloadListingsRefresh.ts`.
+- Broadcast types: `videoActivityUpdated`, `downloadProgress`, `downloadComplete`, `jobsUpdated` (a job is enqueued or flips to In Progress), `videosUpdated` (per video mid-batch, after its rows persist), `rescanStatus`, `scheduledTaskStatus`, `downloadPauseChanged`, `playlistSyncUpdated`. Listing pages refetch through `client/src/hooks/useDownloadListingsRefresh.ts`.

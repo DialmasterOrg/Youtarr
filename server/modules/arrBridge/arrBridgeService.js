@@ -7,10 +7,11 @@ const { createArrBridgeSettings } = require('./arrBridgeSettings');
 const { createArrCatalog } = require('./arrCatalog');
 const { createArrClient } = require('./arrClient');
 const { createGrabExecutor } = require('./grabExecutor');
-const { createGrabService, grabState } = require('./grabService');
+const { createGrabService, grabState, isGrabId } = require('./grabService');
 const { createLibraryCopyRemover, libraryCopyView } = require('./libraryCopyRemover');
 const { createNewznabApi } = require('./newznabApi');
 const { createRecentSearches } = require('./recentSearches');
+const { createSearchHistory } = require('./searchHistory');
 const { createSabnzbdApi } = require('./sabnzbdApi');
 const { createSearchBudget } = require('./searchBudget');
 const { createSearchQueue } = require('./searchQueue');
@@ -101,7 +102,7 @@ function createLibraryResolutionLookup({ Video }) {
 /**
  * @param {Object} deps
  * @param {Object} deps.configModule
- * @param {Object} deps.models - { ArrBridgeGrab, Video, ChannelVideo, Job }
+ * @param {Object} deps.models - { ArrBridgeGrab, ArrBridgeSearch, Video, ChannelVideo, Job }
  * @param {Function} deps.searchVideos - (query, count, { useApi, onApiUnits }) => Promise<Array>
  * @param {Function} deps.isYoutubeApiAvailable - () => boolean
  * @param {Function} deps.downloader - (jobData, { jobId }) => Promise<string|Object>
@@ -112,18 +113,20 @@ function createLibraryResolutionLookup({ Video }) {
  * @param {Function} deps.removeVideo - (youtubeId, removal) => Promise<boolean>; deletes a library video
  * @param {Function} deps.probeResolution - (youtubeId) => Promise<number|null>; the highest resolution yt-dlp lists
  * @param {Function} [deps.getHostDownloadsFolder] - () => the downloads folder as the host knows it, or null
+ * @param {Function} [deps.getCookieKey] - () => what identifies the cookie file in use, or null
  * @param {Object} deps.logger
  * @param {Function} [deps.createExecutor] - Test seam; defaults to createGrabExecutor
  * @param {Function} [deps.createClient] - Test seam; defaults to createArrClient
  */
 function createArrBridgeService({
   configModule, models, searchVideos, isYoutubeApiAvailable, downloader, jobLookup, storageGuard,
-  isArchived, getActivity, removeVideo, probeResolution, getHostDownloadsFolder, logger,
+  isArchived, getActivity, removeVideo, probeResolution, getHostDownloadsFolder, getCookieKey, logger,
   createExecutor = createGrabExecutor, createClient = createArrClient,
 }) {
   const getConfig = () => configModule.getConfig();
   const getSettings = () => readSettings(getConfig());
   let running = false;
+  const isPaused = () => storageGuard.getStatus()?.paused === true;
 
   const staging = createStaging({ getOutputRoot: () => configModule.directoryPath, getSettings, logger });
   const arrClient = createClient();
@@ -141,6 +144,9 @@ function createArrBridgeService({
     getSettings,
     onHandedOff: libraryCopies.request,
     settleLibraryCopies: libraryCopies.run,
+    // New cookies end the wait of grabs YouTube blocked.
+    getCookieKey,
+    isPaused,
     logger,
   });
   const grabService = createGrabService({
@@ -157,8 +163,14 @@ function createArrBridgeService({
     useApi: needsApi === true || searchBudget.allowsApi(),
     onApiUnits: searchBudget.spend,
   });
-  // What the Settings page shows under "Recent searches"; lost on a restart.
-  const recentSearches = createRecentSearches();
+  // What the Settings page shows under "Recent searches". A search is stored
+  // after it is answered, so the answer never waits for the database.
+  const searchHistory = createSearchHistory({ models, logger });
+  const recentSearches = createRecentSearches({
+    save: (entry) => {
+      searchHistory.record(entry);
+    },
+  });
   const searchService = createSearchService({
     searchVideos: budgetedSearchVideos,
     isYoutubeApiAvailable,
@@ -182,7 +194,7 @@ function createArrBridgeService({
     grabService,
     staging,
     getActivity,
-    isPaused: () => storageGuard.getStatus()?.paused === true,
+    isPaused,
   });
 
   // Applies the current config: creates the key the first time the bridge
@@ -215,38 +227,55 @@ function createArrBridgeService({
   }
 
   /**
-   * The newest grabs for the Settings page, with the title of each video
-   * Youtarr holds. Removed grabs are included: the list is a history.
-   * @param {unknown} [limit]
-   * @returns {Promise<Array<Object>>}
+   * One page of grabs for the Settings page, newest first, with the title
+   * of each video Youtarr holds. Removed grabs are included: the list is a
+   * history.
+   * @param {Object} [query] - { page, pageSize, q }
+   * @returns {Promise<{grabs: Array<Object>, total: number, page: number, pageSize: number}>}
    */
-  async function listRecentGrabs(limit) {
-    const rows = await grabService.listRecent(limit);
-    if (rows.length === 0) return [];
-    const videos = await models.Video.findAll({
-      where: { youtubeId: { [Op.in]: [...new Set(rows.map((row) => row.youtube_id))] } },
-      attributes: ['youtubeId', 'youTubeVideoName', 'youTubeChannelName'],
-      raw: true,
-    });
-    const videoById = new Map(videos.map((video) => [video.youtubeId, video]));
-    return rows.map((row) => {
-      const video = videoById.get(row.youtube_id);
-      return {
-        id: row.id,
-        releaseTitle: row.release_title,
-        youtubeId: row.youtube_id,
-        videoTitle: video?.youTubeVideoName || null,
-        channelName: video?.youTubeChannelName || null,
-        kind: row.kind,
-        category: row.category,
-        state: grabState(row),
-        failMessage: row.fail_message || null,
-        libraryCopy: libraryCopyView(row),
-        createdAt: row.created_at,
-        completedAt: row.completed_at || null,
-        removedAt: row.removed_at || null,
-      };
-    });
+  async function listRecentGrabs(query) {
+    const { rows, total, page, pageSize } = await grabService.listRecent(query);
+    const block = executor.blockStatus();
+    const grabs = rows.map((row) => toGrabView(row, block));
+    return { grabs, total, page, pageSize };
+  }
+
+  function toGrabView(row, block) {
+    const state = grabState(row, { blockActive: block.active });
+    return {
+      id: row.id,
+      releaseTitle: row.release_title,
+      youtubeId: row.youtube_id,
+      videoTitle: row.video?.youTubeVideoName || null,
+      channelName: row.video?.youTubeChannelName || null,
+      kind: row.kind,
+      category: row.category,
+      state,
+      failMessage: row.fail_message || null,
+      // Set when YouTube blocked this grab's own download; a grab can also
+      // be "blocked" because it waits behind another grab's block.
+      blockedAt: state === 'blocked' ? row.blocked_at || null : null,
+      nextTryAt: state === 'blocked' ? block.nextTryAt : null,
+      // What a blocked grab also waits for: the user's "Try again" that is
+      // still to be carried out, and downloads paused by a storage limit.
+      retryRequested: state === 'blocked' && executor.isRetryRequested(row.id),
+      downloadsPaused: state === 'blocked' && isPaused(),
+      hiddenUntil: grabService.hiddenUntilOf(row),
+      libraryCopy: libraryCopyView(row),
+      createdAt: row.created_at,
+      completedAt: row.completed_at || null,
+      removedAt: row.removed_at || null,
+    };
+  }
+
+  /**
+   * The Settings page's "Try again" on a waiting grab.
+   * @param {string} id
+   * @returns {Promise<'started'|'queued'|'paused'|'ready'|'deferred'|null>} null when the grab is not waiting
+   */
+  async function retryGrab(id) {
+    if (!isEnabled(getConfig()) || !isGrabId(id)) return null;
+    return executor.retryNow(id);
   }
 
   return {
@@ -254,7 +283,8 @@ function createArrBridgeService({
     sabnzbd,
     settings,
     listRecentGrabs,
-    listRecentSearches: () => recentSearches.list(),
+    retryGrab,
+    listRecentSearches: (query) => searchHistory.list(query),
     isEnabled: () => isEnabled(getConfig()),
     isAuthorized: (candidate) => isAuthorized(getConfig(), candidate),
     start,

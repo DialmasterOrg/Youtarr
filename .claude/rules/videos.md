@@ -69,6 +69,7 @@ Listing, the filesystem rescan, library repair, deleted vs. missing videos, the 
 - Automatic cleanup and the orphan folder sweep record a `skipped` run while the check covers present rows (`_libraryBlock`; a dry run never checks; the sweep removes an empty `__subfolder` nothing is stored in, which clears the check).
 - Manual deletes (`deleteVideos`, `deleteVideosByYoutubeIds`) refuse each covered video with the message rather than stamping a row whose file may sit on an unmounted share: one check per batch, fail-open if the check itself throws.
 - Job recovery likewise leaves the removal columns alone when it cannot find the file.
+- Deletes remove a folder recursively only at the exact per-video position under the downloads root. Elsewhere they unlink the video's own files, then remove the folder only if it is named for that video and empty (#941).
 - `/getVideos` filters: `missingFilter` is strictly missing; `deletedFilter` (default `off`; the Videos page sends `exclude`, remembered in localStorage) hides or isolates deleted rows and returns `hiddenDeletedCount` while excluding. The channel listing takes the same `deletedFilter`.
 
 ## Trash (`videoTrashModule`)

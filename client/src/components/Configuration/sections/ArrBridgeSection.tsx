@@ -1,10 +1,12 @@
 import React, { ChangeEvent } from 'react';
-import { Alert, Box, FormControlLabel, Switch, Typography } from '../../ui';
+import { useSearchParams } from 'react-router-dom';
+import { Alert, Box, FormControlLabel, Switch, Tab, Tabs, Typography } from '../../ui';
 import { ConfigurationCard } from '../common/ConfigurationCard';
 import { ConfigState, SnackbarState } from '../types';
 import { useArrBridgeKey } from '../hooks/useArrBridgeKey';
 import { useArrBridgeConnections } from '../hooks/useArrBridgeConnections';
 import { useArrBridgeGrabs } from '../hooks/useArrBridgeGrabs';
+import { useArrBridgeGrabRetry } from '../hooks/useArrBridgeGrabRetry';
 import { useArrBridgeSearches } from '../hooks/useArrBridgeSearches';
 import { useArrBridgeFolderCheck } from '../hooks/useArrBridgeFolderCheck';
 import {
@@ -19,6 +21,11 @@ import { ArrConnectionCard } from './components/ArrConnectionCard';
 import { ArrBridgeGrabList } from './components/ArrBridgeGrabList';
 import { ArrBridgeSearchList } from './components/ArrBridgeSearchList';
 
+// The tab is in the address, so the docs and a bookmark can open the lists.
+const TAB_PARAM = 'tab';
+const SETUP_TAB = 'setup';
+const ACTIVITY_TAB = 'activity';
+
 interface ArrBridgeSectionProps {
   token: string | null;
   config: ConfigState;
@@ -28,9 +35,10 @@ interface ArrBridgeSectionProps {
 }
 
 /**
- * Settings -> Sonarr / Radarr, in the order someone sets it up: turn it on,
- * add Youtarr to the apps, connect them, check the shared folder; the
- * settings to tune come after. The switch and the settings are saved with
+ * Settings -> Sonarr / Radarr. The Setup tab is in the order someone sets
+ * it up: turn it on, add Youtarr to the apps, connect them, check the
+ * shared folder; the settings to tune come after. The Activity tab lists
+ * the grabs and the searches. The switch and the settings are saved with
  * the page's Save button; the key and the connections are server-owned and
  * change through their own buttons.
  */
@@ -45,8 +53,14 @@ export const ArrBridgeSection: React.FC<ArrBridgeSectionProps> = ({
   const removeAfterImport = config.arrBridgeRemoveAfterImport;
   const { bridgeKey, loading, error, regenerating, regenerate } = useArrBridgeKey(token, enabled);
   const connections = useArrBridgeConnections(enabled ? token : null);
-  const grabs = useArrBridgeGrabs(token, enabled);
-  const searches = useArrBridgeSearches(token, enabled);
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Only once the bridge is saved as on: a link to the activity must not
+  // hide the switch and step 1 the moment an unsaved switch is flipped.
+  const showTabs = enabled && Boolean(savedConfig?.arrBridgeEnabled);
+  const showActivity = showTabs && searchParams.get(TAB_PARAM) === ACTIVITY_TAB;
+  const grabs = useArrBridgeGrabs(token, showActivity);
+  const grabRetry = useArrBridgeGrabRetry(token, grabs.refresh);
+  const searches = useArrBridgeSearches(token, showActivity);
   const status = connections.status;
   const connected = {
     sonarr: Boolean(status?.connections.sonarr.keySet),
@@ -62,7 +76,16 @@ export const ArrBridgeSection: React.FC<ArrBridgeSectionProps> = ({
     [savedStagingPath, status?.connections.sonarr.url ?? '', status?.connections.radarr.url ?? ''].join('|')
   );
 
-  return (
+  const selectTab = (_event: React.SyntheticEvent, value: string) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (value === ACTIVITY_TAB) next.set(TAB_PARAM, ACTIVITY_TAB);
+      else next.delete(TAB_PARAM);
+      return next;
+    }, { replace: true });
+  };
+
+  const setup = (
     <>
       <ConfigurationCard
         title="Sonarr / Radarr"
@@ -233,25 +256,39 @@ export const ArrBridgeSection: React.FC<ArrBridgeSectionProps> = ({
             />
           </ConfigurationCard>
 
-          <ConfigurationCard title="Recent grabs">
-            <ArrBridgeGrabList
-              grabs={grabs.grabs}
-              loading={grabs.loading}
-              error={grabs.error}
-              onRefresh={grabs.refresh}
-            />
+        </>
+      )}
+    </>
+  );
+
+  return (
+    <>
+      {showTabs && (
+        <Tabs
+          value={showActivity ? ACTIVITY_TAB : SETUP_TAB}
+          onChange={selectTab}
+          aria-label="Sonarr / Radarr"
+          className="mb-4"
+        >
+          <Tab value={SETUP_TAB} label="Setup" />
+          <Tab value={ACTIVITY_TAB} label="Activity" />
+        </Tabs>
+      )}
+
+      {/* Hidden, not unmounted: a key typed into a connection card stays in its field. */}
+      <div hidden={showActivity}>{setup}</div>
+
+      {showActivity && (
+        <>
+          <ConfigurationCard title="Recent grabs" subtitle="What Sonarr and Radarr grabbed, and what became of each grab.">
+            <ArrBridgeGrabList list={grabs} retry={grabRetry} />
           </ConfigurationCard>
 
           <ConfigurationCard
             title="Recent searches"
             subtitle="What Sonarr and Radarr asked for, what Youtarr found on YouTube, and why each video was or was not offered."
           >
-            <ArrBridgeSearchList
-              searches={searches.searches}
-              loading={searches.loading}
-              error={searches.error}
-              onRefresh={searches.refresh}
-            />
+            <ArrBridgeSearchList list={searches} />
           </ConfigurationCard>
         </>
       )}

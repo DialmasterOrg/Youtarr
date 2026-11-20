@@ -96,6 +96,21 @@ describe('useTriggerDownloads', () => {
     });
   });
 
+  test('sends the protect choice with the override settings', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true });
+    const { result } = renderHook(() => useTriggerDownloads(token));
+
+    await act(async () => {
+      await result.current.triggerDownloads({
+        urls: ['https://youtu.be/x'],
+        overrideSettings: { protect: true },
+      });
+    });
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+    expect(body.overrideSettings).toEqual({ protect: true });
+  });
+
   test('includes channelId in the request body when provided', async () => {
     mockFetch.mockResolvedValueOnce({ ok: true });
     const { result } = renderHook(() => useTriggerDownloads(token));

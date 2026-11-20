@@ -365,6 +365,7 @@ function VideoModal({
         defaultResolutionSource={defaultResolutionSource}
         defaultAudioFormat={defaultAudioFormat}
         defaultAudioFormatSource={defaultAudioFormatSource}
+        defaultProtect={config.protectManualDownloads}
       />
 
       <ChangeRatingDialog

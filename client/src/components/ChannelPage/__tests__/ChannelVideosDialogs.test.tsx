@@ -16,6 +16,7 @@ jest.mock('../../DownloadManager/ManualDownload/DownloadSettingsDialog', () => (
       'data-missing-count': props.missingVideoCount,
       'data-default-resolution': props.defaultResolution,
       'data-default-resolution-source': props.defaultResolutionSource,
+      'data-default-protect': String(props.defaultProtect),
       onClick: () => {
         if (props.onConfirm) {
           props.onConfirm({ resolution: '1080', allowRedownload: false });
@@ -71,6 +72,12 @@ describe('ChannelVideosDialogs Component', () => {
   });
 
   describe('Component Rendering', () => {
+    test('passes the protect default to the download settings dialog', () => {
+      renderWithProviders(<ChannelVideosDialogs {...defaultProps} defaultProtect />);
+
+      expect(screen.getByTestId('download-settings-dialog')).toHaveAttribute('data-default-protect', 'true');
+    });
+
     test('renders without crashing', () => {
       renderWithProviders(<ChannelVideosDialogs {...defaultProps} />);
       expect(screen.getByTestId('download-settings-dialog')).toBeInTheDocument();

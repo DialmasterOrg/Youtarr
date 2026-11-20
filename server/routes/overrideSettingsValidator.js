@@ -27,6 +27,10 @@ function createOverrideSettingsValidator({ channelSettingsModule, ratingMapper }
       if (typeof input.skipVideoFolder !== 'boolean') return { ok: false };
       out.skipVideoFolder = input.skipVideoFolder;
     }
+    if ('protect' in input) {
+      if (typeof input.protect !== 'boolean') return { ok: false };
+      out.protect = input.protect;
+    }
     if ('subfolder' in input) {
       if (input.subfolder !== null) {
         if (typeof input.subfolder !== 'string') return { ok: false };

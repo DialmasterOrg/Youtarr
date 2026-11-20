@@ -125,3 +125,16 @@ export interface PlaylistSubscribeSettings {
 }
 
 export type MediaServerType = 'plex' | 'jellyfin' | 'emby';
+
+/** The last recorded sync of a playlist to one media server. */
+export interface PlaylistServerSyncState {
+  last_synced_at: string | null;
+  // Why the last sync changed nothing on the server; null after a successful sync.
+  last_error: string | null;
+}
+
+/** Media server sync state of a playlist. A server that never synced has no entry. */
+export interface PlaylistSyncStatus {
+  syncing: boolean;
+  servers: Partial<Record<MediaServerType, PlaylistServerSyncState>>;
+}

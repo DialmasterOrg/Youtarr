@@ -29,6 +29,9 @@ jest.mock('../jobModule', () => ({
   startNextJob: jest.fn().mockResolvedValue()
 }));
 
+jest.mock('../mediaServers/libraryRefresh', () => ({
+  refreshAfterDownload: jest.fn().mockResolvedValue()
+}));
 jest.mock('../download/downloadExecutor');
 jest.mock('../download/ytdlpCommandBuilder');
 jest.mock('../channelModule', () => ({
@@ -1138,6 +1141,7 @@ describe('DownloadModule', () => {
       ];
       const plexModuleMock = require('../plexModule');
       plexModuleMock.refreshLibrariesForSubfolders = jest.fn().mockReturnValue(Promise.resolve());
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress', data: { videos: [{ youtubeId: 'vid00000001' }] } });
 
       await downloadModule.doGroupedChannelDownloads({}, groups);
 
@@ -1152,10 +1156,46 @@ describe('DownloadModule', () => {
       ];
       const plexModuleMock = require('../plexModule');
       plexModuleMock.refreshLibrariesForSubfolders = jest.fn().mockReturnValue(Promise.resolve());
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress', data: { videos: [{ youtubeId: 'vid00000001' }] } });
 
       await downloadModule.doGroupedChannelDownloads({}, groups);
 
+      expect(plexModuleMock.refreshLibrariesForSubfolders).toHaveBeenCalledTimes(1);
       expect(plexModuleMock.refreshLibrariesForSubfolders).toHaveBeenCalledWith(['kids', 'music']);
+    });
+
+    it('refreshes Jellyfin and Emby once after all groups when the job downloaded videos', async () => {
+      const groups = [
+        { quality: '1080', subFolder: 'kids', channels: [{ channel_id: 'UC1' }] },
+        { quality: '720', subFolder: 'music', channels: [{ channel_id: 'UC2' }] },
+      ];
+      jest.spyOn(downloadModule, 'executeGroupDownload').mockResolvedValue();
+      jobModuleMock.getJob.mockReturnValue({
+        status: 'In Progress',
+        data: { videos: [{ youtubeId: 'vid00000001' }, { youtubeId: 'vid00000002' }] }
+      });
+      const libraryRefresh = require('../mediaServers/libraryRefresh');
+
+      await downloadModule.doGroupedChannelDownloads({}, groups);
+
+      expect(libraryRefresh.refreshAfterDownload).toHaveBeenCalledTimes(1);
+    });
+
+    it('skips every media server refresh when no group downloaded anything', async () => {
+      const groups = [
+        { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1' }] }
+      ];
+      jest.spyOn(downloadModule, 'executeGroupDownload').mockResolvedValue();
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress', data: { videos: [] } });
+      const libraryRefresh = require('../mediaServers/libraryRefresh');
+      const plexModuleMock = require('../plexModule');
+      plexModuleMock.refreshLibrariesForSubfolders = jest.fn().mockReturnValue(Promise.resolve());
+
+      await downloadModule.doGroupedChannelDownloads({}, groups);
+
+      expect(plexModuleMock.refreshLibrariesForSubfolders).not.toHaveBeenCalled();
+      expect(libraryRefresh.refreshAfterDownload).not.toHaveBeenCalled();
+      expect(jobModuleMock.startNextJob).toHaveBeenCalled();
     });
 
     it('should hand accumulated diagnoses to the run tracker on completion', async () => {
@@ -1480,6 +1520,20 @@ describe('DownloadModule', () => {
       });
 
       expect(doSpecificDownloadsSpy.mock.calls[0][0].body.jobLabel).toBe('Auto-retry: 1 video (Sonarr/Radarr grab)');
+    });
+
+    it('keeps the retry of a quiet blocked grab quiet', async () => {
+      await downloadModule.enqueueAutoRetryJob({
+        retryVideos: [retryVideo], autoRetryAttempt: 1, sourceJobData: { quietBlockedFailure: true },
+      });
+
+      expect(doSpecificDownloadsSpy.mock.calls[0][0].body.quietBlockedFailure).toBe(true);
+    });
+
+    it('leaves the quiet flag off the retry of any other job', async () => {
+      await downloadModule.enqueueAutoRetryJob({ retryVideos: [retryVideo], autoRetryAttempt: 1, sourceJobData: {} });
+
+      expect(doSpecificDownloadsSpy.mock.calls[0][0].body).not.toHaveProperty('quietBlockedFailure');
     });
 
     it('leaves the retry of a manual download with the plain label', async () => {
@@ -1889,6 +1943,24 @@ describe('DownloadModule', () => {
           anonymousRetry: false
         })
       );
+    });
+
+    it('tells the executor to protect the videos of a download the user chose to protect', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+
+      await downloadModule.doSpecificDownloads({
+        body: { urls: ['https://youtube.com/watch?v=abc123'], overrideSettings: { protect: true } },
+      });
+
+      expect(mockDownloadExecutor.doDownload.mock.calls[0][7]).toMatchObject({ protectVideos: true });
+    });
+
+    it('does not ask the executor to protect videos by default', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+
+      await downloadModule.doSpecificDownloads({ body: { urls: ['https://youtube.com/watch?v=abc123'] } });
+
+      expect(mockDownloadExecutor.doDownload.mock.calls[0][7]).toMatchObject({ protectVideos: false });
     });
 
     it('uses a job id passed in options and returns it', async () => {
@@ -3023,6 +3095,19 @@ describe('DownloadModule', () => {
 
       const body = spy.mock.calls[0][0].body;
       expect(body.overrideSettings).toMatchObject({ subfolder: 'DialogFolder', rating: 'R', subfolderFallback: 'PLFolder' });
+    });
+
+    it('carries the dialog protect choice into each queued playlist job', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([{ youtube_id: 'a', channel_id: null }]);
+      VideoMock.findOne.mockResolvedValue(null);
+      grouperMock.buildGroups.mockResolvedValue([
+        { resolution: '1080', audioFormat: null, skipVideoFolder: false, youtubeIds: ['a'] },
+      ]);
+      const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockImplementation(async ({ body }) => ({ queued: body.urls.length, acceptedIds: [], alreadyActiveIds: [] }));
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist, { youtubeIds: ['a'], overrideSettings: { protect: true } });
+
+      expect(spy.mock.calls[0][0].body.overrideSettings).toMatchObject({ protect: true });
     });
 
     it('does not send any rating keys when neither dialog nor playlist set a rating', async () => {
