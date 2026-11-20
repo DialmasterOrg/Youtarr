@@ -57,13 +57,10 @@ describe('DownloadSettingsDialog', () => {
       expect(screen.getByLabelText('Use custom settings for this download')).toBeInTheDocument();
     });
 
-    test('renders re-download toggle when custom settings enabled', () => {
+    test('renders re-download toggle without enabling custom settings', () => {
       render(<DownloadSettingsDialog {...defaultProps} />);
 
-      // Enable custom settings to see re-download toggle
-      const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
-      fireEvent.click(toggle);
-
+      expect(screen.getByRole('checkbox', { name: /Use custom settings/i })).not.toBeChecked();
       expect(screen.getByLabelText('Allow re-downloading previously fetched videos')).toBeInTheDocument();
     });
 
@@ -78,7 +75,6 @@ describe('DownloadSettingsDialog', () => {
       // Should show the summary box with quality
       const summaryBox = screen.getByTestId('settings-summary');
       expect(summaryBox).toBeInTheDocument();
-      expect(within(summaryBox).getByText('Current Settings')).toBeInTheDocument();
       expect(within(summaryBox).getByText(/Quality:/)).toBeInTheDocument();
       expect(within(summaryBox).getByText('720p (HD)')).toBeInTheDocument();
     });
@@ -157,7 +153,6 @@ describe('DownloadSettingsDialog', () => {
       const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
       fireEvent.click(toggle);
 
-      expect(screen.getByText('Videos Per Channel')).toBeInTheDocument();
       expect(screen.getByLabelText('Number of videos to download per channel')).toBeInTheDocument();
     });
 
@@ -168,7 +163,6 @@ describe('DownloadSettingsDialog', () => {
       const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
       fireEvent.click(toggle);
 
-      expect(screen.queryByText('Videos Per Channel')).not.toBeInTheDocument();
       expect(screen.queryByLabelText('Number of videos to download per channel')).not.toBeInTheDocument();
     });
 
@@ -180,8 +174,10 @@ describe('DownloadSettingsDialog', () => {
       expect(screen.getByTestId('DownloadIcon')).toBeInTheDocument();
     });
 
-    test('renders note about YouTube quality', () => {
+    test('explains YouTube quality under the resolution field', () => {
       render(<DownloadSettingsDialog {...defaultProps} />);
+
+      fireEvent.click(screen.getByRole('checkbox', { name: /Use custom settings/i }));
 
       expect(screen.getByText(/YouTube will provide the best available quality/i)).toBeInTheDocument();
     });
@@ -738,19 +734,15 @@ describe('DownloadSettingsDialog', () => {
   });
 
   describe('Re-download Functionality', () => {
-    test('auto-opens custom settings and checks re-download toggle when missing videos are present', () => {
+    test('checks re-download toggle and leaves custom settings off when missing videos are present', () => {
       render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={3} />);
-
-      // Custom settings section auto-opens so the user can see the toggle
-      const customToggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
-      expect(customToggle).toBeChecked();
-      expect(screen.getByTestId('custom-settings-section')).toBeVisible();
 
       const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
       expect(redownloadToggle).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: /Use custom settings/i })).not.toBeChecked();
     });
 
-    test('emits only allowRedownload when auto-opened and otherwise untouched', () => {
+    test('emits only allowRedownload when auto-enabled and otherwise untouched', () => {
       render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={3} mode="manual" />);
 
       fireEvent.click(screen.getByRole('button', { name: /Start Download/i }));
@@ -758,8 +750,10 @@ describe('DownloadSettingsDialog', () => {
       expect(mockOnConfirm).toHaveBeenCalledWith({ allowRedownload: true });
     });
 
-    test('emits resolution alongside allowRedownload when user selects one after auto-open', () => {
+    test('emits resolution alongside the auto-enabled allowRedownload when user selects one', () => {
       render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={3} mode="manual" />);
+
+      fireEvent.click(screen.getByRole('checkbox', { name: /Use custom settings/i }));
 
       const resolutionSelect = screen.getByLabelText('Maximum Resolution');
       fireEvent.mouseDown(resolutionSelect);
@@ -930,7 +924,7 @@ describe('DownloadSettingsDialog', () => {
         <DownloadSettingsDialog {...defaultProps} missingVideoCount={3} />
       );
 
-      // Custom settings auto-opened, re-download auto-checked
+      // Re-download auto-checked
       let redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
       expect(redownloadToggle).toBeChecked();
 
@@ -944,8 +938,7 @@ describe('DownloadSettingsDialog', () => {
       // Reopen with missing videos again
       rerender(<DownloadSettingsDialog {...defaultProps} open={true} missingVideoCount={3} />);
 
-      // Auto-opened and auto-checked again (hasUserInteracted was reset)
-      expect(screen.getByRole('checkbox', { name: /Use custom settings/i })).toBeChecked();
+      // Auto-checked again (hasUserInteracted was reset)
       redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
       expect(redownloadToggle).toBeChecked();
     });
@@ -1361,11 +1354,11 @@ describe('DownloadSettingsDialog', () => {
       ).toBeInTheDocument();
     });
 
-    test('auto-opens custom settings and enables re-download when replaceVideoCount > 0', () => {
+    test('enables re-download and leaves custom settings off when replaceVideoCount > 0', () => {
       render(<DownloadSettingsDialog {...defaultProps} replaceVideoCount={2} />);
 
       const customToggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
-      expect(customToggle).toBeChecked();
+      expect(customToggle).not.toBeChecked();
 
       const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
       expect(redownloadToggle).toBeChecked();
