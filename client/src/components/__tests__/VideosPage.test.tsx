@@ -65,9 +65,10 @@ jest.mock('../DownloadManager/ManualDownload/DownloadSettingsDialog', () => ({
       React.createElement('div', { 'data-testid': 'download-missing-count' }, String(props.missingVideoCount ?? 0)),
       React.createElement('div', { 'data-testid': 'download-replace-count' }, String(props.replaceVideoCount ?? 0)),
       React.createElement('div', { 'data-testid': 'download-unavailable-count' }, String(props.unavailableVideoCount ?? 0)),
+      React.createElement('div', { 'data-testid': 'download-default-protect' }, String(props.defaultProtect ?? false)),
       React.createElement(
         'button',
-        { 'data-testid': 'download-dialog-confirm', onClick: () => props.onConfirm({ allowRedownload: true }) },
+        { 'data-testid': 'download-dialog-confirm', onClick: () => props.onConfirm({ allowRedownload: true, protect: true }) },
         'Start Download'
       ),
       React.createElement(
@@ -2238,6 +2239,22 @@ describe('VideosPage Component', () => {
       expect(screen.getByTestId('download-unavailable-count')).toHaveTextContent('1');
     });
 
+    test('opens the dialog with protection on when protecting manual downloads is the default', async () => {
+      const { useConfig } = require('../../hooks/useConfig');
+      useConfig.mockReturnValue({ config: { channelVideosHotLoad: false, protectManualDownloads: true } });
+      try {
+        const user = setupUser();
+        await renderWithDownloadVideos();
+
+        await selectByName(user, 'Missing Video');
+        await user.click(screen.getByRole('button', { name: 'Download' }));
+
+        expect(screen.getByTestId('download-default-protect')).toHaveTextContent('true');
+      } finally {
+        useConfig.mockReturnValue({ config: { channelVideosHotLoad: false } });
+      }
+    });
+
     test('confirming posts eligible urls with videoChannelMap, clears selection and navigates', async () => {
       const user = setupUser();
       await renderWithDownloadVideos();
@@ -2262,6 +2279,7 @@ describe('VideosPage Component', () => {
             audioFormat: undefined,
             rating: undefined,
             skipVideoFolder: undefined,
+            protect: true,
           },
           videoChannelMap: {
             missing0001: CHANNEL_ID,

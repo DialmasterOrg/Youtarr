@@ -215,6 +215,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
             audioFormat: settings.audioFormat,
             rating: settings.rating,
             skipVideoFolder: settings.skipVideoFolder,
+            protect: settings.protect,
           }
         : undefined;
       const ids = pendingDownload.mode === 'selected' ? pendingDownload.ids.filter(id => !snapshot.videos[id]?.state) : undefined;
@@ -556,6 +557,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         defaultResolution={playlist.video_quality || config.preferredResolution || '1080'}
         defaultAudioFormat={playlist.audio_format}
         defaultAudioFormatSource="playlist"
+        defaultProtect={config.protectManualDownloads}
       />
 
       <Dialog

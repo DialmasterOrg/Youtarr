@@ -243,6 +243,7 @@ export function useVideoModalActions({
           audioFormat: settings.audioFormat,
           rating: settings.rating,
           skipVideoFolder: settings.skipVideoFolder,
+          protect: settings.protect,
         }
       : undefined;
 

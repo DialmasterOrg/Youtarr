@@ -174,6 +174,8 @@ async function finalizeDownloadJob({
   cookiesPassed = cookiesEnabled,
   anonymousRetry = false,
   stdioClosed = true,
+  // The user chose to protect this download from automatic removal.
+  protectVideos = false,
 }) {
   // True once the job's terminal status has been persisted; the catch
   // below must not overwrite it with 'Error' for failures that happen
@@ -221,7 +223,12 @@ async function finalizeDownloadJob({
       router.archiveSkippedIds
     );
     // Use successful videos for further processing (archive, database, etc.)
-    videoData = successfulVideos;
+    // The per-video post-processor already saved each video as protected; the
+    // end-of-batch save repeats it for any video that save missed. The flag is
+    // only ever set, never cleared, so a re-download keeps existing protection.
+    videoData = protectVideos
+      ? successfulVideos.map((video) => ({ ...video, protected: true }))
+      : successfulVideos;
 
     // Best-effort: name failed videos from what the DB already knows so
     // history, notifications, and run summaries can identify them.

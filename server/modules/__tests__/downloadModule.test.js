@@ -1931,6 +1931,24 @@ describe('DownloadModule', () => {
       );
     });
 
+    it('tells the executor to protect the videos of a download the user chose to protect', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+
+      await downloadModule.doSpecificDownloads({
+        body: { urls: ['https://youtube.com/watch?v=abc123'], overrideSettings: { protect: true } },
+      });
+
+      expect(mockDownloadExecutor.doDownload.mock.calls[0][7]).toMatchObject({ protectVideos: true });
+    });
+
+    it('does not ask the executor to protect videos by default', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+
+      await downloadModule.doSpecificDownloads({ body: { urls: ['https://youtube.com/watch?v=abc123'] } });
+
+      expect(mockDownloadExecutor.doDownload.mock.calls[0][7]).toMatchObject({ protectVideos: false });
+    });
+
     it('uses a job id passed in options and returns it', async () => {
       const jobId = '9b89e5bc-8c90-4e72-b245-270fed2eacc2';
       jobModuleMock.addOrUpdateJob.mockResolvedValue(jobId);
@@ -3063,6 +3081,19 @@ describe('DownloadModule', () => {
 
       const body = spy.mock.calls[0][0].body;
       expect(body.overrideSettings).toMatchObject({ subfolder: 'DialogFolder', rating: 'R', subfolderFallback: 'PLFolder' });
+    });
+
+    it('carries the dialog protect choice into each queued playlist job', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([{ youtube_id: 'a', channel_id: null }]);
+      VideoMock.findOne.mockResolvedValue(null);
+      grouperMock.buildGroups.mockResolvedValue([
+        { resolution: '1080', audioFormat: null, skipVideoFolder: false, youtubeIds: ['a'] },
+      ]);
+      const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockImplementation(async ({ body }) => ({ queued: body.urls.length, acceptedIds: [], alreadyActiveIds: [] }));
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist, { youtubeIds: ['a'], overrideSettings: { protect: true } });
+
+      expect(spy.mock.calls[0][0].body.overrideSettings).toMatchObject({ protect: true });
     });
 
     it('does not send any rating keys when neither dialog nor playlist set a rating', async () => {

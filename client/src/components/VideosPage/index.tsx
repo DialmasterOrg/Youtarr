@@ -516,6 +516,7 @@ function VideosPage({ token }: VideosPageProps) {
           audioFormat: settings.audioFormat,
           rating: settings.rating,
           skipVideoFolder: settings.skipVideoFolder,
+          protect: settings.protect,
         }
       : undefined;
 
@@ -819,6 +820,7 @@ function VideosPage({ token }: VideosPageProps) {
         unavailableVideoCount={downloadCounts.unavailable}
         defaultResolution={configState?.config?.preferredResolution || '1080'}
         defaultResolutionSource="global"
+        defaultProtect={configState?.config?.protectManualDownloads}
         mode="manual"
         token={token}
       />

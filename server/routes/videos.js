@@ -946,6 +946,9 @@ module.exports = function createVideoRoutes({
    *                     type: string
    *                     enum: ['360', '480', '720', '1080', '1440', '2160']
    *                     description: Override download resolution
+   *                   protect:
+   *                     type: boolean
+   *                     description: Protect the downloaded videos from automatic removal
    *               videoChannelMap:
    *                 type: object
    *                 additionalProperties:
@@ -1013,6 +1016,10 @@ module.exports = function createVideoRoutes({
         return res.status(400).json({
           error: 'skipVideoFolder must be a boolean'
         });
+      }
+
+      if (overrideSettings.protect !== undefined && typeof overrideSettings.protect !== 'boolean') {
+        return res.status(400).json({ error: 'protect must be a boolean' });
       }
 
       // Validate/normalize rating override if provided

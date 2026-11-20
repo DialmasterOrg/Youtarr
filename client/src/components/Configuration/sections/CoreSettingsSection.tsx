@@ -126,6 +126,9 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
               </div>
             )}
           </SettingRow>
+          <SettingRow controlId="protectManualDownloads" label="Protect manual downloads"
+            description={'Turn on "Protect this download from auto-removal" by default for videos you pick and download yourself. You can still change it for each download. Automatic downloads are not affected.'}
+            control={switchFor('protectManualDownloads')} />
         </SettingsSection>
 
         <SettingsSection id="media-server-files" title="Media server files"

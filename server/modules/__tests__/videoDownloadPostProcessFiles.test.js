@@ -713,8 +713,26 @@ describe('videoDownloadPostProcessFiles', () => {
 
     expect(mockVideoPersistence.persistDownloadedVideoForJob).toHaveBeenCalledWith({
       jobId: 'test-job-id',
-      youtubeId: 'abc123'
+      youtubeId: 'abc123',
+      protect: false
     });
+  });
+
+  it('persists the video as protected when the download was started with protection', async () => {
+    process.env.YOUTARR_PROTECT_VIDEOS = 'true';
+
+    try {
+      await loadModule();
+      await settleAsync();
+
+      expect(mockVideoPersistence.persistDownloadedVideoForJob).toHaveBeenCalledWith({
+        jobId: 'test-job-id',
+        youtubeId: 'abc123',
+        protect: true
+      });
+    } finally {
+      delete process.env.YOUTARR_PROTECT_VIDEOS;
+    }
   });
 
   it('emits the persisted control marker on stdout after a successful persist', async () => {
@@ -814,7 +832,8 @@ describe('videoDownloadPostProcessFiles', () => {
 
       expect(mockVideoPersistence.persistDownloadedVideoForJob).toHaveBeenCalledWith({
         jobId: 'test-job-id',
-        youtubeId: 'abc123'
+        youtubeId: 'abc123',
+        protect: false
       });
     });
 

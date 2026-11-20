@@ -144,6 +144,7 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
               onStartDownload={handleManualDownload}
               token={token}
               defaultResolution={defaultResolution}
+              defaultProtect={config.protectManualDownloads}
             />
             <Typography variant="body2" color="text.secondary" className="mb-4">
               Tip: queue videos right from YouTube with the "Send to Youtarr" browser bookmarklet or a phone

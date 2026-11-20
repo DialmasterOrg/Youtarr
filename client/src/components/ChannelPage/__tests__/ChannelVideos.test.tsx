@@ -214,6 +214,7 @@ jest.mock('../ChannelVideosDialogs', () => ({
       'data-testid': 'channel-videos-dialogs',
       'data-default-resolution': props.defaultResolution,
       'data-default-resolution-source': props.defaultResolutionSource,
+      'data-default-protect': String(props.defaultProtect),
       'data-selected-tab': props.selectedTab,
       'data-tab-label': props.tabLabel,
       'data-missing-video-count': props.missingVideoCount,
@@ -230,10 +231,12 @@ jest.mock('../DownloadAllVideosDialog', () => ({
     open: boolean;
     tabType: string;
     tabLabel: string;
+    defaultProtect?: boolean;
   }) {
     const React = require('react');
     return React.createElement('div', {
       'data-testid': 'download-all-dialog',
+      'data-default-protect': String(props.defaultProtect),
       'data-open': String(props.open),
       'data-tab-type': props.tabType,
       'data-tab-label': props.tabLabel,
@@ -1624,6 +1627,17 @@ describe('ChannelVideos Component', () => {
       expect(dialogsElement).toBeInTheDocument();
       expect(dialogsElement).toHaveAttribute('data-default-resolution', '1080');
       expect(dialogsElement).toHaveAttribute('data-default-resolution-source', 'global');
+    });
+
+    test('hands the protect manual downloads default to both download dialogs', () => {
+      useConfig.mockReturnValue({
+        config: { preferredResolution: '1080', protectManualDownloads: true },
+      });
+
+      renderChannelVideos();
+
+      expect(screen.getByTestId('channel-videos-dialogs')).toHaveAttribute('data-default-protect', 'true');
+      expect(screen.getByTestId('download-all-dialog')).toHaveAttribute('data-default-protect', 'true');
     });
 
     test('prioritizes channel quality over global quality', () => {

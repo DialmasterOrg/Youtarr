@@ -35,6 +35,7 @@ jest.mock('../../DownloadManager/ManualDownload/DownloadSettingsDialog', () => (
     open: boolean;
     videoCount?: number;
     hideRedownloadOption?: boolean;
+    defaultProtect?: boolean;
     onConfirm: (settings: unknown) => void;
   }) {
     const ReactLib = require('react');
@@ -44,6 +45,7 @@ jest.mock('../../DownloadManager/ManualDownload/DownloadSettingsDialog', () => (
       {
         'data-testid': 'download-settings-dialog',
         'data-hide-redownload': String(props.hideRedownloadOption),
+        'data-default-protect': String(props.defaultProtect),
       },
       ReactLib.createElement('span', null, `settings-count:${props.videoCount}`),
       ReactLib.createElement(
@@ -58,6 +60,7 @@ jest.mock('../../DownloadManager/ManualDownload/DownloadSettingsDialog', () => (
               audioFormat: null,
               rating: null,
               skipVideoFolder: false,
+              protect: true,
             }),
         },
         'Mock Confirm Settings'
@@ -189,11 +192,32 @@ describe('DownloadAllVideosDialog', () => {
         audioFormat: null,
         rating: null,
         skipVideoFolder: false,
+        protect: true,
       });
     });
     await waitFor(() => {
       expect(onStarted).toHaveBeenCalledWith(42);
     });
+  });
+
+  test('opens the settings step with the protect default it was given', async () => {
+    mockHookState.preview = PREVIEW;
+    const user = userEvent.setup();
+
+    render(
+      <DownloadAllVideosDialog
+        {...baseProps}
+        defaultProtect
+        runMetadataFetch={jest.fn().mockResolvedValue({})}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled();
+    });
+    await user.click(screen.getByRole('button', { name: /continue/i }));
+
+    expect(await screen.findByTestId('download-settings-dialog')).toHaveAttribute('data-default-protect', 'true');
   });
 
   test('ignores repeat confirm clicks so only one download job is queued', async () => {

@@ -540,6 +540,76 @@ describe('DownloadSettingsDialog', () => {
     });
   });
 
+  describe('Protect from auto-removal', () => {
+    const protectToggle = () =>
+      screen.getByRole('checkbox', { name: 'Protect this download from auto-removal' });
+    const startDownload = () => fireEvent.click(screen.getByRole('button', { name: /Start Download/i }));
+
+    test('offers the protect toggle, turned off, for a manual download', () => {
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+
+      expect(protectToggle()).not.toBeChecked();
+    });
+
+    test('does not offer the protect toggle for a channel download run', () => {
+      render(<DownloadSettingsDialog {...defaultProps} mode="channel" />);
+
+      expect(
+        screen.queryByRole('checkbox', { name: 'Protect this download from auto-removal' })
+      ).not.toBeInTheDocument();
+    });
+
+    test('emits protect when the user turns the toggle on', () => {
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+
+      fireEvent.click(protectToggle());
+      startDownload();
+
+      expect(mockOnConfirm).toHaveBeenCalledWith({ protect: true });
+    });
+
+    test('starts with the toggle on when protection is the default', () => {
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" defaultProtect />);
+
+      expect(protectToggle()).toBeChecked();
+    });
+
+    test('emits protect for an untouched dialog when protection is the default', () => {
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" defaultProtect />);
+
+      startDownload();
+
+      expect(mockOnConfirm).toHaveBeenCalledWith({ protect: true });
+    });
+
+    test('emits no protect when the user turns a default-on toggle off', () => {
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" defaultProtect />);
+
+      fireEvent.click(protectToggle());
+      startDownload();
+
+      expect(mockOnConfirm).toHaveBeenCalledWith(null);
+    });
+
+    test('returns to the default when the dialog is reopened', () => {
+      const { rerender } = render(<DownloadSettingsDialog {...defaultProps} mode="manual" defaultProtect />);
+      fireEvent.click(protectToggle());
+
+      rerender(<DownloadSettingsDialog {...defaultProps} open={false} mode="manual" defaultProtect />);
+      rerender(<DownloadSettingsDialog {...defaultProps} open={true} mode="manual" defaultProtect />);
+
+      expect(protectToggle()).toBeChecked();
+    });
+
+    test('never emits protect for a channel download run, even when protection is the default', () => {
+      render(<DownloadSettingsDialog {...defaultProps} mode="channel" defaultProtect />);
+
+      startDownload();
+
+      expect(mockOnConfirm).toHaveBeenCalledWith(null);
+    });
+  });
+
   describe('Confirm Action', () => {
     test('calls onConfirm with settings when custom settings enabled', () => {
       render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);

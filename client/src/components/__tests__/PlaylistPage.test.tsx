@@ -102,8 +102,9 @@ jest.mock('react-router-dom', () => ({
   }),
 }));
 
+const mockConfig: { preferredResolution: string; protectManualDownloads?: boolean } = { preferredResolution: '1080' };
 jest.mock('../../hooks/useConfig', () => ({
-  useConfig: () => ({ config: { preferredResolution: '1080' } }),
+  useConfig: () => ({ config: mockConfig }),
 }));
 
 jest.mock('../DownloadManager/ManualDownload/DownloadSettingsDialog', () => ({
@@ -112,10 +113,12 @@ jest.mock('../DownloadManager/ManualDownload/DownloadSettingsDialog', () => ({
     open,
     onConfirm,
     missingVideoCount,
+    defaultProtect,
   }: {
     open: boolean;
     onConfirm: (s: unknown) => void;
     missingVideoCount?: number;
+    defaultProtect?: boolean;
   }) => {
     const React = require('react');
     if (!open) return null;
@@ -128,9 +131,19 @@ jest.mock('../DownloadManager/ManualDownload/DownloadSettingsDialog', () => ({
         String(missingVideoCount)
       ),
       React.createElement(
+        'div',
+        { 'data-testid': 'mock-dialog-default-protect' },
+        String(defaultProtect)
+      ),
+      React.createElement(
         'button',
         { 'data-testid': 'mock-confirm-download', onClick: () => onConfirm(null) },
         'confirm'
+      ),
+      React.createElement(
+        'button',
+        { 'data-testid': 'mock-confirm-protected-download', onClick: () => onConfirm({ protect: true }) },
+        'confirm protected'
       )
     );
   },
@@ -284,6 +297,36 @@ describe('PlaylistPage selected-download selection lifecycle', () => {
     await waitFor(() => expect(mockTriggerDownload).toHaveBeenCalledWith(['vidA'], undefined));
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/downloads/activity'));
     await waitFor(() => expect(screen.queryByText('1 selected')).not.toBeInTheDocument());
+  });
+
+  test('sends the protect choice from the download dialog', async () => {
+    const user = userEvent.setup();
+    mockTriggerDownload.mockResolvedValue(undefined);
+
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select Vid A' }));
+    await user.click(screen.getByTestId('selection-action-download'));
+    await user.click(await screen.findByTestId('mock-confirm-protected-download'));
+
+    await waitFor(() => expect(mockTriggerDownload).toHaveBeenCalledWith(
+      ['vidA'], expect.objectContaining({ protect: true })
+    ));
+  });
+
+  test('opens the download dialog with protection on when protecting manual downloads is the default', async () => {
+    const user = userEvent.setup();
+    mockConfig.protectManualDownloads = true;
+    try {
+      renderWithProviders(<PlaylistPage token="t" />);
+
+      await user.click(screen.getByRole('checkbox', { name: 'Select Vid A' }));
+      await user.click(screen.getByTestId('selection-action-download'));
+
+      expect(await screen.findByTestId('mock-dialog-default-protect')).toHaveTextContent('true');
+    } finally {
+      delete mockConfig.protectManualDownloads;
+    }
   });
 
   test('Download all opens the dialog and downloads all videos on confirm', async () => {

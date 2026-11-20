@@ -14,6 +14,7 @@ export interface DownloadAllOverrideSettings {
   audioFormat?: string | null;
   rating?: string | null;
   skipVideoFolder?: boolean;
+  protect?: boolean;
 }
 
 interface StartDownloadAllResponse {

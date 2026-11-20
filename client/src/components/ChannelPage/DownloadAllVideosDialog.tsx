@@ -31,6 +31,7 @@ interface DownloadAllVideosDialogProps {
   defaultResolutionSource: 'channel' | 'global';
   defaultAudioFormat?: string | null;
   defaultAudioFormatSource?: 'channel' | 'global';
+  defaultProtect?: boolean;
   // Parent-owned full metadata fetch (the "Load More" flow) so the preview
   // count covers the whole channel tab. Resolves null on failure.
   runMetadataFetch: () => Promise<unknown>;
@@ -60,6 +61,7 @@ function DownloadAllVideosDialog({
   defaultResolutionSource,
   defaultAudioFormat,
   defaultAudioFormatSource,
+  defaultProtect,
   runMetadataFetch,
   onStarted,
 }: DownloadAllVideosDialogProps) {
@@ -115,6 +117,7 @@ function DownloadAllVideosDialog({
           audioFormat: settings.audioFormat,
           rating: settings.rating,
           skipVideoFolder: settings.skipVideoFolder,
+          protect: settings.protect,
         }
       : undefined;
     const queued = await startDownloadAll(tabType, overrideSettings);
@@ -235,6 +238,7 @@ function DownloadAllVideosDialog({
         defaultResolutionSource={defaultResolutionSource}
         defaultAudioFormat={defaultAudioFormat}
         defaultAudioFormatSource={defaultAudioFormatSource}
+        defaultProtect={defaultProtect}
         mode="manual"
         token={token}
         hideRedownloadOption

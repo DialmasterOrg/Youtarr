@@ -74,6 +74,7 @@ yt-dlp runs, the job queue, the download archive, storage limits, and the activi
 ## Finalizer, retries, diagnoses
 
 - `downloadJobFinalizer` persists the terminal status, broadcasts the final state, reports to the run tracker and dispatches notifications; `downloadCompletionEffects` owns the side effects after completion (temp cleanup, poster backfill, playlist hooks, media server refresh, next-job kickoff).
+- `overrideSettings.protect` (manual, playlist and download-all dialogs) becomes the `protectVideos` directive: the per-video post-processor (`YOUTARR_PROTECT_VIDEOS`) and the finalizer's end-of-batch save both mark videos `protected`. Never written false, so a re-download keeps protection.
 - Media servers are refreshed once per job: by `downloadCompletionEffects` for single jobs and by `doGroupedChannelDownloads`' wrap-up for grouped ones (intermediate groups skip it). A job that downloaded nothing refreshes no server.
 - `transient403RetryPlanner` (pure) picks failures to auto-retry: transient mid-stream 403s and cookie-specific `Video unavailable`. The finalizer enqueues an "Auto-retry" URL-list job through a callback injected from downloadModule, capped by `downloadAutoRetryCount`.
 - Handed-off failures are tagged `autoRetryQueued` so run summaries report the post-retry outcome instead of the first failure.

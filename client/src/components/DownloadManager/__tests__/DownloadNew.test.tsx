@@ -25,9 +25,9 @@ jest.mock('../../../hooks/useConfig', () => ({
 
 jest.mock('../ManualDownload/ManualDownload', () => ({
   __esModule: true,
-  default: function MockManualDownload({ onStartDownload, token, defaultResolution }: any) {
+  default: function MockManualDownload({ onStartDownload, token, defaultResolution, defaultProtect }: any) {
     const React = require('react');
-    return React.createElement('div', { 'data-testid': 'manual-download' },
+    return React.createElement('div', { 'data-testid': 'manual-download', 'data-default-protect': String(defaultProtect) },
       React.createElement('span', null, `Resolution: ${defaultResolution}`),
       React.createElement('button', {
         onClick: () => onStartDownload(['https://youtube.com/watch?v=test'], { resolution: '1080' })
@@ -195,6 +195,16 @@ describe('DownloadNew', () => {
     });
 
     expect(screen.getByText('Resolution: 720')).toBeInTheDocument();
+  });
+
+  test('hands the protect manual downloads default to the manual download form', () => {
+    mockUseConfig.mockReturnValue({
+      config: { preferredResolution: '1080', channelFilesToDownload: 3, protectManualDownloads: true },
+    });
+
+    render(<DownloadNew {...defaultProps} />);
+
+    expect(screen.getByTestId('manual-download')).toHaveAttribute('data-default-protect', 'true');
   });
 
   test('handles config errors by falling back to defaults', async () => {
