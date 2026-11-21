@@ -199,6 +199,8 @@ jobs:
         run: |
           echo "CHANGELOG_COMMIT=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
+      # No no-cache here on purpose: this reuses the layers the verification
+      # build just made (itself uncached), so the pushed image is the verified one.
       - name: Build and push Docker images
         if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -209,7 +211,6 @@ jobs:
           tags: |
             ${{ vars.DOCKERHUB_USERNAME }}/youtarr:${{ steps.calculate_version.outputs.new_tag }}
             ${{ vars.DOCKERHUB_USERNAME }}/youtarr:latest
-          no-cache: true
 
       - name: Announce release on Discord
         if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
