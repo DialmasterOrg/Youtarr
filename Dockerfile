@@ -15,7 +15,6 @@ RUN npm ci --only=production --ignore-scripts
 # ---- Build ----
 FROM base AS build
 COPY package*.json ./
-RUN npm ci --ignore-scripts
 # Copy server code and built React app
 COPY server/ ./server/
 COPY client/build/ ./client/build/
