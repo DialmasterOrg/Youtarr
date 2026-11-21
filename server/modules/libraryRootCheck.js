@@ -4,17 +4,20 @@
 const fs = require('fs');
 const path = require('path');
 const { Op } = require('sequelize');
+const logger = require('../logger');
 // pathBuilder, not the filesystem index: the index loads fileOperations, which
 // binds child_process at require time, and this check needs neither.
 const { isSubfolderDirectory } = require('./filesystem/pathBuilder');
 const {
   LOCAL_TEMP_DIR_NAME, M3U_FOLDER_NAME, HEALTHCHECK_FILE_PREFIX, ARR_STAGING_DIR_NAME,
 } = require('./filesystem/constants');
+const { REMOVAL_STATES, notStateWhere } = require('./videoRemovalState');
 
 const LIBRARY_CHECK_REASONS = {
   MISSING: 'missing',
   EMPTY: 'empty',
   UNREADABLE: 'unreadable',
+  NOT_FOUND: 'not-found',
   SUBFOLDER_EMPTY: 'subfolder-empty',
   SUBFOLDER_UNREADABLE: 'subfolder-unreadable',
 };
@@ -22,6 +25,15 @@ const SUBFOLDER_REASONS = [LIBRARY_CHECK_REASONS.SUBFOLDER_EMPTY, LIBRARY_CHECK_
 
 // ENOTDIR: the folder's path now leads to a regular file, so the folder is gone.
 const ABSENT_CODES = ['ENOENT', 'ENOTDIR'];
+
+// The presence probe stats this many randomly picked downloaded videos...
+const PRESENCE_PROBE_SAMPLE_SIZE = 20;
+// ...needs at least this many definite answers to judge...
+const PRESENCE_PROBE_MIN_CHECKED = 10;
+// ...and fails when fewer than this share of them are where they were saved.
+const PRESENCE_PROBE_MIN_FOUND_SHARE = 0.5;
+// Pages, the trash card and the download pause all ask; one probe serves them for this long.
+const PRESENCE_PROBE_CACHE_MS = 30 * 1000;
 
 // Shown to users, so no paths: the container path means nothing on the host,
 // and a subfolder goes by its own name.
@@ -34,6 +46,9 @@ function describeLibraryCheck({ reason, path: checkedPath }) {
     return 'The downloads folder is empty.';
   case LIBRARY_CHECK_REASONS.UNREADABLE:
     return 'The downloads folder could not be read.';
+  case LIBRARY_CHECK_REASONS.NOT_FOUND:
+    // Files moved by hand inside the library leave stale paths too, and a rescan repairs those.
+    return 'Most downloaded videos are not where Youtarr saved them; if you moved files inside the downloads folder, run a rescan.';
   case LIBRARY_CHECK_REASONS.SUBFOLDER_EMPTY:
     return `The subfolder ${subfolder} is empty.`;
   case LIBRARY_CHECK_REASONS.SUBFOLDER_UNREADABLE:
@@ -176,9 +191,21 @@ function pathPrefixPattern(dir) {
  * @returns {Promise<boolean>}
  */
 async function libraryCheckCoversRows(check, Video, where) {
-  if (!check || check.ok) return false;
+  return (await countRowsUnderLibraryCheck(check, Video, where)) > 0;
+}
+
+/**
+ * How many videos rows the filter matches that a failing check puts in doubt
+ * (see libraryCheckCoversRows); 0 for a passing check.
+ * @param {{ok: boolean, reason?: string, path?: string}} check - a checkLibraryRoot result
+ * @param {{count: Function}} Video - the Video model
+ * @param {Object} where - Sequelize filter for the rows that matter to the caller
+ * @returns {Promise<number>}
+ */
+async function countRowsUnderLibraryCheck(check, Video, where) {
+  if (!check || check.ok) return 0;
   if (!SUBFOLDER_REASONS.includes(check.reason)) {
-    return (await Video.count({ where })) > 0;
+    return Video.count({ where });
   }
   const underSubfolder = {
     [Op.or]: failingSubfolders(check).flatMap((dir) => {
@@ -186,15 +213,113 @@ async function libraryCheckCoversRows(check, Video, where) {
       return [{ filePath: { [Op.like]: pattern } }, { audioFilePath: { [Op.like]: pattern } }];
     }),
   };
-  return (await Video.count({ where: { [Op.and]: [where, underSubfolder] } })) > 0;
+  return Video.count({ where: { [Op.and]: [where, underSubfolder] } });
+}
+
+// 'present' if any of the paths is a regular file, 'absent' if every one is
+// confirmed gone, 'unknown' if a check failed for another reason.
+async function storedFileState(paths, stat) {
+  let unknown = false;
+  for (const candidate of paths.filter(Boolean)) {
+    try {
+      if ((await stat(candidate)).isFile()) return 'present';
+    } catch (err) {
+      if (!ABSENT_CODES.includes(err.code)) unknown = true;
+    }
+  }
+  return unknown ? 'unknown' : 'absent';
+}
+
+const presenceProbeCache = new Map();
+
+// Drop the probe's cached answers: a rescan just repaired the stored paths it
+// samples, so the next check must look again rather than repeat a stale result.
+function forgetStoredFilesProbe() {
+  presenceProbeCache.clear();
+}
+
+/**
+ * Are downloaded videos where Youtarr saved them? Stats the stored files of a
+ * random sample of present videos stored under the root. Catches a downloads
+ * folder that is not empty but is not the library either: a volume mapping
+ * that points elsewhere, or a bare mount point a download has written into.
+ * Fails open (passes) when the sample cannot be read.
+ * @param {string} baseDir - The downloads root
+ * @param {{findAll: Function, sequelize: {random: Function}}} Video - the Video model
+ * @param {{ stat?: Function, now?: Function }} [deps] - injectable for tests
+ * @returns {Promise<{ok: true}|{ok: false, reason: string, path: string, message: string}>}
+ */
+async function probeStoredFiles(baseDir, Video, { stat = fs.promises.stat, now = Date.now } = {}) {
+  const cached = presenceProbeCache.get(baseDir);
+  // A copy: callers decorate the result they get.
+  if (cached && now() - cached.at < PRESENCE_PROBE_CACHE_MS) return { ...cached.result };
+
+  let rows;
+  try {
+    const pattern = pathPrefixPattern(baseDir);
+    rows = await Video.findAll({
+      attributes: ['filePath', 'audioFilePath'],
+      where: { removed: false, [Op.or]: [{ filePath: { [Op.like]: pattern } }, { audioFilePath: { [Op.like]: pattern } }] },
+      order: Video.sequelize.random(),
+      limit: PRESENCE_PROBE_SAMPLE_SIZE,
+      raw: true,
+    });
+  } catch (err) {
+    logger.warn({ err }, 'Could not read videos to check the downloads folder; assuming it is fine');
+    return { ok: true };
+  }
+
+  const states = await Promise.all(rows.map((row) => storedFileState([row.filePath, row.audioFilePath], stat)));
+  const checked = states.filter((state) => state !== 'unknown').length;
+  const found = states.filter((state) => state === 'present').length;
+  const result = checked >= PRESENCE_PROBE_MIN_CHECKED && found / checked < PRESENCE_PROBE_MIN_FOUND_SHARE
+    ? failure(LIBRARY_CHECK_REASONS.NOT_FOUND, baseDir)
+    : { ok: true };
+  presenceProbeCache.set(baseDir, { at: now(), result });
+  return { ...result };
+}
+
+/**
+ * checkLibraryRoot, then (if the root passes) the presence probe: what every
+ * writer except the rescan uses before treating a file as gone. The rescan
+ * uses checkLibraryRoot alone, because stale paths after files were moved by
+ * hand are exactly what it repairs; it judges what its walk found instead.
+ * @param {string} baseDir - The downloads root
+ * @param {Object} Video - the Video model
+ * @param {{ readdir?: Function, stat?: Function, now?: Function }} [deps] - injectable for tests
+ */
+async function checkLibraryAvailable(baseDir, Video, deps = {}) {
+  const rootCheck = await checkLibraryRoot(baseDir, deps);
+  if (!rootCheck.ok) return rootCheck;
+  return probeStoredFiles(baseDir, Video, deps);
+}
+
+/**
+ * The failure that should hold new downloads, or null. Only a failure of the
+ * downloads folder itself counts (new files would land on a bare mount point
+ * or in the wrong folder), and only while it covers videos still on record as
+ * present or missing: a fresh install, or a library whose files the user
+ * removed and marked as deleted, keeps downloading.
+ * @param {string} baseDir - The downloads root
+ * @param {Object} Video - the Video model
+ * @returns {Promise<{ok: false, reason: string, path: string, message: string}|null>}
+ */
+async function downloadsFolderBlock(baseDir, Video) {
+  const check = await checkLibraryAvailable(baseDir, Video);
+  if (check.ok || SUBFOLDER_REASONS.includes(check.reason)) return null;
+  return (await libraryCheckCoversRows(check, Video, notStateWhere(REMOVAL_STATES.DELETED))) ? check : null;
 }
 
 module.exports = {
   LIBRARY_CHECK_REASONS,
   checkLibraryRoot,
+  checkLibraryAvailable,
+  downloadsFolderBlock,
+  forgetStoredFilesProbe,
   describeLibraryCheck,
   isYoutarrManagedEntry,
   isUnderLibraryCheckPath,
   isRowUnderLibraryCheck,
   libraryCheckCoversRows,
+  countRowsUnderLibraryCheck,
 };

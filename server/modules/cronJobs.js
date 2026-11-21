@@ -171,9 +171,7 @@ function initialize(deps = {}) {
         trigger,
         ignoreLibraryCheck: trigger === 'manual' && ignoreLibraryCheck === true,
       });
-      if (result && result.timedOut) {
-        logger.info('Video metadata backfill reached time limit, will continue at the next scheduled run');
-      } else if (!result || result.status !== 'error') {
+      if (!result || result.status !== 'error') {
         logger.info('Video metadata backfill completed successfully');
       }
       return result ? rescanRunSummary.toRunRecord(result) : undefined;

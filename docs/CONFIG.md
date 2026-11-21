@@ -96,7 +96,7 @@ The Scheduling page also shows what the scheduler is actually doing: an **Upcomi
 **Run now** starts a task immediately with the saved settings, and the run appears in the history with the `manual` trigger. The button is disabled, with the reason shown next to it:
 - while the task is running, whether that run came from its schedule, a startup pass, or another manual start (the Maintenance rescan, Watch Status **Sync Now**, the YT-DLP page's update button, or **Download new** in Downloads). For automatic downloads, "running" lasts until the sweep's last download finishes, including its playlist downloads and any automatic retries. The run's history entry records the check for new videos and the queuing of downloads; the downloads themselves are summarized in Download History and notifications;
 - while its feature is turned off (watch status sync, automatic yt-dlp updates; the card links to the page that turns it on);
-- for automatic downloads, while downloads are paused by a storage limit;
+- for automatic downloads, while downloads are paused (by a storage limit, or because the downloads folder looks unavailable);
 - for watch status sync, while no media server is connected;
 - for channel video counts without a YouTube API key, while YouTube has paused lookups or a download is running.
 
@@ -1064,6 +1064,8 @@ While paused:
 
 If a measurement fails (for example, disk space cannot be read), that limit does not pause downloads.
 
+Downloads also pause the same way, with no setting to configure, while the downloads folder looks unavailable and videos are on record there: it does not exist, cannot be read, is empty, or most downloaded videos are not where Youtarr saved them (a share that is not mounted, or a volume mapping that points at a different folder). New files would otherwise land outside your library. They resume on their own once the folder is back, or as soon as a rescan repairs the stored paths of files you moved yourself. The folder check is reused for 30 seconds. If a check takes longer than 10 seconds, Youtarr keeps its previous answer until the share responds, so a slow, dead share does not resume downloads; with no previous answer, it does not pause them. See [Every Video Shows as Missing After I Moved the Library](TROUBLESHOOTING.md#every-video-shows-as-missing-after-i-moved-the-library).
+
 Size values must be a positive whole number followed by `MB`, `GB` or `TB` (for example `500GB`), or blank for off. Saving any other value from the UI or API is rejected. A malformed value hand-edited into `config.json` is fixed when the file is loaded (at startup, or when Youtarr notices the edit while running): spacing and unit case are corrected where possible (`"500 gb"` becomes `"500GB"`), and anything else, including `0`, is cleared to off, with a warning in the logs. This also applies to `autoRemovalUsageLimit`.
 
 When combining these with Auto Removal, set the pause usage limit at or above `autoRemovalUsageLimit`, and the pause free-space minimum at or below `autoRemovalFreeSpaceThreshold`. Otherwise cleanup stops before storage is back within the pause limit and downloads stay paused. The settings page warns about this.
@@ -1148,10 +1150,12 @@ The Maintenance page's last-run summary comes from the scheduled task run histor
     "videosMarkedMissing": 3,
     "videosScanned": 8421,
     "filesFoundOnDisk": 8423,
+    "videosNotMarkedMissing": 0,
+    "videosMissing": 2,
     "errorMessage": null
   }
   ```
-- **Description**: The outcome of the most recent filesystem reconciliation pass (the `backfillVideoMetadata` run), whether it was started by the schedule, the server-startup pass, or the manual "Rescan files on disk" action on the Maintenance & Rescan settings page. Surfaced read-only on that page so users can see when the last scan ran and what it found or fixed.
+- **Description**: The outcome of the most recent filesystem reconciliation pass (the `backfillVideoMetadata` run), whether it was started by the schedule, the server-startup pass, or the manual "Rescan files on disk" action on the Maintenance & Rescan settings page. Surfaced read-only on that page so users can see when the last scan ran and what it found or fixed. `videosNotMarkedMissing` counts videos left alone because their folder looked unmounted or most of its videos were not found; `videosMissing` is how many videos were missing after the run (`null` for runs recorded before it was counted). `timed-out` only appears for runs from releases before the folder scan was exempt from the time limit. While a rescan runs, the same endpoint also returns `progress` (`phase` `walk` or `rows`, folders and video files found so far, videos checked out of the total).
 - **Note**: Managed by the application; do not edit by hand.
 
 ## Logging

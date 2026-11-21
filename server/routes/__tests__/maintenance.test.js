@@ -22,7 +22,8 @@ describe('Maintenance routes', () => {
     jest.resetModules();
 
     mockVideosModule = {
-      isBackfillRunning: jest.fn().mockReturnValue(false)
+      isBackfillRunning: jest.fn().mockReturnValue(false),
+      getRescanProgress: jest.fn().mockReturnValue(null)
     };
     mockConfigModule = {
       getConfig: jest.fn().mockReturnValue({})
@@ -111,7 +112,19 @@ describe('Maintenance routes', () => {
       const res = await request(app).get('/api/maintenance/rescan-status');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ running: false, lastRun: null });
+      expect(res.body).toEqual({ running: false, progress: null, lastRun: null });
+    });
+
+    test('returns the running rescan\'s progress', async () => {
+      const progress = {
+        phase: 'walk', foldersScanned: 4210, filesFound: 3980, videosProcessed: 0, videosTotal: 0, startedAt: '2026-11-21T14:34:00.000Z',
+      };
+      mockVideosModule.isBackfillRunning.mockReturnValue(true);
+      mockVideosModule.getRescanProgress.mockReturnValue(progress);
+
+      const res = await request(app).get('/api/maintenance/rescan-status');
+
+      expect(res.body).toEqual(expect.objectContaining({ running: true, progress }));
     });
 
     test('asks only for runs that scanned, never a skipped occurrence', async () => {
@@ -141,6 +154,7 @@ describe('Maintenance routes', () => {
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
         running: true,
+        progress: null,
         lastRun: {
           startedAt: '2026-05-04T15:00:00.000Z',
           completedAt: '2026-05-04T15:01:00.000Z',
@@ -150,6 +164,8 @@ describe('Maintenance routes', () => {
           videosMarkedMissing: 0,
           videosScanned: 5,
           filesFoundOnDisk: 5,
+          videosNotMarkedMissing: 0,
+          videosMissing: null,
           errorMessage: null
         }
       });
@@ -171,7 +187,7 @@ describe('Maintenance routes', () => {
 
       const res = await request(app).get('/api/maintenance/rescan-status');
 
-      expect(res.body).toEqual({ running: false, lastRun });
+      expect(res.body).toEqual({ running: false, progress: null, lastRun });
     });
   });
 });

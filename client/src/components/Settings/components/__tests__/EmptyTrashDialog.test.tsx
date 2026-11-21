@@ -26,11 +26,39 @@ const renderDialog = (overrides: Partial<React.ComponentProps<typeof EmptyTrashD
 const confirmButton = () => screen.getByRole('button', { name: /^Empty trash \(/ });
 
 describe('EmptyTrashDialog', () => {
-  test('opens on Missing when there are no deleted videos', () => {
-    renderDialog({ counts: { deleted: 0, missing: 4 } });
+  test('never preselects Missing, even when there are no deleted videos', async () => {
+    const { user } = renderDialog({ counts: { deleted: 0, missing: 4 } });
 
-    expect(screen.getByRole('radio', { name: 'Missing (4)' })).toHaveAttribute('aria-checked', 'true');
-    expect(confirmButton()).toHaveTextContent('Empty trash (4 videos)');
+    expect(screen.getByRole('radio', { name: 'Deleted (0)' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: 'Missing (4)' })).toHaveAttribute('aria-checked', 'false');
+    await user.click(screen.getByRole('checkbox', { name: 'I understand this cannot be undone' }));
+    expect(confirmButton()).toHaveTextContent('Empty trash (0 videos)');
+    expect(confirmButton()).toBeDisabled();
+  });
+
+  test('warns once Missing is chosen when most of the library is missing, and asks the user to say the files are gone', async () => {
+    const warning = '16,800 of your 16,813 downloaded videos are missing.';
+    const { onConfirm, user } = renderDialog({ counts: { deleted: 0, missing: 16800 }, missingWarning: warning });
+
+    expect(screen.queryByText(warning)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: 'Missing (16800)' }));
+    expect(screen.getByText(warning)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: 'I understand this cannot be undone' }));
+    expect(confirmButton()).toBeDisabled();
+    await user.click(screen.getByRole('checkbox', { name: /^I removed these files myself/ }));
+    await user.click(confirmButton());
+
+    expect(onConfirm).toHaveBeenCalledWith({ states: ['missing'], removeFromArchive: false });
+  });
+
+  test('asks nothing extra for deleted videos alone', async () => {
+    const { user } = renderDialog({ missingWarning: '16,800 of your 16,813 downloaded videos are missing.' });
+
+    await user.click(screen.getByRole('checkbox', { name: 'I understand this cannot be undone' }));
+
+    expect(screen.queryByRole('checkbox', { name: /^I removed these files myself/ })).not.toBeInTheDocument();
+    expect(confirmButton()).toBeEnabled();
   });
 
   test('disables removing archive entries with the reason while a download runs, and keeps them', async () => {

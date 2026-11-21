@@ -20,6 +20,9 @@ interface RemovedVideosCardProps {
   // in. Resolves started: false when the server refused or the request failed.
   onRescanAnyway?: () => Promise<{ started: boolean }>;
   rescanRunning?: boolean;
+  // Videos the last rescan did not mark missing because it could not find most
+  // of a folder's videos (or the folder looked unmounted); 0 when none.
+  rescanHeldBack?: number;
 }
 
 const RESCAN_NOT_STARTED = 'The rescan did not start. The rescan card above shows why.';
@@ -28,15 +31,22 @@ const RESCAN_FINISHED = 'Rescan finished. Videos it could not find now count as 
 const EMPTIED_MYSELF = 'I removed these files myself; they are not on an unmounted drive';
 
 const videos = (n: number) => (n === 1 ? 'video' : 'videos');
+const formatCount = (n: number) => n.toLocaleString('en-US');
 
-// Check results that can also mean the user emptied the folder on purpose,
+// Check results that can also mean the user removed the files on purpose,
 // the one case where rescanning anyway, or marking every missing video as
 // deleted despite the check, makes sense.
-const EMPTY_FOLDER_REASONS = ['empty', 'subfolder-empty'];
+const OVERRIDABLE_REASONS = ['empty', 'subfolder-empty', 'not-found'];
+// Of these, the ones where Rescan anyway marks every covered video missing;
+// for the others it marks only those it cannot find.
+const EVERY_VIDEO_REASONS = ['empty', 'subfolder-empty'];
+// Missing counts as "most of the library" from this many videos and at least
+// as many missing videos as present ones.
+const MOSTLY_MISSING_MIN = 25;
 
 // Settings > Maintenance: what Deleted and Missing mean, how many there are,
 // and the two ways to clear them out.
-function RemovedVideosCard({ token, onRescanAnyway, rescanRunning = false }: RemovedVideosCardProps) {
+function RemovedVideosCard({ token, onRescanAnyway, rescanRunning = false, rescanHeldBack = 0 }: RemovedVideosCardProps) {
   const { summary, loading, error, refetch, markAllMissingDeleted, emptyTrash, actionPending, actionError } = useRemovedVideos(token);
   const [markAllOpen, setMarkAllOpen] = useState(false);
   const [emptyTrashOpen, setEmptyTrashOpen] = useState(false);
@@ -50,17 +60,30 @@ function RemovedVideosCard({ token, onRescanAnyway, rescanRunning = false }: Rem
   const deleted = summary?.deleted ?? 0;
   const missing = summary?.missing ?? 0;
   const legacy = summary?.legacy ?? 0;
+  const present = summary?.present ?? 0;
   const libraryWarning = summary && !summary.libraryCheck.ok ? summary.libraryCheck.message : null;
+  const checkReason = summary?.libraryCheck.reason ?? '';
   // The failing folder holds missing videos, so they are in doubt.
   const missingBlocked = summary?.missingActionsBlocked ?? false;
   // Missing videos cannot be purged while that holds, so with no deleted ones
   // there would be nothing the dialog could offer.
   const nothingToPurge = deleted === 0 && (missing === 0 || missingBlocked);
   const archiveRemovalDisabledReason = summary?.downloadsActive ? 'Unavailable while a download is running.' : null;
-  // The folder may simply have been emptied on purpose: the user can say so.
-  const folderLooksEmpty = libraryWarning !== null && EMPTY_FOLDER_REASONS.includes(summary?.libraryCheck.reason ?? '');
-  const canRescanAnyway = Boolean(onRescanAnyway) && folderLooksEmpty;
+  // The files may simply have been removed on purpose: the user can say so.
+  const folderLooksEmpty = libraryWarning !== null && OVERRIDABLE_REASONS.includes(checkReason);
+  // What Rescan anyway would do: from the live check if it fails, else from
+  // what the last rescan held back.
+  const rescanAffects = folderLooksEmpty ? summary?.presentCovered ?? 0 : rescanHeldBack;
+  const rescanMarksEvery = folderLooksEmpty && EVERY_VIDEO_REASONS.includes(checkReason);
+  const canRescanAnyway = Boolean(onRescanAnyway) && rescanAffects > 0 && (folderLooksEmpty || libraryWarning === null);
   const needsEmptiedAcknowledgement = missingBlocked && folderLooksEmpty;
+  const mostlyMissingWarning = missing >= MOSTLY_MISSING_MIN && missing >= present
+    ? `${formatCount(missing)} of your ${formatCount(missing + present)} downloaded videos are missing. If you moved your library `
+      + 'or changed the volume mapping, fix that, restart Youtarr and rescan before you mark them as deleted or empty the trash.'
+    : null;
+  // Mostly missing is treated like an unmounted folder here too: no check may
+  // be failing (a wrong folder that is not empty), so the user says so instead.
+  const needsGoneAcknowledgement = needsEmptiedAcknowledgement || mostlyMissingWarning !== null;
 
   // A rescan that just finished may have marked videos missing: reload the counts.
   const wasRescanRunning = useRef(rescanRunning);
@@ -153,6 +176,16 @@ function RemovedVideosCard({ token, onRescanAnyway, rescanRunning = false }: Rem
                 + (canRescanAnyway ? ' If you removed the files yourself, rescan anyway to mark them missing.' : '')}
           </Alert>
         )}
+        {!libraryWarning && canRescanAnyway && (
+          <Alert severity="warning" className="break-words">
+            {`The last rescan did not mark ${formatCount(rescanHeldBack)} ${videos(rescanHeldBack)} missing because it could not`
+              + ' find most of the videos where they are stored. If you moved your library or changed the volume mapping, fix'
+              + ' that and restart Youtarr. If you removed the files yourself, rescan anyway to mark them missing.'}
+          </Alert>
+        )}
+        {!libraryWarning && mostlyMissingWarning && (
+          <Alert severity="warning" className="break-words">{mostlyMissingWarning}</Alert>
+        )}
         {error && <Alert severity="error">{error}</Alert>}
         {actionError && <Alert severity="error">{actionError}</Alert>}
         {rescanAnywayError && <Alert severity="error">{rescanAnywayError}</Alert>}
@@ -196,7 +229,10 @@ function RemovedVideosCard({ token, onRescanAnyway, rescanRunning = false }: Rem
         onClose={() => setRescanAnywayOpen(false)}
         onConfirm={() => { void handleRescanAnyway(); }}
         pending={rescanRunning}
-        folderMessage={libraryWarning}
+        folderMessage={folderLooksEmpty ? libraryWarning : null}
+        affected={rescanAffects}
+        present={present}
+        exact={rescanMarksEvery}
       />
 
       <Dialog open={markAllOpen} onClose={() => setMarkAllOpen(false)} maxWidth="sm" fullWidth>
@@ -208,16 +244,19 @@ function RemovedVideosCard({ token, onRescanAnyway, rescanRunning = false }: Rem
                 ? '1 missing video will be marked as deleted and hidden from the Videos page by default. Its record is kept, so it can still be re-downloaded, and if its file turns up again the rescan marks it downloaded. Only do this if the file is really gone, not sitting on an unmounted drive.'
                 : `${missing} missing videos will be marked as deleted and hidden from the Videos page by default. Their records are kept, so they can still be re-downloaded, and if a file turns up again the rescan marks it downloaded. Only do this if the files are really gone, not sitting on an unmounted drive.`}
             </Typography>
+            {mostlyMissingWarning && (
+              <Alert severity="warning" className="break-words">{mostlyMissingWarning}</Alert>
+            )}
             {needsEmptiedAcknowledgement && (
-              <>
-                <Alert severity="warning" className="break-words">{libraryWarning}</Alert>
-                <FormControlLabel
-                  control={
-                    <Checkbox checked={emptiedAcknowledged} onChange={(event) => setEmptiedAcknowledged(event.target.checked)} />
-                  }
-                  label={EMPTIED_MYSELF}
-                />
-              </>
+              <Alert severity="warning" className="break-words">{libraryWarning}</Alert>
+            )}
+            {needsGoneAcknowledgement && (
+              <FormControlLabel
+                control={
+                  <Checkbox checked={emptiedAcknowledged} onChange={(event) => setEmptiedAcknowledged(event.target.checked)} />
+                }
+                label={EMPTIED_MYSELF}
+              />
             )}
           </div>
         </DialogContent>
@@ -229,7 +268,7 @@ function RemovedVideosCard({ token, onRescanAnyway, rescanRunning = false }: Rem
             onClick={handleMarkAll}
             variant="outlined"
             color="warning"
-            disabled={actionPending || (needsEmptiedAcknowledgement && !emptiedAcknowledged)}
+            disabled={actionPending || (needsGoneAcknowledgement && !emptiedAcknowledged)}
           >
             Mark {missing} as deleted
           </Button>
@@ -242,6 +281,7 @@ function RemovedVideosCard({ token, onRescanAnyway, rescanRunning = false }: Rem
         onConfirm={handleEmptyTrash}
         counts={{ deleted, missing }}
         missingDisabledReason={missingBlocked ? libraryWarning : null}
+        missingWarning={mostlyMissingWarning}
         archiveRemovalDisabledReason={archiveRemovalDisabledReason}
         pending={actionPending}
       />

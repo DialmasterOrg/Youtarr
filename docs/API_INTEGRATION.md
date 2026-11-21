@@ -130,7 +130,7 @@ Any other body fields are ignored. Folder layout (flat or one folder per video) 
 | 401 | `{"error": "Invalid API key"}` | Invalid or missing authentication |
 | 403 | `{"error": "API keys can only access the download endpoint"}` | API key used on wrong endpoint |
 | 403 | `{"error": "Status API keys can only access the status summary endpoint"}` | A read-only status key was used; it cannot start downloads |
-| 409 | `{"success": false, "error": "Downloads are paused: ..."}` | A storage limit (Settings -> Storage Limits) was reached; the message says which. Retry after storage is back within the limits |
+| 409 | `{"success": false, "error": "Downloads are paused: ..."}` | A storage limit (Settings -> Storage Limits) was reached, or the downloads folder looks unavailable (for example a share that is not mounted); the message says which. Retry once that is resolved |
 | 429 | `{"success": false, "error": "Rate limit exceeded"}` | Too many requests |
 
 ### GET /api/status/summary
@@ -188,7 +188,7 @@ curl https://your-youtarr-server.com/api/status/summary \
 | `library.channels` | Subscribed channels |
 | `library.videos` | Downloaded videos that are still on disk |
 | `library.storageBytes` | Size of those videos, from the file sizes Youtarr recorded (thumbnails, subtitles and other sidecar files are not counted) |
-| `downloads.paused` | `true` while a storage limit is holding downloads |
+| `downloads.paused` | `true` while a storage limit, or a downloads folder that looks unavailable, is holding downloads |
 | `downloads.activeJob` | The job that is running, or `null` |
 | `downloads.queuedJobs` | Jobs waiting behind it |
 | `downloads.videosDownloading` | Videos being downloaded now |
