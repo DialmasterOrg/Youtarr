@@ -1,5 +1,43 @@
 # Changelog
 
+## [v1.94.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.94.0) - 2026-11-20
+
+### Features
+
+* add read-only status API for dashboards ([8ab4578](https://github.com/DialmasterOrg/Youtarr/commit/8ab4578733e6b2bd48ba1964141f35a0faf1807c)), closes [#1039](https://github.com/DialmasterOrg/Youtarr/issues/1039)
+* add Sonarr/Radarr Activity tab with history ([7dbbd06](https://github.com/DialmasterOrg/Youtarr/commit/7dbbd06206f6a4bef7321f2660c8e901521be847)), closes [#760](https://github.com/DialmasterOrg/Youtarr/issues/760)
+* group settings index, rework core page ([fb18e90](https://github.com/DialmasterOrg/Youtarr/commit/fb18e90e2a399fe03fe1e9237797068a773ad383)), closes [#1044](https://github.com/DialmasterOrg/Youtarr/issues/1044) [#175](https://github.com/DialmasterOrg/Youtarr/issues/175)
+* group the settings nav menu ([84a4962](https://github.com/DialmasterOrg/Youtarr/commit/84a4962f463389cc828e9b856e322f7e7162a88d)), closes [#1044](https://github.com/DialmasterOrg/Youtarr/issues/1044) [#175](https://github.com/DialmasterOrg/Youtarr/issues/175)
+* protect manual downloads from auto-removal ([8863f1c](https://github.com/DialmasterOrg/Youtarr/commit/8863f1cadcf41a7f96c6e429c2ce753fe3087dc0)), closes [#773](https://github.com/DialmasterOrg/Youtarr/issues/773)
+* refresh Jellyfin and Emby after downloads ([3b53517](https://github.com/DialmasterOrg/Youtarr/commit/3b53517e67fbde799e27f4264fe5ea15319128b4)), closes [#948](https://github.com/DialmasterOrg/Youtarr/issues/948)
+* retry Sonarr/Radarr grabs YouTube blocked ([daadc29](https://github.com/DialmasterOrg/Youtarr/commit/daadc29fc55c7a1357c3e861e8cfcfa1707e6804)), closes [#1048](https://github.com/DialmasterOrg/Youtarr/issues/1048)
+
+
+### Bug Fixes
+
+* improve UX for download settings dialog ([b4ee209](https://github.com/DialmasterOrg/Youtarr/commit/b4ee209f2578e963c34cc0928f4f3083d139c652)), closes [#773](https://github.com/DialmasterOrg/Youtarr/issues/773)
+* keep menus and popovers on screen in cards ([2ceef5b](https://github.com/DialmasterOrg/Youtarr/commit/2ceef5b0abf7cebb447854dfc463b6eb68ebd0d4))
+* remove empty video folder after delete ([0d88d22](https://github.com/DialmasterOrg/Youtarr/commit/0d88d22685edd7b324a3bcd28308ad19f1e0209a)), closes [#941](https://github.com/DialmasterOrg/Youtarr/issues/941)
+* send cookies on playlist fetches ([de5e30b](https://github.com/DialmasterOrg/Youtarr/commit/de5e30bbb0761db9c5a68c463e1571ee2c58b08a)), closes [#984](https://github.com/DialmasterOrg/Youtarr/issues/984)
+* show playlist sync result on playlist page ([b5a7408](https://github.com/DialmasterOrg/Youtarr/commit/b5a74080c036fa9fae9734530b96216118aac9d5)), closes [#994](https://github.com/DialmasterOrg/Youtarr/issues/994)
+
+
+### Tests
+
+* mock playlist module in server harnesses ([a300caf](https://github.com/DialmasterOrg/Youtarr/commit/a300caf24fc325c1bac8d17bbefeca652d82b2a5)), closes [#984](https://github.com/DialmasterOrg/Youtarr/issues/984)
+
+
+### Documentation
+
+* update CHANGELOG for v1.93.0 [skip ci] ([8411512](https://github.com/DialmasterOrg/Youtarr/commit/8411512b15ad46f69fccd22b900e3dcc8617a622))
+
+
+### Continuous Integration
+
+* bump anthropics/claude-code-action ([52c95ac](https://github.com/DialmasterOrg/Youtarr/commit/52c95ac0c51f715ce96dbe5fa959efa2dae82401))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.93.0...v1.94.0
+
 ## [v1.93.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.93.0) - 2026-11-17
 
 ### Features
