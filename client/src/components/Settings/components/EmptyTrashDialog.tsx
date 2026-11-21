@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import {
   Alert,
   Button,
@@ -22,16 +22,19 @@ interface EmptyTrashDialogProps {
   counts: { deleted: number; missing: number };
   // Why the missing choices are unavailable (the downloads folder looks unmounted), or null.
   missingDisabledReason: string | null;
+  // Shown once missing videos are chosen (most of the library is missing), or null.
+  missingWarning?: string | null;
   // Why archive entries cannot be removed right now (a download is running), or null.
   archiveRemovalDisabledReason: string | null;
   pending: boolean;
 }
 
-// The first choice that is both available and non-empty, so the dialog never
-// opens on a choice the user cannot confirm.
-function defaultChoice(counts: { deleted: number; missing: number }, missingDisabled: boolean): WhichChoice {
-  return counts.deleted === 0 && !missingDisabled ? 'missing' : 'deleted';
-}
+// Missing videos are never preselected: their files may only be out of sight
+// (a share that is not mounted, a volume mapping that changed), and emptying
+// them forgets them for good. With no deleted videos the confirm button stays
+// disabled until the user picks.
+const DEFAULT_CHOICE: WhichChoice = 'deleted';
+const REMOVED_MYSELF = 'I removed these files myself; they are not on an unmounted drive or in a folder Youtarr cannot see';
 
 const STATES_FOR: Record<WhichChoice, TrashState[]> = {
   deleted: ['deleted'],
@@ -75,27 +78,25 @@ const EmptyTrashDialog: React.FC<EmptyTrashDialogProps> = ({
   onConfirm,
   counts,
   missingDisabledReason,
+  missingWarning = null,
   archiveRemovalDisabledReason,
   pending,
 }) => {
   const id = useId();
   const missingDisabled = missingDisabledReason !== null || counts.missing === 0;
-  const [which, setWhich] = useState<WhichChoice>(() => defaultChoice(counts, missingDisabled));
+  const [which, setWhich] = useState<WhichChoice>(DEFAULT_CHOICE);
   const [archive, setArchive] = useState<ArchiveChoice>('keep');
   const [acknowledged, setAcknowledged] = useState(false);
+  const [goneAcknowledged, setGoneAcknowledged] = useState(false);
 
-  // Every opening starts from the safe defaults. Only an opening resets, from
-  // the counts current at that moment: the ref is refreshed after each render
-  // (never during one), so a parent re-render cannot wipe the user's choices.
-  const openingChoice = useRef(which);
-  useEffect(() => {
-    openingChoice.current = defaultChoice(counts, missingDisabled);
-  });
+  // Every opening starts from the safe defaults; a parent re-render while it
+  // is open does not wipe the user's choices.
   useEffect(() => {
     if (open) {
-      setWhich(openingChoice.current);
+      setWhich(DEFAULT_CHOICE);
       setArchive('keep');
       setAcknowledged(false);
+      setGoneAcknowledged(false);
     }
   }, [open]);
 
@@ -104,6 +105,9 @@ const EmptyTrashDialog: React.FC<EmptyTrashDialogProps> = ({
   const effectiveArchive: ArchiveChoice = archiveRemovalDisabled ? 'keep' : archive;
   const total = counts.deleted + counts.missing;
   const count = which === 'deleted' ? counts.deleted : which === 'missing' ? counts.missing : total;
+  // Most of the library missing is treated like an unmounted folder: forgetting
+  // those videos needs the user to say the files are really gone.
+  const needsGoneAcknowledgement = missingWarning !== null && which !== 'deleted';
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -138,6 +142,15 @@ const EmptyTrashDialog: React.FC<EmptyTrashDialogProps> = ({
                 disabled={missingDisabled}
               />
             </RadioGroup>
+            {needsGoneAcknowledgement && (
+              <>
+                <Alert severity="warning" className="break-words">{missingWarning}</Alert>
+                <FormControlLabel
+                  control={<Checkbox checked={goneAcknowledged} onChange={(event) => setGoneAcknowledged(event.target.checked)} />}
+                  label={REMOVED_MYSELF}
+                />
+              </>
+            )}
           </fieldset>
 
           <fieldset className="space-y-3">
@@ -196,7 +209,7 @@ const EmptyTrashDialog: React.FC<EmptyTrashDialogProps> = ({
           onClick={() => onConfirm({ states: STATES_FOR[which], removeFromArchive: effectiveArchive === 'remove' })}
           variant="outlined"
           color="error"
-          disabled={!acknowledged || count === 0 || pending}
+          disabled={!acknowledged || (needsGoneAcknowledgement && !goneAcknowledged) || count === 0 || pending}
         >
           Empty trash ({count} {videos(count)})
         </Button>

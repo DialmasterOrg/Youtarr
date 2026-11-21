@@ -30,6 +30,7 @@ function setup(
   const triggerRescan = jest.fn().mockResolvedValue({ started: true });
   useRescanStatus.mockReturnValue({
     running: false,
+    progress: null,
     lastRun: null,
     loading: false,
     error: null,
@@ -37,7 +38,7 @@ function setup(
     ...overrides
   });
   useRemovedVideos.mockReturnValue({
-    summary: { deleted: 2, missing: 1, legacy: 0, libraryCheck },
+    summary: { deleted: 2, missing: 1, legacy: 0, present: 50, presentCovered: libraryCheck.ok ? 0 : 50, libraryCheck },
     loading: false,
     error: null,
     refetch: jest.fn(),
@@ -104,6 +105,7 @@ describe('MaintenanceSection', () => {
     const { triggerRescan } = setup({}, { ok: false, reason: 'empty', path: '/d', message: 'The downloads folder is empty.' });
 
     await user.click(screen.getByRole('button', { name: 'Rescan anyway...' }));
+    await user.click(screen.getByRole('checkbox', { name: /^I removed th/ }));
     await user.click(screen.getByRole('button', { name: 'Rescan anyway' }));
 
     expect(triggerRescan).toHaveBeenCalledWith({ ignoreLibraryCheck: true });
@@ -122,8 +124,32 @@ describe('MaintenanceSection', () => {
       errorMessage: null
     };
     setup({ lastRun });
-    expect(screen.getByText(/updated 7 videos/i)).toBeInTheDocument();
-    expect(screen.getByText(/marked 2 missing/i)).toBeInTheDocument();
+    expect(screen.getByText(/Found 98 video files on disk for 100 videos: updated 7, marked 2 missing\./)).toBeInTheDocument();
+  });
+
+  test('offers Rescan anyway when the last rescan held videos back', () => {
+    const lastRun: RescanLastRun = {
+      startedAt: '2026-11-21T12:19:33.000Z',
+      completedAt: '2026-11-21T12:19:34.000Z',
+      trigger: 'scheduled',
+      status: 'error',
+      videosUpdated: 0,
+      videosMarkedMissing: 0,
+      videosScanned: 16801,
+      filesFoundOnDisk: 2,
+      videosNotMarkedMissing: 16799,
+      errorMessage: 'Scanned 16,801 videos and found 2 video files on disk: 0 updated, 0 marked missing, 16,799 not marked missing.'
+    };
+    setup({ lastRun });
+    expect(screen.getByRole('button', { name: 'Rescan anyway...' })).toBeEnabled();
+  });
+
+  test('shows the running rescan\'s progress', () => {
+    setup({
+      running: true,
+      progress: { phase: 'walk', foldersScanned: 4210, filesFound: 3980, videosProcessed: 0, videosTotal: 0, startedAt: '2026-11-21T14:34:00.000Z' },
+    });
+    expect(screen.getByText(/Scanning the downloads folder: 4,210 folders and 3,980 video files so far\./)).toBeInTheDocument();
   });
 
   test('says when the last rescan skipped the downloads folder check', () => {

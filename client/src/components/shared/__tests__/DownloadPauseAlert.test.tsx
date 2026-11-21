@@ -74,4 +74,28 @@ describe('DownloadPauseAlert', () => {
 
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
+
+  describe('when the downloads folder looks unavailable', () => {
+    const libraryPause: DownloadPauseStatus = {
+      ...pausedStatus,
+      reasons: [{ type: 'library', libraryReason: 'empty', text: 'the downloads folder is empty' }],
+    };
+
+    test('says why and what to check, linking to Maintenance instead of storage settings', () => {
+      renderAlert({ status: libraryPause });
+
+      expect(screen.getByText('The downloads folder is empty.')).toBeInTheDocument();
+      expect(screen.getByText(/wait until the downloads folder is available again/)).toBeInTheDocument();
+      expect(screen.getByText(/volume mapping/)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Maintenance' })).toHaveAttribute('href', '/settings/maintenance');
+      expect(screen.queryByRole('link', { name: 'Storage limit settings' })).not.toBeInTheDocument();
+    });
+
+    test('names both conditions when a storage limit holds downloads too', () => {
+      renderAlert({ status: { ...pausedStatus, reasons: [...libraryPause.reasons, ...pausedStatus.reasons] } });
+
+      expect(screen.getByText(/the downloads folder is available again and storage is back within your limits/)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Storage limit settings' })).toBeInTheDocument();
+    });
+  });
 });

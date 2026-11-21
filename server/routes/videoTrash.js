@@ -26,7 +26,8 @@ module.exports = function createVideoTrashRoutes({ verifyToken, videoTrashModule
    *       Deleted = Youtarr removed the file (a delete in the app, automatic cleanup, or a missing video the user
    *       marked as deleted), including videos removed before Youtarr recorded why (`legacy`, a subset of `deleted`).
    *       Missing = a file was expected on disk and not found. `libraryCheck` says whether the downloads folder
-   *       looks mounted; a failing subfolder that no present or missing video is stored in is reported as passing,
+   *       looks mounted and holds the videos saved there (`not-found`: most sampled videos are not where they
+   *       were saved); a failing subfolder that no present or missing video is stored in is reported as passing,
    *       since it puts nothing in doubt. `missingActionsBlocked` says whether the failing check covers missing
    *       videos, in which case actions over all missing videos are refused.
    *     tags: [Videos]
@@ -44,6 +45,12 @@ module.exports = function createVideoTrashRoutes({ verifyToken, videoTrashModule
    *                   type: integer
    *                 legacy:
    *                   type: integer
+   *                 present:
+   *                   type: integer
+   *                   description: Downloaded videos whose files are on record as there
+   *                 presentCovered:
+   *                   type: integer
+   *                   description: Present videos the failing library check puts in doubt (what Rescan anyway could mark missing); 0 while it passes
    *                 libraryCheck:
    *                   type: object
    *                   properties:
@@ -52,7 +59,7 @@ module.exports = function createVideoTrashRoutes({ verifyToken, videoTrashModule
    *                     reason:
    *                       type: string
    *                       nullable: true
-   *                       enum: [missing, empty, unreadable, subfolder-empty, subfolder-unreadable]
+   *                       enum: [missing, empty, unreadable, not-found, subfolder-empty, subfolder-unreadable]
    *                     path:
    *                       type: string
    *                       nullable: true
@@ -90,8 +97,9 @@ module.exports = function createVideoTrashRoutes({ verifyToken, videoTrashModule
    *       The records are kept, so the videos can still be re-downloaded, and a file that turns up again is marked
    *       downloaded by the rescan. Send either `videoIds` or `all: true`. `all` is refused while the downloads
    *       folder, or a subfolder missing videos are stored in, looks unmounted; with
-   *       `ignoreLibraryCheck: true` it goes ahead anyway when the check failed only because a folder is empty
-   *       (one the user emptied on purpose), never when a folder is gone or unreadable.
+   *       `ignoreLibraryCheck: true` it goes ahead anyway when the check failed only because a folder is empty or
+   *       most videos are not where they were saved (files the user removed on purpose), never when a folder is
+   *       gone or unreadable.
    *     tags: [Videos]
    *     requestBody:
    *       required: true

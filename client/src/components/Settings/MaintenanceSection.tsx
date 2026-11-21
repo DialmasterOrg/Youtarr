@@ -2,12 +2,12 @@ import { ScheduleSummary } from '../Configuration/sections/components/ScheduleSu
 import { ConfigState } from '../Configuration/types';
 import React, { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Alert, Button, CircularProgress, Typography } from '../ui';
+import { Alert, Button, Typography } from '../ui';
 import { ConfigurationCard } from '../Configuration/common/ConfigurationCard';
 import { useRescanStatus } from '../../hooks/useRescanStatus';
-import { formatDateTime } from '../../utils/formatters';
 import { REMOVED_VIDEOS_ANCHOR } from '../../utils/videoRemoval';
 import RemovedVideosCard from './components/RemovedVideosCard';
+import RescanStatusLine from './components/RescanStatusLine';
 
 interface MaintenanceSectionProps {
   token: string | null;
@@ -15,9 +15,12 @@ interface MaintenanceSectionProps {
 }
 
 export function MaintenanceSection({ token, config }: MaintenanceSectionProps) {
-  const { running, lastRun, loading, error, triggerRescan } = useRescanStatus(token);
+  const { running, progress, lastRun, loading, error, triggerRescan } = useRescanStatus(token);
   const persistentError = !running && lastRun?.status === 'error' ? lastRun.errorMessage : null;
   const transientError = error && error !== persistentError ? error : null;
+  // The last rescan left videos unmarked (a folder looked unmounted, or most
+  // of its videos were not found): Rescan anyway is how to release them.
+  const lastRunHeldBack = !running ? lastRun?.videosNotMarkedMissing ?? 0 : 0;
   const { hash } = useLocation();
 
   // Links from the Videos page land on the deleted and missing videos card.
@@ -25,33 +28,6 @@ export function MaintenanceSection({ token, config }: MaintenanceSectionProps) {
     if (hash !== `#${REMOVED_VIDEOS_ANCHOR}`) return;
     document.getElementById(REMOVED_VIDEOS_ANCHOR)?.scrollIntoView?.({ block: 'start' });
   }, [hash]);
-
-  let statusLine: React.ReactNode;
-  if (running) {
-    statusLine = (
-      <div className="flex items-center gap-2">
-        <CircularProgress size={16} />
-        <Typography variant="body2" color="text.secondary">
-          Rescan in progress...
-        </Typography>
-      </div>
-    );
-  } else if (lastRun) {
-    statusLine = (
-      <Typography variant="body2" color="text.secondary">
-        Last rescan: {formatDateTime(lastRun.completedAt)} ({lastRun.trigger}). Updated{' '}
-        {lastRun.videosUpdated} videos, marked {lastRun.videosMarkedMissing} missing.
-        {lastRun.status === 'timed-out' && ' (timed out; click to continue)'}
-        {lastRun.libraryCheckSkipped && ' The downloads folder check was skipped.'}
-      </Typography>
-    );
-  } else {
-    statusLine = (
-      <Typography variant="body2" color="text.secondary">
-        No rescan has run yet.
-      </Typography>
-    );
-  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -77,7 +53,7 @@ export function MaintenanceSection({ token, config }: MaintenanceSectionProps) {
           </Button>
         </div>
 
-        {statusLine}
+        <RescanStatusLine running={running} progress={progress} lastRun={lastRun} />
 
         {transientError && (
           <Alert severity="warning">{transientError}</Alert>
@@ -94,6 +70,7 @@ export function MaintenanceSection({ token, config }: MaintenanceSectionProps) {
         token={token}
         onRescanAnyway={() => triggerRescan({ ignoreLibraryCheck: true })}
         rescanRunning={running}
+        rescanHeldBack={lastRunHeldBack}
       />
     </section>
     </div>

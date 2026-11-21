@@ -13,7 +13,7 @@ jest.mock('../../models', () => mockModels);
 jest.mock('../../db.js', () => ({
   sequelize: { transaction: jest.fn(async (fn) => fn('tx')) },
 }));
-jest.mock('../libraryRootCheck', () => ({ ...jest.requireActual('../libraryRootCheck'), checkLibraryRoot: jest.fn() }));
+jest.mock('../libraryRootCheck', () => ({ ...jest.requireActual('../libraryRootCheck'), checkLibraryAvailable: jest.fn() }));
 jest.mock('../configModule', () => ({
   directoryPath: '/data/youtube',
   getJobsPath: () => '/app/jobs',
@@ -26,7 +26,7 @@ jest.mock('../../logger', () => ({ info: jest.fn(), warn: jest.fn(), error: jest
 
 const { Video, JobVideo, VideoWatchStatus, PlaylistVideo } = require('../../models');
 const { sequelize } = require('../../db.js');
-const { checkLibraryRoot } = require('../libraryRootCheck');
+const { checkLibraryAvailable } = require('../libraryRootCheck');
 const messageEmitter = require('../messageEmitter');
 const archiveModule = require('../archiveModule');
 const archiveAccess = require('../download/archiveAccess');
@@ -52,16 +52,17 @@ const countOnlyPresentUnderSubfolder = (total) => async ({ where }) => {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  checkLibraryRoot.mockResolvedValue(LIBRARY_OK);
+  checkLibraryAvailable.mockResolvedValue(LIBRARY_OK);
   Video.update.mockResolvedValue([0]);
 });
 
 describe('getRemovedSummary', () => {
-  test('counts deleted, missing, and legacy rows and reports the library check', async () => {
+  test('counts deleted, missing, legacy and present rows and reports the library check', async () => {
     Video.count
       .mockResolvedValueOnce(12) // deleted
       .mockResolvedValueOnce(4) // missing
-      .mockResolvedValueOnce(3); // legacy
+      .mockResolvedValueOnce(3) // legacy
+      .mockResolvedValueOnce(800); // present
 
     const summary = await videoTrashModule.getRemovedSummary();
 
@@ -69,6 +70,8 @@ describe('getRemovedSummary', () => {
       deleted: 12,
       missing: 4,
       legacy: 3,
+      present: 800,
+      presentCovered: 0,
       libraryCheck: { ok: true, reason: null, path: null, message: null },
       missingActionsBlocked: false,
       downloadsActive: false,
@@ -76,6 +79,26 @@ describe('getRemovedSummary', () => {
     expect(Video.count).toHaveBeenNthCalledWith(1, { where: stateWhere('deleted') });
     expect(Video.count).toHaveBeenNthCalledWith(2, { where: stateWhere('missing') });
     expect(Video.count).toHaveBeenNthCalledWith(3, { where: { removed: true, removed_reason: null } });
+    expect(Video.count).toHaveBeenNthCalledWith(4, { where: { removed: false } });
+  });
+
+  test('says how many present videos a failing check puts in doubt', async () => {
+    Video.count.mockResolvedValue(16800);
+    checkLibraryAvailable.mockResolvedValue(LIBRARY_EMPTY);
+
+    const summary = await videoTrashModule.getRemovedSummary();
+
+    expect(summary.presentCovered).toBe(16800);
+  });
+
+  test('counts only the present videos under a failing subfolder as in doubt', async () => {
+    Video.count.mockImplementation(countOnlyPresentUnderSubfolder(5));
+    checkLibraryAvailable.mockResolvedValue(SUBFOLDER_EMPTY);
+
+    const summary = await videoTrashModule.getRemovedSummary();
+
+    expect(summary.present).toBe(5);
+    expect(summary.presentCovered).toBe(2);
   });
 
   test('says when a download is active, so the archive choice can be disabled up front', async () => {
@@ -89,20 +112,20 @@ describe('getRemovedSummary', () => {
 
   test('passes a failed library check through so the page can disable the missing actions', async () => {
     Video.count.mockResolvedValue(2);
-    checkLibraryRoot.mockResolvedValue(LIBRARY_EMPTY);
+    checkLibraryAvailable.mockResolvedValue(LIBRARY_EMPTY);
 
     const summary = await videoTrashModule.getRemovedSummary();
 
     expect(summary.libraryCheck).toEqual({ ok: false, reason: 'empty', path: '/data/youtube', message: LIBRARY_EMPTY.message });
     expect(summary.missingActionsBlocked).toBe(true);
-    expect(checkLibraryRoot).toHaveBeenCalledWith('/data/youtube');
+    expect(checkLibraryAvailable).toHaveBeenCalledWith('/data/youtube', Video);
   });
 
   // The warning still shows (the Videos page banner sends people to Rescan
   // anyway), but marking and emptying missing videos stay open.
   test('warns about a failing subfolder that holds only present videos without blocking the missing actions', async () => {
     Video.count.mockImplementation(countOnlyPresentUnderSubfolder(5));
-    checkLibraryRoot.mockResolvedValue(SUBFOLDER_EMPTY);
+    checkLibraryAvailable.mockResolvedValue(SUBFOLDER_EMPTY);
 
     const summary = await videoTrashModule.getRemovedSummary();
 
@@ -112,7 +135,7 @@ describe('getRemovedSummary', () => {
 
   test('reports the folder as fine when the failing subfolder holds no present or missing video', async () => {
     Video.count.mockImplementation(countNoneUnderSubfolder(5));
-    checkLibraryRoot.mockResolvedValue(SUBFOLDER_EMPTY);
+    checkLibraryAvailable.mockResolvedValue(SUBFOLDER_EMPTY);
 
     const summary = await videoTrashModule.getRemovedSummary();
 
@@ -150,7 +173,7 @@ describe('markMissingAsDeleted', () => {
   });
 
   test('refuses to mark all while the downloads folder looks unmounted', async () => {
-    checkLibraryRoot.mockResolvedValue(LIBRARY_EMPTY);
+    checkLibraryAvailable.mockResolvedValue(LIBRARY_EMPTY);
 
     await expect(videoTrashModule.markMissingAsDeleted({ all: true })).rejects.toBeInstanceOf(LibraryUnavailableError);
     await expect(videoTrashModule.markMissingAsDeleted({ all: true })).rejects.toMatchObject({
@@ -162,7 +185,7 @@ describe('markMissingAsDeleted', () => {
   });
 
   test('marks all while only an empty subfolder no video is stored in fails the check', async () => {
-    checkLibraryRoot.mockResolvedValue(SUBFOLDER_EMPTY);
+    checkLibraryAvailable.mockResolvedValue(SUBFOLDER_EMPTY);
     Video.count.mockImplementation(countNoneUnderSubfolder(3));
     Video.update.mockResolvedValue([2]);
 
@@ -170,7 +193,7 @@ describe('markMissingAsDeleted', () => {
   });
 
   test('marks all without asking while the failing subfolder holds present videos but no missing ones', async () => {
-    checkLibraryRoot.mockResolvedValue(SUBFOLDER_EMPTY);
+    checkLibraryAvailable.mockResolvedValue(SUBFOLDER_EMPTY);
     Video.count.mockImplementation(countOnlyPresentUnderSubfolder(3));
     Video.update.mockResolvedValue([2]);
 
@@ -178,14 +201,24 @@ describe('markMissingAsDeleted', () => {
   });
 
   test('marks all anyway when asked to, for a folder the user emptied on purpose', async () => {
-    checkLibraryRoot.mockResolvedValue(LIBRARY_EMPTY);
+    checkLibraryAvailable.mockResolvedValue(LIBRARY_EMPTY);
     Video.update.mockResolvedValue([5]);
 
     await expect(videoTrashModule.markMissingAsDeleted({ all: true, ignoreLibraryCheck: true })).resolves.toEqual({ updated: 5 });
   });
 
+  test('marks all anyway when asked to while most videos are not where they were saved', async () => {
+    checkLibraryAvailable.mockResolvedValue({
+      ok: false, reason: 'not-found', path: '/data/youtube', message: 'Most downloaded videos are not where Youtarr saved them.',
+    });
+    Video.update.mockResolvedValue([5]);
+
+    await expect(videoTrashModule.markMissingAsDeleted({ all: true })).rejects.toBeInstanceOf(LibraryUnavailableError);
+    await expect(videoTrashModule.markMissingAsDeleted({ all: true, ignoreLibraryCheck: true })).resolves.toEqual({ updated: 5 });
+  });
+
   test('still refuses to mark all when the folder is gone, even when asked to ignore the check', async () => {
-    checkLibraryRoot.mockResolvedValue(LIBRARY_MISSING);
+    checkLibraryAvailable.mockResolvedValue(LIBRARY_MISSING);
 
     await expect(videoTrashModule.markMissingAsDeleted({ all: true, ignoreLibraryCheck: true }))
       .rejects.toBeInstanceOf(LibraryUnavailableError);
@@ -193,7 +226,7 @@ describe('markMissingAsDeleted', () => {
   });
 
   test('still marks a chosen selection while the downloads folder looks unmounted', async () => {
-    checkLibraryRoot.mockResolvedValue(LIBRARY_EMPTY);
+    checkLibraryAvailable.mockResolvedValue(LIBRARY_EMPTY);
     Video.update.mockResolvedValue([1]);
 
     await expect(videoTrashModule.markMissingAsDeleted({ videoIds: [7] })).resolves.toEqual({ updated: 1 });
@@ -391,7 +424,7 @@ describe('purgeRemoved', () => {
   });
 
   test('refuses to purge missing videos while the downloads folder looks unmounted, before touching anything', async () => {
-    checkLibraryRoot.mockResolvedValue(LIBRARY_EMPTY);
+    checkLibraryAvailable.mockResolvedValue(LIBRARY_EMPTY);
 
     await expect(videoTrashModule.purgeRemoved({ states: ['missing'], removeFromArchive: false })).rejects.toBeInstanceOf(LibraryUnavailableError);
     expect(Video.destroy).not.toHaveBeenCalled();
@@ -399,7 +432,7 @@ describe('purgeRemoved', () => {
   });
 
   test('purges missing videos while only an empty subfolder no video is stored in fails the check', async () => {
-    checkLibraryRoot.mockResolvedValue(SUBFOLDER_EMPTY);
+    checkLibraryAvailable.mockResolvedValue(SUBFOLDER_EMPTY);
     Video.count.mockImplementation(countNoneUnderSubfolder(3));
 
     await expect(videoTrashModule.purgeRemoved({ states: ['missing'], removeFromArchive: false })).resolves.toEqual(
@@ -408,7 +441,7 @@ describe('purgeRemoved', () => {
   });
 
   test('purges missing videos while the failing subfolder holds present videos but no missing ones', async () => {
-    checkLibraryRoot.mockResolvedValue(SUBFOLDER_EMPTY);
+    checkLibraryAvailable.mockResolvedValue(SUBFOLDER_EMPTY);
     Video.count.mockImplementation(countOnlyPresentUnderSubfolder(3));
 
     await expect(videoTrashModule.purgeRemoved({ states: ['missing'], removeFromArchive: false })).resolves.toEqual(
@@ -417,7 +450,7 @@ describe('purgeRemoved', () => {
   });
 
   test('still purges deleted videos while the downloads folder looks unmounted', async () => {
-    checkLibraryRoot.mockResolvedValue(LIBRARY_EMPTY);
+    checkLibraryAvailable.mockResolvedValue(LIBRARY_EMPTY);
 
     await expect(videoTrashModule.purgeRemoved({ states: ['deleted'], removeFromArchive: false })).resolves.toEqual(
       expect.objectContaining({ purged: 2 })
@@ -440,7 +473,7 @@ describe('purgeRemoved', () => {
 
   test('runs one purge at a time while the first is still checking the downloads folder', async () => {
     let finishCheck;
-    checkLibraryRoot.mockImplementationOnce(() => new Promise((resolve) => { finishCheck = resolve; }));
+    checkLibraryAvailable.mockImplementationOnce(() => new Promise((resolve) => { finishCheck = resolve; }));
 
     const first = videoTrashModule.purgeRemoved({ states: ['missing'], removeFromArchive: true });
     await expect(videoTrashModule.purgeRemoved({ states: ['missing'], removeFromArchive: true })).rejects.toBeInstanceOf(PurgeRunningError);
@@ -450,7 +483,7 @@ describe('purgeRemoved', () => {
   });
 
   test('releases the lock when the downloads folder looks unmounted', async () => {
-    checkLibraryRoot.mockResolvedValue(LIBRARY_EMPTY);
+    checkLibraryAvailable.mockResolvedValue(LIBRARY_EMPTY);
 
     await expect(videoTrashModule.purgeRemoved({ states: ['missing'], removeFromArchive: false })).rejects.toBeInstanceOf(LibraryUnavailableError);
     expect(videoTrashModule.isPurgeRunning()).toBe(false);
@@ -551,7 +584,7 @@ describe('purgeRemoved', () => {
 
   test('releases waiting downloads after a purge fails its library check', async () => {
     let finishCheck;
-    checkLibraryRoot.mockImplementationOnce(() => new Promise((resolve) => { finishCheck = resolve; }));
+    checkLibraryAvailable.mockImplementationOnce(() => new Promise((resolve) => { finishCheck = resolve; }));
     const purge = videoTrashModule.purgeRemoved({ states: ['missing'], removeFromArchive: true });
     const rejected = expect(purge).rejects.toBeInstanceOf(LibraryUnavailableError);
     const run = jest.fn().mockResolvedValue(undefined);

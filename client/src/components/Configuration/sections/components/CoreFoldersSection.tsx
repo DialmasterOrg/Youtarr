@@ -14,9 +14,13 @@ import type { ConfigState, DeploymentEnvironment } from '../../types';
 
 const PHONE_QUERY = '(max-width: 767px)';
 const DOWNLOADS_FOLDER_ID = 'youtubeOutputDirectory';
+// Inside the container YOUTUBE_OUTPUT_DIR is only this label: the volume line
+// decides which host folder Youtarr really uses, and a hand-written compose
+// file can map one folder while the label names another.
 const DOWNLOADS_FOLDER_NOTE = {
   elfhosted: 'This path is configured by your platform deployment and cannot be changed here.',
-  docker: 'Docker volume, set by YOUTUBE_OUTPUT_DIR. Edit .env and restart to change it.',
+  docker: 'Shown from YOUTUBE_OUTPUT_DIR. The volume mapping for the downloads folder decides which folder Youtarr '
+    + 'really uses: to move the library, change both and restart.',
 };
 
 interface PendingDefault {
