@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { NavHeader } from '../NavHeader';
+import { useHeaderTrim } from '../HeaderTrim/useHeaderTrim';
 import { ThemeEngineProvider } from '../../../contexts/ThemeEngineContext';
 import { TooltipProvider } from '../../ui/tooltip';
 import { getThemeById, resolveThemeLayoutPolicy } from '../../../themes';
@@ -21,6 +22,12 @@ jest.mock('../DownloadActivityIndicator', () => ({
 jest.mock('../ScheduledTaskIndicator', () => ({
   ScheduledTaskIndicator: () => <div data-testid="scheduled-task-indicator" />,
 }));
+
+jest.mock('../HeaderTrim/useHeaderTrim', () => ({
+  useHeaderTrim: jest.fn(),
+}));
+
+const mockUseHeaderTrim = useHeaderTrim as jest.MockedFunction<typeof useHeaderTrim>;
 
 const NAV_ITEMS = [
   {
@@ -326,5 +333,19 @@ describe('NavHeader shared update indicator', () => {
     const computedStyle = window.getComputedStyle(headerInner);
     expect(computedStyle.paddingLeft).toBe('4px');
     expect(computedStyle.paddingRight).toBe('4px');
+  });
+
+  it('renders no header trim when none is active', () => {
+    renderHeader();
+
+    expect(screen.queryByTestId('header-trim')).not.toBeInTheDocument();
+  });
+
+  it('renders the active header trim', () => {
+    mockUseHeaderTrim.mockReturnValue('halloween');
+
+    renderHeader();
+
+    expect(screen.getByTestId('header-trim')).toHaveAttribute('data-trim', 'halloween');
   });
 });
