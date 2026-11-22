@@ -48,7 +48,12 @@ YouTube playlist following, playlist downloads, and the `.m3u` files.
 
 ## m3u files and output refresh
 
-- `m3uGenerator` writes `__playlists__/*.m3u`: entries prefer the file matching the playlist's Download Type (mp3 for MP3 Only, video otherwise) and fall back to the other; deleted rows (`videoRemovalState.removalState`) are left out, missing rows stay listed since their file may return.
+- `m3uGenerator`: MP3 Only lists the mp3 and Video Only the video, each falling back to the other file; Video + MP3 writes `<name>.m3u` (videos) and `<name> (MP3).m3u` (mp3s) with no fallback. Channel files follow the same rule.
+- Deleted rows (`videoRemovalState.removalState`) are left out of playlist files; missing rows stay listed since their file may return.
+- The `(MP3)` file exists only while it has entries. It carries a `#YOUTARR-MP3-LIST:<kind>:<id>` line and is overwritten or removed only when that line names the asker: the path can hold a user's or another subscription's file.
+- A playlist's main list is not written over another playlist's marked `(MP3)` file (a playlist really titled `X (MP3)`), and the rebuild returns false: whichever file exists first keeps the name, in both directions.
+- `m3uGenerator` queues rebuilds (and channel deletes) per playlist or channel, each reading settings when it starts, because a slow rebuild begun under an older Download Type would otherwise finish last and restore removed files.
+- A changed `audio_format` on the playlist settings route rebuilds the files at once, because Download Type decides which files exist; a `sort_order` change still waits for the next rebuild.
 - Entries follow the saved `sort_order` ('default' = YouTube playlist order, 'reversed' = flipped). Per-channel `<channel folder>.m3u` files (`m3u_enabled`/`m3u_sort_order`) list only files on disk and carry no `.ignore` marker, so Jellyfin and Emby import them.
 - Channel m3u files are regenerated on download completion, in-app deletion, settings changes, channel enable/disable and rescan completion (the scheduled rescan doubles as the periodic refresh); zero entries deletes the file instead of writing an empty playlist.
 - `playlistOutputRefresh` rebuilds the m3u and re-syncs media servers for every enabled playlist that includes any of the given videos, one playlist at a time. `videoDeletionModule` calls it in the background after every delete path; downloads use `downloadModule.afterDownloadHook` instead.

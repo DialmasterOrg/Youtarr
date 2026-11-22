@@ -96,7 +96,10 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
 Enable "Generate channel playlist file (.m3u)" in a channel's settings to have
 Youtarr write a `<Channel Name>.m3u` playlist at the top of that channel's
 folder, listing every downloaded video (oldest first by default, or newest
-first). Jellyfin and Emby import the file automatically as a playlist, but
+first). A channel whose Download Type is **Video + MP3** gets two files:
+`<Channel Name>.m3u` lists the videos and `<Channel Name> (MP3).m3u` lists the
+MP3s, each with only the items that have that file. Jellyfin and Emby import
+the file automatically as a playlist, but
 only from certain library types (Jellyfin: "Mixed Movies and Shows" or Music,
 Emby: "Mixed Content"); in a Movies-type library (the current
 recommendation) the server ignores the file, though it still opens in any
@@ -106,7 +109,9 @@ recommendation) the server ignores the file, though it still opens in any
 library-type tradeoff. The file updates after downloads and deletions and
 refreshes after the scheduled file rescan; files deleted outside
 Youtarr drop out of the playlist at the next refresh.
-Turning the setting off (or unsubscribing from the channel) deletes the file.
+Turning the setting off (or unsubscribing from the channel) deletes the file,
+and the `(MP3)` file with it. Changing the Download Type away from Video + MP3
+removes the `(MP3)` file.
 
 ## Import YouTube Subscriptions
 
@@ -262,6 +267,8 @@ The header shows how many eligible selected videos are still undownloaded, inclu
 ### Playlist files (.m3u)
 
 For every playlist you subscribe to, Youtarr writes a `.m3u` file into a `__playlists__` folder next to your videos. It uses relative paths, so it keeps working if you move your library, and it's written whether or not you've connected a media server. The file lists every item you've actually downloaded, in playlist order: one entry each, using the file that matches the playlist's Download Type (the MP3 for MP3 Only playlists, the video file otherwise) and falling back to the other format so nothing is dropped. Any player that reads `.m3u` (VLC, mpv, Kodi, and most media servers) can open it.
+
+A **Video + MP3** playlist gets two files instead, so a music player is not handed video files: `<playlist title>.m3u` lists the videos and `<playlist title> (MP3).m3u` lists the MP3s. Neither falls back to the other format, so an item downloaded as only one of the two appears in just that file. The `(MP3)` file is written once at least one MP3 exists, and it is removed when you change the playlist's Download Type to Video Only or MP3 Only. Both files are rewritten after each download or deletion, and on demand with **Rebuild .m3u file** on the playlist page.
 
 ### Syncing to Plex, Jellyfin, and Emby
 
