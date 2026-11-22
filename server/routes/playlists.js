@@ -425,7 +425,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    * /api/playlists/{playlistId}/settings:
    *   put:
    *     summary: Update per-playlist download settings
-   *     description: Accepts default_sub_folder, video_quality, min_duration, max_duration, title_filter_regex, audio_format, default_rating, and sort_order.
+   *     description: Accepts default_sub_folder, video_quality, min_duration, max_duration, title_filter_regex, audio_format, default_rating, and sort_order. A changed audio_format rebuilds the playlist's .m3u files in the background.
    *     tags: [Playlists]
    *     parameters:
    *       - in: path
@@ -469,8 +469,15 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     try {
       const p = await findEnabledPlaylist(req.params.playlistId);
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
+      // Download Type decides which .m3u files exist, so a change rebuilds them
+      // now. Compare values, not payload presence: the dialog sends every field.
+      const audioFormatChanged = 'audio_format' in updates
+        && (updates.audio_format ?? null) !== (p.audio_format ?? null);
       await p.update(updates);
       registerSubfolder(updates.default_sub_folder);
+      if (audioFormatChanged) {
+        m3uGenerator.generatePlaylistM3U(p.id).catch(logBgFailure(req, p.playlist_id, 'M3U generation'));
+      }
       res.json({ settings: updates });
     } catch (err) {
       req.log.error({ err }, 'update settings failed');
@@ -1011,7 +1018,8 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    * @swagger
    * /api/playlists/{playlistId}/regenerate-m3u:
    *   post:
-   *     summary: Regenerate the playlist M3U file
+   *     summary: Regenerate the playlist M3U files
+   *     description: Rewrites the playlist's .m3u in the __playlists__ folder. A Video + MP3 playlist also gets a second file, named with a (MP3) suffix, that lists its mp3s; for any other Download Type that file is removed.
    *     tags: [Playlists]
    *     parameters:
    *       - in: path
@@ -1026,14 +1034,16 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *       404:
    *         description: Playlist not found
    *       500:
-   *         description: Internal server error
+   *         description: The file was not rebuilt (a write failed, or its name is taken by another playlist's MP3 list), or an internal error
    */
   router.post('/api/playlists/:playlistId/regenerate-m3u', verifyToken, async (req, res) => {
     try {
       const p = await findEnabledPlaylist(req.params.playlistId);
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
       const ok = await m3uGenerator.generatePlaylistM3U(p.id);
-      res.json({ success: ok });
+      // An error status, because the page reports any 2xx answer as a success.
+      if (!ok) return res.status(500).json({ error: 'The .m3u file was not rebuilt. The server log has the reason.' });
+      res.json({ success: true });
     } catch (err) {
       req.log.error({ err }, 'm3u regen failed');
       res.status(500).json({ error: 'M3U regen failed' });

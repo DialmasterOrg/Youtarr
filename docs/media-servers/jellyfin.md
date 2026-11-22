@@ -135,6 +135,8 @@ Whether Jellyfin picks that file up as a playlist depends entirely on the librar
 - **Mixed Movies and Shows**: Jellyfin imports the file automatically as a (read-only) playlist during library scans, and picks up changes on later scans.
 - **Movies**: Jellyfin ignores the file. This is expected; Jellyfin only imports playlist files from Mixed or Music libraries.
 
+A channel whose Download Type is **Video + MP3** also gets a `<Channel Name> (MP3).m3u` in the same folder, listing its MP3s, while `<Channel Name>.m3u` lists the videos.
+
 If you keep the recommended Movies library type, you can still use the file outside Jellyfin: any `.m3u`-capable player (VLC, mpv, Kodi) opens it directly, or a third-party tool such as [m3u-to-jellyfin](https://github.com/warreth/m3u-to-jellyfin) can import it into Jellyfin as a native, editable playlist via the API.
 
 ## Multi-Library Organization

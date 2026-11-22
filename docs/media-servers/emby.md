@@ -142,6 +142,8 @@ Whether Emby picks that file up as a playlist depends on the library type:
 - **Mixed Content**: Emby imports the file automatically as a (read-only) playlist during library scans, and picks up changes on later scans.
 - **Movies**: Emby ignores the file. This is expected behavior, not a bug.
 
+A channel whose Download Type is **Video + MP3** also gets a `<Channel Name> (MP3).m3u` in the same folder, listing its MP3s, while `<Channel Name>.m3u` lists the videos.
+
 If you keep the recommended Movies library type, you can still open the file directly in any `.m3u`-capable player (VLC, mpv, Kodi).
 
 ## Multi-Library Organization

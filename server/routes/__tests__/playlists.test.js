@@ -962,6 +962,76 @@ describe('PUT /api/playlists/:playlistId/settings', () => {
     expect(res.json).toHaveBeenCalledWith({ settings: { sort_order: 'reversed' } });
   });
 
+  describe('m3u rebuild on Download Type change', () => {
+    const saveSettings = async (deps, body) => {
+      const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+      const res = createResponse();
+      await handler({ params: { playlistId: 'PLtest123' }, body, log: loggerMock }, res);
+      return res;
+    };
+
+    test('rebuilds the m3u files when audio_format changes', async () => {
+      const deps = buildDeps();
+      const p = makePlaylist({ audio_format: 'video_mp3' });
+      deps.models.Playlist.findOne.mockResolvedValue(p);
+
+      await saveSettings(deps, { audio_format: null });
+
+      expect(deps.m3uGenerator.generatePlaylistM3U).toHaveBeenCalledWith(p.id);
+    });
+
+    test('waits for the save to finish before rebuilding, since the generator re-reads the row', async () => {
+      const deps = buildDeps();
+      let finishSave;
+      const p = makePlaylist({
+        audio_format: 'video_mp3',
+        update: jest.fn(() => new Promise((resolve) => { finishSave = resolve; })),
+      });
+      deps.models.Playlist.findOne.mockResolvedValue(p);
+
+      const saving = saveSettings(deps, { audio_format: null });
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(p.update).toHaveBeenCalled();
+      expect(deps.m3uGenerator.generatePlaylistM3U).not.toHaveBeenCalled();
+
+      finishSave();
+      await saving;
+
+      expect(deps.m3uGenerator.generatePlaylistM3U).toHaveBeenCalledWith(p.id);
+    });
+
+    test('does not rebuild the m3u files when audio_format is sent unchanged', async () => {
+      const deps = buildDeps();
+      deps.models.Playlist.findOne.mockResolvedValue(makePlaylist({ audio_format: 'video_mp3' }));
+
+      await saveSettings(deps, { audio_format: 'video_mp3', sort_order: 'reversed' });
+
+      expect(deps.m3uGenerator.generatePlaylistM3U).not.toHaveBeenCalled();
+    });
+
+    test('does not rebuild the m3u files when audio_format is not sent', async () => {
+      const deps = buildDeps();
+      deps.models.Playlist.findOne.mockResolvedValue(makePlaylist({ audio_format: 'video_mp3' }));
+
+      await saveSettings(deps, { video_quality: '720p' });
+
+      expect(deps.m3uGenerator.generatePlaylistM3U).not.toHaveBeenCalled();
+    });
+
+    test('still saves the settings when the background m3u rebuild fails', async () => {
+      const deps = buildDeps();
+      const p = makePlaylist({ audio_format: null });
+      deps.models.Playlist.findOne.mockResolvedValue(p);
+      deps.m3uGenerator.generatePlaylistM3U.mockRejectedValue(new Error('disk'));
+
+      const res = await saveSettings(deps, { audio_format: 'video_mp3' });
+
+      expect(p.update).toHaveBeenCalledWith({ audio_format: 'video_mp3' });
+      expect(res.json).toHaveBeenCalledWith({ settings: { audio_format: 'video_mp3' } });
+      expect(res.status).not.toHaveBeenCalledWith(500);
+    });
+  });
+
   test('rejects an invalid sort_order with 400 before touching the playlist', async () => {
     const deps = buildDeps();
 
@@ -2226,6 +2296,22 @@ describe('POST /api/playlists/:playlistId/regenerate-m3u', () => {
 
     expect(deps.m3uGenerator.generatePlaylistM3U).toHaveBeenCalledWith(p.id);
     expect(res.json).toHaveBeenCalledWith({ success: true });
+  });
+
+  // The page shows a success message for any 2xx answer, whatever its body.
+  test('answers with an error when the generator reports the file was not written', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist());
+    deps.m3uGenerator.generatePlaylistM3U.mockResolvedValue(false);
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/regenerate-m3u', deps);
+    const req = { params: { playlistId: 'PLtest123' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ error: 'The .m3u file was not rebuilt. The server log has the reason.' });
   });
 
   test('returns 404 when playlist not found', async () => {

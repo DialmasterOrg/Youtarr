@@ -39,6 +39,13 @@ describe('PlaylistHelpDialog', () => {
     ).toBeInTheDocument();
   });
 
+  test('explains the separate MP3 file for Video + MP3 playlists', () => {
+    renderDialog();
+    expect(
+      screen.getByText(/Video \+ MP3 playlists get two files once an MP3 has been\s+downloaded/i)
+    ).toBeInTheDocument();
+  });
+
   test('calls onClose when the Close button is clicked', async () => {
     const onClose = jest.fn();
     renderDialog({ onClose });

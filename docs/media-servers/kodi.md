@@ -105,6 +105,8 @@ Youtarr doesn't push native playlists into Kodi the way it does for Plex, Jellyf
 
 Channels can also write their own `.m3u`: enable "Generate channel playlist file (.m3u)" in a channel's settings and Youtarr writes a `<Channel Name>.m3u` at the top of that channel's folder, importable into Kodi the same way.
 
+For a playlist or channel whose Download Type is **Video + MP3**, Youtarr writes two files: the regular `.m3u` lists the videos and a second one ending in `(MP3).m3u` lists the MP3s, so you can import the MP3 list as a music playlist.
+
 ## File Structure
 
 See [docs/YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md](../YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md)
