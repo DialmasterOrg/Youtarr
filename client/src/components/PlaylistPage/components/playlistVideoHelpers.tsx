@@ -9,6 +9,8 @@ import { isMembersOnlyBlocked, isMembersOnlyVideo } from '../../../utils/videoSt
 
 export type PlaylistVideoStatusColor = 'success' | 'default' | 'warning' | 'error' | 'info';
 
+const FILTERED_TOOLTIP = "Skipped by this playlist's download filters. Select it to download it anyway.";
+
 export interface PlaylistVideoStatus {
   label: string;
   color: PlaylistVideoStatusColor;
@@ -117,6 +119,7 @@ export function statusLabel(v: PlaylistVideo): PlaylistVideoStatus {
       ? { label: 'Missing', color: 'error', tooltip }
       : { label: 'Deleted', color: 'default', tooltip };
   }
+  if (v.filtered) return { label: 'Filtered', color: 'default', tooltip: FILTERED_TOOLTIP };
   return { label: 'Tracked', color: 'default' };
 }
 

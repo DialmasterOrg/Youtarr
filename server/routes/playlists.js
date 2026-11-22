@@ -84,6 +84,15 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     return !channelSettingsModule.validateSubFolder(value).valid;
   }
 
+  // Playlist title filters use the channel title filter validator: both are
+  // Python patterns evaluated by titleFilterRegex. Returns the error, or null.
+  function titleFilterInvalid(value) {
+    if (value === undefined || value === null) return null;
+    if (typeof value !== 'string') return 'title_filter_regex must be a string or null';
+    const result = channelSettingsModule.validateTitleRegex(value);
+    return result.valid ? null : result.error;
+  }
+
   /**
    * @swagger
    * /api/playlists:
@@ -137,7 +146,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    * /api/playlists/{playlistId}:
    *   get:
    *     summary: Get a playlist with download and sync counts
-   *     description: Includes downloaded_count (videos with a file on disk now; downloaded and later deleted videos are not counted), not_downloaded_count, unsyncable_count, following_existing_count (older eligible entries needing explicit selection), and following_requested_count (eligible saved selections not yet downloaded) alongside the playlist row. sync_status holds syncing (a media server sync is running now) and servers, keyed by plex, jellyfin or emby, each with last_synced_at and last_error (why the last sync changed nothing on that server, null after a successful one). A server that never synced has no entry.
+   *     description: Includes downloaded_count (videos with a file on disk now; downloaded and later deleted videos are not counted), not_downloaded_count, unsyncable_count, following_existing_count (older eligible entries needing explicit selection), following_requested_count (eligible saved selections not yet downloaded), filtered_count (undownloaded videos the playlist's download filters skip) and filter_error (why the title filter could not be evaluated, null otherwise; while set, every unselected video counts as skipped) alongside the playlist row. sync_status holds syncing (a media server sync is running now) and servers, keyed by plex, jellyfin or emby, each with last_synced_at and last_error (why the last sync changed nothing on that server, null after a successful one). A server that never synced has no entry.
    *     tags: [Playlists]
    *     parameters:
    *       - in: path
@@ -425,7 +434,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    * /api/playlists/{playlistId}/settings:
    *   put:
    *     summary: Update per-playlist download settings
-   *     description: Accepts default_sub_folder, video_quality, min_duration, max_duration, title_filter_regex, audio_format, default_rating, and sort_order. A changed audio_format rebuilds the playlist's .m3u files in the background.
+   *     description: Accepts default_sub_folder, video_quality, min_duration, max_duration, title_filter_regex, audio_format, default_rating, and sort_order. A changed audio_format rebuilds the playlist's .m3u files in the background. min_duration, max_duration (exact seconds; the settings dialog saves a whole-minute maximum as its last second, so 10 minutes is 659) and title_filter_regex (a Python regular expression, case sensitive unless it sets (?i)) are the download filters. They decide which videos automatic downloads, download all and the suggested batch pick; a video they skip stays listed and downloads when requested by id.
    *     tags: [Playlists]
    *     parameters:
    *       - in: path
@@ -438,7 +447,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *       200:
    *         description: Applied settings
    *       400:
-   *         description: Invalid default_sub_folder, sort_order, or title_filter_regex (must be a string or null and compile as a JavaScript regex; playlist title filters match case-insensitively)
+   *         description: Invalid default_sub_folder, sort_order, durations (non-negative integers up to 24 hours, minimum below maximum), or title_filter_regex (must be a string or null and compile as a Python regular expression)
    *       404:
    *         description: Playlist not found
    *       500:
@@ -454,21 +463,19 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     if ('sort_order' in updates && !VALID_SORT_ORDERS.has(updates.sort_order)) {
       return res.status(400).json({ error: 'Invalid sort_order; expected default or reversed' });
     }
-    const titleFilter = updates.title_filter_regex;
-    if (titleFilter != null && typeof titleFilter !== 'string') {
-      return res.status(400).json({ error: 'title_filter_regex must be a string or null' });
-    }
-    if (titleFilter) {
-      // A pattern the refresh cannot compile would break every refresh of this playlist.
-      try {
-        playlistModule.buildTitleFilterRegExp(titleFilter);
-      } catch (err) {
-        return res.status(400).json({ error: `Invalid title_filter_regex: ${err.message}` });
-      }
-    }
+    const titleFilterError = titleFilterInvalid(updates.title_filter_regex);
+    if (titleFilterError) return res.status(400).json({ error: titleFilterError });
     try {
       const p = await findEnabledPlaylist(req.params.playlistId);
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
+      if ('min_duration' in updates || 'max_duration' in updates) {
+        // A request may send one limit; check it against the saved other one.
+        const durations = channelSettingsModule.validateDurationSettings(
+          ('min_duration' in updates ? updates.min_duration : p.min_duration) ?? null,
+          ('max_duration' in updates ? updates.max_duration : p.max_duration) ?? null
+        );
+        if (!durations.valid) return res.status(400).json({ error: durations.error });
+      }
       // Download Type decides which .m3u files exist, so a change rebuilds them
       // now. Compare values, not payload presence: the dialog sends every field.
       const audioFormatChanged = 'audio_format' in updates
@@ -490,7 +497,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    * /api/playlists/{playlistId}/videos:
    *   get:
    *     summary: List playlist videos with download and watch overlay
-   *     description: Each row overlays download state, file details, watched_by (media server types with a played watch-status row for the video), and members_access for members-only videos (no_cookies, unchecked, confirmed or denied; null otherwise).
+   *     description: Each row overlays download state, file details, filtered (not downloaded and skipped by the playlist's download filters; false for a video saved for retry and while the filters cannot be evaluated), watched_by (media server types with a played watch-status row for the video), and members_access for members-only videos (no_cookies, unchecked, confirmed or denied; null otherwise).
    *     tags: [Playlists]
    *     parameters:
    *       - in: path
@@ -605,6 +612,11 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
         }
       }
 
+      // When the filters cannot be evaluated the page shows the playlist's
+      // filter_error; flagging every row as filtered would say the wrong thing.
+      const filterState = await playlistDownloadModule.findSkippedIds(playlist, rows);
+      const filteredIds = filterState.error ? new Set() : filterState.filteredIds;
+
       const videos = rows.map((row) => {
         const dl = downloadedById.get(row.youtube_id);
         const youtubeId = row.youtube_id;
@@ -637,6 +649,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
           published_at: row.published_at || dl?.originalDate || null,
           thumbnail: youtubeRemoved ? localThumb : flatThumb,
           downloaded: isDownloaded,
+          filtered: !isDownloaded && filteredIds.has(youtubeId),
           previously_downloaded: previouslyDownloaded,
           // Why the file is gone (see videoRemovalState): tells Deleted from Missing.
           removed_reason: dl?.removed_reason ?? null,
@@ -754,7 +767,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    * /api/playlists/{playlistId}/download-preview:
    *   get:
    *     summary: Preview an explicit batch of existing playlist videos
-   *     description: Returns all eligible tracked candidates, selectedIds, and missingDates. Publication ordering selects nothing when any eligible date is unknown. Does not refresh or queue downloads.
+   *     description: Returns all eligible tracked candidates, selectedIds, and missingDates. Each candidate carries filtered; a candidate the playlist's download filters skip is never in selectedIds but can still be queued. Publication ordering selects nothing when any unfiltered eligible date is unknown. Does not refresh or queue downloads.
    *     tags: [Playlists]
    *     parameters:
    *       - in: path
@@ -786,10 +799,73 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     try {
       const p = await findEnabledPlaylist(req.params.playlistId);
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
-      res.json(await playlistDownloadModule.getPreview(p.playlist_id, { order, count }, downloadDeps));
+      res.json(await playlistDownloadModule.getPreview(p, { order, count }, downloadDeps));
     } catch (err) {
       req.log.error({ err }, 'preview playlist downloads failed');
       res.status(500).json({ error: 'Failed to preview playlist downloads' });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/playlists/{playlistId}/filter-preview:
+   *   post:
+   *     summary: Preview download filters before saving them
+   *     description: Evaluates the given filters against the playlist's tracked videos without saving anything. Unavailable entries are left out.
+   *     tags: [Playlists]
+   *     parameters:
+   *       - in: path
+   *         name: playlistId
+   *         required: true
+   *         schema: { type: string }
+   *     requestBody:
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               title_filter_regex:
+   *                 type: string
+   *                 nullable: true
+   *                 description: Python regular expression, searched in each title (case sensitive unless the pattern sets (?i))
+   *               min_duration:
+   *                 type: integer
+   *                 nullable: true
+   *                 description: Seconds
+   *               max_duration:
+   *                 type: integer
+   *                 nullable: true
+   *                 description: Seconds, compared exactly
+   *     responses:
+   *       200:
+   *         description: totalCount and matchCount over all tracked videos; waitingCount, the discoveries since the starting point that would download automatically (null without a starting point); videos, the 50 most recently discovered with a matches flag; truncated, whether more videos exist than are listed
+   *       400:
+   *         description: Invalid pattern or durations, or the pattern could not be evaluated
+   *       404:
+   *         description: Playlist not found
+   *       500:
+   *         description: Preview failed
+   */
+  router.post('/api/playlists/:playlistId/filter-preview', verifyToken, async (req, res) => {
+    const body = req.body || {};
+    const proposed = {
+      title_filter_regex: body.title_filter_regex ?? null,
+      min_duration: body.min_duration ?? null,
+      max_duration: body.max_duration ?? null,
+    };
+    const titleFilterError = titleFilterInvalid(proposed.title_filter_regex);
+    if (titleFilterError) return res.status(400).json({ error: titleFilterError });
+    const durations = channelSettingsModule.validateDurationSettings(proposed.min_duration, proposed.max_duration);
+    if (!durations.valid) return res.status(400).json({ error: durations.error });
+    try {
+      const p = await findEnabledPlaylist(req.params.playlistId);
+      if (!p) return res.status(404).json({ error: 'Playlist not found' });
+      const result = await playlistDownloadModule.getFilterPreview(p, proposed, downloadDeps);
+      if (result.error) return res.status(400).json({ error: result.error });
+      res.json(result);
+    } catch (err) {
+      req.log.error({ err, playlist_id: req.params.playlistId }, 'preview playlist filters failed');
+      res.status(500).json({ error: 'Failed to preview the filters' });
     }
   });
 
@@ -936,7 +1012,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    * /api/playlists/{playlistId}/download:
    *   post:
    *     summary: Queue downloads for playlist videos
-   *     description: Downloads all not-yet-downloaded videos, or only the ids in videoIds when provided. Fire-and-forget; the post-download hook handles playlist sync and M3U regeneration.
+   *     description: Downloads all not-yet-downloaded videos that pass the playlist's download filters, or only the ids in videoIds when provided (the filters do not apply to requested ids). Fire-and-forget; the post-download hook handles playlist sync and M3U regeneration.
    *     tags: [Playlists]
    *     parameters:
    *       - in: path

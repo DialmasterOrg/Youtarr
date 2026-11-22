@@ -142,3 +142,39 @@ describe('PlaylistHeader', () => {
   });
 
 });
+
+describe('PlaylistHeader download filters', () => {
+  const renderHeader = (overrides: Partial<Playlist>, props = {}) =>
+    render(
+      <MemoryRouter>
+        <PlaylistHeader {...baseProps} {...props} playlist={{ ...playlist, ...overrides } as Playlist} />
+      </MemoryRouter>
+    );
+
+  test.each([
+    { title_filter_regex: 'Episode' },
+    { min_duration: 60 },
+    { max_duration: 600 },
+  ])('shows that download filters are on for %j', (filters) => {
+    renderHeader(filters);
+    expect(screen.getByText('Download filters on')).toBeInTheDocument();
+  });
+
+  test.each([{}, { title_filter_regex: '  ', min_duration: null, max_duration: null }])(
+    'shows no filter chip for %j',
+    (filters) => {
+      renderHeader(filters);
+      expect(screen.queryByText('Download filters on')).not.toBeInTheDocument();
+    }
+  );
+
+  test('passes the skipped count to the downloads group', () => {
+    renderHeader({ title_filter_regex: 'Episode' }, { filteredCount: 3 });
+    expect(screen.getByText(/3 undownloaded videos are skipped/)).toBeInTheDocument();
+  });
+
+  test('passes a filter error to the downloads group', () => {
+    renderHeader({ title_filter_regex: '[' }, { filterError: 'Invalid regex pattern' });
+    expect(screen.getByText(/Invalid regex pattern/)).toBeInTheDocument();
+  });
+});

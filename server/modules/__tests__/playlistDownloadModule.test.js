@@ -1,4 +1,4 @@
-jest.mock('../../logger', () => ({ error: jest.fn() }));
+jest.mock('../../logger', () => ({ error: jest.fn(), warn: jest.fn() }));
 jest.mock('../download/videoActivity', () => ({ isActive: jest.fn(() => false) }));
 jest.mock('../archiveOnlyIds', () => ({ findArchiveOnlyIds: jest.fn() }));
 const playlistDownloads = require('../playlistDownloadModule');
@@ -81,7 +81,7 @@ describe('playlistDownloadModule', () => {
 
   test('omits already active videos before preview selection', async () => {
     videoActivity.isActive.mockImplementation((id) => id === 'old');
-    const result = await playlistDownloads.getPreview('PL1', { order: 'asc', count: 1 }, dependencies());
+    const result = await playlistDownloads.getPreview(playlist, { order: 'asc', count: 1 }, dependencies());
     expect(result.selectedIds).toEqual(['new']);
   });
 
@@ -94,9 +94,9 @@ describe('playlistDownloadModule', () => {
     expect(require('../../logger').error).toHaveBeenCalledWith({ err, playlist_id: 'PL1', count: 1 }, expect.any(String));
   });
   test('previews publication order independently of playlist position', async () => {
-    const result = await playlistDownloads.getPreview('PL1', { order: 'published', count: 1 }, dependencies());
+    const result = await playlistDownloads.getPreview(playlist, { order: 'published', count: 1 }, dependencies());
     expect(result).toEqual({
-      candidates: rows.map(({ youtube_id, title, position, published_at }) => ({ youtube_id, title, position, published_at })),
+      candidates: rows.map(({ youtube_id, title, position, published_at }) => ({ youtube_id, title, position, published_at, filtered: false })),
       selectedIds: ['new'], missingDates: 0,
     });
   });
@@ -105,14 +105,14 @@ describe('playlistDownloadModule', () => {
     const deps = dependencies();
     deps.PlaylistVideo.findAll.mockResolvedValue([...rows, { youtube_id: 'private', title: '[Private video]' }]);
     deps.Video.findAll.mockResolvedValue([{ youtubeId: 'old', filePath: null }]);
-    const result = await playlistDownloads.getPreview('PL1', { order: 'asc', count: 5 }, deps);
+    const result = await playlistDownloads.getPreview(playlist, { order: 'asc', count: 5 }, deps);
     expect(result.selectedIds).toEqual(['new']);
   });
 
   test('does not guess publication order when dates are missing', async () => {
     const deps = dependencies();
     deps.PlaylistVideo.findAll.mockResolvedValue([{ ...rows[0], published_at: null }, rows[1]]);
-    expect(await playlistDownloads.getPreview('PL1', { order: 'published', count: 1 }, deps))
+    expect(await playlistDownloads.getPreview(playlist, { order: 'published', count: 1 }, deps))
       .toMatchObject({ selectedIds: [], missingDates: 1 });
   });
 
@@ -121,6 +121,7 @@ describe('playlistDownloadModule', () => {
     deps.PlaylistVideo.findAll.mockResolvedValue([...rows, { ...rows[0], id: 2, youtube_id: 'requested', auto_download_requested: true }]);
     expect(await playlistDownloads.getCounts(playlist, deps)).toEqual({
       downloaded_count: 0, not_downloaded_count: 3, following_existing_count: 1, following_requested_count: 1, unsyncable_count: 0,
+      filtered_count: 0, filter_error: null,
     });
   });
 
@@ -280,5 +281,155 @@ describe('playlistDownloadModule', () => {
     deps.downloadModule.doPlaylistDownloads.mockRejectedValue(err);
     await expect(playlistDownloads.queueBatch({ ...playlist, ...state }, ['old'], deps)).rejects.toBe(err);
     expect(deps.PlaylistVideo.update).not.toHaveBeenCalled();
+  });
+
+  // Title patterns run through the real Python script (see playlistFilters.test.js).
+  describe('download filters', () => {
+    const olderOnly = { ...playlist, min_duration: null, max_duration: null, title_filter_regex: 'Older' };
+    const broken = { ...olderOnly, title_filter_regex: '[unclosed' };
+
+    test('reports the videos the playlist filters skip', async () => {
+      const { filteredIds } = await playlistDownloads.getTrackedVideos('PL1', dependencies(), { filterBy: olderOnly });
+      expect([...filteredIds]).toEqual(['new']);
+    });
+
+    test('keeps skipped videos among the candidates so they stay selectable', async () => {
+      const { candidates } = await playlistDownloads.getTrackedVideos('PL1', dependencies(), { filterBy: olderOnly });
+      expect(candidates.map((row) => row.youtube_id)).toEqual(['old', 'new']);
+    });
+
+    test('never skips a video the user selected', async () => {
+      const deps = dependencies();
+      deps.PlaylistVideo.findAll.mockResolvedValue([rows[0], { ...rows[1], auto_download_requested: true }]);
+      const { filteredIds } = await playlistDownloads.getTrackedVideos('PL1', deps, { filterBy: olderOnly });
+      expect([...filteredIds]).toEqual([]);
+    });
+
+    test('skips nothing when the caller passes no playlist filters', async () => {
+      const result = await playlistDownloads.getTrackedVideos('PL1', dependencies());
+      expect(result).toMatchObject({ filteredIds: new Set(), filterError: null });
+    });
+
+    test('loads each video duration for the duration filters', async () => {
+      const deps = dependencies();
+      await playlistDownloads.getTrackedVideos('PL1', deps, { filterBy: olderOnly });
+      expect(deps.PlaylistVideo.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        attributes: expect.arrayContaining(['duration']),
+      }));
+    });
+
+    test('applies a duration filter to tracked videos', async () => {
+      const deps = dependencies();
+      deps.PlaylistVideo.findAll.mockResolvedValue([{ ...rows[0], duration: 30 }, { ...rows[1], duration: 900 }]);
+      const { filteredIds } = await playlistDownloads.getTrackedVideos('PL1', deps, {
+        filterBy: { ...olderOnly, title_filter_regex: null, min_duration: 60 },
+      });
+      expect([...filteredIds]).toEqual(['old']);
+    });
+
+    test('counts the undownloaded videos the filters skip', async () => {
+      expect(await playlistDownloads.getCounts(olderOnly, dependencies()))
+        .toMatchObject({ not_downloaded_count: 2, filtered_count: 1, filter_error: null });
+    });
+
+    test('a skipped discovery is not counted as an older video needing manual selection', async () => {
+      expect(await playlistDownloads.getCounts(olderOnly, dependencies()))
+        .toMatchObject({ following_existing_count: 1 });
+    });
+
+    test('reports a filter that cannot be evaluated and holds every video', async () => {
+      expect(await playlistDownloads.getCounts(broken, dependencies()))
+        .toMatchObject({ filtered_count: 2, filter_error: expect.stringMatching(/Invalid regex pattern/) });
+    });
+
+    test('does not suggest skipped videos for a batch', async () => {
+      const result = await playlistDownloads.getPreview(olderOnly, { order: 'asc', count: 5 }, dependencies());
+      expect(result.selectedIds).toEqual(['old']);
+    });
+
+    test('still lists skipped videos in the batch preview, marked as filtered', async () => {
+      const result = await playlistDownloads.getPreview(olderOnly, { order: 'asc', count: 5 }, dependencies());
+      expect(result.candidates.map(({ youtube_id, filtered }) => ({ youtube_id, filtered }))).toEqual([
+        { youtube_id: 'old', filtered: false }, { youtube_id: 'new', filtered: true },
+      ]);
+    });
+
+    describe('getFilterPreview', () => {
+      const proposed = { title_filter_regex: 'Newer', min_duration: null, max_duration: null };
+      const withDiscovery = () => {
+        const deps = dependencies();
+        deps.PlaylistVideo.findAll.mockResolvedValue([...rows, { id: 12, youtube_id: 'newer2', title: 'Newer short', position: 3 }]);
+        return deps;
+      };
+
+      test('counts the tracked videos that match the proposed filters', async () => {
+        expect(await playlistDownloads.getFilterPreview(playlist, proposed, withDiscovery()))
+          .toMatchObject({ totalCount: 3, matchCount: 2 });
+      });
+
+      test('evaluates the proposed filters, not the saved ones', async () => {
+        expect(await playlistDownloads.getFilterPreview(olderOnly, proposed, withDiscovery()))
+          .toMatchObject({ matchCount: 2 });
+      });
+
+      test('lists each video with whether it matches', async () => {
+        const result = await playlistDownloads.getFilterPreview(playlist, proposed, dependencies());
+        expect(result.videos).toEqual([
+          { youtube_id: 'old', title: 'Older upload', duration: null, matches: false },
+          { youtube_id: 'new', title: 'Newer upload', duration: null, matches: true },
+        ]);
+      });
+
+      test('leaves unavailable entries out of the totals', async () => {
+        const deps = dependencies();
+        deps.PlaylistVideo.findAll.mockResolvedValue([...rows, { id: 13, youtube_id: 'private', title: '[Private video]' }]);
+        expect(await playlistDownloads.getFilterPreview(playlist, proposed, deps)).toMatchObject({ totalCount: 2 });
+      });
+
+      test('counts the waiting discoveries that would download automatically', async () => {
+        expect(await playlistDownloads.getFilterPreview(playlist, proposed, withDiscovery()))
+          .toMatchObject({ waitingCount: 2 });
+      });
+
+      test('does not count a downloaded discovery as waiting', async () => {
+        const deps = withDiscovery();
+        deps.Video.findAll.mockResolvedValue([{ youtubeId: 'new' }]);
+        expect(await playlistDownloads.getFilterPreview(playlist, proposed, deps)).toMatchObject({ waitingCount: 1 });
+      });
+
+      // "Follow from now" cannot skip a job that is already admitted.
+      test('does not count a discovery that is already queued or downloading as waiting', async () => {
+        videoActivity.isActive.mockImplementation((id) => id === 'new');
+        expect(await playlistDownloads.getFilterPreview(playlist, proposed, withDiscovery())).toMatchObject({ waitingCount: 1 });
+      });
+
+      test('does not count a discovery a refresh added after the filters were evaluated', async () => {
+        const deps = dependencies();
+        deps.PlaylistVideo.findAll
+          .mockResolvedValueOnce(rows)
+          .mockResolvedValue([...rows, { id: 12, youtube_id: 'newer2', title: 'Newer short', position: 3 }]);
+        expect(await playlistDownloads.getFilterPreview(playlist, proposed, deps)).toMatchObject({ waitingCount: 1 });
+      });
+
+      test('reports no waiting count before a starting point exists', async () => {
+        const result = await playlistDownloads.getFilterPreview({ ...playlist, auto_download_baseline_at: null }, proposed, dependencies());
+        expect(result.waitingCount).toBeNull();
+      });
+
+      test('caps the listed videos but not the counts', async () => {
+        const deps = dependencies();
+        deps.PlaylistVideo.findAll.mockResolvedValue(
+          Array.from({ length: 60 }, (_, i) => ({ id: i + 1, youtube_id: `v${i}`, title: `Newer ${i}`, position: i + 1 }))
+        );
+        const result = await playlistDownloads.getFilterPreview(playlist, proposed, deps);
+        expect({ listed: result.videos.length, total: result.totalCount, truncated: result.truncated })
+          .toEqual({ listed: 50, total: 60, truncated: true });
+      });
+
+      test('returns the error when the proposed pattern cannot be evaluated', async () => {
+        const result = await playlistDownloads.getFilterPreview(playlist, { ...proposed, title_filter_regex: '[unclosed' }, dependencies());
+        expect(result).toEqual({ error: expect.stringMatching(/Invalid regex pattern/) });
+      });
+    });
   });
 });

@@ -3167,9 +3167,87 @@ describe('DownloadModule', () => {
       const callArgs = PlaylistVideoMock.findAll.mock.calls[0][0];
       expect(callArgs.order).toEqual([['position', 'ASC']]);
       expect(callArgs.attributes).toEqual(
-        ['id', 'youtube_id', 'channel_id', 'channel_name', 'title', 'position', 'published_at', 'added_at', 'first_seen_at', 'auto_download_requested', 'auto_download_last_attempt_at']
+        ['id', 'youtube_id', 'channel_id', 'channel_name', 'title', 'duration', 'position', 'published_at', 'added_at', 'first_seen_at', 'auto_download_requested', 'auto_download_last_attempt_at']
       );
       expect(callArgs.limit).toBeUndefined();
+    });
+
+    describe('with playlist download filters', () => {
+      const filteredPlaylist = { ...mockPlaylist, min_duration: 600, max_duration: null, title_filter_regex: null };
+      const queuedUrls = (spy) => spy.mock.calls.map(([{ body }]) => body.urls);
+
+      beforeEach(() => {
+        PlaylistVideoMock.findAll.mockResolvedValue([
+          { id: 1, youtube_id: 'short', channel_id: 'UC1', title: 'Short', duration: 30 },
+          { id: 2, youtube_id: 'long', channel_id: 'UC1', title: 'Long', duration: 900 },
+        ]);
+        VideoMock.findOne.mockResolvedValue(null);
+        ChannelMock.findOne.mockResolvedValue({ channel_id: 'UC1' });
+      });
+
+      it('download all leaves out the videos the filters skip', async () => {
+        const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockImplementation(async ({ body }) => ({ queued: body.urls.length }));
+        await downloadModule.doPlaylistDownloads(filteredPlaylist);
+        expect(queuedUrls(spy)).toEqual([['https://www.youtube.com/watch?v=long']]);
+      });
+
+      it('an explicit selection downloads a video the filters skip', async () => {
+        PlaylistVideoMock.findAll.mockResolvedValue([
+          { id: 1, youtube_id: 'short', channel_id: 'UC1', title: 'Short', duration: 30 },
+        ]);
+        const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockImplementation(async ({ body }) => ({ queued: body.urls.length }));
+        await downloadModule.doPlaylistDownloads(filteredPlaylist, { youtubeIds: ['short'] });
+        expect(queuedUrls(spy)).toEqual([['https://www.youtube.com/watch?v=short']]);
+      });
+
+      it('a scheduled run skips filtered discoveries without spending their allowance', async () => {
+        const p = { ...filteredPlaylist, auto_download_baseline_at: new Date('2026-07-01'), auto_download_baseline_id: 0 };
+        const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockImplementation(async ({ body }) => ({ queued: body.urls.length }));
+        await downloadModule.doPlaylistDownloads(p, { limitToRecent: true, overrideSettings: { videoCount: 1 } });
+        expect(queuedUrls(spy)).toEqual([['https://www.youtube.com/watch?v=long']]);
+      });
+
+      // The title pattern goes through the real Python matcher, which rejects it.
+      describe('when the title filter cannot be evaluated on a scheduled run', () => {
+        const brokenPlaylist = () => ({
+          ...filteredPlaylist, min_duration: null, title_filter_regex: '[unclosed',
+          auto_download_baseline_at: new Date('2026-07-01'), auto_download_baseline_id: 0,
+        });
+        const run = (p) => downloadModule.doPlaylistDownloads(p, { limitToRecent: true, overrideSettings: { videoCount: 5 } });
+
+        beforeEach(() => {
+          PlaylistVideoMock.findAll.mockResolvedValue([
+            { id: 1, youtube_id: 'unselected', channel_id: 'UC1', title: 'Unselected', duration: 900 },
+            { id: 2, youtube_id: 'selected', channel_id: 'UC1', title: 'Selected', duration: 900, auto_download_requested: true },
+          ]);
+        });
+
+        it('fails the playlist with the reason, so the sweep is not recorded as finding nothing', async () => {
+          jest.spyOn(downloadModule, 'doSpecificDownloads').mockImplementation(async ({ body }) => ({ queued: body.urls.length }));
+          await expect(run(brokenPlaylist())).rejects.toThrow(/Download filters could not be evaluated.*Invalid regex pattern/);
+        });
+
+        it('queues the videos the user selected before failing, and holds the rest', async () => {
+          const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockImplementation(async ({ body }) => ({ queued: body.urls.length }));
+          await run(brokenPlaylist()).catch(() => {});
+          expect(queuedUrls(spy)).toEqual([['https://www.youtube.com/watch?v=selected']]);
+        });
+
+        it('reports how many videos it queued on the error', async () => {
+          jest.spyOn(downloadModule, 'doSpecificDownloads').mockImplementation(async ({ body }) => ({ queued: body.urls.length }));
+          await expect(run(brokenPlaylist())).rejects.toMatchObject({ queued: 1 });
+        });
+      });
+
+      it('a scheduled run still retries a filtered video the user selected', async () => {
+        const p = { ...filteredPlaylist, auto_download_baseline_at: new Date('2026-07-01'), auto_download_baseline_id: 10 };
+        PlaylistVideoMock.findAll.mockResolvedValue([
+          { id: 1, youtube_id: 'short', channel_id: 'UC1', title: 'Short', duration: 30, auto_download_requested: true },
+        ]);
+        const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockImplementation(async ({ body }) => ({ queued: body.urls.length }));
+        await downloadModule.doPlaylistDownloads(p, { limitToRecent: true, overrideSettings: { videoCount: 1 } });
+        expect(queuedUrls(spy)).toEqual([['https://www.youtube.com/watch?v=short']]);
+      });
     });
 
     it('uses ASC order on unlimited bulk runs (no limitToRecent)', async () => {
