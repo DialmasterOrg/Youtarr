@@ -22,9 +22,10 @@ function createMaintenanceRoutes({
    *   post:
    *     summary: Kick off a manual filesystem rescan
    *     description: >
-   *       With `ignoreLibraryCheck: true` ("Rescan anyway") the scan skips the check that keeps an unmounted
-   *       drive or share from getting every video marked missing. Only for a downloads folder the user emptied
-   *       on purpose; the scheduled rescan never skips it.
+   *       With `ignoreLibraryCheck: true` ("Rescan anyway") the scan skips the checks that keep an unmounted
+   *       drive or share, or a volume mapping that points elsewhere, from getting every video marked missing:
+   *       the empty-folder check and the hold on a folder where most videos were not found. Only for files the
+   *       user removed on purpose; the scheduled rescan never skips them.
    *     tags: [Maintenance]
    *     requestBody:
    *       required: false
@@ -71,21 +72,52 @@ function createMaintenanceRoutes({
    * @swagger
    * /api/maintenance/rescan-status:
    *   get:
-   *     summary: Get current rescan running state and last-run summary
+   *     summary: Get current rescan running state, its progress, and last-run summary
    *     tags: [Maintenance]
    *     responses:
    *       200:
    *         description: Status object
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 running:
+   *                   type: boolean
+   *                 progress:
+   *                   type: object
+   *                   nullable: true
+   *                   description: The running rescan's progress; null when none is running
+   *                   properties:
+   *                     phase:
+   *                       type: string
+   *                       enum: [walk, rows]
+   *                       description: walk = listing the downloads folder; rows = checking each video
+   *                     foldersScanned:
+   *                       type: integer
+   *                     filesFound:
+   *                       type: integer
+   *                     videosProcessed:
+   *                       type: integer
+   *                     videosTotal:
+   *                       type: integer
+   *                     startedAt:
+   *                       type: string
+   *                       format: date-time
+   *                 lastRun:
+   *                   type: object
+   *                   nullable: true
    */
   router.get('/api/maintenance/rescan-status', verifyToken, async (req, res) => {
     try {
       const running = videosModule.isBackfillRunning();
+      const progress = videosModule.getRescanProgress();
       const run = await scheduledTaskRuns.getLatestRun(rescanRunSummary.TASK_KEY, { statuses: rescanRunSummary.LAST_RUN_STATUSES });
       // Legacy fallback: releases before the run history stored the summary in config.json.
       const lastRun = run
         ? rescanRunSummary.fromRunRecord(run)
         : (configModule.getConfig().rescanLastRun ?? null);
-      return res.status(200).json({ running, lastRun });
+      return res.status(200).json({ running, progress, lastRun });
     } catch (err) {
       logger.error({ err }, 'Failed to read rescan status');
       return res.status(500).json({ error: 'Failed to read rescan status' });

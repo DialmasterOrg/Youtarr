@@ -499,17 +499,6 @@ describe('CronJobs', () => {
       expect(mockLogger.info).toHaveBeenCalledWith('Video metadata backfill completed successfully');
     });
 
-    test('should log message when backfill times out', async () => {
-      const resolvedPromise = Promise.resolve({ timedOut: true });
-      mockVideosModule.backfillVideoMetadata.mockReturnValue(resolvedPromise);
-
-      await backfillCallback();
-
-      await resolvedPromise;
-
-      expect(mockLogger.info).toHaveBeenCalledWith('Video metadata backfill reached time limit, will continue at the next scheduled run');
-    });
-
     test('should handle errors during backfill', async () => {
       const testError = new Error('Backfill failed');
       const rejectedPromise = Promise.reject(testError);

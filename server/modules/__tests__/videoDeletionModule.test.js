@@ -44,7 +44,7 @@ describe('VideoDeletionModule', () => {
   let mockFilesystem;
   let m3uGenerator;
   let playlistOutputRefresh;
-  let mockCheckLibraryRoot;
+  let mockCheckLibraryAvailable;
 
   beforeEach(() => {
     jest.resetModules();
@@ -64,9 +64,9 @@ describe('VideoDeletionModule', () => {
     };
 
     // The downloads folder looks mounted unless a test says otherwise.
-    mockCheckLibraryRoot = jest.fn().mockResolvedValue({ ok: true });
+    mockCheckLibraryAvailable = jest.fn().mockResolvedValue({ ok: true });
     jest.doMock('../libraryRootCheck', () => ({
-      checkLibraryRoot: mockCheckLibraryRoot,
+      checkLibraryAvailable: mockCheckLibraryAvailable,
       isUnderLibraryCheckPath,
       libraryCheckCoversRows
     }));
@@ -863,7 +863,7 @@ describe('VideoDeletionModule', () => {
       const video = (id, youtubeId, filePath) => ({ id, youtubeId, filePath, removed: false, update: jest.fn().mockResolvedValue() });
 
       test('refuses every video with the check message and touches nothing', async () => {
-        mockCheckLibraryRoot.mockResolvedValue(emptyRoot);
+        mockCheckLibraryAvailable.mockResolvedValue(emptyRoot);
         const mockVideo1 = video(1, 'abc123', '/test/output/Channel/Channel - Video1 - abc123/video.mp4');
         const mockVideo2 = video(2, 'def456', '/test/output/Channel/Channel - Video2 - def456/video.mp4');
         mockVideo.findByPk.mockResolvedValueOnce(mockVideo1).mockResolvedValueOnce(mockVideo2);
@@ -877,7 +877,7 @@ describe('VideoDeletionModule', () => {
       });
 
       test('refuses only the videos under an empty subfolder', async () => {
-        mockCheckLibraryRoot.mockResolvedValue(emptySubfolder);
+        mockCheckLibraryAvailable.mockResolvedValue(emptySubfolder);
         const inMusic = video(1, 'abc123', '/test/output/__Music/Channel/Channel - Video1 - abc123/video.mp4');
         const inRoot = video(2, 'def456', '/test/output/Channel/Channel - Video2 - def456/video.mp4');
         mockVideo.findByPk.mockResolvedValueOnce(inMusic).mockResolvedValueOnce(inRoot);
@@ -897,7 +897,7 @@ describe('VideoDeletionModule', () => {
 
         await VideoDeletionModule.deleteVideos([1, 2]);
 
-        expect(mockCheckLibraryRoot).toHaveBeenCalledTimes(1);
+        expect(mockCheckLibraryAvailable).toHaveBeenCalledTimes(1);
       });
     });
 
@@ -1608,7 +1608,7 @@ describe('VideoDeletionModule', () => {
 
       beforeEach(() => {
         mockConfigModule.getConfig.mockReturnValue({ autoRemovalEnabled: true, autoRemovalVideoAgeThreshold: '30' });
-        mockCheckLibraryRoot.mockResolvedValue(emptyRoot);
+        mockCheckLibraryAvailable.mockResolvedValue(emptyRoot);
         mockSequelize.query.mockResolvedValue([]);
       });
 
@@ -1633,7 +1633,7 @@ describe('VideoDeletionModule', () => {
       });
 
       test('runs normally when only an empty subfolder no video is stored in fails the check', async () => {
-        mockCheckLibraryRoot.mockResolvedValue({ ok: false, reason: 'subfolder-empty', path: '/test/__Kids', message: 'The subfolder __Kids is empty.' });
+        mockCheckLibraryAvailable.mockResolvedValue({ ok: false, reason: 'subfolder-empty', path: '/test/__Kids', message: 'The subfolder __Kids is empty.' });
         mockVideo.count.mockImplementation(countNoneUnderSubfolder(12));
 
         const result = await VideoDeletionModule.performAutomaticCleanup();
@@ -1645,7 +1645,7 @@ describe('VideoDeletionModule', () => {
       test('does not consult the check for a dry run', async () => {
         const result = await VideoDeletionModule.performAutomaticCleanup({ dryRun: true });
 
-        expect(mockCheckLibraryRoot).not.toHaveBeenCalled();
+        expect(mockCheckLibraryAvailable).not.toHaveBeenCalled();
         expect(result.skipped).toBeUndefined();
       });
     });
@@ -2623,7 +2623,7 @@ describe('VideoDeletionModule', () => {
     });
 
     test('skips the sweep while the downloads folder looks unmounted and videos are recorded', async () => {
-      mockCheckLibraryRoot.mockResolvedValue({ ok: false, reason: 'empty', path: '/test/output', message: 'The downloads folder is empty.' });
+      mockCheckLibraryAvailable.mockResolvedValue({ ok: false, reason: 'empty', path: '/test/output', message: 'The downloads folder is empty.' });
       mockVideo.count.mockResolvedValue(3);
       mockFilesystem.listSubdirectories.mockResolvedValue(['/test/output/__Music']);
 
@@ -2635,7 +2635,7 @@ describe('VideoDeletionModule', () => {
     });
 
     test('sweeps normally when the folder looks unmounted but nothing downloaded is recorded', async () => {
-      mockCheckLibraryRoot.mockResolvedValue({ ok: false, reason: 'empty', path: '/test/output', message: 'The downloads folder is empty.' });
+      mockCheckLibraryAvailable.mockResolvedValue({ ok: false, reason: 'empty', path: '/test/output', message: 'The downloads folder is empty.' });
       mockVideo.count.mockResolvedValue(0);
       mockFilesystem.listSubdirectories.mockResolvedValue([]);
 
@@ -2646,7 +2646,7 @@ describe('VideoDeletionModule', () => {
     });
 
     test('sweeps an empty subfolder that no recorded video is stored in, so the check passes again', async () => {
-      mockCheckLibraryRoot.mockResolvedValue({ ok: false, reason: 'subfolder-empty', path: '/test/output/__Kids', message: 'The subfolder __Kids is empty.' });
+      mockCheckLibraryAvailable.mockResolvedValue({ ok: false, reason: 'subfolder-empty', path: '/test/output/__Kids', message: 'The subfolder __Kids is empty.' });
       mockVideo.count.mockImplementation(countNoneUnderSubfolder(3));
       mockFilesystem.listSubdirectories
         .mockResolvedValueOnce(['/test/output/__Kids'])

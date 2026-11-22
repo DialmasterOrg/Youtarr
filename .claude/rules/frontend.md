@@ -16,6 +16,7 @@ Apply these when creating or substantially rewriting client code. Scope Discipli
 - `ui/Menu` and `ui/Popover` portal to `document.body`: a transformed ancestor (a Card's hover lift) would otherwise become the containing block for their fixed positioning. Neither is used inside a modal Dialog, which disables pointer events outside its content.
 - `ui/AccordionContent` stays mounted when collapsed (tests can query it) but is `invisible`, so its controls leave the tab order and the accessibility tree.
 - `components/layout/`: `AppShell.tsx` is the outer frame, `NavSidebar.tsx` and `NavHeader.tsx` own desktop and mobile nav, `navLayoutConstants.ts` the shared sizing, `layoutFallback.css` fallback variables for themes that skip layout overrides.
+- `layout/HeaderTrim.tsx` renders inside `NavHeader` on the dates `HeaderTrim/useHeaderTrim.ts` picks, so anything rendering the header is date-dependent; `NavHeader.test.tsx` mocks the hook. `?trim=<id>` forces one, any other value forces none.
 - `themes/` holds `playful`, `linear`, `flat`, the shared `layoutPolicy.ts` and the `ALL_THEMES` registry; a new theme adds an entry and implements the required token surface.
 - `contexts/ThemeEngineContext.tsx` owns the active theme mode, resolves the layout policy for the current viewport, and injects the theme CSS variables onto the document root.
 

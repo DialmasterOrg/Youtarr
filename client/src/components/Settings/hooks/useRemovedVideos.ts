@@ -13,6 +13,11 @@ export interface RemovedVideosSummary {
   missing: number;
   // Deleted videos removed before Youtarr recorded why (a subset of deleted).
   legacy: number;
+  // Downloaded videos whose files are on record as there.
+  present: number;
+  // Present videos the failing library check puts in doubt (what Rescan anyway
+  // could mark missing); 0 while the check passes.
+  presentCovered: number;
   libraryCheck: RemovedVideosLibraryCheck;
   // The failing library check covers missing videos: marking all of them as
   // deleted needs the user's say-so (empty folder only) and emptying them is refused.
@@ -29,8 +34,8 @@ export interface EmptyTrashOptions {
 }
 
 export interface MarkAllMissingOptions {
-  // The user emptied the downloads folder (or a subfolder) on purpose; the
-  // server honours it only while the check fails because a folder is empty.
+  // The user removed the files on purpose; the server honours it only while the
+  // check fails because a folder is empty or most videos are not found.
   ignoreLibraryCheck?: boolean;
 }
 

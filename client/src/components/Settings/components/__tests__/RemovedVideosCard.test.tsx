@@ -18,6 +18,9 @@ const summary = (overrides: Partial<RemovedVideosSummary> = {}): RemovedVideosSu
   deleted: 12,
   missing: 4,
   legacy: 0,
+  present: 800,
+  // Read only while a library check fails.
+  presentCovered: 800,
   libraryCheck: { ok: true, reason: null, path: null, message: null },
   missingActionsBlocked: false,
   downloadsActive: false,
@@ -27,7 +30,13 @@ const summary = (overrides: Partial<RemovedVideosSummary> = {}): RemovedVideosSu
 type CardProps = Partial<React.ComponentProps<typeof RemovedVideosCard>>;
 
 const EMPTY_ROOT = { ok: false, reason: 'empty', path: '/d', message: 'The downloads folder is empty.' };
+const NOT_FOUND = { ok: false, reason: 'not-found', path: '/d', message: 'Most downloaded videos are not where Youtarr saved them.' };
 const rescanThatStarts = () => jest.fn().mockResolvedValue({ started: true });
+// The dialog asks the user to say they removed the files before it confirms.
+const confirmRescanAnyway = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(screen.getByRole('checkbox', { name: /^I removed th/ }));
+  await user.click(screen.getByRole('button', { name: 'Rescan anyway' }));
+};
 
 function setup(
   summaryValue: RemovedVideosSummary | null = summary(),
@@ -130,6 +139,55 @@ describe('RemovedVideosCard', () => {
     expect(screen.getByText(/1 missing video will be marked as deleted.*Its record is kept, so it can still be re-downloaded/)).toBeInTheDocument();
   });
 
+  test('says in the confirmation how many videos a rescan anyway would mark missing', async () => {
+    const { user } = setup(
+      summary({ libraryCheck: EMPTY_ROOT, present: 16801, presentCovered: 16800 }), {}, { onRescanAnyway: rescanThatStarts(), rescanRunning: false }
+    );
+    await user.click(screen.getByRole('button', { name: 'Rescan anyway...' }));
+    expect(screen.getByText('16,800 of your 16,801 downloaded videos will be marked missing.')).toBeInTheDocument();
+  });
+
+  test('offers Rescan anyway, with an upper bound, when most videos are not where they were saved', async () => {
+    const { user } = setup(summary({ libraryCheck: NOT_FOUND, presentCovered: 800 }), {}, { onRescanAnyway: rescanThatStarts(), rescanRunning: false });
+    await user.click(screen.getByRole('button', { name: 'Rescan anyway...' }));
+    expect(screen.getByText(/^Up to 800 downloaded videos will be marked missing/)).toBeInTheDocument();
+  });
+
+  test('does not offer Rescan anyway when it would mark nothing', () => {
+    setup(summary({ libraryCheck: EMPTY_ROOT, present: 0, presentCovered: 0 }), {}, { onRescanAnyway: rescanThatStarts(), rescanRunning: false });
+    expect(screen.queryByRole('button', { name: 'Rescan anyway...' })).not.toBeInTheDocument();
+  });
+
+  test('offers Rescan anyway when the last rescan held videos back, saying why', async () => {
+    const { user } = setup(summary(), {}, { onRescanAnyway: rescanThatStarts(), rescanRunning: false, rescanHeldBack: 16799 });
+    expect(screen.getByText(/The last rescan did not mark 16,799 videos missing/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Rescan anyway...' }));
+    expect(screen.getByText(/^Up to 16,799 downloaded videos will be marked missing/)).toBeInTheDocument();
+  });
+
+  test('warns when most of the library is missing', () => {
+    setup(summary({ deleted: 1, missing: 16800, present: 13 }));
+    expect(screen.getByText(/16,800 of your 16,813 downloaded videos are missing\. If you moved your library/)).toBeInTheDocument();
+  });
+
+  test('asks the user to say the files are gone before marking most of the library as deleted', async () => {
+    const { hook, user } = setup(summary({ deleted: 1, missing: 16800, present: 13 }));
+
+    await user.click(screen.getByRole('button', { name: 'Mark all missing as deleted' }));
+    const confirm = screen.getByRole('button', { name: 'Mark 16800 as deleted' });
+    expect(confirm).toBeDisabled();
+    await user.click(screen.getByRole('checkbox', { name: 'I removed these files myself; they are not on an unmounted drive' }));
+    await user.click(confirm);
+
+    // No check is failing, so there is nothing for the server to look past.
+    expect(hook.markAllMissingDeleted).toHaveBeenCalledWith({ ignoreLibraryCheck: false });
+  });
+
+  test('does not call a few missing videos most of the library', () => {
+    setup(summary({ missing: 20, present: 5 }));
+    expect(screen.queryByText(/downloaded videos are missing/)).not.toBeInTheDocument();
+  });
+
   test('does not offer Rescan anyway when the downloads folder is missing', () => {
     const missingRoot = { ok: false, reason: 'missing', path: '/d', message: 'The downloads folder does not exist.' };
     setup(summary({ libraryCheck: missingRoot }), {}, { onRescanAnyway: rescanThatStarts(), rescanRunning: false });
@@ -142,7 +200,7 @@ describe('RemovedVideosCard', () => {
 
     await user.click(screen.getByRole('button', { name: 'Rescan anyway...' }));
     expect(screen.getByText(/Only continue if you removed the files yourself/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Rescan anyway' }));
+    await confirmRescanAnyway(user);
 
     expect(onRescanAnyway).toHaveBeenCalledTimes(1);
     expect(await screen.findByText('Rescan started. When it finishes, the missing videos can be marked as deleted here.')).toBeInTheDocument();
@@ -152,7 +210,7 @@ describe('RemovedVideosCard', () => {
     const onRescanAnyway = rescanThatStarts();
     const { user, rerender } = setup(summary({ libraryCheck: EMPTY_ROOT }), {}, { onRescanAnyway, rescanRunning: false });
     await user.click(screen.getByRole('button', { name: 'Rescan anyway...' }));
-    await user.click(screen.getByRole('button', { name: 'Rescan anyway' }));
+    await confirmRescanAnyway(user);
     expect(await screen.findByText(/^Rescan started\./)).toBeInTheDocument();
 
     rerender(<RemovedVideosCard token="tok" onRescanAnyway={onRescanAnyway} rescanRunning />);
@@ -170,7 +228,7 @@ describe('RemovedVideosCard', () => {
     const { user, rerender } = setup(summary({ libraryCheck: EMPTY_ROOT }), {}, { onRescanAnyway, rescanRunning: false });
 
     await user.click(screen.getByRole('button', { name: 'Rescan anyway...' }));
-    await user.click(screen.getByRole('button', { name: 'Rescan anyway' }));
+    await confirmRescanAnyway(user);
     rerender(<RemovedVideosCard token="tok" onRescanAnyway={onRescanAnyway} rescanRunning />);
     rerender(<RemovedVideosCard token="tok" onRescanAnyway={onRescanAnyway} rescanRunning={false} />);
     await act(async () => refuse({ started: false }));
@@ -184,7 +242,7 @@ describe('RemovedVideosCard', () => {
     const { user } = setup(summary({ libraryCheck: EMPTY_ROOT }), {}, { onRescanAnyway, rescanRunning: false });
 
     await user.click(screen.getByRole('button', { name: 'Rescan anyway...' }));
-    await user.click(screen.getByRole('button', { name: 'Rescan anyway' }));
+    await confirmRescanAnyway(user);
 
     expect(await screen.findByText('The rescan did not start. The rescan card above shows why.')).toBeInTheDocument();
     expect(screen.queryByText(/Rescan started\./)).not.toBeInTheDocument();
@@ -202,7 +260,7 @@ describe('RemovedVideosCard', () => {
     const onRescanAnyway = jest.fn().mockResolvedValue({ started: false });
     const { user } = setup(summary({ libraryCheck: EMPTY_ROOT }), {}, { onRescanAnyway, rescanRunning: false });
     await user.click(screen.getByRole('button', { name: 'Rescan anyway...' }));
-    await user.click(screen.getByRole('button', { name: 'Rescan anyway' }));
+    await confirmRescanAnyway(user);
     expect(await screen.findByText('The rescan did not start. The rescan card above shows why.')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Empty trash...' }));

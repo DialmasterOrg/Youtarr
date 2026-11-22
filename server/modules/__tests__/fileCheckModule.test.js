@@ -33,7 +33,7 @@ describe('FileCheckModule', () => {
     // The downloads folder looks mounted unless a test says otherwise.
     mockLibraryRootCheck = {
       ...jest.requireActual('../libraryRootCheck'),
-      checkLibraryRoot: jest.fn().mockResolvedValue({ ok: true }),
+      checkLibraryAvailable: jest.fn().mockResolvedValue({ ok: true }),
     };
     jest.doMock('../libraryRootCheck', () => mockLibraryRootCheck);
     jest.doMock('../configModule', () => ({ directoryPath: '/videos' }));
@@ -48,7 +48,7 @@ describe('FileCheckModule', () => {
     });
 
     test('holds back the missing mark and reports how many rows it held', async () => {
-      mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(failedCheck);
+      mockLibraryRootCheck.checkLibraryAvailable.mockResolvedValue(failedCheck);
       mockFs.stat.mockRejectedValue({ code: 'ENOENT' });
 
       const result = await fileCheckModule.checkVideoFiles([presentRow(1, 'abc123'), presentRow(2, 'def456')]);
@@ -56,12 +56,24 @@ describe('FileCheckModule', () => {
       expect(result.updates).toEqual([]);
       expect(result.videos.map((v) => v.removed)).toEqual([false, false]);
       expect(result.libraryWarning).toEqual({ reason: 'empty', path: '/videos', message: failedCheck.message, heldBack: 2 });
-      expect(mockLibraryRootCheck.checkLibraryRoot).toHaveBeenCalledTimes(1);
-      expect(mockLibraryRootCheck.checkLibraryRoot).toHaveBeenCalledWith('/videos');
+      expect(mockLibraryRootCheck.checkLibraryAvailable).toHaveBeenCalledTimes(1);
+      expect(mockLibraryRootCheck.checkLibraryAvailable).toHaveBeenCalledWith('/videos', mockVideo);
+    });
+
+    test('holds back the missing mark when most videos are not where they were saved', async () => {
+      mockLibraryRootCheck.checkLibraryAvailable.mockResolvedValue({
+        ok: false, reason: 'not-found', path: '/videos', message: 'Most downloaded videos are not where Youtarr saved them.',
+      });
+      mockFs.stat.mockRejectedValue({ code: 'ENOENT' });
+
+      const result = await fileCheckModule.checkVideoFiles([presentRow(1, 'abc123')]);
+
+      expect(result.updates).toEqual([]);
+      expect(result.libraryWarning).toEqual(expect.objectContaining({ reason: 'not-found', heldBack: 1 }));
     });
 
     test('still records a present file\'s new size', async () => {
-      mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(failedCheck);
+      mockLibraryRootCheck.checkLibraryAvailable.mockResolvedValue(failedCheck);
       mockFs.stat.mockResolvedValue({ size: 2000 });
 
       const result = await fileCheckModule.checkVideoFiles([presentRow(1, 'abc123')]);
@@ -75,7 +87,7 @@ describe('FileCheckModule', () => {
       const rowAt = (id, filePath) => ({ id, youtubeId: `vid${id}`, filePath, fileSize: '1000', removed: false });
 
       test('still marks a video stored outside that subfolder missing', async () => {
-        mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(emptySubfolder);
+        mockLibraryRootCheck.checkLibraryAvailable.mockResolvedValue(emptySubfolder);
         mockFs.stat.mockRejectedValue({ code: 'ENOENT' });
 
         const result = await fileCheckModule.checkVideoFiles([rowAt(1, '/videos/__Videos/channel/vid1.mp4')]);
@@ -85,7 +97,7 @@ describe('FileCheckModule', () => {
       });
 
       test('holds back only the videos under that subfolder', async () => {
-        mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(emptySubfolder);
+        mockLibraryRootCheck.checkLibraryAvailable.mockResolvedValue(emptySubfolder);
         mockFs.stat.mockRejectedValue({ code: 'ENOENT' });
 
         const result = await fileCheckModule.checkVideoFiles([
@@ -98,7 +110,7 @@ describe('FileCheckModule', () => {
       });
 
       test('holds back the videos under every failing subfolder, not just the first', async () => {
-        mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue({
+        mockLibraryRootCheck.checkLibraryAvailable.mockResolvedValue({
           ...emptySubfolder, paths: ['/videos/__Music', '/videos/__Kids'], message: 'The subfolders __Music and __Kids are empty.',
         });
         mockFs.stat.mockRejectedValue({ code: 'ENOENT' });
@@ -118,7 +130,7 @@ describe('FileCheckModule', () => {
 
       const result = await fileCheckModule.checkVideoFiles([presentRow(1, 'abc123')]);
 
-      expect(mockLibraryRootCheck.checkLibraryRoot).not.toHaveBeenCalled();
+      expect(mockLibraryRootCheck.checkLibraryAvailable).not.toHaveBeenCalled();
       expect(result.libraryWarning).toBeNull();
     });
   });

@@ -290,14 +290,20 @@ const initialize = async () => {
     const tabVideoCounts = require('./modules/channel/tabVideoCounts');
     const autoDownloadScheduler = require('./modules/channel/autoDownloadScheduler');
     const downloadRunTracker = require('./modules/download/downloadRunTracker');
-    const { Channel } = require('./models');
+    const { Channel, Video } = require('./models');
     const { registerRoutes } = require('./routes');
     const { createExternalRequestService } = require('./modules/externalApi/externalRequestService');
     const { createArrBridgeService } = require('./modules/arrBridge');
     const scheduledTaskRuns = require('./modules/scheduledTaskRuns');
     const scheduledTaskManager = require('./modules/scheduledTaskManager');
     const storageGuard = require('./modules/storageGuard');
+    const { downloadsFolderBlock } = require('./modules/libraryRootCheck');
     const membersAccess = require('./modules/membersAccess');
+
+    // Downloads wait while the downloads folder looks unmounted or is not the
+    // library: they would land where the library is not, and a file in an
+    // empty mount point would hide that from every other check.
+    storageGuard.setLibraryCheck(() => downloadsFolderBlock(configModule.directoryPath, Video));
 
     // Runs left "running" by the previous process never finished; close them
     // out before any timer fires, then start recording this process's runs.

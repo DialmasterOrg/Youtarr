@@ -345,6 +345,7 @@ const createServerModule = ({
         jest.doMock('../modules/logLevelSync', () => ({ apply: jest.fn(), subscribe: jest.fn() }));
         jest.doMock('../modules/storageGuard', () => ({
           initialize: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
+          setLibraryCheck: jest.fn(),
           refresh: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
           isPausedError: jest.fn(() => false),
           describe: jest.fn(() => ''),

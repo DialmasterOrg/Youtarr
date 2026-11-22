@@ -696,7 +696,9 @@ docker exec youtarr ls /usr/src/app/data
 
 From Git Bash on Windows, prefix the command with `MSYS_NO_PATHCONV=1`, otherwise Git Bash rewrites `/usr/src/app/data` into a Windows path.
 
-If the share is unreachable when Youtarr starts, Youtarr's startup file rescan marks the videos on it as missing. Nothing is deleted: once the share is back, restart Youtarr or use **Run now** on "Rescan files on disk" under Settings > Scheduling.
+If the share is unreachable when Youtarr starts, the downloads folder looks empty (or most videos are not where they were saved), so Youtarr marks nothing missing and pauses downloads until the share is back. Nothing is deleted: once the share is back, downloads resume on their own; restart Youtarr or use **Run now** on "Rescan files on disk" under Settings > Scheduling to pick up any changes.
+
+**Note:** Youtarr only sees the host folder the volume line maps to `/usr/src/app/data`. `YOUTUBE_OUTPUT_DIR` under `environment:` is only the label Youtarr shows for it, so if you move your library, change the volume line too (our `docker-compose.yml` uses `YOUTUBE_OUTPUT_DIR` from `.env` for both).
 
 #### Troubleshooting NAS Issues
 

@@ -4,7 +4,7 @@ const { Video } = require('../models');
 const { VIDEO_EXTENSIONS, AUDIO_EXTENSIONS } = require('./filesystem/constants');
 const createLimiter = require('./subscriptionImport/concurrencyLimiter');
 const { REMOVAL_REASONS, REMOVAL_COLUMNS, removedColumns, presentColumns } = require('./videoRemovalState');
-const { checkLibraryRoot, isRowUnderLibraryCheck } = require('./libraryRootCheck');
+const { checkLibraryAvailable, isRowUnderLibraryCheck } = require('./libraryRootCheck');
 const configModule = require('./configModule');
 
 // Per-video checks run concurrently up to this bound: each stat costs a full
@@ -76,11 +76,11 @@ class FileCheckModule {
     const updateSlots = new Array(updatedVideos.length).fill(null);
 
     // An unmounted drive makes every file look gone, so the folder itself is
-    // checked before the first row is marked missing: once per pass, and only
-    // when a pass would mark something.
+    // checked (and a sample of videos looked for in it) before the first row
+    // is marked missing: once per pass, and only when a pass would mark something.
     let libraryCheckPromise = null;
     const getLibraryCheck = () => {
-      libraryCheckPromise ??= checkLibraryRoot(configModule.directoryPath);
+      libraryCheckPromise ??= checkLibraryAvailable(configModule.directoryPath, Video);
       return libraryCheckPromise;
     };
     let heldBack = 0;

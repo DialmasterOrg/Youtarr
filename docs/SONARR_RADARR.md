@@ -328,7 +328,7 @@ YouTube sometimes refuses a download with an HTTP 403 error or a "Sign in to con
 - Only the first blocked download sends a notification. The hourly tries do not. A block found again later, when no blocked grab is waiting, sends a new one.
 - Uploading, replacing or removing cookies (Settings -> Cookies) makes Youtarr try the waiting grabs again within a minute, one at a time.
 - **Try again** on the row tries that grab now. If YouTube blocks it again, the row goes back to waiting and shows when Youtarr checks again.
-- While a storage limit pauses downloads, nothing is tried, and the rows say so. A try you asked for starts when downloads resume.
+- While downloads are paused (a storage limit, or a downloads folder that looks unavailable), nothing is tried, and the rows say so. A try you asked for starts when downloads resume.
 - To stop the wait, remove the item from the queue in Sonarr or Radarr.
 - After a restart, Youtarr tries one waiting grab at once instead of waiting out the hour.
 

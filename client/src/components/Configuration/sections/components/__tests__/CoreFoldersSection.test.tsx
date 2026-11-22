@@ -63,10 +63,12 @@ describe('CoreFoldersSection', () => {
     expect(input).toBeDisabled();
   });
 
-  test('says the downloads folder comes from YOUTUBE_OUTPUT_DIR', () => {
+  test('says the downloads folder is shown from YOUTUBE_OUTPUT_DIR but set by the volume mapping', () => {
     renderSection();
-    expect(screen.getByLabelText('Downloads folder'))
-      .toHaveAccessibleDescription('Docker volume, set by YOUTUBE_OUTPUT_DIR. Edit .env and restart to change it.');
+    expect(screen.getByLabelText('Downloads folder')).toHaveAccessibleDescription(
+      'Shown from YOUTUBE_OUTPUT_DIR. The volume mapping for the downloads folder decides which folder Youtarr '
+      + 'really uses: to move the library, change both and restart.'
+    );
   });
 
   test('says the platform sets the downloads folder on Elfhosted, whatever the case', () => {

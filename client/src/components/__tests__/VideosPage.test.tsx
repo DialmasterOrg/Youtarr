@@ -595,6 +595,22 @@ describe('VideosPage Component', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/settings/maintenance');
     });
 
+    test('links the warning to Maintenance when most videos are not where they were saved', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: {
+          ...mockPaginatedResponse(mockVideos),
+          libraryWarning: {
+            reason: 'not-found', path: '/data/youtube', message: 'Most downloaded videos are not where Youtarr saved them.', heldBack: 2,
+          },
+        },
+      });
+
+      render(<VideosPage token={mockToken} />);
+
+      expect(await screen.findByText(/volume mapping points at your library/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Maintenance' })).toBeInTheDocument();
+    });
+
     test('fetches and displays videos when token is provided', async () => {
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
 
