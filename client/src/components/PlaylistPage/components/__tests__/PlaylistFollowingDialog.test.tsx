@@ -133,3 +133,37 @@ test('reset success confirms automatic downloads remain enabled', async () => {
   await user.click(screen.getByRole('button', { name: 'Skip backlog and reset starting point' }));
   await waitFor(() => expect(onSaved).toHaveBeenCalledWith('Starting point updated. Automatic downloads remain enabled.'));
 });
+
+describe('videos skipped by the download filters', () => {
+  const filteredCandidates = [candidates[0], { ...candidates[1], filtered: true }];
+
+  beforeEach(() => {
+    http.get.mockResolvedValue({ data: { candidates: filteredCandidates, selectedIds: ['new'], missingDates: 0 } });
+  });
+
+  test('marks a skipped video in the list', async () => {
+    render(<PlaylistFollowingDialog playlist={playlist} token="t" mode="batch" defaultCount={3} onClose={jest.fn()} onSaved={jest.fn()} />);
+    await screen.findByRole('checkbox', { name: 'Select Old upload' });
+    expect(screen.getByText('Skipped by download filters')).toBeVisible();
+  });
+
+  test('explains that skipped videos are not preselected but can be checked', async () => {
+    render(<PlaylistFollowingDialog playlist={playlist} token="t" mode="batch" defaultCount={3} onClose={jest.fn()} onSaved={jest.fn()} />);
+    expect(await screen.findByText(/1 video skipped by this playlist's download filters is not preselected/)).toBeVisible();
+  });
+
+  test('queues a skipped video the user checks', async () => {
+    const user = userEvent.setup();
+    render(<PlaylistFollowingDialog playlist={playlist} token="t" mode="batch" defaultCount={3} onClose={jest.fn()} onSaved={jest.fn()} />);
+    await user.click(await screen.findByRole('checkbox', { name: 'Select Old upload' }));
+    await user.click(screen.getByRole('button', { name: 'Queue 2 videos' }));
+    await waitFor(() => expect(http.post).toHaveBeenCalledWith('/api/playlists/PL1/download-batch', { videoIds: ['new', 'old'] }, expect.any(Object)));
+  });
+
+  test('says nothing about filters when no listed video is skipped', async () => {
+    http.get.mockResolvedValue({ data: { candidates, selectedIds: ['new'], missingDates: 0 } });
+    render(<PlaylistFollowingDialog playlist={playlist} token="t" mode="batch" defaultCount={3} onClose={jest.fn()} onSaved={jest.fn()} />);
+    await screen.findByRole('checkbox', { name: 'Select Old upload' });
+    expect(screen.queryByText(/download filters/)).not.toBeInTheDocument();
+  });
+});

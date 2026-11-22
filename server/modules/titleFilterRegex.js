@@ -4,8 +4,8 @@ const path = require('path');
 // Channel title filters are Python regexes because yt-dlp applies them with
 // Python's re.search. The channel filter preview and validation go through
 // this module so a pattern behaves the same there as in real downloads.
-// (Playlist title filters are evaluated separately; see
-// playlistModule.buildTitleFilterRegExp.)
+// Playlist title filters (playlistFilters) are evaluated here too, so one
+// pattern means the same thing on a channel and on a playlist.
 const SCRIPT_PATH = path.join(__dirname, '../utils/title-filter-regex.py');
 const VALIDATE_TIMEOUT_MS = 2000;
 const MATCH_TIMEOUT_MS = 15000;

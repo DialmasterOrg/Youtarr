@@ -155,6 +155,8 @@ jest.mock('../../hooks/useMediaQuery', () => ({
 
 // Replaces the listed videos for one test.
 const mockVideosOverride: { current: PlaylistVideo[] | null } = { current: null };
+// Extra or replaced fields of the playlist detail hook for one test.
+const mockDetailOverride: { current: Record<string, unknown> } = { current: {} };
 
 jest.mock('../../hooks/usePlaylistDetail', () => ({
   usePlaylistDetail: () => ({
@@ -174,6 +176,7 @@ jest.mock('../../hooks/usePlaylistDetail', () => ({
     sync: jest.fn(),
     regenerateM3U: jest.fn(),
     triggerDownload: (...args: unknown[]) => mockTriggerDownload(...args),
+    ...mockDetailOverride.current,
   }),
 }));
 
@@ -340,6 +343,30 @@ describe('PlaylistPage selected-download selection lifecycle', () => {
 
     await waitFor(() => expect(mockTriggerDownload).toHaveBeenCalledWith(undefined, undefined));
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/downloads/activity'));
+  });
+
+  describe('with download filters', () => {
+    afterEach(() => {
+      mockDetailOverride.current = {};
+    });
+
+    test('Download all counts only the videos the filters do not skip', () => {
+      mockDetailOverride.current = { notDownloadedCount: 5, filteredCount: 3 };
+      renderWithProviders(<PlaylistPage token="t" />);
+      expect(screen.getByRole('button', { name: 'Download all 2 videos' })).toBeInTheDocument();
+    });
+
+    test('says how many undownloaded videos the filters skip', () => {
+      mockDetailOverride.current = { notDownloadedCount: 5, filteredCount: 3 };
+      renderWithProviders(<PlaylistPage token="t" />);
+      expect(screen.getByText(/3 undownloaded videos are skipped by this playlist's download filters/)).toBeInTheDocument();
+    });
+
+    test('warns when the filters cannot be evaluated', () => {
+      mockDetailOverride.current = { notDownloadedCount: 5, filteredCount: 5, filterError: 'Invalid regex pattern: bad' };
+      renderWithProviders(<PlaylistPage token="t" />);
+      expect(screen.getByText(/Invalid regex pattern: bad/)).toBeInTheDocument();
+    });
   });
 
   test('passes missingVideoCount 1 when a previously-downloaded video is selected', async () => {

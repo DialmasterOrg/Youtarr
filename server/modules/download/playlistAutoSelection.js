@@ -13,8 +13,10 @@ function publicationTime(value) {
   return Number.isFinite(time) && new Date(time).toISOString().startsWith(iso) ? time : null;
 }
 
-function selectBatchEntries({ candidates, order, limit }) {
-  const available = eligible(candidates);
+// filteredIds: videos the playlist's download filters skip, as reported by
+// playlistDownloadModule.getTrackedVideos. They are never chosen here.
+function selectBatchEntries({ candidates, order, limit, filteredIds = new Set() }) {
+  const available = eligible(candidates).filter((c) => !filteredIds.has(c.youtube_id));
   const missingDates = available.filter((c) => publicationTime(c.published_at) === null).length;
   // Unknown dates might be newest: require a positional or manual choice.
   if (order === 'published' && missingDates) return { selected: [], missingDates };
@@ -27,11 +29,12 @@ function selectBatchEntries({ candidates, order, limit }) {
   return { selected, missingDates };
 }
 
-function selectNewSinceBaseline({ candidates, baselineAt, baselineId, limit }) {
+function selectNewSinceBaseline({ candidates, baselineAt, baselineId, limit, filteredIds = new Set() }) {
   const cutoff = new Date(baselineAt).getTime() + BASELINE_TOLERANCE_MS;
   const discoveries = [];
   const retries = [];
   for (const candidate of eligible(candidates)) {
+    if (filteredIds.has(candidate.youtube_id)) continue;
     const isDiscovery = baselineId != null
       ? candidate.id > baselineId
       : candidate.added_at && new Date(candidate.added_at).getTime() > cutoff;

@@ -130,6 +130,19 @@ describe('statusLabel', () => {
   test('returns Tracked for a plain tracked video', () => {
     expect(statusLabel(makeVideo())).toEqual({ label: 'Tracked', color: 'default' });
   });
+  test('Filtered, with an explanation, for a video the download filters skip', () => {
+    expect(statusLabel(makeVideo({ filtered: true }))).toEqual({
+      label: 'Filtered',
+      color: 'default',
+      tooltip: "Skipped by this playlist's download filters. Select it to download it anyway.",
+    });
+  });
+  test('Excluded wins over Filtered, since excluding is the user\'s own choice', () => {
+    expect(statusLabel(makeVideo({ filtered: true, ignored: true })).label).toBe('Excluded');
+  });
+  test('Deleted wins over Filtered for a video downloaded before', () => {
+    expect(statusLabel(makeVideo({ filtered: true, previously_downloaded: true })).label).toBe('Deleted');
+  });
 });
 
 describe('toDownloadFileProps', () => {

@@ -56,6 +56,9 @@ export interface PlaylistVideo {
   published_at: string | null;
   thumbnail: string | null;
   downloaded: boolean;
+  // Not downloaded and skipped by the playlist's download filters (title or
+  // duration). It can still be downloaded by selecting it.
+  filtered?: boolean;
   // Previously downloaded but the file is gone (deleted/missing). The backend
   // skips these during downloads unless allowRedownload is set.
   previously_downloaded: boolean;

@@ -72,6 +72,8 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     followingExistingCount,
     followingRequestedCount,
     unsyncableCount,
+    filteredCount,
+    filterError,
     syncStatus,
     loading,
     loadingMore,
@@ -87,6 +89,10 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     regenerateM3U,
     triggerDownload,
   } = usePlaylistDetail({ token, playlistId, sortOrder, downloadState, watchedState });
+  // Download all leaves out the videos the playlist's download filters skip.
+  const downloadAllCount = notDownloadedCount == null
+    ? null
+    : Math.max(0, notDownloadedCount - (filteredCount ?? 0));
 
   const { snapshot } = useVideoActivity();
   // What the video modal learned about members-only access, until the next fetch.
@@ -449,9 +455,11 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         serverStatus={serverStatus}
         anyConfigured={anyConfigured}
         downloadedCount={downloadedCount}
-        newCount={notDownloadedCount}
+        newCount={downloadAllCount}
         followingExistingCount={followingExistingCount}
         followingRequestedCount={followingRequestedCount}
+        filteredCount={filteredCount}
+        filterError={filterError}
         onChooseExisting={() => setFollowingMode('batch')}
         unsyncableCount={unsyncableCount}
         syncStatus={syncStatus}
@@ -551,7 +559,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         videoCount={
           pendingDownload.mode === 'selected'
             ? pendingDownload.ids.length
-            : notDownloadedCount ?? playlist.video_count
+            : downloadAllCount ?? playlist.video_count
         }
         missingVideoCount={missingVideoCount}
         defaultResolution={playlist.video_quality || config.preferredResolution || '1080'}

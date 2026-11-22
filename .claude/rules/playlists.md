@@ -3,6 +3,7 @@ paths:
   - "server/modules/playlistModule.js"
   - "server/modules/playlistDownloadModule.js"
   - "server/modules/playlistDownloadGrouper.js"
+  - "server/modules/playlistFilters.js"
   - "server/modules/playlistVideoFilters.js"
   - "server/modules/playlistConstants.js"
   - "server/modules/playlistOutputRefresh.js"
@@ -44,7 +45,21 @@ YouTube playlist following, playlist downloads, and the `.m3u` files.
 - Explicit-id downloads can override ignored. `following_requested_count` reports eligible outstanding selections in the header without claiming they failed.
 - `playlistDownloadGrouper` resolves per-video settings override -> channel -> playlist -> global and groups videos by the result.
 - `playlistVideoFilters` orders before pagination and resolves `downloadState`/`watchedState` into a youtube_id constraint; models and `watchStatusQueries` are passed at call time so the route keeps its dependency injection.
-- Playlist title filters are case-insensitive JavaScript regexes (`playlistModule.buildTitleFilterRegExp`); the settings route rejects patterns it cannot compile. Client feature defaults live in `components/PlaylistPage/playlistConstants.ts`.
+- Client feature defaults live in `components/PlaylistPage/playlistConstants.ts`.
+
+## Download filters
+
+- A playlist's `title_filter_regex`, `min_duration` and `max_duration` decide what Youtarr picks, never what is tracked: a refresh stores every available entry, because hiding non-matching ones made a filter change unpredictable and a typo invisible.
+- `getTrackedVideos` reports `filteredIds` when given `filterBy`; scheduled discoveries, download-all and the suggested batch leave them out. Explicit ids ignore the filters, and a saved request (`auto_download_requested`) is never filtered.
+- The videos listing flags every undownloaded row that fails the filters, so `filtered` rows can outnumber `filtered_count`, which counts only download candidates. Narrowing the flag to candidates made non-matching rows read as tracked.
+- Playlist durations are exact seconds (no final-minute grace like channels); the dialog saves a whole-minute maximum as its last second, because API-set values predate the dialog and must keep their meaning.
+- `playlistFilters` evaluates titles with Python `re` through `titleFilterRegex`, so a pattern means the same on a playlist and a channel; both playlist routes validate with `channelSettingsModule.validateTitleRegex`.
+- A title pattern that cannot be evaluated holds every unrequested video and surfaces as `filter_error`, because downloading everything the filter was meant to keep out is the worse failure.
+- A scheduled run that cannot evaluate the filters queues the saved requests, then throws with `queued` set: `playlistAutoDownload` counts those jobs and the playlist as failed, so the sweep never records an idle "found nothing" run.
+- Filtered discoveries stay above the baseline, so loosening a filter releases them to later runs; the settings preview reports that count, and "Follow from now" skips them.
+- The settings dialog sends only the filter fields that were edited: API-set values predate validation (equal limits, long patterns), and resending one the server now rejects would block saving an unrelated setting.
+- A refresh under the open settings form updates only fields the user has not changed: a reset discarded drafts, and stale untouched fields let a save overwrite another session's values. Preview results clear when the shown filters change.
+- `ensureSourceChannel` does not copy the filters to auto-created channels: a playlist-specific pattern would silently block the channel if it is later subscribed.
 
 ## m3u files and output refresh
 
