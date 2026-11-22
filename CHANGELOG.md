@@ -1,5 +1,24 @@
 # Changelog
 
+## [v1.95.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.95.0) - 2026-11-22
+
+### Features
+
+* add header trim layer ([01c1780](https://github.com/DialmasterOrg/Youtarr/commit/01c17803dc7c495c8fb81246eff8eba6ca09ca87))
+* guard library against wrong mounts ([5a97254](https://github.com/DialmasterOrg/Youtarr/commit/5a97254fb9b9d7f757412459fdbebe65c3aa8423)), closes [#1054](https://github.com/DialmasterOrg/Youtarr/issues/1054)
+
+
+### Continuous Integration
+
+* speed up release image builds ([3c92594](https://github.com/DialmasterOrg/Youtarr/commit/3c9259417c708218946bf2517cb6209bbafa40ad))
+
+
+### Documentation
+
+* update CHANGELOG for v1.94.0 [skip ci] ([8bb72bb](https://github.com/DialmasterOrg/Youtarr/commit/8bb72bbef54ba8c553f3c8697d35730feec3fda2))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.94.0...v1.95.0
+
 ## [v1.94.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.94.0) - 2026-11-20
 
 ### Features
