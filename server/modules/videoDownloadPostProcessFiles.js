@@ -1,6 +1,6 @@
 const fs = require('fs-extra');
 const path = require('path');
-const { execSync, spawnSync } = require('child_process');
+const { execFileSync, spawnSync } = require('child_process');
 const { spawnYtDlpSync } = require('./ytdlpProcess');
 const configModule = require('./configModule');
 const nfoGenerator = require('./nfoGenerator');
@@ -224,9 +224,14 @@ async function downloadChannelThumbnailIfMissing(channelId) {
 
       // Resize the thumbnail to make it smaller
       if (fs.existsSync(channelThumbPath)) {
-        const tempPath = channelThumbPath + '.temp';
-        execSync(
-          `${configModule.ffmpegPath} -loglevel error -y -i "${channelThumbPath}" -vf "scale=iw*0.4:ih*0.4" -q:v 2 "${tempPath}"`,
+        // Must end in .jpg: ffmpeg picks the output format from the extension.
+        const tempPath = path.join(
+          configModule.getImagePath(),
+          `channelthumb-${channelId}-small.jpg`
+        );
+        execFileSync(
+          configModule.ffmpegPath,
+          ['-loglevel', 'error', '-y', '-i', channelThumbPath, '-vf', 'scale=iw*0.4:ih*0.4', '-q:v', '2', tempPath],
           { stdio: 'pipe' }
         );
         fs.renameSync(tempPath, channelThumbPath);
@@ -666,8 +671,11 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
       // Resize the image using ffmpeg with proper settings to avoid deprecated format warnings
       // Using -loglevel error to suppress the deprecated pixel format warnings but still show actual errors
       try {
-        execSync(
-          `${configModule.ffmpegPath} -loglevel error -y -i "${newImageFullPath}" -vf "scale=iw*0.5:ih*0.5" -q:v 2 "${newImageFullPathSmall}"`,
+        // Argument list, never a shell string: the ID in these paths is read
+        // from the downloaded file's name.
+        execFileSync(
+          configModule.ffmpegPath,
+          ['-loglevel', 'error', '-y', '-i', newImageFullPath, '-vf', 'scale=iw*0.5:ih*0.5', '-q:v', '2', newImageFullPathSmall],
           { stdio: 'inherit' }
         );
         fs.rename(newImageFullPathSmall, newImageFullPath);
