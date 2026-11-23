@@ -12,6 +12,7 @@ const {
   resolveChannelFolderName,
 } = require('../filesystem');
 const channelYtdlpExecutor = require('./channelYtdlpExecutor');
+const { CHANNEL_THUMBNAIL_SCALE_FILTER } = require('../constants/channelThumbnail');
 
 // How long the channel list skips a channel whose folder images it has checked.
 const LIST_BACKFILL_RECHECK_MS = 15 * 60 * 1000;
@@ -56,7 +57,7 @@ class ChannelThumbnails {
       await promisify(execFile)(configModule.ffmpegPath, [
         '-loglevel', 'error', '-y',
         '-i', realImagePath,
-        '-vf', 'scale=iw*0.4:ih*0.4',
+        '-vf', CHANNEL_THUMBNAIL_SCALE_FILTER,
         '-q:v', '2',
         smallImagePath,
       ]);

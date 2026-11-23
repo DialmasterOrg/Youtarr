@@ -14,6 +14,7 @@ const { slimInfoJson } = require('./infoJsonSlimmer');
 const { JobVideoDownload } = require('../models');
 const videoPersistence = require('./videoPersistence');
 const { VIDEO_PERSISTED_MARKER } = require('./constants/outputMarkers');
+const { CHANNEL_THUMBNAIL_SCALE_FILTER } = require('./constants/channelThumbnail');
 const logger = require('../logger');
 const logLevelSync = require('./logLevelSync');
 const { buildChannelPath, isFileForVideo, cleanupEmptyParents, moveWithRetries, ensureDirWithRetries, copySyncWithFallback } = require('./filesystem');
@@ -222,7 +223,7 @@ async function downloadChannelThumbnailIfMissing(channelId) {
         throw new Error(result.stderr || `yt-dlp exited with code ${result.status}`);
       }
 
-      // Resize the thumbnail to make it smaller
+      // Cap the thumbnail's size
       if (fs.existsSync(channelThumbPath)) {
         // Must end in .jpg: ffmpeg picks the output format from the extension.
         const tempPath = path.join(
@@ -231,7 +232,7 @@ async function downloadChannelThumbnailIfMissing(channelId) {
         );
         execFileSync(
           configModule.ffmpegPath,
-          ['-loglevel', 'error', '-y', '-i', channelThumbPath, '-vf', 'scale=iw*0.4:ih*0.4', '-q:v', '2', tempPath],
+          ['-loglevel', 'error', '-y', '-i', channelThumbPath, '-vf', CHANNEL_THUMBNAIL_SCALE_FILTER, '-q:v', '2', tempPath],
           { stdio: 'pipe' }
         );
         fs.renameSync(tempPath, channelThumbPath);
