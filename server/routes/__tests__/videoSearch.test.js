@@ -103,6 +103,17 @@ describe('POST /api/videos/search behavior', () => {
     expect(res.body).toEqual({ error: 'Search failed' });
   });
 
+  test('502 with the reason when YouTube answers the search with a bot check', async () => {
+    const botCheck = Object.assign(new Error('Bot detection encountered. Try again later.'), { code: 'COOKIES_REQUIRED' });
+    const app = buildApp({
+      verifyToken,
+      searchVideos: jest.fn().mockRejectedValueOnce(botCheck),
+    });
+    const res = await request(app).post('/api/videos/search').send({ query: 'x' });
+    expect(res.status).toBe(502);
+    expect(res.body).toEqual({ error: 'Bot detection encountered. Try again later.', errorCode: 'COOKIES_REQUIRED' });
+  });
+
   test('passes AbortSignal to module', async () => {
     const searchVideos = jest.fn().mockResolvedValueOnce([]);
     const app = buildApp({ verifyToken, searchVideos });

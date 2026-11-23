@@ -1,5 +1,6 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const { BOT_CHECK_CODE } = require('../modules/ytdlpBotCheck');
 
 const MAX_QUERY_LENGTH = 200;
 const DEFAULT_COUNT = 25;
@@ -102,7 +103,7 @@ function createVideoSearchRoutes({ verifyToken, videoSearchModule }) {
    *       499:
    *         description: Client closed the request before search completed
    *       502:
-   *         description: Search failed (yt-dlp error)
+   *         description: Search failed (yt-dlp error). When YouTube answered with its bot check, `error` explains it and `errorCode` is COOKIES_REQUIRED.
    *       504:
    *         description: Search timed out (60s server-side limit)
    */
@@ -136,6 +137,9 @@ function createVideoSearchRoutes({ verifyToken, videoSearchModule }) {
         return res.status(504).json({ error: 'Search timed out' });
       }
       req.log.error({ err, query: validation.query }, 'video search failed');
+      if (err.code === BOT_CHECK_CODE) {
+        return res.status(502).json({ error: err.message, errorCode: BOT_CHECK_CODE });
+      }
       return res.status(502).json({ error: 'Search failed' });
     }
   });

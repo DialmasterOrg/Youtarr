@@ -10,6 +10,7 @@ const filesystem = require('../filesystem');
 const { JobVideoDownload } = require('../../models');
 const { VIDEO_PERSISTED_MARKER } = require('../constants/outputMarkers');
 const { containsHttp403, isSabrRestriction } = require('./ytdlpStderrSignals');
+const { isBotCheck, botCheckMessage } = require('../ytdlpBotCheck');
 
 const PROGRESS_THROTTLE_MS = 250;
 // yt-dlp prints "<id>: has already been recorded in the archive" when it skips
@@ -280,14 +281,11 @@ class YtdlpOutputRouter {
       this.errorTracker.handleWarningLine(line, 'stderr');
     }
 
-    // Check for bot detection message (handle different quote types and patterns)
-    if (line.includes('Sign in to confirm') && line.includes('not a bot')) {
+    if (isBotCheck(line)) {
       this.botDetected = true;
       const botMessage = this.anonymousRetry
         ? 'Bot detection encountered during the no-cookies fallback. The fallback also failed, so this video may be genuinely unavailable.'
-        : this.cookiesEnabled
-          ? 'Bot detection encountered even though cookies are configured - they are likely expired or rotated. Re-export fresh cookies from your browser and upload them again.'
-          : 'Bot detection encountered. YouTube is temporarily refusing requests from this server; this usually clears on its own, so try again later. If it keeps happening, upload YouTube cookies in Settings -> Cookies.';
+        : botCheckMessage(this.cookiesEnabled);
       MessageEmitter.emitMessage(
         'broadcast',
         null,

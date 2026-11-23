@@ -128,6 +128,31 @@ describe('channelYtdlpExecutor', () => {
       await expect(promise).rejects.toMatchObject({ code: 'COOKIES_REQUIRED' });
     });
 
+    test('reports a bot check, not a missing channel, for the wording YouTube sends', async () => {
+      const promise = executor.executeYtDlpCommand(['--dump-json']);
+      proc.stderr.emit('data', 'ERROR: [youtube] DpCGv8hzK2I: Sign in to confirm you’re not a bot. This helps protect our community.');
+      proc.emit('exit', 1);
+
+      await expect(promise).rejects.toMatchObject({
+        code: 'COOKIES_REQUIRED',
+        usedCookies: false,
+        message: expect.stringMatching(/usually clears on its own/),
+      });
+    });
+
+    test('points at the cookies when the bot-checked run sent them', async () => {
+      const promise = executor.executeYtDlpCommand(['--dump-json']);
+      proc.cookiesPassed = true;
+      proc.stderr.emit('data', 'ERROR: [youtube] DpCGv8hzK2I: Sign in to confirm you’re not a bot.');
+      proc.emit('exit', 1);
+
+      await expect(promise).rejects.toMatchObject({
+        code: 'COOKIES_REQUIRED',
+        usedCookies: true,
+        message: expect.stringMatching(/likely expired or rotated/),
+      });
+    });
+
     test('rejects with CHANNEL_NOT_FOUND when stderr reports an extraction failure', async () => {
       const promise = executor.executeYtDlpCommand(['--dump-json']);
       proc.stderr.emit('data', 'ERROR: Unable to extract channel data');

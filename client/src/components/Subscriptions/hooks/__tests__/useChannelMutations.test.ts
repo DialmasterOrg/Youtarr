@@ -194,6 +194,38 @@ describe('useChannelMutations', () => {
     expect(result.current.isAddingChannel).toBe(false);
   });
 
+  test('shows the server explanation when YouTube answers a channel lookup with a bot check', async () => {
+    const botCheckMessage = 'Bot detection encountered. YouTube is temporarily refusing requests from this server; this usually clears on its own, so try again later.';
+    mockedAxios.post.mockRejectedValueOnce({
+      response: { status: 403, data: { status: 'error', message: botCheckMessage } },
+    });
+
+    const { result } = renderHook(() => useChannelMutations({ token, onRefresh: jest.fn() }));
+
+    let response;
+    await act(async () => {
+      response = await result.current.lookupChannel(validUrl);
+    });
+
+    expect(response).toEqual({ success: false, message: botCheckMessage });
+  });
+
+  test('falls back to a cookies hint for a 403 without an explanation', async () => {
+    mockedAxios.post.mockRejectedValueOnce({ response: { status: 403 } });
+
+    const { result } = renderHook(() => useChannelMutations({ token, onRefresh: jest.fn() }));
+
+    let response;
+    await act(async () => {
+      response = await result.current.lookupChannel(validUrl);
+    });
+
+    expect(response).toEqual({
+      success: false,
+      message: 'Authentication issue. Please check your cookies configuration.',
+    });
+  });
+
   test('addPendingChannel adds the channel to pending changes', async () => {
     mockedAxios.post.mockResolvedValueOnce({
       data: { status: 'success', channelInfo: mockChannelInfo },

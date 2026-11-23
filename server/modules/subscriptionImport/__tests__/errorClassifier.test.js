@@ -5,6 +5,8 @@ const { classifyYtdlpError, ERROR_CODES } = require('../errorClassifier');
 describe('classifyYtdlpError', () => {
   test.each([
     ['ERROR: Sign in to confirm you are not a bot', ERROR_CODES.BOT_CHECK],
+    ['ERROR: [youtube:tab] channels: Sign in to confirm you’re not a bot. This helps protect our community.', ERROR_CODES.BOT_CHECK],
+    ['ERROR: Sign in to confirm you\'re not a bot', ERROR_CODES.BOT_CHECK],
     ['ERROR: Please sign in to view this channel', ERROR_CODES.EXPIRED_COOKIES],
     ['ERROR: This cookie has expired', ERROR_CODES.EXPIRED_COOKIES],
     ['WARNING: The provided YouTube account cookies are no longer valid. They have likely been rotated', ERROR_CODES.EXPIRED_COOKIES],

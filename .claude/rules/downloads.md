@@ -8,6 +8,7 @@ paths:
   - "server/modules/ytdlpModule.js"
   - "server/modules/ytdlpProcess.js"
   - "server/modules/ytDlpRunner.js"
+  - "server/modules/ytdlpBotCheck.js"
   - "server/modules/ytdlpUpdateRunSummary.js"
   - "server/modules/storageGuard.js"
   - "server/modules/storageUsage.js"
@@ -58,6 +59,8 @@ yt-dlp runs, the job queue, the download archive, storage limits, and the activi
 ## Executor and yt-dlp output
 
 - `downloadExecutor` finalizes on the child's `close` event (stdio drained), not `exit`, with a 5 s `STDIO_DRAIN_TIMEOUT_MS` fallback for pipes an orphaned ffmpeg or post-process child holds open.
+- `ytdlpBotCheck` holds the bot check matcher and error code every yt-dlp caller uses, and the wording for lookups and the live download message. It matches around the apostrophe: YouTube sends U+2019, and a straight-quote match missed every bot check.
+- `videoValidationModule` gives every failed validation an `errorCode` and never returns yt-dlp output (unrecognized failures become `FETCH_FAILED`), because the manual download page and `/api/videos/download` show a coded error's text as is.
 - `outputDirHealthCheckConfig` (pure) reads `OUTPUT_DIR_HEALTHCHECK_TIMEOUT` (seconds, default 10) once for the executor's pre-download output-directory probe; an invalid value warns and keeps the default. A job failing on the timeout names the variable in its notes; a permission failure does not.
 - `YtdlpOutputRouter` classifies complete stderr lines only, holding a split line until its newline; after `dispose()` output is logged but never classified or broadcast. Its 25 s heartbeat rebroadcasts the monitor snapshot while yt-dlp is silent during merges.
 - `ytdlpStderrSignals.containsHttp403` ignores yt-dlp's "require a GVS PO Token ... may yield HTTP Error 403" advisory, printed on every free-account cookie run; `isSabrRestriction` matches the account-level SABR warning.

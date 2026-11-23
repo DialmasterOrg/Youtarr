@@ -5,8 +5,7 @@
 // measurements arrive in the context.
 
 const { isTransient403Failure } = require('./transient403RetryPlanner');
-
-const BOT_CHECK_PATTERN = /sign in to confirm.*not a bot/i;
+const { isBotCheck } = require('../ytdlpBotCheck');
 
 // When bot detection fired run-wide, only download/extraction-shaped failures
 // are attributed to it; unrelated errors (postprocessing, disk) in the same
@@ -98,7 +97,7 @@ const REGISTRY = [
   {
     matches: (video, context) => {
       const error = String(video.error || '');
-      if (BOT_CHECK_PATTERN.test(error)) return true;
+      if (isBotCheck(error)) return true;
       return context.botDetected === true && DOWNLOAD_FAILURE_PATTERN.test(error);
     },
     keyFor: (context) =>
