@@ -9,6 +9,7 @@ paths:
   - "server/modules/ytdlpProcess.js"
   - "server/modules/ytDlpRunner.js"
   - "server/modules/ytdlpBotCheck.js"
+  - "server/modules/youtubeBlockAdvice.js"
   - "server/modules/ytdlpUpdateRunSummary.js"
   - "server/modules/storageGuard.js"
   - "server/modules/storageUsage.js"
@@ -59,7 +60,9 @@ yt-dlp runs, the job queue, the download archive, storage limits, and the activi
 ## Executor and yt-dlp output
 
 - `downloadExecutor` finalizes on the child's `close` event (stdio drained), not `exit`, with a 5 s `STDIO_DRAIN_TIMEOUT_MS` fallback for pipes an orphaned ffmpeg or post-process child holds open.
-- `ytdlpBotCheck` holds the bot check matcher and error code every yt-dlp caller uses, and the wording for lookups and the live download message. It matches around the apostrophe: YouTube sends U+2019, and a straight-quote match missed every bot check.
+- `ytdlpBotCheck` holds the bot check matcher and error code every yt-dlp caller uses. It matches around the apostrophe: YouTube sends U+2019, and a straight-quote match missed every bot check.
+- `youtubeBlockAdvice` words every bot check and HTTP 403 message by cookie state. Texts cover uploaded and external cookie files, since uploads are refused with an external one, and hold no underscores, which break Slack's italics.
+- Reword only its message bodies: Download History and the Sonarr/Radarr bridge show the diagnosis titles, `isYoutubeBlock` reads the keys, and the activity page matches the "Bot detection encountered" prefix.
 - `videoValidationModule` gives every failed validation an `errorCode` and never returns yt-dlp output (unrecognized failures become `FETCH_FAILED`), because the manual download page and `/api/videos/download` show a coded error's text as is.
 - `outputDirHealthCheckConfig` (pure) reads `OUTPUT_DIR_HEALTHCHECK_TIMEOUT` (seconds, default 10) once for the executor's pre-download output-directory probe; an invalid value warns and keeps the default. A job failing on the timeout names the variable in its notes; a permission failure does not.
 - `YtdlpOutputRouter` classifies complete stderr lines only, holding a split line until its newline; after `dispose()` output is logged but never classified or broadcast. Its 25 s heartbeat rebroadcasts the monitor snapshot while yt-dlp is silent during merges.

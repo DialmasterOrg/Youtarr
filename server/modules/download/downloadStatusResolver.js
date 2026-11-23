@@ -1,6 +1,8 @@
 // Pure decision functions for a finished yt-dlp run. No I/O; the executor
 // performs all persistence and emission based on what these return.
 
+const { KIND, adviceFor, botCheckText } = require('../youtubeBlockAdvice');
+
 function describeSponsorBlockFailures(count) {
   return `SponsorBlock unavailable for ${count} video${count !== 1 ? 's' : ''}`;
 }
@@ -88,15 +90,9 @@ function describeNonZeroExit({
       notes = `${subtitleFailureCount} subtitle download${subtitleFailureCount !== 1 ? 's' : ''} failed; the videos themselves downloaded`;
     }
   } else if (httpForbiddenDetected) {
-    // Failed with 403 errors - likely authentication issue. With cookies
-    // already enabled, "configure cookies" is the wrong advice: stale or
-    // rotated cookies are the usual cause.
+    // The note is the diagnosis the failed videos get, so the two agree.
     output = `${videoCount} videos. Error: YouTube returned HTTP 403 (Forbidden)`;
-    notes = anonymousRetry
-      ? 'The no-cookies fallback was also blocked by YouTube. This video may be genuinely unavailable.'
-      : cookiesEnabled
-        ? 'YouTube denied access (HTTP 403) while using your uploaded cookies. Re-export fresh cookies from your browser, or disable cookies in Settings -> Cookies.'
-        : 'YouTube denied access (HTTP 403). Configure cookies in Settings -> Cookies to resolve this issue.';
+    notes = adviceFor(KIND.HTTP_403, { cookiesEnabled, anonymousRetry }).message;
     errorCode = anonymousRetry
       ? 'NO_COOKIES_FALLBACK_FAILED'
       : 'COOKIES_RECOMMENDED';
@@ -218,13 +214,7 @@ function resolveFinalPresentation({
     finalErrorCode = anonymousRetry
       ? 'NO_COOKIES_FALLBACK_FAILED'
       : 'COOKIES_REQUIRED';
-    // Anonymous retries intentionally suppress configured cookies, so they
-    // need a third diagnostic state rather than ordinary "set cookies" advice.
-    finalText = anonymousRetry
-      ? 'Download failed: Bot detection encountered during the no-cookies fallback. The fallback also failed, so this video may be genuinely unavailable.'
-      : cookiesEnabled
-        ? 'Download failed: Bot detection encountered even though cookies are configured - they are likely expired or rotated. Re-export fresh cookies from your browser and upload them in Settings -> Cookies.'
-        : 'Download failed: Bot detection encountered. YouTube is temporarily refusing requests from this server; this usually clears on its own, so try again later. If it keeps happening, upload YouTube cookies in Settings -> Cookies.';
+    finalText = `Download failed: ${botCheckText({ cookiesEnabled, anonymousRetry })}`;
   } else if (monitorHasError && finalState === 'complete' && !flags.hasOnlyHandledErrors) {
     // Don't let a recognized termination flip the state back to error
     // via DownloadProgressMonitor's broad hasError flag.

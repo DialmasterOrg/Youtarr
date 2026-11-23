@@ -63,6 +63,9 @@ jest.mock('../tempSpaceProbe', () => ({
 const jobModule = require('../../jobModule');
 const configModule = require('../../configModule');
 const failureAdvisor = require('../failureAdvisor');
+// The wording itself is tested with youtubeBlockAdvice; these tests check
+// which of its texts the finalizer stores.
+const { KIND, adviceFor, botCheckSummary } = require('../../youtubeBlockAdvice');
 const MessageEmitter = require('../../messageEmitter');
 const notificationModule = require('../../notificationModule');
 const downloadRunTracker = require('../downloadRunTracker');
@@ -258,6 +261,17 @@ describe('downloadJobFinalizer', () => {
       }));
     });
 
+    it('records a cookieless bot check with the summary and diagnosis for a run without cookies', async () => {
+      await finalizeDownloadJob(makeContext({ code: 1, router: makeRouter({ botDetected: true }) }));
+
+      const [, fields] = jobModule.updateJob.mock.calls.find(
+        ([id, update]) => id === mockJobId && update.error === 'COOKIES_REQUIRED'
+      );
+      // Run summaries quote the output, so it says what stopped the job and no more.
+      expect(fields.output).toBe(botCheckSummary({ cookiesEnabled: false }));
+      expect(fields.notes).toBe(adviceFor(KIND.BOT_CHECK, { cookiesEnabled: false }).message);
+    });
+
     it('uses stale-cookie messaging for bot detection when cookies are enabled', async () => {
       configModule.getCookiesPath.mockReturnValue('/app/config/cookies.user.txt');
 
@@ -266,8 +280,8 @@ describe('downloadJobFinalizer', () => {
       expect(jobModule.updateJob).toHaveBeenCalledWith(mockJobId, expect.objectContaining({
         status: 'Error',
         error: 'COOKIES_REQUIRED',
-        output: expect.stringMatching(/expired or rotated/i),
-        notes: expect.stringMatching(/re-export fresh cookies/i)
+        output: botCheckSummary({ cookiesEnabled: true }),
+        notes: adviceFor(KIND.BOT_CHECK, { cookiesEnabled: true }).message
       }));
 
       // The broadcast final presentation must match the persisted advice.

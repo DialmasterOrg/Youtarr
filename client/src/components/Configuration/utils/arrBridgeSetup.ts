@@ -111,7 +111,7 @@ export const GRAB_STATE_LABELS: Record<ArrGrabState, { label: string; tone: Grab
 };
 
 export const BLOCKED_GRAB_ADVICE =
-  'This is often temporary. If it keeps happening, upload fresh YouTube cookies in Settings -> Cookies. To stop, remove it from the queue in Sonarr or Radarr.';
+  'This is often temporary. If it keeps happening, upload fresh YouTube cookies in Settings -> Cookies, or replace your external cookie file on the server. To stop, remove it from the queue in Sonarr or Radarr.';
 
 /**
  * Why a blocked grab waits and when Youtarr next tests the block. One

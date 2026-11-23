@@ -3,9 +3,9 @@ const {
   BOT_CHECK_CODE,
   BOT_CHECK_PATTERN,
   isBotCheck,
-  botCheckMessage,
   createBotCheckError,
 } = require('../ytdlpBotCheck');
+const { botCheckText } = require('../youtubeBlockAdvice');
 
 // stderr of a real bot-checked metadata fetch (yt-dlp 2026.11.22).
 const REAL_STDERR =
@@ -41,48 +41,26 @@ describe('ytdlpBotCheck', () => {
     expect(BOT_CHECK_PATTERN.test(REAL_STDERR)).toBe(true);
   });
 
-  describe('botCheckMessage', () => {
-    it('calls the block temporary when the run sent no cookies', () => {
-      expect(botCheckMessage(false)).toMatch(/usually clears on its own/);
-    });
-
-    it('points at the cookies when the run sent them', () => {
-      expect(botCheckMessage(true)).toMatch(/likely expired or rotated/);
-    });
-
-    // Uploads are refused while YOUTARR_COOKIES_FILE is set, so advice that
-    // only says "upload" sends those users to a control that is not there.
-    it('covers both uploaded cookies and an external cookie file when cookies were sent', () => {
-      expect(botCheckMessage(true)).toMatch(/upload them in Settings -> Cookies/);
-      expect(botCheckMessage(true)).toMatch(/YOUTARR_COOKIES_FILE/);
-    });
-
-    it('does not tell a cookieless run to upload, which an external cookie file rules out', () => {
-      expect(botCheckMessage(false)).toMatch(/set up YouTube cookies in Settings -> Cookies/);
-      expect(botCheckMessage(false)).not.toMatch(/upload/i);
-    });
-
-    it('keeps the prefix the activity page matches on', () => {
-      expect(botCheckMessage(false)).toMatch(/^Bot detection encountered/);
-      expect(botCheckMessage(true)).toMatch(/^Bot detection encountered/);
-    });
-  });
-
   describe('createBotCheckError', () => {
-    it('builds an error with the bot check code and the matching message', () => {
+    it('builds an error with the bot check code and the wording for a run that sent cookies', () => {
       const error = createBotCheckError({ usedCookies: true });
 
       expect(error).toBeInstanceOf(Error);
       expect(error.code).toBe(BOT_CHECK_CODE);
       expect(error.usedCookies).toBe(true);
-      expect(error.message).toBe(botCheckMessage(true));
+      expect(error.message).toBe(botCheckText({ cookiesEnabled: true }));
     });
 
     it('treats a run with unknown cookie use as cookieless', () => {
       const error = createBotCheckError();
 
       expect(error.usedCookies).toBe(false);
-      expect(error.message).toBe(botCheckMessage(false));
+      expect(error.message).toBe(botCheckText({ cookiesEnabled: false }));
+    });
+
+    it('words the two cookie states differently', () => {
+      expect(createBotCheckError({ usedCookies: true }).message)
+        .not.toBe(createBotCheckError({ usedCookies: false }).message);
     });
   });
 

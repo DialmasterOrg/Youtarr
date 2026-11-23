@@ -6,6 +6,7 @@
 
 const { isTransient403Failure } = require('./transient403RetryPlanner');
 const { isBotCheck } = require('../ytdlpBotCheck');
+const { KIND, ADVICE: YOUTUBE_BLOCK_ADVICE, adviceKey } = require('../youtubeBlockAdvice');
 
 // When bot detection fired run-wide, only download/extraction-shaped failures
 // are attributed to it; unrelated errors (postprocessing, disk) in the same
@@ -22,54 +23,9 @@ const ADVICE = {
       'log names the folder and how much space it had; where downloads are ' +
       'staged depends on "External temp directory" in Settings.',
   },
-  'http-403-cookies-enabled': {
-    title: 'YouTube blocked the download while using your cookies',
-    message:
-      'YouTube blocked this download while using your uploaded cookies. ' +
-      'Cookies that are stale or rotated are the most common cause. First: ' +
-      're-export fresh cookies from your browser and upload them in ' +
-      'Settings -> Cookies. If fresh cookies still fail, ' +
-      'temporarily disable cookies and retry - many videos download fine ' +
-      'without them.',
-  },
-  'http-403-cookies-disabled': {
-    title: 'YouTube blocked the download',
-    message:
-      'YouTube blocked this download. This is sometimes temporary - ' +
-      'retrying later can work. If it keeps failing, uploading YouTube ' +
-      'cookies from your browser (Settings -> Cookies) often ' +
-      'resolves it.',
-  },
-  'http-403-anonymous-retry': {
-    title: 'No-cookies fallback also failed',
-    message:
-      'The no-cookies fallback was also blocked by YouTube. This video may ' +
-      'be genuinely unavailable.',
-  },
-  'bot-check-cookies-enabled': {
-    title: 'YouTube bot check despite cookies',
-    message:
-      'YouTube flagged this download as automated even though cookies are ' +
-      'configured - they are likely expired or rotated. Re-export fresh ' +
-      'cookies from your browser and upload them again.',
-  },
-  'bot-check-cookies-disabled': {
-    title: 'YouTube bot check (usually temporary)',
-    message:
-      'YouTube asked this server to sign in before serving the video. ' +
-      'Without cookies this is usually a temporary block on the server\'s ' +
-      'IP address that clears on its own. Videos from subscribed channels ' +
-      'and playlists are retried automatically on the next scheduled ' +
-      'download; a manual download can be run again later. If it keeps ' +
-      'happening across several runs, upload YouTube cookies from your ' +
-      'browser in Settings -> Cookies.',
-  },
-  'bot-check-anonymous-retry': {
-    title: 'No-cookies fallback also failed',
-    message:
-      'YouTube rejected the no-cookies fallback with a bot check. This video ' +
-      'may be genuinely unavailable.',
-  },
+  // The YouTube refusals are worded in youtubeBlockAdvice, with every other
+  // text about them.
+  ...YOUTUBE_BLOCK_ADVICE,
 };
 
 // The diagnoses that mean YouTube refused this server or these cookies, which
@@ -100,22 +56,12 @@ const REGISTRY = [
       if (isBotCheck(error)) return true;
       return context.botDetected === true && DOWNLOAD_FAILURE_PATTERN.test(error);
     },
-    keyFor: (context) =>
-      context.anonymousRetry
-        ? 'bot-check-anonymous-retry'
-        : context.cookiesEnabled
-          ? 'bot-check-cookies-enabled'
-          : 'bot-check-cookies-disabled',
+    keyFor: (context) => adviceKey(KIND.BOT_CHECK, context),
   },
   {
     matches: (video, context) =>
       isTransient403Failure(video, { httpForbiddenDetected: context.httpForbiddenDetected === true }),
-    keyFor: (context) =>
-      context.anonymousRetry
-        ? 'http-403-anonymous-retry'
-        : context.cookiesEnabled
-          ? 'http-403-cookies-enabled'
-          : 'http-403-cookies-disabled',
+    keyFor: (context) => adviceKey(KIND.HTTP_403, context),
   },
 ];
 

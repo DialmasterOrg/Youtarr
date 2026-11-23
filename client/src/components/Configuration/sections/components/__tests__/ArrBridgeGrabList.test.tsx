@@ -173,7 +173,10 @@ describe('ArrBridgeGrabList', () => {
     test('gives the cookie advice and says how to stop the wait', () => {
       setup({ grabs: [blocked()] });
 
+      // An external cookie file cannot be replaced from Settings, which only
+      // refreshes its status, so the advice names where each setup is fixed.
       expect(screen.getByText(/upload fresh YouTube cookies in Settings -> Cookies/)).toBeInTheDocument();
+      expect(screen.getByText(/replace your external cookie file on the server/)).toBeInTheDocument();
       expect(screen.getByText(/To stop, remove it from the queue in Sonarr or Radarr\./)).toBeInTheDocument();
     });
 
