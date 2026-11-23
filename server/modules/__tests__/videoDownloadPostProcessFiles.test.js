@@ -38,6 +38,7 @@ jest.mock('../configModule', () => ({
   stopWatchingConfig: jest.fn(),
   getCookiesPath: jest.fn(() => null),
   getDefaultSubfolder: jest.fn(() => null),
+  getYtdlpCacheDir: jest.fn(() => '/mock/ytdlp-cache'),
   ffmpegPath: '/usr/bin/ffmpeg',
   atomicParsleyPath: '/usr/bin/AtomicParsley',
   directoryPath: '/library',
@@ -1718,6 +1719,74 @@ describe('videoDownloadPostProcessFiles', () => {
         expect.stringContaining('/library/Test Channel/Video Title [abc123]/Video Title [abc123].info.json'),
         expect.stringContaining('"_actual_filepath": "/library/__Music/Test Channel/Video Title [abc123]/Video Title [abc123].mp4"')
       );
+    });
+  });
+
+  describe('thumbnail resizing', () => {
+    it('resizes the cached video thumbnail by passing ffmpeg an argument list', async () => {
+      const imagePath = '/library/Channel/Video Title [abc123].jpg';
+      fs.existsSync.mockImplementation((p) => p === jsonPath || p === imagePath);
+
+      await loadModule();
+      await settleAsync();
+
+      expect(childProcess.execFileSync).toHaveBeenCalledWith(
+        '/usr/bin/ffmpeg',
+        [
+          '-loglevel', 'error', '-y',
+          '-i', '/mock/images/videothumb-abc123.jpg',
+          '-vf', 'scale=iw*0.5:ih*0.5',
+          '-q:v', '2',
+          '/mock/images/videothumb-abc123-small.jpg',
+        ],
+        { stdio: 'inherit' }
+      );
+      expect(childProcess.execSync).not.toHaveBeenCalled();
+    });
+
+    it('never hands a bracketed filename token to a shell', async () => {
+      const stem = '/library/Channel/Channel - [$(id)] Video';
+      process.argv = ['node', 'script', `${stem}.mp4`];
+      fs.existsSync.mockImplementation((p) => p === `${stem}.info.json` || p === `${stem}.jpg`);
+
+      await loadModule();
+      await settleAsync();
+
+      expect(childProcess.execFileSync).toHaveBeenCalledWith(
+        '/usr/bin/ffmpeg',
+        expect.arrayContaining(['/mock/images/videothumb-$(id).jpg']),
+        expect.any(Object)
+      );
+      expect(childProcess.execSync).not.toHaveBeenCalled();
+    });
+
+    it('resizes a newly downloaded channel thumbnail by passing ffmpeg an argument list', async () => {
+      const channelThumbPath = '/mock/images/channelthumb-channel123.jpg';
+      const resizedThumbPath = '/mock/images/channelthumb-channel123-small.jpg';
+      configModule.__setConfig({ writeChannelPosters: true, writeVideoNfoFiles: true });
+      let thumbChecks = 0;
+      fs.existsSync.mockImplementation((p) => {
+        if (p !== channelThumbPath) return p === jsonPath;
+        thumbChecks += 1;
+        return thumbChecks > 1;
+      });
+
+      await loadModule();
+      await settleAsync();
+
+      expect(childProcess.execFileSync).toHaveBeenCalledWith(
+        '/usr/bin/ffmpeg',
+        [
+          '-loglevel', 'error', '-y',
+          '-i', channelThumbPath,
+          '-vf', 'scale=iw*0.4:ih*0.4',
+          '-q:v', '2',
+          resizedThumbPath,
+        ],
+        { stdio: 'pipe' }
+      );
+      expect(fs.renameSync).toHaveBeenCalledWith(resizedThumbPath, channelThumbPath);
+      expect(childProcess.execSync).not.toHaveBeenCalled();
     });
   });
 

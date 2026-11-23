@@ -125,6 +125,8 @@ describe('customArgsParser.checkCustomArgs', () => {
       '--print-to-file foo bar',
       '--exec "rm -rf /"',
       '--add-headers "Cookie: SID=abc"',
+      '--trim-filenames 120',
+      '--trim-file-names 120',
     ])('blocks %s', (input) => {
       const r = checkCustomArgs(input);
       expect(r.ok).toBe(false);
@@ -157,6 +159,13 @@ describe('customArgsParser.checkCustomArgs', () => {
       const r = checkCustomArgs('--add-headers "Accept-Language: en"');
       expect(r.blocked[0].option).toBe('--add-headers');
       expect(r.blocked[0].reason).toMatch(/cookies/i);
+    });
+
+    test('--trim-filenames is blocked because it can cut the video ID off the file name', () => {
+      const r = checkCustomArgs('--trim-file 120 --no-mtime');
+      expect(r.blocked[0].option).toBe('--trim-filenames');
+      expect(r.blocked[0].reason).toMatch(/video ID/i);
+      expect(r.args).toEqual(['--no-mtime']);
     });
 
     test('never leaks a blocked option value', () => {
