@@ -61,11 +61,20 @@ describe('channelThumbnails', () => {
         [
           '-loglevel', 'error', '-y',
           '-i', '/path/to/images/channelthumb-UC$(id)"x.jpg',
-          '-vf', 'scale=iw*0.4:ih*0.4',
+          '-vf', expect.any(String),
           '-q:v', '2',
           '/path/to/images/channelthumb-UC$(id)"x-small.jpg',
         ],
         expect.any(Function)
+      );
+    });
+
+    test('caps the longest side at 512 px without upscaling or changing the aspect ratio', async () => {
+      await channelThumbnails.resizeChannelThumbnail('UC123');
+
+      const ffmpegArgs = childProcess.execFile.mock.calls[0][1];
+      expect(ffmpegArgs[ffmpegArgs.indexOf('-vf') + 1]).toBe(
+        'scale=\'min(512,iw)\':\'min(512,ih)\':force_original_aspect_ratio=decrease'
       );
     });
 

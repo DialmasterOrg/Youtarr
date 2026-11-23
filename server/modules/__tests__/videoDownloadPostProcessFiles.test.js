@@ -1760,7 +1760,7 @@ describe('videoDownloadPostProcessFiles', () => {
       expect(childProcess.execSync).not.toHaveBeenCalled();
     });
 
-    it('resizes a newly downloaded channel thumbnail by passing ffmpeg an argument list', async () => {
+    it('caps a newly downloaded channel thumbnail at 512 px by passing ffmpeg an argument list', async () => {
       const channelThumbPath = '/mock/images/channelthumb-channel123.jpg';
       const resizedThumbPath = '/mock/images/channelthumb-channel123-small.jpg';
       configModule.__setConfig({ writeChannelPosters: true, writeVideoNfoFiles: true });
@@ -1779,7 +1779,7 @@ describe('videoDownloadPostProcessFiles', () => {
         [
           '-loglevel', 'error', '-y',
           '-i', channelThumbPath,
-          '-vf', 'scale=iw*0.4:ih*0.4',
+          '-vf', 'scale=\'min(512,iw)\':\'min(512,ih)\':force_original_aspect_ratio=decrease',
           '-q:v', '2',
           resizedThumbPath,
         ],

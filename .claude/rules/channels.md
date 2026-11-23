@@ -8,6 +8,7 @@ paths:
   - "server/modules/channelSearchModule.js"
   - "server/modules/channelVideoReanchor.js"
   - "server/modules/channelFolderNameMigration.js"
+  - "server/modules/constants/channelThumbnail.js"
   - "server/modules/titleFilterRegex.js"
   - "server/modules/videoMetadataModule.js"
   - "server/modules/tabsUtils.js"
@@ -52,6 +53,7 @@ Channel subscriptions, listings, title filters, per-tab download counts, channel
 - `subscriptionImport/` (`importJobRunner`, `takeoutParser`, `cookiesFetcher`, `thumbnailEnricher`, `concurrencyLimiter`, `errorClassifier`) treats the uploaded Takeout CSV and cookies as untrusted: validated, size-limited, parsed defensively.
 - `videoMetadataModule.getCachedVideoMetadata` reads the cached `.info.json` only; `getVideoMetadata` fetches with yt-dlp and caches the result (slimmed; see `.claude/rules/videos.md`).
 - `channelThumbnails.backfillChannelImages` uses async disk checks only: synchronous ones on a slow mount blocked the event loop, and every other request, about 5 ms per channel on each channel list load.
+- Both cached channel thumbnail writers (`channelThumbnails.resizeChannelThumbnail` and the post-processor's fallback) cap the longest side at 512 px without upscaling, via `constants/channelThumbnail.js`: avatar sources run from under 200 px to over 4000, so a percentage fits neither.
 - The channel list calls `backfillChannelImagesInBackground`, never awaited, which skips channels checked in the last 15 minutes; a poster or backdrop setting change forgets every check, so newly enabled images appear on the next load.
 - The Channels page's add input is also the list search (`/getchannels?search=`, debounced). Enter adds only `isExplicitChannelReference` input, because a bare word may be a search; the search is held while a lookup runs so the list does not empty behind it.
 - `useChannelList` applies only its newest request's response, because search-as-you-type overlaps requests. An unmatched name goes to Find Channels as `?q=`, run once on open: a YouTube search costs 100 quota units or seconds of yt-dlp, so never as-you-type.
