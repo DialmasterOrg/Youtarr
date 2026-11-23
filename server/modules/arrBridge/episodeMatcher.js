@@ -62,6 +62,19 @@ function carriesEpisodeNumber(candidate, episode) {
     || (episode.absoluteNumber !== null && bare.includes(episode.absoluteNumber));
 }
 
+// "All Souls the deal": one of the series' names and the episode title, in
+// either order, and no other word. Uploads titled this way carry no number,
+// and with the runtime such a title leaves little room for an unrelated video.
+function isSeriesNameAndTitleOnly(candidate, episode) {
+  const titleWords = phrase(candidate.title).trim();
+  const episodeWords = phrase(episode.episodeTitle).trim();
+  return episode.seriesTitles.some((name) => {
+    const seriesWords = phrase(name).trim();
+    if (seriesWords === '') return false;
+    return titleWords === `${seriesWords} ${episodeWords}` || titleWords === `${episodeWords} ${seriesWords}`;
+  });
+}
+
 const seriesTermsOf = (episode) => episode.seriesTitles
   .map((name) => matchTerms(name, { dropTrailingYear: true }))
   .filter((terms) => terms.length > 0);
@@ -185,7 +198,8 @@ function filterByEpisodeTitle(candidates, { episode, settings, onReject }) {
     if (loose) return null;
     if (!namesSeries(candidate, seriesTerms, exclusions)) return REJECTION.NAME_MISSING;
     if (namesAnotherSeries(candidate, titlePhrase, otherSeries)) return REJECTION.ANOTHER_SERIES;
-    return !needsNumber || carriesEpisodeNumber(candidate, episode) ? null : REJECTION.EPISODE_NUMBER_MISSING;
+    if (!needsNumber || carriesEpisodeNumber(candidate, episode)) return null;
+    return isSeriesNameAndTitleOnly(candidate, episode) ? null : REJECTION.EPISODE_NUMBER_MISSING;
   };
   const kept = candidates.filter((candidate) => {
     const reason = rejectionOf(candidate);

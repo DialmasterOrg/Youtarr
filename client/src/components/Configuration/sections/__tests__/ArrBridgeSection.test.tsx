@@ -498,6 +498,21 @@ describe('ArrBridgeSection', () => {
       expect(expectations().getByText(/Youtarr removes its own copy/)).toBeInTheDocument();
       expect(expectations().queryByText(/stays in your Youtarr library/)).not.toBeInTheDocument();
     });
+
+    test('recommends a YouTube API key, with a link to its page, while none is set', () => {
+      setupSection({ config: createConfig({ youtubeApiKey: '' }) });
+
+      expect(expectations().getByText(/A YouTube API key is recommended/)).toBeInTheDocument();
+      expect(expectations().getByRole('link', { name: 'Add a YouTube API key' }))
+        .toHaveAttribute('href', '/settings/youtube-api');
+    });
+
+    test('does not recommend a YouTube API key once one is set', () => {
+      setupSection({ config: createConfig({ youtubeApiKey: 'AIza-key' }) });
+
+      expect(expectations().queryByText(/A YouTube API key is recommended/)).not.toBeInTheDocument();
+      expect(expectations().queryByRole('link', { name: 'Add a YouTube API key' })).not.toBeInTheDocument();
+    });
   });
 
   test('saving a connection goes to the connections hook for that app', async () => {

@@ -156,8 +156,13 @@ function planSearch(request, { settings, isYoutubeApiAvailable, runtimeSeconds =
 // The search by what Sonarr calls the episode. The query always uses the
 // series' main title, so the alias requests of one search in Sonarr share a
 // single YouTube search; each is still named from the alias it asked for.
+// The episode title is quoted: YouTube reads an unquoted "The Deal" loosely
+// (deals, bargains) and buries the episode. The matcher needs the title as a
+// whole phrase anyway.
 function planEpisodeTitleSearch(request, episode, settings) {
-  const query = cleanQueryText(`${episode.seriesTitle.replace(TRAILING_YEAR_TAG, '')} ${episode.episodeTitle}`);
+  const seriesText = cleanQueryText(episode.seriesTitle.replace(TRAILING_YEAR_TAG, ''));
+  const titleText = cleanQueryText(episode.episodeTitle);
+  const query = [seriesText, titleText && `"${titleText}"`].filter(Boolean).join(' ');
   if (!query) return null;
   const name = { season: request.season, episode: request.episode };
   return {
