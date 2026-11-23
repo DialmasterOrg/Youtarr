@@ -1,5 +1,5 @@
 import React, { ChangeEvent } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { Alert, Box, FormControlLabel, Switch, Tab, Tabs, Typography } from '../../ui';
 import { ConfigurationCard } from '../common/ConfigurationCard';
 import { ConfigState, SnackbarState } from '../types';
@@ -119,6 +119,15 @@ export const ArrBridgeSection: React.FC<ArrBridgeSectionProps> = ({
                 Setup guide
               </a>
             </li>
+            {!config.youtubeApiKey && (
+              <li>
+                A YouTube API key is recommended: searches are faster, resolution labels are more reliable, and
+                daily shows are only found with one.{' '}
+                <RouterLink to="/settings/youtube-api" className="text-primary underline">
+                  Add a YouTube API key
+                </RouterLink>
+              </li>
+            )}
           </ul>
         </Box>
 

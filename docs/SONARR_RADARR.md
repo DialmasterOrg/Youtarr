@@ -192,6 +192,7 @@ Good to know:
 
 - When several videos match, an automatic search lets Sonarr or Radarr choose, and a newer upload usually wins. Search interactively to choose yourself: each release links to its YouTube page and is named after the channel that uploaded it.
 - A search for a whole season finds nothing when the season is numbered by year (`Season 2024`), which is how TheTVDB lists most shows made for YouTube. Sonarr searches by season whenever a season has more than one wanted episode, so for such a show search the episodes one at a time.
+- A YouTube API key (**Settings -> YouTube API**) is recommended. With one, searches are faster and resolution labels are more reliable: without it, Youtarr checks each video with yt-dlp, and a check that YouTube blocks leaves the label at the highest resolution allowed.
 - Daily shows (searched by date) need a YouTube API key in **Settings -> YouTube API**, because only the API gives exact upload dates. For the same reason they are not held to the daily share described below.
 - With a YouTube API key, one YouTube search costs about 100 to 200 units of your daily quota: 100 for each page of results, plus 1 to read the videos' lengths. A second page is needed when the first has too few usable results. Results are remembered for 10 minutes, so repeating a search in that time costs nothing.
 - One search in Sonarr or Radarr can be several YouTube searches. Sonarr asks once per name of a series (its title and each alias), and a search for whole seasons asks once per season. With a [Sonarr connection](#step-3-connect-your-sonarr-and-radarr-recommended), an episode found by its title costs one YouTube search for all names together. A Radarr search of many movies is at least one YouTube search per movie.
@@ -368,7 +369,7 @@ Under each search is every video YouTube returned, with its channel and length. 
 | The title names another series | Other words sit between the name and the episode ("Beyblade Metal Fusion S01E29"), it names a similarly named series in your library, or it carries a year from before the series began. |
 | The episode's title is not in the title | For a search by episode title. |
 | The title also has another episode's title | Two episodes in one video. |
-| A one-word episode title also needs the episode number | A title like "Pilot" appears in unrelated videos. |
+| A one-word episode title also needs the episode number | A title like "Pilot" appears in unrelated videos. A video whose title is only the series name and the episode title is offered without the number. |
 | Not uploaded on the air date | For a daily show: the upload is more than a day from the air date. |
 | The movie's year is not in the title | Strict matching needs it. |
 | Its grab failed in the last 7 days | It is offered again after that, or once the video is in your Youtarr library. |

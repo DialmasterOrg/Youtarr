@@ -355,9 +355,26 @@ describe('episodeMatcher', () => {
     const episode = show('Basketball', { seriesTitle: 'The Office (US)', seriesTitles: ['The Office (US)', 'The Office'] });
 
     test('needs the episode number under strict matching', () => {
-      expect(passes('The Office - Basketball', episode)).toBe(false);
+      expect(passes('The Office - Basketball (Full Game Scene)', episode)).toBe(false);
       expect(passes('The Office S01E05 Basketball', episode)).toBe(true);
       expect(passes('The Office Episode 5: Basketball', episode)).toBe(true);
+    });
+
+    test('passes without a number when the title is only a series name and the episode title', () => {
+      expect(passes('The Office - Basketball', episode)).toBe(true);
+      expect(passes('The Office (US): Basketball', episode)).toBe(true);
+      expect(passes('Basketball | The Office', episode)).toBe(true);
+    });
+
+    // What yt-dlp returned first for 'All Souls "The Deal"' on 2026-11-23:
+    // the episode, from a channel that titles its uploads without a number.
+    test('All Souls S01E03 finds the upload titled "All Souls the deal"', () => {
+      const allSouls = show('The Deal', {
+        seriesTitle: 'All Souls', seriesTitles: ['All Souls'], runtimeSeconds: 2700, episode: 3,
+      });
+      const upload = candidate('QDQ89luX_Cs', 'All Souls the deal', 'Ballinn Sunnie93', 2580);
+
+      expect(ids(filterByEpisodeTitle([upload], { episode: allSouls, settings: settings() }))).toEqual(['QDQ89luX_Cs']);
     });
 
     test('accepts the absolute number as the episode number', () => {
@@ -366,11 +383,11 @@ describe('episodeMatcher', () => {
     });
 
     test('passes without a number under loose matching', () => {
-      expect(passes('The Office - Basketball', episode, LOOSE)).toBe(true);
+      expect(passes('The Office - Basketball (Full Game Scene)', episode, LOOSE)).toBe(true);
     });
 
     test('a title of an article and one word counts as one word', () => {
-      expect(passes('Some Show - The Fight', show('The Fight'))).toBe(false);
+      expect(passes('Some Show Finale - The Fight', show('The Fight'))).toBe(false);
       expect(passes('Some Show Ep. 5 - The Fight', show('The Fight'))).toBe(true);
     });
   });
@@ -405,7 +422,7 @@ describe('episodeMatcher', () => {
         video('Beyblade Burst Episode 29: Play it Again Dizzi'),
         beyblade({ siblingTitles: ['Beyblade Burst'] }),
       ],
-      ['episode-number-missing', video('The Office - Basketball'), office],
+      ['episode-number-missing', video('The Office - Basketball (Full Game Scene)'), office],
     ])('%s', (reason, item, episode) => {
       expect(reasonFor(item, episode)).toBe(reason);
     });

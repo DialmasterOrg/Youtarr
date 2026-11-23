@@ -184,7 +184,7 @@ describe('arrBridgeService', () => {
     expect(arrClient.fetchParsedEpisode).toHaveBeenCalledWith(sonarr, 'Beyblade.S01E29.480p.YT.WEB-DL-YOUTARR');
     expect(arrClient.fetchSeriesById).toHaveBeenCalledWith(sonarr, 14);
     expect(arrClient.fetchEpisodes).toHaveBeenCalledWith(sonarr, 14);
-    expect(searchVideos).toHaveBeenCalledWith('Beyblade Play It Again Dizzi', 25, {
+    expect(searchVideos).toHaveBeenCalledWith('Beyblade "Play It Again Dizzi"', 25, {
       useApi: true, onApiUnits: expect.any(Function),
     });
     expect(response.body).toContain('Beyblade.S01E29.1080p.YT.WEB-DL-BEYBLADEOfficial');
