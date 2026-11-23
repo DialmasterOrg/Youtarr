@@ -21,6 +21,7 @@ const membersAccess = require('../membersAccess');
 const tempSpaceProbe = require('./tempSpaceProbe');
 const { containsHttp403 } = require('./ytdlpStderrSignals');
 const { isBotCheck } = require('../ytdlpBotCheck');
+const { KIND, adviceFor, botCheckSummary } = require('../youtubeBlockAdvice');
 const { isSpecificUrlDownloadJob } = require('./jobTypes');
 const { runCompletionSideEffects } = require('./downloadCompletionEffects');
 const {
@@ -370,11 +371,7 @@ async function finalizeDownloadJob({
 
     if (botDetected) {
       status = 'Error';
-      output = anonymousRetry
-        ? 'Bot detection encountered during the no-cookies fallback. The fallback also failed, so this video may be genuinely unavailable.'
-        : cookiesEnabled
-          ? 'Bot detection encountered even though cookies are configured - they are likely expired or rotated.'
-          : 'Bot detection encountered. YouTube is temporarily refusing requests from this server; this usually clears on its own, so try again later.';
+      output = botCheckSummary({ cookiesEnabled, anonymousRetry });
 
       // Same leftovers, and the same guard, as the non-zero exit branch below.
       if (stdioClosed) {
@@ -387,11 +384,7 @@ async function finalizeDownloadJob({
         endDate: Date.now(),
         output: output,
         data: dataPayload,
-        notes: anonymousRetry
-          ? 'The no-cookies fallback was also rejected by YouTube. This video may be genuinely unavailable.'
-          : cookiesEnabled
-            ? 'YouTube requires authentication and your uploaded cookies appear stale. Re-export fresh cookies from your browser and upload them in Settings -> Cookies.'
-            : 'YouTube asked this server to sign in (bot check). Without cookies this is usually temporary and the next scheduled download retries the failed videos. If it keeps happening, upload YouTube cookies in Settings -> Cookies.',
+        notes: adviceFor(KIND.BOT_CHECK, { cookiesEnabled, anonymousRetry }).message,
         error: anonymousRetry ? 'NO_COOKIES_FALLBACK_FAILED' : 'COOKIES_REQUIRED'
       });
       jobErrorCode = anonymousRetry ? 'NO_COOKIES_FALLBACK_FAILED' : 'COOKIES_REQUIRED';

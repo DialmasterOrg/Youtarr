@@ -119,6 +119,7 @@ jest.mock('../../filesystem', () => {
 });
 
 const DownloadExecutor = require('../downloadExecutor');
+const { KIND, adviceFor } = require('../../youtubeBlockAdvice');
 const filesystem = require('../../filesystem');
 const configModule = require('../../configModule');
 const plexModule = require('../../plexModule');
@@ -1676,7 +1677,7 @@ describe('DownloadExecutor', () => {
       expect(jobModule.updateJob).toHaveBeenCalledWith(
         mockJobId,
         expect.objectContaining({
-          notes: 'YouTube denied access (HTTP 403). Configure cookies in Settings -> Cookies to resolve this issue.',
+          notes: adviceFor(KIND.HTTP_403, { cookiesEnabled: false }).message,
           error: 'COOKIES_RECOMMENDED'
         })
       );
