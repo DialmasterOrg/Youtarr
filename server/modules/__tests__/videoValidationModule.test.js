@@ -301,6 +301,29 @@ describe('VideoValidationModule', () => {
 
       expect(result.isValidUrl).toBe(false);
       expect(result.error).toBe('Invalid YouTube URL format');
+      expect(result.errorCode).toBe('INVALID_URL');
+    });
+
+    it.each([
+      ['a number', 123],
+      ['an object', { href: 'https://www.youtube.com/watch?v=OOUclRI0Ae4' }],
+    ])('calls %s an invalid URL instead of blaming YouTube', async (_label, url) => {
+      const result = await videoValidationModule.validateVideo(url);
+
+      expect(result).toEqual({
+        isValidUrl: false,
+        error: 'Invalid YouTube URL format',
+        errorCode: 'INVALID_URL',
+      });
+      expect(ytDlpRunner.fetchMetadata).not.toHaveBeenCalled();
+    });
+
+    it('does not mistake a yt-dlp failure that mentions an invalid URL for bad input', async () => {
+      ytDlpRunner.fetchMetadata.mockRejectedValue(new Error('Failed to fetch video metadata: ERROR: Invalid YouTube URL returned by redirect'));
+
+      const result = await videoValidationModule.validateVideo('https://www.youtube.com/watch?v=OOUclRI0Ae4');
+
+      expect(result.errorCode).toBe('FETCH_FAILED');
     });
 
     it('should handle timeout errors', async () => {
@@ -310,6 +333,7 @@ describe('VideoValidationModule', () => {
 
       expect(result.isValidUrl).toBe(false);
       expect(result.error).toBe('Request timed out. Please try again.');
+      expect(result.errorCode).toBe('TIMEOUT');
     });
 
     it('should handle unavailable videos', async () => {
@@ -319,15 +343,51 @@ describe('VideoValidationModule', () => {
 
       expect(result.isValidUrl).toBe(false);
       expect(result.error).toBe('Video is unavailable or has been removed');
+      expect(result.errorCode).toBe('VIDEO_UNAVAILABLE');
     });
 
-    it('should handle generic errors', async () => {
-      ytDlpRunner.fetchMetadata.mockRejectedValue(new Error('Some random error'));
+    it('recognizes the wording yt-dlp uses for a video that does not exist', async () => {
+      ytDlpRunner.fetchMetadata.mockRejectedValue(new Error(
+        'Failed to fetch video metadata: ERROR: [youtube] aaaaaaaaaaa: This video is unavailable\n'
+      ));
+
+      const result = await videoValidationModule.validateVideo('https://www.youtube.com/watch?v=aaaaaaaaaaa');
+
+      expect(result).toEqual({
+        isValidUrl: false,
+        error: 'Video is unavailable or has been removed',
+        errorCode: 'VIDEO_UNAVAILABLE',
+      });
+    });
+
+    it('reports a bot check with the message the runner worded for it', async () => {
+      const botCheck = Object.assign(
+        new Error('Bot detection encountered. YouTube is temporarily refusing requests from this server.'),
+        { code: 'COOKIES_REQUIRED', usedCookies: false }
+      );
+      ytDlpRunner.fetchMetadata.mockRejectedValue(botCheck);
 
       const result = await videoValidationModule.validateVideo('https://www.youtube.com/watch?v=OOUclRI0Ae4');
 
-      expect(result.isValidUrl).toBe(false);
-      expect(result.error).toBe('Some random error');
+      expect(result).toEqual({
+        isValidUrl: false,
+        error: botCheck.message,
+        errorCode: 'COOKIES_REQUIRED',
+      });
+    });
+
+    it('keeps yt-dlp output out of the reply for a failure it does not recognize', async () => {
+      ytDlpRunner.fetchMetadata.mockRejectedValue(new Error(
+        'Failed to fetch video metadata: ERROR: [youtube] OOUclRI0Ae4: Private video. Use --cookies-from-browser or --cookies for the authentication.'
+      ));
+
+      const result = await videoValidationModule.validateVideo('https://www.youtube.com/watch?v=OOUclRI0Ae4');
+
+      expect(result).toEqual({
+        isValidUrl: false,
+        error: 'YouTube did not return this video\'s details. The server log has the reason.',
+        errorCode: 'FETCH_FAILED',
+      });
     });
 
     it('should detect already downloaded videos', async () => {

@@ -127,6 +127,7 @@ Any other body fields are ignored. Folder layout (flat or one folder per video) 
 | Status | Response | Description |
 |--------|----------|-------------|
 | 400 | `{"success": false, "error": "URL is required"}` | Missing or invalid URL |
+| 400 | `{"success": false, "error": "Bot detection encountered. ...", "errorCode": "COOKIES_REQUIRED"}` | YouTube would not return the video, so nothing was queued. `errorCode` says why: `COOKIES_REQUIRED` (YouTube's bot check, often temporary, so retrying later can work), `TIMEOUT`, `VIDEO_UNAVAILABLE`, `COOKIES_REJECTED` (members-only video and the configured cookies could not be used) or `FETCH_FAILED` (any other failure; the reason is in the server log) |
 | 401 | `{"error": "Invalid API key"}` | Invalid or missing authentication |
 | 403 | `{"error": "API keys can only access the download endpoint"}` | API key used on wrong endpoint |
 | 403 | `{"error": "Status API keys can only access the status summary endpoint"}` | A read-only status key was used; it cannot start downloads |

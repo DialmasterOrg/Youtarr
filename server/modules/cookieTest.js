@@ -7,6 +7,7 @@ const ytDlpRunner = require('./ytDlpRunner');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const { getExternalCookiesPath, getExternalCookiesStatus } = require('./externalCookies');
 const { classifyYtdlpError, ERROR_CODES } = require('./subscriptionImport/errorClassifier');
+const { BOT_CHECK_CODE } = require('./ytdlpBotCheck');
 
 const COOKIE_TEST_TIMEOUT_MS = 60 * 1000;
 // The subscriptions feed only renders for a signed-in session, so it doubles
@@ -17,8 +18,6 @@ const PROBE_ARGS = ['--flat-playlist', '--skip-download', '-J', '--playlist-end'
 // warnings (verified with yt-dlp 2026.09.16). For other URLs they can mean an
 // outdated yt-dlp, which is why this check stays specific to the feed.
 const NOT_SIGNED_IN_PATTERN = /Incomplete yt initial data received|unable to extract yt initial data/i;
-// Matches both apostrophes yt-dlp prints; the shared classifier only matches "you are".
-const BOT_CHECK_PATTERN = /sign in to confirm.*not a bot/i;
 const INVALID_COOKIE_FILE = 'INVALID_COOKIE_FILE';
 const IN_PROGRESS_CODE = 'COOKIE_TEST_IN_PROGRESS';
 const SNAPSHOT_DIR_PREFIX = 'youtarr-cookie-test-';
@@ -36,8 +35,6 @@ const MESSAGES = {
   [ERROR_CODES.UNKNOWN]: 'yt-dlp could not complete the cookie test. Try again, and update yt-dlp if it keeps failing.',
 };
 
-// ytDlpRunner reports its own bot-check detection with this code.
-const RUNNER_BOT_CHECK_CODE = 'COOKIES_REQUIRED';
 const RUNNER_TIMEOUT_CODE = 'YTDLP_TIMEOUT';
 
 function failure(code, error = MESSAGES[code]) {
@@ -46,10 +43,9 @@ function failure(code, error = MESSAGES[code]) {
 
 function classifyFailure(error) {
   if (error.code === RUNNER_TIMEOUT_CODE) return ERROR_CODES.TIMEOUT;
-  if (error.code === RUNNER_BOT_CHECK_CODE) return ERROR_CODES.BOT_CHECK;
+  if (error.code === BOT_CHECK_CODE) return ERROR_CODES.BOT_CHECK;
 
   const stderr = error.message || '';
-  if (BOT_CHECK_PATTERN.test(stderr)) return ERROR_CODES.BOT_CHECK;
   const { code } = classifyYtdlpError(stderr);
   if (code !== ERROR_CODES.UNKNOWN) return code;
   return NOT_SIGNED_IN_PATTERN.test(stderr) ? ERROR_CODES.EXPIRED_COOKIES : ERROR_CODES.UNKNOWN;

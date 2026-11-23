@@ -4,7 +4,11 @@ const logger = require('../logger');
 const ChannelVideo = require('../models/channelvideo');
 const youtubeUrlParser = require('./youtubeUrlParser');
 const membersAccess = require('./membersAccess');
+const { BOT_CHECK_CODE } = require('./ytdlpBotCheck');
 
+// yt-dlp words it "Video unavailable" or "This video is unavailable".
+const VIDEO_UNAVAILABLE_PATTERN = /video (is )?unavailable/i;
+const FETCH_FAILED_ERROR ='YouTube did not return this video\'s details. The server log has the reason.';
 const COOKIES_UNUSABLE_FOR_MEMBERS_ERROR = 'This video is members-only, and the configured cookies could not be used to check access: they hold no signed-in YouTube session, have expired, or YouTube rejected them. Export fresh cookies and try again.';
 
 class VideoValidationModule {
@@ -194,10 +198,21 @@ class VideoValidationModule {
     let videoId = null;
     let canonicalUrl = null;
 
+    // Whatever the parser rejects, and however it words it, is bad input:
+    // nothing was asked of YouTube.
     try {
       const normalized = this.normalizeUrlToVideoId(url);
       videoId = normalized.id;
       canonicalUrl = normalized.canonicalUrl;
+    } catch (error) {
+      return {
+        isValidUrl: false,
+        error: 'Invalid YouTube URL format',
+        errorCode: 'INVALID_URL'
+      };
+    }
+
+    try {
 
       const cachedResponse = this.getCachedResponse(videoId);
       if (cachedResponse) {
@@ -230,13 +245,11 @@ class VideoValidationModule {
 
       return response;
     } catch (error) {
-      // Check for bot detection error
-      if (error.code === 'COOKIES_REQUIRED' ||
-          error.message.includes('Bot detection encountered')) {
+      if (error.code === BOT_CHECK_CODE) {
         return {
           isValidUrl: false,
-          error: 'Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.',
-          errorCode: 'COOKIES_REQUIRED'
+          error: error.message,
+          errorCode: BOT_CHECK_CODE
         };
       }
       // Check for members-only video error
@@ -282,25 +295,25 @@ class VideoValidationModule {
         });
         this._persistAvailabilityFromResponse(membersOnlyResponse);
         return membersOnlyResponse;
-      } else if (error.message.includes('Invalid YouTube URL')) {
-        return {
-          isValidUrl: false,
-          error: 'Invalid YouTube URL format'
-        };
       } else if (error.message.includes('timed out')) {
         return {
           isValidUrl: false,
-          error: 'Request timed out. Please try again.'
+          error: 'Request timed out. Please try again.',
+          errorCode: 'TIMEOUT'
         };
-      } else if (error.message.includes('Video unavailable')) {
+      } else if (VIDEO_UNAVAILABLE_PATTERN.test(error.message)) {
         return {
           isValidUrl: false,
-          error: 'Video is unavailable or has been removed'
+          error: 'Video is unavailable or has been removed',
+          errorCode: 'VIDEO_UNAVAILABLE'
         };
       } else {
+        // The message here is raw yt-dlp output, already logged by
+        // fetchVideoMetadata; it is not worded for a user.
         return {
           isValidUrl: false,
-          error: error.message || 'Failed to validate video'
+          error: FETCH_FAILED_ERROR,
+          errorCode: 'FETCH_FAILED'
         };
       }
     }

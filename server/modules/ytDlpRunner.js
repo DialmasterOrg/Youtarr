@@ -2,6 +2,7 @@ const { spawnYtDlp } = require('./ytdlpProcess');
 const path = require('path');
 const fs = require('fs');
 const tempPathManager = require('./download/tempPathManager');
+const { BOT_CHECK_CODE, isBotCheck, createBotCheckError } = require('./ytdlpBotCheck');
 
 const MEMBERS_ONLY_PATTERNS = [
   /join this channel to get access to members-only content/i,
@@ -128,12 +129,8 @@ class YtDlpRunner {
           fileStream.end();
         }
 
-        // Check for bot detection
-        if (stderr.includes('Sign in to confirm you\'re not a bot') ||
-            stderr.includes('Sign in to confirm that you\'re not a bot')) {
-          const error = new Error('Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.');
-          error.code = 'COOKIES_REQUIRED';
-          reject(error);
+        if (isBotCheck(stderr)) {
+          reject(createBotCheckError({ usedCookies: ytDlpProcess.cookiesPassed === true }));
         } else if (code === 0) {
           resolve(stdout);
         } else if (code === null) {
@@ -191,6 +188,8 @@ class YtDlpRunner {
       const stdout = await this.run(args, { timeoutMs });
       return JSON.parse(stdout);
     } catch (error) {
+      // Already worded for the user, and callers key on its code.
+      if (error.code === BOT_CHECK_CODE) throw error;
       if (error.message.includes('timed out')) {
         throw new Error('Failed to fetch video metadata: Request timed out');
       }

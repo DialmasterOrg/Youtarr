@@ -117,6 +117,17 @@ describe('POST /api/channels/search behavior', () => {
     expect(res.body).toEqual({ error: 'Search failed' });
   });
 
+  test('502 with the reason when YouTube answers the search with a bot check', async () => {
+    const botCheck = Object.assign(new Error('Bot detection encountered. Try again later.'), { code: 'COOKIES_REQUIRED' });
+    const app = buildApp({
+      verifyToken,
+      searchChannels: jest.fn().mockRejectedValueOnce(botCheck),
+    });
+    const res = await request(app).post('/api/channels/search').send({ query: 'x' });
+    expect(res.status).toBe(502);
+    expect(res.body).toEqual({ error: 'Bot detection encountered. Try again later.', errorCode: 'COOKIES_REQUIRED' });
+  });
+
   test('requires auth via verifyToken', async () => {
     const verifyTokenDeny = (_req, res) => res.status(401).json({ error: 'Unauthorized' });
     const app = buildApp({ verifyToken: verifyTokenDeny });

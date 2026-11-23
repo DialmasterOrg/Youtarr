@@ -895,6 +895,40 @@ describe('API Key Authentication - Security Tests', () => {
       });
     });
 
+    test('answers 400 with the validation error and its code when YouTube refuses the lookup', async () => {
+      const apiKeyModuleMock = createApiKeyModuleMock();
+      const created = await apiKeyModuleMock.createApiKey('Download Key');
+
+      const { app, downloadModuleMock, videoValidationModuleMock } = await createServerModule({ apiKeyModuleMock });
+      videoValidationModuleMock.validateVideo.mockResolvedValueOnce({
+        isValidUrl: false,
+        error: 'Bot detection encountered. Try again later.',
+        errorCode: 'COOKIES_REQUIRED'
+      });
+
+      const handlers = findRouteHandlers(app, 'post', '/api/videos/download');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' },
+        headers: { 'x-api-key': created.key },
+        authType: 'api_key',
+        apiKeyId: created.id,
+        apiKeyName: 'Download Key'
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'Bot detection encountered. Try again later.',
+        errorCode: 'COOKIES_REQUIRED'
+      });
+      expect(downloadModuleMock.doGroupedManualDownloads).not.toHaveBeenCalled();
+    });
+
     test('rejects invalid API key via apiKeyModule', async () => {
       const apiKeyModuleMock = createApiKeyModuleMock();
       await apiKeyModuleMock.createApiKey('Valid Key');

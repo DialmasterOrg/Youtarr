@@ -4,6 +4,7 @@ import {
   Typography,
   Button,
   Alert,
+  AlertTitle,
   Snackbar,
   Divider,
   Paper,
@@ -26,6 +27,9 @@ import BulkImportDialog from './BulkImportDialog';
 import { VideoInfo, ValidationResponse, DownloadSettings } from './types';
 
 const ENRICH_CHUNK_SIZE = 25;
+// errorCode values of POST /api/checkYoutubeVideoURL this page treats specially.
+const BOT_CHECK_CODE = 'COOKIES_REQUIRED';
+const INVALID_URL_CODE = 'INVALID_URL';
 
 interface EnrichedVideoMeta {
   title: string;
@@ -74,6 +78,7 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
   const [previouslyDownloadedCount, setPreviouslyDownloadedCount] = useState(0);
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [isEnrichingBulk, setIsEnrichingBulk] = useState(false);
+  const [validationWarning, setValidationWarning] = useState<string | null>(null);
 
   const handleBulkImport = useCallback((videos: VideoInfo[]) => {
     setValidatedVideos(prev => [...prev, ...videos]);
@@ -104,6 +109,7 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
     setIsValidating(true);
     setErrorMessage(null);
     setSuccessMessage(null);
+    setValidationWarning(null);
 
     try {
       const response = await axios.post<ValidationResponse>(
@@ -118,10 +124,15 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
       const { data } = response;
 
       if (!data.isValidUrl) {
-        // Rejected cookies on a members-only video: the URL itself is fine.
-        setErrorMessage(data.errorCode === 'COOKIES_REJECTED' && data.error
-          ? data.error
-          : 'Invalid YouTube URL. Please check the URL and try again.');
+        // A coded error means the URL was fine and the YouTube lookup failed,
+        // so the server's reason is shown; a bot check gets the warning that
+        // stays on screen, since it takes more than a glance to read.
+        const serverReason = data.errorCode && data.errorCode !== INVALID_URL_CODE ? data.error : undefined;
+        if (serverReason && data.errorCode === BOT_CHECK_CODE) {
+          setValidationWarning(serverReason);
+        } else {
+          setErrorMessage(serverReason || 'Invalid YouTube URL. Please check the URL and try again.');
+        }
         return false;
       }
 
@@ -255,6 +266,16 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
               disabled={isDownloading}
             />
           </Box>
+          {validationWarning && (
+            <Alert
+              severity="warning"
+              onClose={() => setValidationWarning(null)}
+              data-testid="validation-warning"
+            >
+              <AlertTitle>Could not add this video</AlertTitle>
+              {validationWarning}
+            </Alert>
+          )}
           <Box className="flex justify-center">
             <Button
               variant="outlined"

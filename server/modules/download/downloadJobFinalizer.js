@@ -20,6 +20,7 @@ const failedVideoEnricher = require('./failedVideoEnricher');
 const membersAccess = require('../membersAccess');
 const tempSpaceProbe = require('./tempSpaceProbe');
 const { containsHttp403 } = require('./ytdlpStderrSignals');
+const { isBotCheck } = require('../ytdlpBotCheck');
 const { isSpecificUrlDownloadJob } = require('./jobTypes');
 const { runCompletionSideEffects } = require('./downloadCompletionEffects');
 const {
@@ -190,9 +191,7 @@ async function finalizeDownloadJob({
     let httpForbiddenDetected = router.httpForbiddenDetected;
 
     // Also check the complete stderr buffer for bot detection
-    if (!botDetected && stderrBuffer &&
-        stderrBuffer.includes('Sign in to confirm') &&
-        stderrBuffer.includes('not a bot')) {
+    if (!botDetected && isBotCheck(stderrBuffer)) {
       botDetected = true;
       logger.info('Bot detection found in stderr buffer');
     }
