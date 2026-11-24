@@ -442,6 +442,20 @@ describe('ArrBridgeSection', () => {
       expect(props.onConfigChange).toHaveBeenCalledWith({ arrBridgeRemoveAfterImport: true });
     });
 
+    test('say that subtitles are handed over when Youtarr downloads them', () => {
+      setupSection({ config: createConfig({ subtitlesEnabled: true, subtitleLanguage: 'en,de' }) });
+
+      const note = within(screen.getByRole('group', { name: 'Subtitles' }));
+      expect(note.getByText(/Youtarr downloads subtitles \(en, de\) with each video/)).toBeInTheDocument();
+    });
+
+    test('say that grabs have no subtitles while Youtarr downloads none', () => {
+      setupSection({ config: createConfig({ subtitlesEnabled: false }) });
+
+      const note = within(screen.getByRole('group', { name: 'Subtitles' }));
+      expect(note.getByText(/Subtitles are off in Youtarr/)).toBeInTheDocument();
+    });
+
     test('say that removing after the import needs the connection in step 3', () => {
       setupSection();
 
