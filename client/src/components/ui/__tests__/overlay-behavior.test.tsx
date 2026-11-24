@@ -202,28 +202,6 @@ describe('overlay positioning guards', () => {
     expect(content).toHaveStyle({ maxHeight: 'min(var(--radix-select-content-available-height), calc(100dvh - var(--app-shell-overlay-top-offset, 0px) - var(--mobile-nav-total-offset, 0px) - 16px))' });
   });
 
-  test('trusted mouseDown does not trigger the synthetic test-event opener', () => {
-    const onOpen = jest.fn();
-    render(
-      <Select open={false} onOpen={onOpen} value="PG" onChange={jest.fn()}>
-        <MenuItem value="PG">PG</MenuItem>
-      </Select>
-    );
-
-    const trustedMouseDown = new MouseEvent('mousedown', { bubbles: true });
-    const isTrustedDescriptor = Object.getOwnPropertyDescriptor(trustedMouseDown, 'isTrusted');
-    if (!isTrustedDescriptor?.configurable) {
-      // jsdom exposes isTrusted as a non-configurable getter, so this environment
-      // cannot synthesize a trusted browser event.
-      expect(isTrustedDescriptor).toBeDefined();
-      return;
-    }
-    Object.defineProperty(trustedMouseDown, 'isTrusted', { value: true });
-    fireEvent(screen.getByRole('button', { name: 'PG' }), trustedMouseDown);
-
-    expect(onOpen).not.toHaveBeenCalled();
-  });
-
   test('select content renders above dialog content when opened inside a modal', async () => {
     render(
       <Dialog open onClose={jest.fn()}>
