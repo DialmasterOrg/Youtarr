@@ -132,7 +132,9 @@ describe('grabExecutor', () => {
       await executor.runOnce();
 
       expect(deps.downloader).not.toHaveBeenCalled();
-      expect(deps.staging.stage).toHaveBeenCalledWith({ category: 'tv', releaseTitle: TITLE, sourcePath: LIBRARY_FILE });
+      expect(deps.staging.stage).toHaveBeenCalledWith({
+        category: 'tv', releaseTitle: TITLE, sourcePath: LIBRARY_FILE, youtubeId: YOUTUBE_ID,
+      });
       expect(rows[0]).toMatchObject({ status: 'completed', staged_path: STAGED_FILE, bytes: 4096, completed_at: NOW });
     });
 
@@ -283,7 +285,9 @@ describe('grabExecutor', () => {
 
       await executor.handleJobEnded({ jobId: JOB_ID });
 
-      expect(deps.staging.stage).toHaveBeenCalledWith({ category: 'tv', releaseTitle: TITLE, sourcePath: LIBRARY_FILE });
+      expect(deps.staging.stage).toHaveBeenCalledWith({
+        category: 'tv', releaseTitle: TITLE, sourcePath: LIBRARY_FILE, youtubeId: YOUTUBE_ID,
+      });
       expect(rows[0]).toMatchObject({ status: 'completed', staged_path: STAGED_FILE, bytes: 4096, completed_at: NOW });
     });
 

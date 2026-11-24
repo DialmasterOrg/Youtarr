@@ -9,6 +9,7 @@ Youtarr can act as an indexer and a download client for Sonarr and Radarr. Sonar
 - [Step 3: Connect your Sonarr and Radarr (recommended)](#step-3-connect-your-sonarr-and-radarr-recommended)
 - [Step 4: The shared folder](#step-4-the-shared-folder)
 - [Settings to check in Sonarr and Radarr](#settings-to-check-in-sonarr-and-radarr)
+- [Subtitles](#subtitles)
 - [How matching works](#how-matching-works)
 - [Resolution](#resolution)
 - [Using Youtarr beside other indexers](#using-youtarr-beside-other-indexers)
@@ -163,6 +164,21 @@ Youtarr puts `.ignore` and `.plexignore` files in the staging folder, so Plex, J
 - **Quality profile.** Youtarr labels each release `WEB-DL` at the resolution the video really has, up to the lower of **Resolution** and **Offer releases as** on the Sonarr / Radarr page (see [Resolution](#resolution)). The profile of the series or movie must allow WEBDL at the resolution a video really has, up to that one: a video that only exists in 480p is offered as 480p, and a profile that does not allow 480p will not take it. Sonarr's default "Any" profile does not include 2160p.
 - **Delay profile.** Usenet must be enabled: Youtarr presents itself as a Usenet indexer.
 - **Automatic search.** With the default strict matching you can leave "Enable Automatic Search" on; [How matching works](#how-matching-works) names the cases it can still get wrong. If you turn on loose matching in Youtarr, turn it off for the Youtarr indexer and search interactively.
+- **Import Extra Files.** Off by default. Turn it on if you want a video's subtitles imported with it; see [Subtitles](#subtitles).
+
+## Subtitles
+
+Youtarr hands a video's subtitle files to Sonarr and Radarr together with the video. Sonarr and Radarr only take them when two settings are on:
+
+1. **In Youtarr:** [Subtitles](CONFIG.md#enable-subtitles) on the Core settings page, with the languages you want. The setting and its languages decide what Youtarr downloads from then on. A grab hands over the subtitle files a video has: a video downloaded while subtitles were off has none, and a video downloaded earlier with subtitles is handed over with them even when the setting is off now.
+2. **In Sonarr and Radarr:** **Settings -> Media Management -> Importing -> Import Extra Files**. The list of extensions beside it (an advanced setting) holds `srt` by default, which is the format Youtarr hands over.
+
+The subtitles are imported next to the episode or movie and named after it, like `Show - S01E02.en.srt`. With Import Extra Files off they are ignored, and the staging folder is cleaned up as usual.
+
+- **Regional tracks lose their region.** Sonarr and Radarr read a plain two or three letter language code only, so Youtarr hands over `en-GB` as `en` and `zh-Hans` as `zh`. Youtarr's own library keeps the full code.
+- **Several tracks of one language are all imported, numbered.** A video with different `en-CA` and `en-GB` subtitles arrives as `.1.en.srt` and `.2.en.srt`, and one with Simplified and Traditional Chinese as `.1.zh.srt` and `.2.zh.srt`. Sonarr and Radarr cannot tell such tracks apart, so the number is all that distinguishes them. Tracks that hold exactly the same text (YouTube lists one English track under `en`, `en-CA` and `en-GB` on some videos) are handed over once. To get one track only, set that exact code (`zh-Hans`, for example) as the subtitle language in Youtarr's `config.json`; see [Subtitle Languages](CONFIG.md#subtitle-languages).
+- **A language Sonarr or Radarr does not know** (their lists are shorter than YouTube's) is imported without a language code in its name.
+- Sonarr and Radarr get copies of the subtitle files. Editing or replacing them there, with Bazarr for example, never changes Youtarr's files.
 
 ## How matching works
 

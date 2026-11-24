@@ -88,6 +88,10 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 ## Grabs and staging
 
 - The apps only ever get a hardlink under `.arr-staging` (a copy across filesystems): they move the file and delete the folder themselves.
+- A grab's `.srt` files are staged as copies, never links (an in-place edit would reach the library file). A subtitle that cannot be staged never fails the grab.
+- A library subtitle is read through a handle opened without following links or waiting on a pipe, and staged with exclusive create: both folders can be shares, where an entry's name proves nothing about what it is.
+- Subtitles are staged under the bare language code: the apps read only a final 2 or 3 letter code, so `en-GB` imports with no language and `fr-CA` as Catalan.
+- Tracks sharing a language are all staged, numbered before the code (`.1.en.srt`) as the apps number them; byte-identical ones once, because YouTube lists one track under `en`, `en-CA` and `en-GB`.
 - With `arrBridgeRemoveAfterImport` on, `libraryCopyRemover` deletes Youtarr's copy of a grab only after a confirmed import, through `videoDeletionModule` (`auto_removal`; the archive line stays). Off, a grab never removes a library file, a Videos row or an archive line.
 - One history delete serves an import and a removal, so only the connected app's history (`downloadId` is the grab id) proves an import; unconfirmed keeps the copy. A hardlink count is no proof: any other link reads as one.
 - `library_copy` is `owned` only for a video with no library row that the grab's own job downloads; a requeue clears it, because another job may then be the one that downloads the video.
