@@ -1,5 +1,5 @@
 import React from 'react';
-import { Info, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { Info, ThumbsDown, ThumbsUp } from '../../../lib/icons';
 import { IconButton } from '../../ui';
 import { ExternalRequestReview } from '../../../types/externalRequest';
 import {

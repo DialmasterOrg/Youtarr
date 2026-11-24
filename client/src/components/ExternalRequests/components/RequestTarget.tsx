@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
-import { ExternalLink, Radio, Trash2, Video } from 'lucide-react';
+import {
+  ExternalLink,
+  Radio,
+  Trash2,
+  Video,
+} from '../../../lib/icons';
 import { Avatar, Chip } from '../../ui';
 import RatingBadge from '../../shared/RatingBadge';
 import { ExternalRequestReview, ExternalRequestStatus } from '../../../types/externalRequest';

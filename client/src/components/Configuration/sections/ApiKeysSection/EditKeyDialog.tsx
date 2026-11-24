@@ -9,7 +9,7 @@ import {
   Divider,
   Typography,
 } from '../../../ui';
-import { AlertTriangle as WarningIcon } from 'lucide-react';
+import { Warning as WarningIcon } from '../../../../lib/icons';
 import { ApiKey, useApiKeys } from './useApiKeys';
 import { useExternalAccessEditor } from './useExternalAccessEditor';
 import PolicyEditor from './PolicyEditor';

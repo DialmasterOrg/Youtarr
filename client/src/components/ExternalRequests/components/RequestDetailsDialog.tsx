@@ -1,5 +1,5 @@
 import React from 'react';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink } from '../../../lib/icons';
 import {
   Alert,
   Button,

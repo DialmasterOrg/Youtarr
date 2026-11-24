@@ -1,6 +1,6 @@
 import React from 'react';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import { Key } from 'lucide-react';
+import { Key } from '../../lib/icons';
 import { Link } from 'react-router-dom';
 import {
   Alert,
