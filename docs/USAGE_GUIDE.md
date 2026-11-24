@@ -755,7 +755,7 @@ Send videos to Youtarr from anywhere using API keys. This enables one-click down
 
 ### Versioned external API keys and the Requests page
 
-When the server runs with `EXTERNAL_API_ENABLED=true` (see [External API](EXTERNAL_API.md)), the same settings page gains an **External access keys** section below the bookmarklet keys. These keys use `/external-api/v1` for approved catalog access and approval-backed video, channel, and deletion requests. Bookmarklet keys cannot use `/external-api/v1`, and external keys cannot use the bookmarklet endpoint. With the variable unset, neither the section nor the Requests page appears.
+When the server runs with `EXTERNAL_API_ENABLED=true` (see [External API](EXTERNAL_API.md)), the same settings page gains an **External access keys** section below the bookmarklet keys. These keys use `/external-api/v1` for approved catalog access and approval-backed video, channel, and deletion requests. Bookmarklet keys cannot use `/external-api/v1`, and external keys cannot use the bookmarklet endpoint. With the variable unset, the Requests page is hidden and the section appears only while an external key is still active, so you can revoke it (it still counts toward the 20-key limit); you cannot create, edit or regenerate external keys until the API is turned back on.
 
 1. Click **Create external key**, name it, choose its permissions and content policy, and select the channels it may see.
 2. To change grants later, use the edit action on the key's card. Youtarr asks for confirmation before saving a change that widens what the key can see or request.

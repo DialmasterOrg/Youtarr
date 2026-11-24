@@ -42,7 +42,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
   { key: 'autoremove', title: 'Auto Removal', group: 'automation', description: 'Automated cleanup and retention policies.' },
   { key: 'storage-limits', title: 'Storage Limits', group: 'automation', description: 'Pause downloads when storage is full or over a size limit.' },
   { key: 'maintenance', title: 'Maintenance & Rescan', group: 'automation', description: 'Rescan files on disk and other maintenance actions.' },
-  { key: 'api-keys', title: 'API Keys & Bookmarklet', group: 'integrations', description: 'One-click "Send to Youtarr" bookmarklet and phone shortcuts.' },
+  { key: 'api-keys', title: 'API Keys & Bookmarklet', group: 'integrations', description: 'One-click "Send to Youtarr" bookmarklet, phone shortcuts, and keys for dashboards and external apps.' },
   { key: 'notifications', title: 'Notifications', group: 'integrations', description: 'Toast notifications and alert behavior.' },
   { key: 'rss-feeds', title: 'RSS Feeds', group: 'integrations', description: 'A private RSS feed of your downloaded videos.' },
   { key: 'sonarr-radarr', title: 'Sonarr / Radarr', group: 'integrations', description: 'Let Sonarr and Radarr search and grab YouTube videos through Youtarr.' },
