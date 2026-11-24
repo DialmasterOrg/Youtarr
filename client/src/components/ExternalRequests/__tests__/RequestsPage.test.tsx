@@ -117,6 +117,8 @@ describe('RequestsPage', () => {
     await waitFor(() => {
       expect(mockedAxios.get).toHaveBeenCalledTimes(3);
     });
+    // A decision taken from the details dialog returns there with the new status.
+    expect(await screen.findByText('Request details')).toBeInTheDocument();
     expect(mockedAxios.get).toHaveBeenLastCalledWith(
       "/api/external-requests",
       expect.objectContaining({ headers: { "x-access-token": "session-token" }, params: expect.objectContaining({ page: 1, pageSize: 25 }) })
@@ -239,6 +241,8 @@ describe('RequestsPage', () => {
         expect.objectContaining({ headers: { 'x-access-token': 'session-token' } })
       );
     });
+    // A decision taken from the list goes back to the list, not to the details.
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
   test('keeps review controls aligned but disables decisions for a completed request', async () => {

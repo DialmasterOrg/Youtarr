@@ -60,7 +60,8 @@ test('duplicate submission is prevented and a declined channel grant is sent', a
   expect(result.current.selected).not.toBeNull();
   await act(async () => pending.resolve({ data: { ...request, status: 'completed' } }));
   expect(result.current.action).toBeNull();
-  expect(result.current.selected?.status).toBe('completed');
+  // An inline decision closes back to the list.
+  expect(result.current.selected).toBeNull();
 });
 
 test('capacity errors retain the confirmation and support retry without losing its choice', async () => {

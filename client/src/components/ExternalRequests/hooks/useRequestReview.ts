@@ -107,7 +107,7 @@ export function useRequestReview(token: string, refresh: () => void) {
   }, [actionFromDetails]);
 
   const submitAction = useCallback(async () => {
-    const { selected, action, reason, grantToRequestingKey } = review;
+    const { selected, action, reason, grantToRequestingKey, actionFromDetails: fromDetails } = review;
     if (!selected || !action || submitting.current) return;
     if (action === 'reject' && !reason.trim()) return;
     const current = sequence.current;
@@ -126,7 +126,14 @@ export function useRequestReview(token: string, refresh: () => void) {
         { headers: { 'x-access-token': token } }
       );
       if (current !== sequence.current) return;
-      setReview({ ...EMPTY_REVIEW, selected: response.data });
+      // A decision made from the details dialog returns there with the new
+      // status; one made from the list goes back to the list.
+      if (fromDetails) {
+        setReview({ ...EMPTY_REVIEW, selected: response.data });
+      } else {
+        ++sequence.current;
+        setReview(EMPTY_REVIEW);
+      }
       refresh();
     } catch (error) {
       if (current === sequence.current) {
