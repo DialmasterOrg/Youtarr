@@ -11,6 +11,7 @@ const {
   getSubtitle,
   buildAutoRemovalTitle,
   buildDownloadPauseContent,
+  buildCookiesInvalidContent,
   formatBytes,
   groupVideosByChannel,
   getTerminatedCount,
@@ -209,9 +210,20 @@ function formatDownloadPauseMessage(status) {
   return { title, body };
 }
 
+/**
+ * Format the "cookies stopped working" notification as plain text
+ * @param {Object} info - see utils.buildCookiesInvalidContent
+ * @returns {Object} Object with title and body strings
+ */
+function formatCookiesInvalidMessage(info) {
+  const { title, summary, effect, action } = buildCookiesInvalidContent(info);
+  return { title, body: `${summary}\n\n${effect}\n\n${action}` };
+}
+
 module.exports = {
   formatDownloadMessage,
   formatTestMessage,
   formatAutoRemovalMessage,
-  formatDownloadPauseMessage
+  formatDownloadPauseMessage,
+  formatCookiesInvalidMessage
 };

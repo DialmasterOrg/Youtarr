@@ -5,7 +5,8 @@ import { ScheduleKey } from '../schedules';
 import WebSocketContext from '../../../contexts/WebSocketContext';
 
 export type ScheduleRunStatus = 'running' | 'success' | 'error' | 'skipped' | 'interrupted';
-export type ScheduleRunTrigger = 'scheduled' | 'manual' | 'startup';
+// 'download' is a download run reporting rejected cookies to the cookie check.
+export type ScheduleRunTrigger = 'scheduled' | 'manual' | 'startup' | 'download';
 
 export interface ScheduleRun {
   id: number;
@@ -21,7 +22,7 @@ export interface ScheduleRun {
 
 export type RunBlockReason =
   | 'not-registered' | 'running' | 'disabled' | 'cooldown' | 'managed'
-  | 'downloads-paused' | 'no-media-server' | 'youtube-throttled' | 'downloads-active';
+  | 'downloads-paused' | 'no-media-server' | 'no-cookie-file' | 'youtube-throttled' | 'downloads-active';
 
 export interface ScheduleRunAvailability {
   available: boolean;

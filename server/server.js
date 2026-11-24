@@ -299,6 +299,7 @@ const initialize = async () => {
     const storageGuard = require('./modules/storageGuard');
     const { downloadsFolderBlock } = require('./modules/libraryRootCheck');
     const membersAccess = require('./modules/membersAccess');
+    const cookieHealth = require('./modules/cookieHealth');
 
     // Downloads wait while the downloads folder looks unmounted or is not the
     // library: they would land where the library is not, and a file in an
@@ -310,6 +311,7 @@ const initialize = async () => {
     await scheduledTaskRuns.markInterruptedRuns();
     scheduledTaskManager.setRunRecorder(scheduledTaskRuns);
     tabVideoCounts.setRunHistory(scheduledTaskRuns);
+    cookieHealth.useRunHistory(scheduledTaskRuns);
     tabVideoCounts.setDownloadActivityCheck(() => jobModule.getInProgressJobId() !== null);
     autoDownloadScheduler.setRunTracker(downloadRunTracker);
     // A queued job abandoned before it started still counts toward its run.

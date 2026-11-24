@@ -13,6 +13,7 @@ const {
   getSubtitle,
   buildAutoRemovalTitle,
   buildDownloadPauseContent,
+  buildCookiesInvalidContent,
   formatBytes,
   groupVideosByChannel,
   getTerminatedCount,
@@ -219,9 +220,21 @@ function formatDownloadPauseMessage(status) {
   return { title, body };
 }
 
+/**
+ * Format the "cookies stopped working" notification as Telegram HTML
+ * @param {Object} info - see utils.buildCookiesInvalidContent
+ * @returns {Object} Object with title and HTML body strings
+ */
+function formatCookiesInvalidMessage(info) {
+  const { title, summary, effect, action } = buildCookiesInvalidContent(info);
+  const body = `${escapeHtml(summary)}\n\n${escapeHtml(effect)}\n\n<i>${escapeHtml(action)}</i>\n\n<i>— Youtarr</i>`;
+  return { title, body };
+}
+
 module.exports = {
   formatDownloadMessage,
   formatTestMessage,
   formatAutoRemovalMessage,
-  formatDownloadPauseMessage
+  formatDownloadPauseMessage,
+  formatCookiesInvalidMessage
 };

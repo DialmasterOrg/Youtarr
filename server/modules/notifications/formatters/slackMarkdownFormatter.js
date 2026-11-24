@@ -14,6 +14,7 @@ const {
   getSubtitle,
   buildAutoRemovalTitle,
   buildDownloadPauseContent,
+  buildCookiesInvalidContent,
   formatBytes,
   groupVideosByChannel,
   getTerminatedCount,
@@ -241,9 +242,20 @@ function formatDownloadPauseMessage(status) {
   return { title, body };
 }
 
+/**
+ * Format the "cookies stopped working" notification as Slack markdown
+ * @param {Object} info - see utils.buildCookiesInvalidContent
+ * @returns {Object} { title, body } for Apprise
+ */
+function formatCookiesInvalidMessage(info) {
+  const { title, summary, effect, action } = buildCookiesInvalidContent(info);
+  return { title, body: `${summary}\n\n${effect}\n\n_${action}_` };
+}
+
 module.exports = {
   formatDownloadMessage,
   formatTestMessage,
   formatAutoRemovalMessage,
-  formatDownloadPauseMessage
+  formatDownloadPauseMessage,
+  formatCookiesInvalidMessage
 };

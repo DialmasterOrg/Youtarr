@@ -12,6 +12,7 @@ const {
   getSubtitle,
   buildAutoRemovalTitle,
   buildDownloadPauseContent,
+  buildCookiesInvalidContent,
   formatBytes,
   groupVideosByChannel,
   getTerminatedCount,
@@ -26,6 +27,8 @@ const {
 } = require('../utils');
 
 const DISCORD_FIELD_VALUE_LIMIT = 1024;
+// Red, like the downloads paused embed: something needs the user.
+const COOKIES_INVALID_COLOR = 0xE53935;
 
 function truncateFieldValueAtLineBoundary(value, limit = DISCORD_FIELD_VALUE_LIMIT) {
   if (!value || value.length <= limit) {
@@ -349,10 +352,35 @@ function formatDownloadPauseMessage(status) {
   };
 }
 
+/**
+ * Format the "cookies stopped working" notification as a Discord embed
+ * @param {Object} info - see utils.buildCookiesInvalidContent
+ * @returns {Object} Discord webhook payload
+ */
+function formatCookiesInvalidMessage(info) {
+  const { title, summary, effect, action } = buildCookiesInvalidContent(info);
+  return {
+    embeds: [{
+      title,
+      description: summary,
+      color: COOKIES_INVALID_COLOR,
+      fields: [
+        { name: 'What this affects', value: effect, inline: false },
+        { name: 'What to do', value: action, inline: false }
+      ],
+      timestamp: new Date().toISOString(),
+      footer: {
+        text: 'Youtarr'
+      }
+    }]
+  };
+}
+
 module.exports = {
   formatDownloadMessage,
   formatTestMessage,
   formatPlainMessage,
   formatAutoRemovalMessage,
-  formatDownloadPauseMessage
+  formatDownloadPauseMessage,
+  formatCookiesInvalidMessage
 };

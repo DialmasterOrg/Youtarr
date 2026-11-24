@@ -1,6 +1,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const crypto = require('crypto');
 const logger = require('../logger');
 
 const UPLOADED_COOKIES_FILENAME = 'cookies.user.txt';
@@ -23,7 +24,7 @@ class UploadedCookies {
   prepare(args) {
     const cookieIndex = args.indexOf('--cookies');
     if (cookieIndex < 0 || args[cookieIndex + 1] !== this.getPath()) {
-      return { args, cleanup: null };
+      return { args, cleanup: null, cookieKey: null };
     }
 
     let copyDir = null;
@@ -42,7 +43,7 @@ class UploadedCookies {
     const withoutCookies = () => {
       const remaining = [...args];
       remaining.splice(cookieIndex, 2);
-      return { args: remaining, cleanup: null };
+      return { args: remaining, cleanup: null, cookieKey: null };
     };
 
     let contents;
@@ -63,7 +64,10 @@ class UploadedCookies {
       fs.writeFileSync(copyPath, contents, { mode: 0o600, flag: 'wx' });
       const preparedArgs = [...args];
       preparedArgs[cookieIndex + 1] = copyPath;
-      return { args: preparedArgs, cleanup };
+      // Names the bytes this run was given, the same hash membersAccess keys
+      // the cookie file by, so a finished run is matched to the right upload.
+      const cookieKey = crypto.createHash('sha256').update(contents).digest('hex');
+      return { args: preparedArgs, cleanup, cookieKey };
     } catch (err) {
       cleanup();
       logger.error({ err }, 'Could not make a private copy of uploaded cookies; running yt-dlp without cookies');

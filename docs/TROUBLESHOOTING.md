@@ -808,6 +808,8 @@ The cookie file no longer belongs to a signed-in YouTube session. The cookies ex
 
 If the test reports a bot check instead, sign into YouTube in your browser, solve any challenge it shows, then re-export. A network or timeout failure means YouTube could not be reached; check the server's internet connection and the proxy setting in Settings.
 
+Youtarr runs this test on a schedule and notifies you when the cookies stop working, so you do not have to check by hand. See [Cookie Check and Notification](CONFIG.md#cookie-check-and-notification).
+
 ### Downloads Are Only 360p With Cookies Enabled
 
 **Problem**: With cookies enabled, videos download at 360p (yt-dlp logs `Downloading 1 format(s): 18`) even though the video is available in HD, and the video details modal lists 360p as the only available resolution. Disabling cookies brings HD back.

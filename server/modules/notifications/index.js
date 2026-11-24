@@ -67,6 +67,32 @@ async function sendNotification(url, message, sendMethod) {
   }
 }
 
+/**
+ * Format one message per configured service and send each on its own, so one
+ * failing service does not stop the others.
+ * @param {Array<Object>} urls - normalized appriseUrls entries
+ * @param {Function} buildMessage - (formatter) => the message for that service
+ * @param {string} failureMessage - log message for a service that failed
+ * @returns {Promise<number>} how many services accepted the message
+ */
+async function deliverToEach(urls, buildMessage, failureMessage) {
+  const results = await Promise.all(urls.map(async (entry) => {
+    try {
+      const service = getServiceForUrl(entry.url);
+      const useRichFormatting = entry.richFormatting && service.supportsRichFormatting;
+      const formatter = useRichFormatting ? getFormatter(service) : plainFormatter;
+      const sendMethod = useRichFormatting ? service.sendMethod : 'apprise-plain';
+
+      await sendNotification(entry.url, buildMessage(formatter), sendMethod);
+      return true;
+    } catch (err) {
+      logger.error({ err, name: entry.name }, failureMessage);
+      return false;
+    }
+  }));
+  return results.filter(Boolean).length;
+}
+
 class NotificationModule {
   constructor() {
     this.configModule = require('../configModule');
@@ -239,6 +265,36 @@ class NotificationModule {
       }
     } catch (error) {
       logger.error({ err: error }, 'Failed to send download pause notification');
+    }
+  }
+
+  /**
+   * Send a notification that the YouTube cookies stopped working. Follows the
+   * main notifications setting only; cookieHealth decides when to send it.
+   * @param {Object} info - see utils.buildCookiesInvalidContent
+   * @returns {Promise<boolean>} whether any notification service accepted it,
+   *   so the caller can try again later
+   */
+  async sendCookiesInvalidNotification(info) {
+    if (!this.isConfigured()) {
+      logger.debug('Notifications not configured, skipping cookies notification');
+      return false;
+    }
+
+    try {
+      const urls = this.getUrlsFromConfig(this.configModule.getConfig());
+      const successCount = await deliverToEach(
+        urls,
+        (formatter) => formatter.formatCookiesInvalidMessage(info),
+        'Failed to send cookies notification'
+      );
+      if (successCount > 0) {
+        logger.info({ successCount, totalCount: urls.length }, 'Cookies notification sent successfully');
+      }
+      return successCount > 0;
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to send cookies notification');
+      return false;
     }
   }
 

@@ -67,7 +67,8 @@ function createSchedulesRoutes({ verifyToken, scheduledTaskManager, scheduledTas
    *                         properties:
    *                           trigger:
    *                             type: string
-   *                             enum: [scheduled, manual, startup]
+   *                             enum: [scheduled, manual, startup, download]
+   *                             description: download is a download run reporting rejected cookies to the cookie check
    *                           status:
    *                             type: string
    *                             enum: [running, success, error, skipped, interrupted]
@@ -163,7 +164,7 @@ function createSchedulesRoutes({ verifyToken, scheduledTaskManager, scheduledTas
    *       404:
    *         description: Unknown task
    *       409:
-   *         description: The task cannot run now; reason is running, disabled, cooldown, managed, downloads-paused, no-media-server, youtube-throttled or downloads-active, and availableAt says when it can run again when known
+   *         description: The task cannot run now; reason is running, disabled, cooldown, managed, downloads-paused, no-media-server, no-cookie-file, youtube-throttled or downloads-active, and availableAt says when it can run again when known
    *       503:
    *         description: The task is not registered yet (server still starting or database unavailable)
    */
