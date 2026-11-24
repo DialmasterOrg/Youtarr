@@ -154,4 +154,5 @@ export {
   FolderX,
   Pencil,
   Radio,
+  ClipboardList,
 } from 'lucide-react';
