@@ -98,7 +98,7 @@ describe('external cookie validation and status', () => {
   ])('omits a %s source and exposes a safe warning', (_name, arrange, message) => {
     arrange();
     const result = cookies.prepareExternalCookies(['--cookies', process.env.YOUTARR_COOKIES_FILE, '--dump-json']);
-    expect(result).toEqual({ args: ['--dump-json'], cleanup: null });
+    expect(result).toEqual({ args: ['--dump-json'], cleanup: null, cookieKey: null });
     const status = cookies.getExternalCookiesStatus();
     expect(status.ready).toBe(false);
     expect(status.error).toMatch(message);

@@ -158,6 +158,8 @@ module.exports = function createConfigRoutes({
    *                   type: string
    *                 channelVideoCountsFrequency:
    *                   type: string
+   *                 cookieCheckFrequency:
+   *                   type: string
    *                 logLevel:
    *                   type: string
    *                   enum: ['', warn, info, debug]
@@ -250,6 +252,8 @@ module.exports = function createConfigRoutes({
    *               channelFeedCheckFrequency:
    *                 type: string
    *               channelVideoCountsFrequency:
+   *                 type: string
+   *               cookieCheckFrequency:
    *                 type: string
    *               logLevel:
    *                 type: string

@@ -3,6 +3,10 @@
 jest.mock('../../../logger');
 jest.mock('../../membersAccess');
 
+jest.mock('../../cookieHealth', () => ({
+  reportDownloadRejection: jest.fn().mockResolvedValue()
+}));
+
 jest.mock('../../jobModule', () => ({
   updateJob: jest.fn().mockResolvedValue(),
   startNextJob: jest.fn(() => Promise.resolve()),
@@ -61,6 +65,7 @@ jest.mock('../tempSpaceProbe', () => ({
 }));
 
 const jobModule = require('../../jobModule');
+const cookieHealth = require('../../cookieHealth');
 const configModule = require('../../configModule');
 const failureAdvisor = require('../failureAdvisor');
 // The wording itself is tested with youtubeBlockAdvice; these tests check
@@ -210,6 +215,96 @@ describe('downloadJobFinalizer', () => {
       await finalizeDownloadJob(makeContext());
 
       expect(jobModule.updateJob.mock.calls[0][1].status).toBe('Complete');
+    });
+
+    describe('cookies YouTube rejected', () => {
+      const REJECTED_WARNING = 'WARNING: [youtube] The provided YouTube account cookies are no longer valid. '
+        + 'They have likely been rotated in the browser as a security measure.';
+
+      // The cookie file the run was started with, which may have been replaced since.
+      const STARTED_WITH = 'c'.repeat(64);
+
+      it('reports a run that passed the cookies and saw yt-dlp\'s warning, naming the cookies it started with', async () => {
+        await finalizeDownloadJob(makeContext({
+          cookiesEnabled: true,
+          cookieKey: STARTED_WITH,
+          router: makeRouter({ stderrBuffer: REJECTED_WARNING }),
+        }));
+
+        expect(cookieHealth.reportDownloadRejection.mock.calls).toEqual([[STARTED_WITH]]);
+      });
+
+      it('tells the members-only record which cookies the run started with', async () => {
+        const membersAccess = require('../../membersAccess');
+
+        await finalizeDownloadJob(makeContext({ cookiesEnabled: true, cookieKey: STARTED_WITH }));
+
+        expect(membersAccess.recordDownloadOutcome).toHaveBeenCalledWith(
+          expect.objectContaining({ cookieKey: STARTED_WITH })
+        );
+      });
+
+      it('reports nothing for a file error whose video title mentions rotated cookies', async () => {
+        await finalizeDownloadJob(makeContext({
+          cookiesEnabled: true,
+          cookieKey: STARTED_WITH,
+          router: makeRouter({
+            stderrBuffer: 'ERROR: Unable to rename file: [Errno 2] No such file or directory: '
+              + '\'/tmp/Baker - My cookies got rotated [abc123def45].f137.mp4.part\'',
+          }),
+        }));
+
+        expect(cookieHealth.reportDownloadRejection).not.toHaveBeenCalled();
+      });
+
+      it('reports nothing for a run without the warning', async () => {
+        await finalizeDownloadJob(makeContext({
+          cookiesEnabled: true,
+          router: makeRouter({ stderrBuffer: 'ERROR: Join this channel' }),
+        }));
+
+        expect(cookieHealth.reportDownloadRejection).not.toHaveBeenCalled();
+      });
+
+      it('reports nothing for an anonymous retry', async () => {
+        await finalizeDownloadJob(makeContext({
+          cookiesEnabled: true,
+          anonymousRetry: true,
+          router: makeRouter({ stderrBuffer: REJECTED_WARNING }),
+        }));
+
+        expect(cookieHealth.reportDownloadRejection).not.toHaveBeenCalled();
+      });
+
+      it('reports nothing when the cookies were dropped before yt-dlp started', async () => {
+        await finalizeDownloadJob(makeContext({
+          cookiesEnabled: true,
+          cookiesPassed: false,
+          router: makeRouter({ stderrBuffer: REJECTED_WARNING }),
+        }));
+
+        expect(cookieHealth.reportDownloadRejection).not.toHaveBeenCalled();
+      });
+
+      it('leaves a run that also hit a bot check to the scheduled check', async () => {
+        await finalizeDownloadJob(makeContext({
+          cookiesEnabled: true,
+          router: makeRouter({ stderrBuffer: REJECTED_WARNING, botDetected: true }),
+        }));
+
+        expect(cookieHealth.reportDownloadRejection).not.toHaveBeenCalled();
+      });
+
+      it('does not turn the job into an error when the report fails', async () => {
+        cookieHealth.reportDownloadRejection.mockRejectedValueOnce(new Error('unexpected'));
+
+        await finalizeDownloadJob(makeContext({
+          cookiesEnabled: true,
+          router: makeRouter({ stderrBuffer: REJECTED_WARNING }),
+        }));
+
+        expect(jobModule.updateJob.mock.calls[0][1].status).toBe('Complete with Warnings');
+      });
     });
 
     it('excludes the run\'s archive skips from the downloaded videos', async () => {

@@ -78,6 +78,15 @@ describe('getContext', () => {
     expect(membersAccess.getContext().cookieKey).not.toBe(first);
   });
 
+  // ytdlpProcess reports the same hash for the copy it hands to yt-dlp, which
+  // is how a finished run is matched to the cookie file it was given.
+  test('uses the SHA-256 of the file contents as the key', () => {
+    useCookieFile('first');
+
+    expect(membersAccess.getContext().cookieKey)
+      .toBe(jest.requireActual('crypto').createHash('sha256').update('first').digest('hex'));
+  });
+
   test('does not re-read an unchanged file', () => {
     useCookieFile();
     membersAccess.getContext();
@@ -466,6 +475,57 @@ describe('recordDownloadOutcome', () => {
     expect(VideoMembersAccess.bulkCreate.mock.calls[0][0]).toEqual([
       expect.objectContaining({ youtube_id: 'bbbbbbbbbbb', access: 'confirmed' }),
     ]);
+  });
+
+  describe('a run whose cookies were replaced before it finished', () => {
+    const REJECTED = 'WARNING: [youtube] The provided YouTube account cookies are no longer valid.';
+    let startedWith;
+
+    // The run starts with one cookie file; the user uploads another meanwhile.
+    beforeEach(() => {
+      useCookieFile();
+      startedWith = membersAccess.getContext().cookieKey;
+      useCookieFile(cookieFile(NOW_SECONDS + 60 * 24 * 3600), { size: 12, mtimeMs: 2000 });
+    });
+
+    test('does not hold its rejection against the new cookies', async () => {
+      await membersAccess.recordDownloadOutcome({
+        membersOnlyIds: new Set(), downloadedIds: [], usedCookies: true, cookieKey: startedWith, stderr: REJECTED,
+      });
+
+      await expect(membersAccess.buildDownloadFilter({ cookiesEnabled: true })).resolves.toBeNull();
+    });
+
+    test('records no denial against the new cookies', async () => {
+      await membersAccess.recordDownloadOutcome({
+        membersOnlyIds: new Set(['aaaaaaaaaaa']), downloadedIds: [], usedCookies: true, cookieKey: startedWith,
+      });
+
+      expect(VideoMembersAccess.bulkCreate.mock.calls[0][0][0]).toMatchObject({ access: null, cookie_key: null });
+    });
+
+    test('does not confirm access with the new cookies', async () => {
+      ChannelVideo.findAll.mockResolvedValue([{ youtube_id: 'bbbbbbbbbbb' }]);
+
+      await membersAccess.recordDownloadOutcome({
+        membersOnlyIds: new Set(), downloadedIds: ['bbbbbbbbbbb'], usedCookies: true, cookieKey: startedWith,
+      });
+
+      expect(VideoMembersAccess.bulkCreate).not.toHaveBeenCalled();
+    });
+  });
+
+  test('judges a run that finished with the cookies it started with', async () => {
+    useCookieFile();
+
+    await membersAccess.recordDownloadOutcome({
+      membersOnlyIds: new Set(['aaaaaaaaaaa']),
+      downloadedIds: [],
+      usedCookies: true,
+      cookieKey: membersAccess.getContext().cookieKey,
+    });
+
+    expect(VideoMembersAccess.bulkCreate.mock.calls[0][0][0]).toMatchObject({ access: 'denied' });
   });
 });
 

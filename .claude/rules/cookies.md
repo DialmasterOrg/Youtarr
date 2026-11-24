@@ -4,6 +4,7 @@ paths:
   - "server/modules/uploadedCookies.js"
   - "server/modules/cookieTest.js"
   - "server/modules/cookieDetails.js"
+  - "server/modules/cookieHealth.js"
   - "server/modules/ytdlpProcess.js"
   - "server/utils/validate-cookies.py"
   - "client/src/components/Configuration/sections/CookieConfigSection.tsx"
@@ -30,6 +31,26 @@ External and uploaded cookie files, how yt-dlp runs receive them, and the cookie
 - `cookieTest` (`POST /api/cookies/test`) runs one yt-dlp request to the subscriptions feed with `buildCommonArgs` against a private temp copy and never logs stderr, because yt-dlp echoes malformed cookie lines with their values. One test at a time (409), rate-limited.
 - In that feed, exit 0 with JSON means signed in (even zero subscriptions) and "Incomplete yt initial data" warnings mean signed out (EXPIRED_COOKIES); that meaning is specific to the feed, so it stays out of the shared subscription-import classifier.
 - `cookieDetails` summarizes the YouTube login cookies (names, counts, earliest expiry; never values) for `GET /api/cookies/status` and the upload and delete responses.
+
+## Cookies stopped working (`cookieHealth`, issue #1066)
+
+- The `cookieCheckFrequency` task runs `cookieTest` while `cookiesEnabled`; `cookieHealth` notifies after two counted failures in a row (`EXPIRED_COOKIES`, or an unusable external file), because one can be a YouTube page change.
+- Bot check, network and timeout results are recorded `skipped` and neither count nor reset the streak: bot checks are IP-based even with valid cookies. `UNKNOWN` records an error that never counts.
+- A download run that passed the cookies and printed yt-dlp's "no longer valid" warning notifies at once (`downloadJobFinalizer`), unless it also hit a bot check; it records a run with trigger `download`.
+- That report matches `ytdlpStderrSignals.containsRejectedCookiesWarning`, anchored to yt-dlp's own warning line, not `isCookiesRejected`: error lines carry file paths, and a video title there can hold the same words.
+- A download's rejection counts as the first failed check even when its notification is not delivered, and is recorded once then, so the next failing check retries instead of starting the streak.
+- One notification per cookie file, keyed by the first 16 hex characters of `membersAccess`'s cookie key, never the full hash: run details reach the Scheduling page. A later pass does not re-arm it.
+- The `unreadable` marker stands for a condition, not a file, so a readable file clears it (`track`): the file going missing again is a new incident.
+- A file counts as notified only when a service accepted the message (`sendCookiesInvalidNotification` resolves true), so notifications that are off or failing are tried again at the next failure.
+- Checks and download reports run one at a time (`serialize`): interleaved across their awaits, a slow notification for a replaced file undid its replacement's mark, and a report made during a check was recorded as newer than that check's result.
+- The run history is the persistence layer, as for `tabCountThrottle`: every run `cookieHealth` describes, skipped ones included, writes the streak and the notified file into its details. The Test cookies button never touches this state.
+- After a restart it reads the newest run that has details (`getLatestRun` with `withDetails`), so a row recorded without them cannot hide the notified file; `runScheduledCheck` never rejects for the same reason.
+
+## Runs that outlive their cookie file
+
+- `ytdlpProcess` sets `child.cookieKey` to the SHA-256 of the bytes it copied for the run, the same hash `membersAccess` keys the file by. Never re-read the file for it: an external updater can replace it between two reads.
+- `downloadExecutor` passes that key to the finalizer, and `cookieHealth.reportDownloadRejection` and `membersAccess.recordDownloadOutcome` drop what the run saw when it no longer matches the configured file: rejection, denials, confirmations.
+- `getExternalCookiesStatus` returns named fields only, so the key never reaches `GET /api/cookies/status`.
 
 ## Members-only access (`membersAccess`)
 

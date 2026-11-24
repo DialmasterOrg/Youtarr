@@ -39,6 +39,8 @@ export function describeRunNowBlock({ availability, settingsLabel, featureOnInFo
       return { text: message, link: { to: '/settings/storage-limits', label: 'Storage limits' } };
     case 'no-media-server':
       return { text: message, link: { to: '/settings/watch-status', label: 'Watch status settings' } };
+    case 'no-cookie-file':
+      return { text: message, link: { to: '/settings/cookies', label: 'Cookies settings' } };
     case 'downloads-active':
       return { text: message, link: { to: '/downloads/activity', label: 'Download activity' } };
     default:

@@ -73,7 +73,7 @@ Configuration can be modified through:
 
 ### Scheduling
 
-All nine recurring tasks can be configured in **Settings -> Scheduling**. Schedules are stored in `config.json` as cron expressions. Every schedule offers a daily time picker, preset intervals, or a custom cron expression. The 15 and 30 minute presets are available for every task, but the page shows a warning when any task other than automatic downloads is set to run more than once an hour, because those tasks do full-library or network work on every run; the choice is still yours. **Custom cron** accepts five fields (minute, hour, day of month, month, day of week), or six fields with seconds first. Runs must be at least 15 minutes apart: an expression such as `*/5 * * * *` is rejected, and a six-field expression needs a single fixed seconds value.
+All ten recurring tasks can be configured in **Settings -> Scheduling**. Schedules are stored in `config.json` as cron expressions. Every schedule offers a daily time picker, preset intervals, or a custom cron expression. The 15 and 30 minute presets are available for every task, but the page shows a warning when any task other than automatic downloads is set to run more than once an hour, because those tasks do full-library or network work on every run; the choice is still yours. **Custom cron** accepts five fields (minute, hour, day of month, month, day of week), or six fields with seconds first. Runs must be at least 15 minutes apart: an expression such as `*/5 * * * *` is rejected, and a six-field expression needs a single fixed seconds value.
 
 | Config key | Default | Task |
 | --- | --- | --- |
@@ -86,23 +86,25 @@ All nine recurring tasks can be configured in **Settings -> Scheduling**. Schedu
 | `ytdlpUpdateFrequency` | `0 4 * * *` | Automatic yt-dlp update checks |
 | `channelFeedCheckFrequency` | `30 * * * *` | Read each subscribed channel's YouTube RSS feeds (its public uploads, and its members-only uploads when it has any) and, only when one shows an upload Youtarr has not listed yet, list that channel's tabs with yt-dlp so its video list is current before you open it. At most 60 tab listings per run, one at a time with a pause between them; the rest wait for the next run. A channel that has never had a members-only video is asked for that feed once a day. The feeds do not show everything (a changed title, a live stream that ended), so each tab is still listed in full at least once a day when its channel page is opened. YouTube's feeds are often unavailable for a while (hours at a time on some days). Such a run is recorded as skipped and changes nothing: no video list is altered, and channel pages still refresh themselves when opened. |
 | `channelVideoCountsFrequency` | `45 4 * * *` | Look up subscribed channel tabs' public video counts on YouTube for the download percentages. With a YouTube API key every channel is counted each run. Without one, yt-dlp counts up to 200 tabs per run, one at a time with a pause between lookups and without cookies, choosing channels whose counts are at least three days old (oldest attempt first), so a large library fills in over several runs; channel pages you open are counted on demand. A run stops at the next channel while a download is running and continues on a later run. If YouTube rate-limits or bot-checks the lookups, refreshes pause for 6 hours (doubling up to 24 hours while it keeps happening). If cookies are configured and YouTube bot-checks two runs in a row that send no cookies (common on VPS and datacenter IPs), these runs switch to sending your cookies, still one lookup at a time, and try again without them after 30 days; on an IP that always needs cookies, that retry costs about a day of missed counts each month. Startup also counts channels whose counts are missing or old. |
+| `cookieCheckFrequency` | `10 */8 * * *` | Ask YouTube whether the cookies still belong to a signed-in session, and notify you when they stop working. Runs only while cookies are enabled. See [Cookie Check and Notification](#cookie-check-and-notification). |
 
 Times use the server timezone, shown on the Scheduling page and configured through `TZ`. Interval presets follow the clock: "Every 4 hours" runs at 00:00, 04:00, 08:00, and so on. Changing a schedule takes effect after saving, without a restart or immediate execution. To run a task immediately, use its **Run now** button. Running tasks are allowed to finish. Invalid schedule submissions are rejected without saving other changes.
 
-Existing feature switches still control downloads, watch sync, video removal, and yt-dlp updates. Empty-folder cleanup continues even when video removal is disabled. Elfhosted manages yt-dlp updates itself. The archive repair and filesystem rescan retain their startup passes, which appear in the run history with the `startup` trigger.
+Existing feature switches still control downloads, watch sync, video removal, yt-dlp updates, and the cookie check (which follows **Enable Cookies**). Empty-folder cleanup continues even when video removal is disabled. Elfhosted manages yt-dlp updates itself. The archive repair and filesystem rescan retain their startup passes, which appear in the run history with the `startup` trigger.
 
 The Scheduling page also shows what the scheduler is actually doing: an **Upcoming runs** list, and on each card the next run, whether the task is running now, and its last recorded run with the outcome (for example "completed: Deleted 12 videos and freed 8.10 GB"). If a saved expression could not be scheduled, the card says so in red. Every time on the page is shown in the server timezone, whatever zone your browser is in, and the page updates live over the WebSocket connection, and also refreshes every minute (every 30 seconds while a task runs) and when you return to the tab. Run history is stored in the database (`scheduled_task_runs`: the last 20 runs per task, plus the newest run of each outcome so the last yt-dlp install is always kept), never in `config.json`. If a run is still in progress at its next scheduled time, that occurrence is recorded as skipped; starting a task manually while it is already running (from its schedule, a startup pass, or another manual start) is refused, so only scheduled occurrences are recorded as skipped; a run cut short by a restart is recorded as interrupted.
 
 **Run now** starts a task immediately with the saved settings, and the run appears in the history with the `manual` trigger. The button is disabled, with the reason shown next to it:
 - while the task is running, whether that run came from its schedule, a startup pass, or another manual start (the Maintenance rescan, Watch Status **Sync Now**, the YT-DLP page's update button, or **Download new** in Downloads). For automatic downloads, "running" lasts until the sweep's last download finishes, including its playlist downloads and any automatic retries. The run's history entry records the check for new videos and the queuing of downloads; the downloads themselves are summarized in Download History and notifications;
-- while its feature is turned off (watch status sync, automatic yt-dlp updates; the card links to the page that turns it on);
+- while its feature is turned off (watch status sync, automatic yt-dlp updates, the cookie check; the card links to the page that turns it on);
 - for automatic downloads, while downloads are paused (by a storage limit, or because the downloads folder looks unavailable);
 - for watch status sync, while no media server is connected;
+- for the cookie check, while cookies are enabled but no cookie file is active;
 - for channel video counts without a YouTube API key, while YouTube has paused lookups or a download is running.
 
 Automatic downloads can be run now even when automatic downloads are turned off: the switch only stops the schedule, and Run now does the same channel and playlist sweep as **Download new**.
 
-Only channel video counts can't be run again within 15 minutes of their last start, the same spacing schedules must keep; the card says when Run now becomes available. Automatic downloads can run again as soon as the previous sweep has finished, the same as **Download new**. The page-specific buttons (Sync Now, the YT-DLP update button, Download new) keep working while the schedule is turned off. Automatic video cleanup asks for confirmation first, because it deletes files.
+Channel video counts, the check for new videos, and the cookie check can't be run again within 15 minutes of their last start, the same spacing schedules must keep; the card says when Run now becomes available. Automatic downloads can run again as soon as the previous sweep has finished, the same as **Download new**. The page-specific buttons (Sync Now, the YT-DLP update button, Download new) keep working while the schedule is turned off. Automatic video cleanup asks for confirmation first, because it deletes files.
 
 Youtarr must be running at the scheduled time; missed occurrences are not replayed. If your server is switched off overnight, choose a time when it is running. Restore default changes the schedule in the form; save to apply it. Valid custom expressions are preserved on upgrade, with one exception: a schedule that ran more often than every 15 minutes, which only a hand-edited `config.json` could produce, is thinned when Youtarr starts. Runs closer than 15 minutes apart are dropped and the hours and days are kept, so `*/5 * * * *` becomes `*/15 * * * *` and `0,5 2 * * 0` becomes `0 2 * * 0`. The change is logged with the old and new expression. If a hand-edited expression is invalid, the old timer remains active until a valid edit; after a restart, that task stays unscheduled. Check server logs for the affected configuration key.
 
@@ -512,6 +514,46 @@ is a config field.
   timeout (60 seconds), or an unusable external file. One test runs at a time,
   and tests are limited to 5 per minute.
 
+### Cookie Check and Notification
+
+When cookies expire or YouTube rotates them, public videos keep downloading
+without them, so nothing looks wrong, while members-only videos, Watch Later
+and private playlists stop working. Youtarr watches for this in two ways and
+sends one notification through your [notification services](#notifications).
+
+- **Scheduled check**: while cookies are enabled, the **Check YouTube
+  cookies** task runs the same test as **Test cookies** every 8 hours
+  (`cookieCheckFrequency`, default `10 */8 * * *`). It appears in Settings ->
+  Scheduling like every other task, with its last result and a **Run now**
+  button. The check has to fail twice in a row before it notifies, so a
+  one-time change on YouTube's side does not raise an alert.
+- **Downloads**: when a download run that used the cookies gets yt-dlp's
+  "cookies are no longer valid" warning, Youtarr notifies right away, without
+  waiting for the next check. The report appears in the task's history with
+  the `download` trigger. A run that also hit a bot check is left to the
+  scheduled check, and so is a run that started before you replaced the
+  cookies: its warning is about the old file, not the new one.
+
+What counts as "stopped working": YouTube no longer treating the cookies as a
+signed-in session, or an external cookie file that yt-dlp can no longer load. A
+network problem, a timeout, or a bot check does not count, and neither breaks
+nor adds to the two-in-a-row count: bot checks come and go by IP address even
+while the cookies are fine. Such a check is recorded as skipped.
+
+The notification is sent once per cookie file. Uploading new cookies, or
+changing the external file, starts over. A cookie file that passes again and
+later fails is not notified a second time, and there is no "working again"
+message. An external file that could not be read at all is the exception:
+once it is readable again, a later outage notifies again. If notifications are
+turned off or no service accepts the message, the next failing check or
+download tries again, so turning notifications on later still tells you about
+cookies that are already broken. A rejection reported by a download counts as
+the first failed check, so one failing check after it is enough to retry.
+
+There is no separate switch: the notification follows **Enable
+Notifications**, like the downloads paused notification. For a webhook, add an
+Apprise `json://` or `form://` URL as a notification service.
+
 ### External Cookie File
 
 To refresh cookies from an external script or service, set the optional
@@ -602,6 +644,7 @@ Youtarr uses [Apprise](https://github.com/caronc/apprise) to send notifications 
 - **Type**: `boolean`
 - **Default**: `false`
 - **Description**: Enable notifications when new videos are downloaded
+- **Note**: The same switch covers the other notifications Youtarr sends: automatic cleanup, downloads pausing and resuming, and [YouTube cookies that stopped working](#cookie-check-and-notification). None of them has a switch of its own.
 
 ### Apprise URLs
 - **Config Key**: `appriseUrls`
@@ -648,7 +691,7 @@ Each entry in the array is an object with the following properties:
 
 `{youtubeId}` is the only variable. Youtarr replaces it with the YouTube ID of the video. The template must be a full `http://` or `https://` URL of at most 500 characters. When the setting is empty, notifications do not change.
 
-The link appears in the services with rich formatting: Discord, Slack, Telegram and Email. Services that receive plain text have no link. Auto removal and download pause notifications have no link, because they do not list videos you can open.
+The link appears in the services with rich formatting: Discord, Slack, Telegram and Email. Services that receive plain text have no link. Auto removal, download pause and cookie notifications have no link, because they do not list videos you can open.
 
 **Examples:**
 

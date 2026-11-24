@@ -10,6 +10,12 @@ const PO_TOKEN_ADVISORY_PATTERN = /require a GVS PO Token/i;
 // streaming for this client") is normal for web/web_safari and isn't matched.
 const SABR_RESTRICTION_PATTERN = /SABR-only streaming experiment/i;
 
+// yt-dlp's own warning that YouTube rejected the account cookies, anchored to
+// the start of its line: error lines carry file paths, and a video title in
+// one can hold the same words.
+const REJECTED_COOKIES_WARNING_PATTERN =
+  /^WARNING: \[youtube[^\]]*\] (?:[\w-]+: )?The provided YouTube account cookies are no longer valid/;
+
 const HTTP_403_PATTERNS = ['http error 403', '403: forbidden'];
 const SPONSORBLOCK_ERROR_PATTERN = /^(?:(?:ERROR|WARNING):\s*)?Unable to communicate with SponsorBlock API\b/i;
 
@@ -34,10 +40,15 @@ function containsHttp403(text) {
   });
 }
 
+function containsRejectedCookiesWarning(text) {
+  return String(text).split('\n').some((line) => REJECTED_COOKIES_WARNING_PATTERN.test(line.trim()));
+}
+
 module.exports = {
   PO_TOKEN_ADVISORY_PATTERN,
   SABR_RESTRICTION_PATTERN,
   containsHttp403,
+  containsRejectedCookiesWarning,
   isNonFatalSponsorBlockError,
   isPoTokenAdvisory,
   isSabrRestriction,

@@ -2,6 +2,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const crypto = require('crypto');
 const { EventEmitter } = require('events');
 
 jest.mock('child_process', () => ({ spawn: jest.fn(), spawnSync: jest.fn() }));
@@ -81,6 +82,41 @@ describe('yt-dlp process snapshots', () => {
 
   test('reports that the cookies reached yt-dlp', () => {
     expect(spawnYtDlp(['--cookies', sourcePath, '--dump-json']).cookiesPassed).toBe(true);
+  });
+
+  describe('the key of the cookies a run was given', () => {
+    const sha256 = text => crypto.createHash('sha256').update(text).digest('hex');
+
+    test('is the hash of the external file as it was copied for the run', () => {
+      expect(spawnYtDlp(['--cookies', sourcePath]).cookieKey).toBe(sha256(cookies('first')));
+    });
+
+    test('still names the copied cookies after the external file is replaced', () => {
+      const child = spawnYtDlp(['--cookies', sourcePath]);
+      fs.rmSync(sourcePath);
+      fs.writeFileSync(sourcePath, cookies('second'), { mode: 0o400 });
+
+      expect(child.cookieKey).toBe(sha256(cookies('first')));
+    });
+
+    test('is the hash of the uploaded file as it was copied for the run', () => {
+      delete process.env.YOUTARR_COOKIES_FILE;
+      const uploadedCookies = require('../uploadedCookies');
+      uploadedCookies.configDir = sourceDir;
+      fs.writeFileSync(uploadedCookies.getPath(), cookies('uploaded'), { mode: 0o600 });
+
+      expect(spawnYtDlp(['--cookies', uploadedCookies.getPath()]).cookieKey).toBe(sha256(cookies('uploaded')));
+    });
+
+    test('is null when the cookies were dropped', () => {
+      fs.unlinkSync(sourcePath);
+
+      expect(spawnYtDlp(['--cookies', sourcePath, '--dump-json']).cookieKey).toBeNull();
+    });
+
+    test('is null for a run without cookies', () => {
+      expect(spawnYtDlp(['--dump-json']).cookieKey).toBeNull();
+    });
   });
 
   test('launches without cookies when no private directory can be created', () => {
