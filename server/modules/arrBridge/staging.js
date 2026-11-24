@@ -20,7 +20,9 @@ const IGNORE_FILE_CONTENT = '*\n';
 // How a library subtitle is opened: O_NOFOLLOW refuses a link, O_NONBLOCK
 // returns at once for a pipe, which otherwise waits for a writer forever.
 // Both are missing on Windows, where neither kind of entry is created this way.
-const SUBTITLE_READ_FLAGS = fs.constants.O_RDONLY
+// Read at use, not at load: the server test harnesses load this module with
+// a stubbed fs that has no constants.
+const subtitleReadFlags = () => fs.constants.O_RDONLY
   | (fs.constants.O_NOFOLLOW || 0)
   | (fs.constants.O_NONBLOCK || 0);
 // Far above any real subtitle; a file is read whole to compare and stage it.
@@ -67,7 +69,7 @@ function createStaging({ fsp = fs.promises, getOutputRoot, getSettings, logger }
   // without waiting on a pipe, and read only once the open handle shows a
   // regular file of a subtitle's size.
   async function readSubtitle(filePath) {
-    const handle = await fsp.open(filePath, SUBTITLE_READ_FLAGS);
+    const handle = await fsp.open(filePath, subtitleReadFlags());
     try {
       const stats = await handle.stat();
       if (!stats.isFile()) throw new Error('Not a regular file');
