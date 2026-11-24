@@ -431,8 +431,21 @@ may contain secrets.
 
 ## Configuration and administration
 
-This runtime includes the management APIs. The external-access editor and
-request-review UI are a separate follow-up in [PR #809](https://github.com/DialmasterOrg/Youtarr/pull/809).
+In **Settings → API Keys & Bookmarklet**, choose **Create external key**,
+set the required request permissions, rating/media policy, workload limits,
+and approved channels, then save the one-time secret. Existing keys can be
+edited, regenerated, or revoked from their cards. Regeneration preserves
+policy and grants while immediately invalidating the previous credential.
+
+The **Requests** page supports status, requester, and request-type filters,
+pagination, details, approval, and rejection with a reason. Channel approval
+lets you choose whether to grant the provisioned channel to the requesting key.
+A decision error keeps the confirmation retryable. Approved requests advance
+automatically through the background executor; temporarily held work stays
+approved with a message until it can proceed. Mobile layouts keep review
+actions on each request card.
+
+The same operations are available through the management APIs:
 
 1. Create an external key with session-authenticated `POST /api/keys` and save
    the returned raw secret; it is shown only once. Omitting `policy` creates a
@@ -454,6 +467,11 @@ request-review UI are a separate follow-up in [PR #809](https://github.com/Dialm
    `POST /api/external-requests/{id}/approve` or `/reject` (a rejection requires
    a JSON `reason`). Policy and grants can be replaced atomically with
    `PUT /api/keys/{id}/external-access` and a `{ "policy": ..., "channelIds": [...] }` body.
+   The replacement covers grants on enabled, non-terminated channels, the
+   ones `GET /api/keys/{id}/channels` lists. A grant on a disabled or
+   terminated channel is kept but grants nothing until the channel is enabled
+   again, at which point it is back in the editor and can be removed there.
+   A revoked key can use none of its grants.
 
 `GET /getconfig` reports the effective feature flag in
 `isPlatformManaged.externalApiEnabled`; clients should use this value when
@@ -463,6 +481,10 @@ When the shared work queue is full, writes return 503 while retaining the
 accepted request and its idempotency key. Retry the same body to resume it
 without charging another accepted write. Completed video, channel, and
 deletion requests return their original result on an idempotent retry.
+
+While `EXTERNAL_API_ENABLED` is off, the settings page still lists active
+external keys so they can be revoked, since they count toward the 20-key
+limit; creating, editing and regenerating them wait until the API is on.
 
 Saving an external key with zero approved channels is intentional and does not
 backfill or grant access. That key fails closed: catalog reads and requests

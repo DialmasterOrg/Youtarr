@@ -321,6 +321,10 @@ module.exports = function createApiKeyRoutes({ verifyToken }) {
    *                 type: array
    *                 uniqueItems: true
    *                 items: { type: integer, minimum: 1 }
+   *                 description: >
+   *                   Replaces the grants on enabled, non-terminated channels.
+   *                   Grants on disabled or terminated channels are kept and
+   *                   take effect again when the channel is enabled.
    *     responses:
    *       200: { description: Policy and exact grant set committed }
    *       400: { description: Invalid policy or channel grant set }

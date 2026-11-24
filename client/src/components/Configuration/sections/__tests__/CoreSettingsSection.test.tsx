@@ -26,7 +26,7 @@ function renderCore({ config = {}, onConfigChange = jest.fn(), isPlatformManaged
       <CoreSettingsSection
         config={{ ...DEFAULT_CONFIG, ...config }}
         onConfigChange={onConfigChange}
-        isPlatformManaged={{ plexUrl: false, authEnabled: true, useTmpForDownloads: false, ytdlpUpdates: false, ...isPlatformManaged }}
+        isPlatformManaged={{ plexUrl: false, authEnabled: true, useTmpForDownloads: false, ytdlpUpdates: false, externalApiEnabled: false, ...isPlatformManaged }}
         deploymentEnvironment={{ isWsl: false, ...deploymentEnvironment }}
         token="token"
       />

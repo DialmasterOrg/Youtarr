@@ -121,6 +121,18 @@ For deployments behind external authentication or not exposed to the internet:
 
 API Keys provide persistent authentication for external integrations like bookmarklets, mobile shortcuts, and automation tools.
 
+### Key types
+
+Youtarr has three kinds of API key:
+
+- **Download keys** (`legacy_download`) queue single videos through `POST /api/videos/download`. Keys created before the External API existed are download keys.
+- **Read-only status keys** (`status_read`) read `GET /api/status/summary` and nothing else.
+- **External access keys** use the opt-in `/external-api/v1` surface, set with `EXTERNAL_API_ENABLED=true`. Each one carries its own request permissions, rating and media policy, workload limits and channel grants, and is created and edited under **Settings → API Keys & Bookmarklet**. See [EXTERNAL_API.md](EXTERNAL_API.md) for the policy model, endpoints and request review.
+
+No key type can use another type's endpoints. While the External API is turned off, external access keys cannot be used but stay listed in Settings, where they can be revoked, because they still count toward the 20-key limit.
+
+The schema and migration history are authoritative for field details. API-key values remain hashed and are never recoverable from the database; revocation is represented by `revoked_at` and inactive status.
+
 ### Key Features
 - **Persistent**: No expiration (unlike session tokens)
 - **Scoped**: A download key can only queue single videos; a read-only status key can only read the status summary
