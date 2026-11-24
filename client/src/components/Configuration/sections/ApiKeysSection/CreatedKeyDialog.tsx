@@ -11,7 +11,7 @@ import {
   Paper,
   Typography,
 } from '../../../ui';
-import { Copy as ContentCopyIcon } from 'lucide-react';
+import { Copy as ContentCopyIcon } from '../../../../lib/icons';
 import { locationUtils } from '../../../../utils/location';
 import { ApiKeyCreatedResponse, ApiKeyRole } from './useApiKeys';
 
@@ -93,6 +93,31 @@ function BookmarkletDetails({ apiKey, onCopy }: { apiKey: string; onCopy: Create
   );
 }
 
+function StatusKeyDetails({ apiKey }: { apiKey: string }) {
+  return (
+    <>
+      <Typography variant="subtitle2" gutterBottom>
+        Use it in your dashboard
+      </Typography>
+      <Typography variant="body2" color="secondary" className="mb-2">
+        This key can only read the status summary. Enter it as the API key in your dashboard, or send it
+        yourself:
+      </Typography>
+      <Paper className="p-4 bg-muted/50">
+        <Typography variant="body2" style={{ fontFamily: 'monospace' }} className="mb-2">
+          <strong>URL:</strong> {locationUtils.getOrigin()}/api/status/summary
+        </Typography>
+        <Typography variant="body2" style={{ fontFamily: 'monospace' }} className="mb-2">
+          <strong>Method:</strong> GET
+        </Typography>
+        <Typography variant="body2" style={{ fontFamily: 'monospace' }}>
+          <strong>Header:</strong> x-api-key: {apiKey.substring(0, 8)}...
+        </Typography>
+      </Paper>
+    </>
+  );
+}
+
 export default function CreatedKeyDialog({ createdKey, role, action, open, onClose, onCopy }: CreatedKeyDialogProps) {
   const key = createdKey?.key || '';
   return (
@@ -115,6 +140,8 @@ export default function CreatedKeyDialog({ createdKey, role, action, open, onClo
 
         {role === 'legacy_download' ? (
           key && <BookmarkletDetails apiKey={key} onCopy={onCopy} />
+        ) : role === 'status_read' ? (
+          <StatusKeyDetails apiKey={key} />
         ) : (
           <Paper className="p-4 bg-muted/50">
             <Typography variant="body2" className="mb-2">

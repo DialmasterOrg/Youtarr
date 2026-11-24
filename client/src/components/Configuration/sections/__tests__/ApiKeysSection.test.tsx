@@ -132,9 +132,13 @@ const installApiKeyHook = () => {
     fetchApiKeys: async () => (await request('/api/keys')).keys || [],
     fetchAvailableChannels: async () => (await request('/getchannels?page=1&pageSize=100&sortOrder=asc')).channels || [],
     fetchChannelGrants: async (keyId) => (await request(`/api/keys/${keyId}/channels`)).channelIds || [],
-    createApiKey: async (name, policy, channelIds) => request('/api/keys', {
+    createApiKey: async (name, policy, channelIds, role) => request('/api/keys', {
       method: 'POST',
-      body: JSON.stringify({ name, ...(policy ? { policy, channelIds: channelIds || [] } : {}) }),
+      body: JSON.stringify({
+        name,
+        ...(role ? { role } : {}),
+        ...(policy ? { policy, channelIds: channelIds || [] } : {}),
+      }),
     }),
     updateExternalAccess: async (keyId, body) => request(`/api/keys/${keyId}/external-access`, {
       method: 'PUT',
@@ -197,11 +201,32 @@ describe('ApiKeysSection', () => {
     expect(await screen.findByText(/The button is only shown once/i)).toBeInTheDocument();
   });
 
-  test('hides the external access section when the external API is disabled', async () => {
+  test('hides the external access section when the external API is disabled and no external key is active', async () => {
+    installDefaultFetch([legacyKey, { ...externalKey, is_active: false, revoked_at: '2026-07-28T12:00:00.000Z' }]);
+    installApiKeyHook();
     renderWithProviders(<ApiKeysSection {...props()} externalApiEnabled={false} />);
 
     await screen.findByLabelText('Bookmarklet API key rows');
     expect(screen.queryByText('External access keys')).not.toBeInTheDocument();
+  });
+
+  test('keeps active external keys revocable while the external API is disabled', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ApiKeysSection {...props()} externalApiEnabled={false} />);
+
+    const cards = await screen.findByLabelText('External API key cards');
+    expect(within(cards).getByText('External Client')).toBeInTheDocument();
+    expect(screen.getByText(/External API is turned off, so these keys cannot be used/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create external key' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit External Client external access' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Regenerate External Client' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Revoke External Client' }));
+    await user.click(screen.getByRole('button', { name: /^Revoke$/ }));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith(
+      '/api/keys/7',
+      expect.objectContaining({ method: 'DELETE' })
+    ));
   });
 
   test('hides the Requests navigation toggle when the external API is disabled', async () => {
@@ -304,6 +329,34 @@ describe('ApiKeysSection', () => {
 
     const rows = await screen.findByLabelText('Bookmarklet API key rows');
     expect(within(rows).getByText('abc12345...')).toBeInTheDocument();
+  });
+
+  test('hides revoked keys from the bookmarklet list', async () => {
+    installDefaultFetch([
+      legacyKey,
+      { ...legacyKey, id: 3, name: 'Old Bookmarklet', is_active: false, revoked_at: '2026-07-28T12:00:00.000Z' },
+    ]);
+    installApiKeyHook();
+    renderWithProviders(<ApiKeysSection {...props()} />);
+
+    const rows = await screen.findByLabelText('Bookmarklet API key rows');
+    expect(within(rows).getByText('My Bookmarklet')).toBeInTheDocument();
+    expect(within(rows).queryByText('Old Bookmarklet')).not.toBeInTheDocument();
+  });
+
+  test('lists read-only status keys with download keys and labels each type', async () => {
+    installDefaultFetch([
+      legacyKey,
+      { ...legacyKey, id: 4, name: 'Dashboard key', key_prefix: 'stat1234', role: 'status_read' },
+    ]);
+    installApiKeyHook();
+    renderWithProviders(<ApiKeysSection {...props()} />);
+
+    const rows = await screen.findByLabelText('Bookmarklet API key rows');
+    expect(within(rows).getByText('Dashboard key')).toBeInTheDocument();
+    expect(within(rows).getByText('Read-only status')).toBeInTheDocument();
+    expect(within(rows).getByText('Download')).toBeInTheDocument();
+    expect(screen.queryByLabelText('External API key cards')).not.toBeInTheDocument();
   });
 
   test('keeps external keys out of the bookmarklet list', async () => {
@@ -509,6 +562,35 @@ describe('ApiKeysSection', () => {
     expect(JSON.parse(call?.[1]?.body as string)).toEqual({ name: 'Bookmarklet' });
   });
 
+  test('creates a read-only status key when its option is checked', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ApiKeysSection {...props()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Create Key' }));
+    await user.type(screen.getByLabelText('Key Name'), 'Dashboard');
+    await user.click(screen.getByRole('checkbox', { name: /Read-only status key/i }));
+    expect(screen.getByText(/cannot start downloads\. Next you'll get your key/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^Create$/ }));
+
+    const dialog = await screen.findByRole('dialog', { name: /API Key Created/i });
+    const call = mockFetch.mock.calls.find(([url, init]) => url === '/api/keys' && init?.method === 'POST');
+    expect(JSON.parse(call?.[1]?.body as string)).toEqual({ name: 'Dashboard', role: 'status_read' });
+    expect(within(dialog).getByText(/\/api\/status\/summary/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/Send to Youtarr/i)).not.toBeInTheDocument();
+  });
+
+  test('goes back to a download key when the create dialog is cancelled', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ApiKeysSection {...props()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Create Key' }));
+    await user.click(screen.getByRole('checkbox', { name: /Read-only status key/i }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(screen.getByRole('button', { name: 'Create Key' }));
+
+    expect(await screen.findByRole('checkbox', { name: /Read-only status key/i })).not.toBeChecked();
+  });
+
   test('shows the draggable Send to Youtarr button after creating a bookmarklet key', async () => {
     const dialog = await createBookmarkletKey();
 
@@ -560,6 +642,22 @@ describe('ApiKeysSection', () => {
     ));
     expect(await screen.findByText(/API Key Regenerated/)).toBeInTheDocument();
     expect(screen.getByText(createdKey.key)).toBeInTheDocument();
+  });
+
+  test('closes the regenerate confirmation when regenerating fails so the error is visible', async () => {
+    const user = userEvent.setup();
+    const fetchDefault = mockFetch.getMockImplementation();
+    mockFetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === '/api/keys/7/regenerate') throw new Error('Failed to regenerate API key');
+      return fetchDefault?.(input, init);
+    });
+    renderWithProviders(<ApiKeysSection {...props()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Regenerate External Client' }));
+    await user.click(screen.getByRole('button', { name: 'Regenerate Key' }));
+
+    expect(await screen.findByText('Failed to regenerate API key')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Regenerate API Key?')).not.toBeInTheDocument());
   });
 
   test('shows API loading failures and allows dismissing the alert', async () => {

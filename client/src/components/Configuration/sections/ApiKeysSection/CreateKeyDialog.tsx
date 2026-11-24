@@ -2,19 +2,22 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Button,
+  Checkbox,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Divider,
+  FormControlLabel,
   TextField,
   Typography,
 } from '../../../ui';
-import { AlertTriangle as WarningIcon } from 'lucide-react';
+import { Warning as WarningIcon } from '../../../../lib/icons';
 import {
   ApiKeyCreatedResponse,
   ApiKeyRole,
   normalizePolicy,
+  STATUS_READ_ROLE,
   useApiKeys,
 } from './useApiKeys';
 import { defaultPolicy } from './policy';
@@ -36,6 +39,7 @@ export default function CreateKeyDialog({
   onCreated,
 }: Props) {
   const [newKeyName, setNewKeyName] = useState('');
+  const [newKeyIsStatus, setNewKeyIsStatus] = useState(false);
   const [newKeyPolicy, setNewKeyPolicy] = useState(defaultPolicy);
   const [newKeyChannelIds, setNewKeyChannelIds] = useState<number[]>([]);
   const [newKeyChannelSearch, setNewKeyChannelSearch] = useState('');
@@ -107,7 +111,8 @@ export default function CreateKeyDialog({
       const result = await api.createApiKey(
         newKeyName.trim(),
         normalized?.policy,
-        createKeyType === 'external' ? newKeyChannelIds : undefined
+        createKeyType === 'external' ? newKeyChannelIds : undefined,
+        createKeyType === 'legacy' && newKeyIsStatus ? STATUS_READ_ROLE : undefined
       );
       if (!active.current) return;
       if (!result.success) {
@@ -116,7 +121,11 @@ export default function CreateKeyDialog({
       }
       onCreated(
         result,
-        createKeyType === 'legacy' ? 'legacy_download' : newKeyPolicy.role
+        createKeyType === 'external'
+          ? newKeyPolicy.role
+          : newKeyIsStatus
+            ? STATUS_READ_ROLE
+            : 'legacy_download'
       );
     } catch (error) {
       if (active.current)
@@ -162,10 +171,22 @@ export default function CreateKeyDialog({
           helperText="A descriptive name to identify this key"
         />
         {createKeyType === 'legacy' && (
-          <Typography variant="body2" color="secondary" className="mt-2">
-            Next you'll get your key, the Send to Youtarr button, and the details for phone shortcuts. They're
-            shown only once.
-          </Typography>
+          <>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={newKeyIsStatus}
+                  onChange={(e) => setNewKeyIsStatus(e.target.checked)}
+                />
+              }
+              label="Read-only status key"
+            />
+            <Typography variant="body2" color="secondary" className="mt-2">
+              {newKeyIsStatus
+                ? "For dashboards and monitoring tools. It can only read the status summary and cannot start downloads. Next you'll get your key and the address to use. They're shown only once."
+                : "Next you'll get your key, the Send to Youtarr button, and the details for phone shortcuts. They're shown only once."}
+            </Typography>
+          </>
         )}
         {createKeyType === 'external' && (
           <>

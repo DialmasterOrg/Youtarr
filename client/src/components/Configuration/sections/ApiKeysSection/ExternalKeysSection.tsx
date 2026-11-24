@@ -1,18 +1,27 @@
 import React, { useState } from 'react';
-import { Box, Button, Paper, TextField, Typography } from '../../../ui';
-import { Filter as FilterIcon, Plus as AddIcon } from 'lucide-react';
+import { Alert, Box, Button, Paper, TextField, Typography } from '../../../ui';
+import { Filter as FilterIcon, Plus as AddIcon } from '../../../../lib/icons';
 import ExternalKeyCard from './ExternalKeyCard';
 import { ApiKey } from './useApiKeys';
 
 interface ExternalKeysSectionProps {
   keys: ApiKey[];
+  /** While the External API is off the keys are listed only so they can be revoked. */
+  externalApiEnabled: boolean;
   onCreate: () => void;
   onEdit: (key: ApiKey) => void;
   onRegenerate: (key: ApiKey) => void;
   onRevoke: (id: number, name: string) => void;
 }
 
-export default function ExternalKeysSection({ keys, onCreate, onEdit, onRegenerate, onRevoke }: ExternalKeysSectionProps) {
+export default function ExternalKeysSection({
+  keys,
+  externalApiEnabled,
+  onCreate,
+  onEdit,
+  onRegenerate,
+  onRevoke,
+}: ExternalKeysSectionProps) {
   const [search, setSearch] = useState('');
   const [activeOnly, setActiveOnly] = useState(true);
   const query = search.trim().toLocaleLowerCase();
@@ -31,10 +40,19 @@ export default function ExternalKeysSection({ keys, onCreate, onEdit, onRegenera
             channels. Add only the request permissions the integration needs.
           </Typography>
         </div>
-        <Button variant="contained" startIcon={<AddIcon size={16} />} onClick={onCreate} size="small">
-          Create external key
-        </Button>
+        {externalApiEnabled && (
+          <Button variant="contained" startIcon={<AddIcon size={16} />} onClick={onCreate} size="small">
+            Create external key
+          </Button>
+        )}
       </Box>
+
+      {!externalApiEnabled && (
+        <Alert severity="info" className="mb-4">
+          The External API is turned off, so these keys cannot be used. They still count toward the key
+          limit, and you can revoke them here.
+        </Alert>
+      )}
 
       {keys.length > 0 && (
         <Box className="mb-3 flex flex-col items-start gap-2 sm:flex-row sm:items-stretch">
@@ -70,7 +88,13 @@ export default function ExternalKeysSection({ keys, onCreate, onEdit, onRegenera
       ) : (
         <div className="grid gap-3" aria-label="External API key cards">
           {visibleKeys.map((key) => (
-            <ExternalKeyCard key={key.id} apiKey={key} onEdit={onEdit} onRegenerate={onRegenerate} onRevoke={onRevoke} />
+            <ExternalKeyCard
+              key={key.id}
+              apiKey={key}
+              onEdit={externalApiEnabled ? onEdit : undefined}
+              onRegenerate={externalApiEnabled ? onRegenerate : undefined}
+              onRevoke={onRevoke}
+            />
           ))}
         </div>
       )}

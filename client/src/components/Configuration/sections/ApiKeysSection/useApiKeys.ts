@@ -30,7 +30,13 @@ export interface ApiKey {
   revoked_at: string | null;
 }
 
-export type ApiKeyRole = 'legacy_download' | 'view' | 'request' | 'delete' | 'admin';
+export type ApiKeyRole = 'legacy_download' | 'status_read' | 'view' | 'request' | 'delete' | 'admin';
+export const DOWNLOAD_ROLE = 'legacy_download';
+export const STATUS_READ_ROLE = 'status_read';
+
+// Download and read-only status keys reach one fixed endpoint each and carry no
+// external policy; every other role is an external access key.
+export const isSimpleKeyRole = (role: ApiKeyRole) => role === DOWNLOAD_ROLE || role === STATUS_READ_ROLE;
 export type MediaType = 'video' | 'short' | 'livestream';
 
 export interface ApiKeyPolicy {
@@ -131,9 +137,15 @@ export const useApiKeys = (token: string | null) => {
     return data.channelIds || [];
   }, [headers]);
 
-  const createApiKey = useCallback(async (name: string, policy?: NormalizedApiKeyPolicy, channelIds?: number[]) => {
+  const createApiKey = useCallback(async (
+    name: string,
+    policy?: NormalizedApiKeyPolicy,
+    channelIds?: number[],
+    role?: typeof STATUS_READ_ROLE
+  ) => {
     const { data } = await axios.post<ApiKeyCreatedResponse>('/api/keys', {
       name,
+      ...(role ? { role } : {}),
       ...(policy ? { policy, channelIds: channelIds || [] } : {}),
     }, { headers });
     return data;

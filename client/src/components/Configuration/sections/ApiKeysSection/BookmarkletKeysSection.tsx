@@ -1,14 +1,17 @@
 import React from 'react';
 import { Box, Button, Chip, IconButton, Paper, TextField, Tooltip, Typography } from '../../../ui';
-import { Plus as AddIcon, Trash2 as DeleteIcon } from 'lucide-react';
+import { Plus as AddIcon, Trash2 as DeleteIcon } from '../../../../lib/icons';
 import { InfoTooltip } from '../../common/InfoTooltip';
 import { formatKeyDate } from './ExternalKeyCard';
-import { ApiKey } from './useApiKeys';
+import { ApiKey, ApiKeyRole, STATUS_READ_ROLE } from './useApiKeys';
 
 const MIN_RATE_LIMIT = 1;
 const MAX_RATE_LIMIT = 100;
 
+const keyTypeLabel = (role: ApiKeyRole) => (role === STATUS_READ_ROLE ? 'Read-only status' : 'Download');
+
 interface BookmarkletKeysSectionProps {
+  /** Active download and read-only status keys; the caller leaves out revoked ones. */
   keys: ApiKey[];
   rateLimit: number;
   onRateLimitChange: (value: number) => void;
@@ -44,6 +47,8 @@ export default function BookmarkletKeysSection({
       <Typography variant="body2" color="secondary" className="mb-4">
         Keys also work with Apple Shortcuts, Tasker, and other tools.
         <strong> Note:</strong> API keys currently support single video downloads only. Playlists and channels require the web UI.
+        {' '}A read-only status key is for dashboards and monitoring tools: it reads your library and download status
+        and cannot start downloads.
       </Typography>
 
       <Box className="flex justify-between items-center mb-4">
@@ -69,8 +74,8 @@ export default function BookmarkletKeysSection({
                   <Typography variant="subtitle2" className="truncate">
                     {key.name}
                   </Typography>
+                  <Chip label={keyTypeLabel(key.role)} size="small" variant="outlined" />
                   <Chip label={`${key.key_prefix}...`} size="small" variant="outlined" />
-                  {key.revoked_at && <Chip label="Revoked" size="small" color="error" variant="outlined" />}
                   <Chip
                     label={`${key.usage_count} ${key.usage_count === 1 ? 'use' : 'uses'}`}
                     size="small"
@@ -81,18 +86,16 @@ export default function BookmarkletKeysSection({
                   Created {formatKeyDate(key.created_at)} · Last used {formatKeyDate(key.last_used_at)}
                 </Typography>
               </div>
-              {!key.revoked_at && (
-                <Tooltip title="Revoke">
-                  <IconButton
-                    size="small"
-                    onClick={() => onRevoke(key.id, key.name)}
-                    color="error"
-                    aria-label={`Revoke ${key.name}`}
-                  >
-                    <DeleteIcon size={16} />
-                  </IconButton>
-                </Tooltip>
-              )}
+              <Tooltip title="Revoke">
+                <IconButton
+                  size="small"
+                  onClick={() => onRevoke(key.id, key.name)}
+                  color="error"
+                  aria-label={`Revoke ${key.name}`}
+                >
+                  <DeleteIcon size={16} />
+                </IconButton>
+              </Tooltip>
             </Paper>
           ))}
         </div>

@@ -467,6 +467,10 @@ The same operations are available through the management APIs:
    `POST /api/external-requests/{id}/approve` or `/reject` (a rejection requires
    a JSON `reason`). Policy and grants can be replaced atomically with
    `PUT /api/keys/{id}/external-access` and a `{ "policy": ..., "channelIds": [...] }` body.
+   The replacement covers grants on enabled, non-terminated channels, the
+   ones `GET /api/keys/{id}/channels` lists. A grant on a disabled or
+   terminated channel is kept but grants nothing until the channel is enabled
+   again.
 
 `GET /getconfig` reports the effective feature flag in
 `isPlatformManaged.externalApiEnabled`; clients should use this value when
@@ -476,6 +480,10 @@ When the shared work queue is full, writes return 503 while retaining the
 accepted request and its idempotency key. Retry the same body to resume it
 without charging another accepted write. Completed video, channel, and
 deletion requests return their original result on an idempotent retry.
+
+While `EXTERNAL_API_ENABLED` is off, the settings page still lists active
+external keys so they can be revoked, since they count toward the 20-key
+limit; creating, editing and regenerating them wait until the API is on.
 
 Saving an external key with zero approved channels is intentional and does not
 backfill or grant access. That key fails closed: catalog reads and requests

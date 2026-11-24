@@ -9,15 +9,15 @@ import {
 } from '../../../ui';
 import {
   Trash2 as DeleteIcon,
-  AlertTriangle as WarningIcon,
+  Warning as WarningIcon,
   Pencil as EditIcon,
   RefreshCw as RegenerateIcon,
   Video as VideoIcon,
   Radio as ChannelIcon,
-  Clock3 as ClockIcon,
+  Timer as ClockIcon,
   Zap as AutoApproveIcon,
   Eye as ViewIcon,
-} from 'lucide-react';
+} from '../../../../lib/icons';
 import { getExternalRatingBand } from '../../../../utils/externalRatingPolicy';
 import RatingBadge from '../../../shared/RatingBadge';
 import { ApiKey } from './useApiKeys';
@@ -36,8 +36,9 @@ export const formatKeyDate = (dateStr: string | null) => {
 
 interface Props {
   apiKey: ApiKey;
-  onEdit: (key: ApiKey) => void;
-  onRegenerate: (key: ApiKey) => void;
+  /** Left out while the External API is off: the key can only be revoked. */
+  onEdit?: (key: ApiKey) => void;
+  onRegenerate?: (key: ApiKey) => void;
   onRevoke: (id: number, name: string) => void;
 }
 export default function ExternalKeyCard({
@@ -191,7 +192,7 @@ export default function ExternalKeyCard({
           </Typography>
         </div>
         <div className="flex items-center">
-          {!key.revoked_at && (
+          {!key.revoked_at && onEdit && (
             <Tooltip title="Edit external access">
               <IconButton
                 size="small"
@@ -202,7 +203,7 @@ export default function ExternalKeyCard({
               </IconButton>
             </Tooltip>
           )}
-          {!key.revoked_at && (
+          {!key.revoked_at && onRegenerate && (
             <Tooltip title="Regenerate key">
               <IconButton
                 size="small"

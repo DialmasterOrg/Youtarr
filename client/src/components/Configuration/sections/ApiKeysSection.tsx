@@ -6,7 +6,7 @@ import {
   Snackbar,
   Divider,
 } from '../../ui';
-import { AlertTriangle as WarningIcon } from 'lucide-react';
+import { Warning as WarningIcon } from '../../../lib/icons';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 
 import { locationUtils } from '../../../utils/location';
@@ -17,7 +17,13 @@ import CreatedKeyDialog from './ApiKeysSection/CreatedKeyDialog';
 import EditKeyDialog from './ApiKeysSection/EditKeyDialog';
 import ExternalKeysSection from './ApiKeysSection/ExternalKeysSection';
 import { apiKeyError } from './ApiKeysSection/apiKeyError';
-import { ApiKey, ApiKeyRole, ApiKeyCreatedResponse, useApiKeys } from './ApiKeysSection/useApiKeys';
+import {
+  ApiKey,
+  ApiKeyRole,
+  ApiKeyCreatedResponse,
+  isSimpleKeyRole,
+  useApiKeys,
+} from './ApiKeysSection/useApiKeys';
 
 const SECTION_TITLE = 'API Keys & Bookmarklet';
 
@@ -92,7 +98,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
     setCreateKeyType(type); setCreateDialogOpen(true);
   };
   const openEditDialog = (key: ApiKey) => {
-    if (token && key.role !== 'legacy_download' && !key.revoked_at) setEditKey(key);
+    if (token && !isSimpleKeyRole(key.role) && !key.revoked_at) setEditKey(key);
   };
 
   const handleDeleteKey = async () => {
@@ -132,7 +138,11 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
       setCreatedKeyDialogOpen(true);
       await fetchApiKeys();
     } catch (err) {
-      if (session === sessionSequence.current) setError(apiKeyError(err, 'Failed to regenerate API key'));
+      if (session === sessionSequence.current) {
+        // Close the confirmation so the error alert behind it is visible.
+        setRegenerateConfirmDialog({ open: false, key: null });
+        setError(apiKeyError(err, 'Failed to regenerate API key'));
+      }
     } finally {
       mutationBusy.current = false;
       setRegenerating(false);
@@ -161,8 +171,14 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
     );
   }
 
-  const externalKeys = apiKeys.filter((key) => key.role !== 'legacy_download');
-  const bookmarkletKeys = apiKeys.filter((key) => key.role === 'legacy_download');
+  const externalKeys = apiKeys.filter((key) => !isSimpleKeyRole(key.role));
+  // GET /api/keys returns revoked keys for the external audit trail; the
+  // bookmarklet list shows only the keys that still work.
+  const bookmarkletKeys = apiKeys.filter((key) => isSimpleKeyRole(key.role) && !key.revoked_at);
+  // Active external keys still count toward the key limit while the External
+  // API is off, so they stay listed where they can be revoked.
+  const showExternalKeys = externalApiEnabled ||
+    externalKeys.some((key) => key.is_active && !key.revoked_at);
 
   return (
     <ConfigurationAccordion
@@ -196,11 +212,12 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
         onRevoke={openDeleteConfirmDialog}
       />
 
-      {externalApiEnabled && (
+      {showExternalKeys && (
         <>
           <Divider className="my-6" />
           <ExternalKeysSection
             keys={externalKeys}
+            externalApiEnabled={externalApiEnabled}
             onCreate={() => openCreateDialog('external')}
             onEdit={openEditDialog}
             onRegenerate={(key) => setRegenerateConfirmDialog({ open: true, key })}
