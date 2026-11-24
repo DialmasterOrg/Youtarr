@@ -95,9 +95,11 @@ async function replaceChannelGrants(keyId, channelIds, { transaction: existingTr
       });
     }
     if (normalized.length > 0) {
+      // A channel disabled since the eligibility check keeps its dormant
+      // grant, which would otherwise collide with the new row.
       await ApiKeyChannelGrant.bulkCreate(
         normalized.map((channelId) => ({ api_key_id: keyId, channel_id: channelId })),
-        { transaction }
+        { transaction, ignoreDuplicates: true }
       );
     }
     return { keyId, channelIds: normalized };

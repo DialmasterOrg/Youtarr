@@ -470,7 +470,8 @@ The same operations are available through the management APIs:
    The replacement covers grants on enabled, non-terminated channels, the
    ones `GET /api/keys/{id}/channels` lists. A grant on a disabled or
    terminated channel is kept but grants nothing until the channel is enabled
-   again.
+   again, at which point it is back in the editor and can be removed there.
+   A revoked key can use none of its grants.
 
 `GET /getconfig` reports the effective feature flag in
 `isPlatformManaged.externalApiEnabled`; clients should use this value when

@@ -31,7 +31,7 @@ describe('API key channel grants', () => {
     });
     expect(ApiKeyChannelGrant.bulkCreate).toHaveBeenCalledWith(
       [{ api_key_id: 7, channel_id: 3 }, { api_key_id: 7, channel_id: 9 }],
-      { transaction: { id: 'transaction', LOCK: { UPDATE: 'UPDATE' } } }
+      { transaction: { id: 'transaction', LOCK: { UPDATE: 'UPDATE' } }, ignoreDuplicates: true }
     );
   });
 
