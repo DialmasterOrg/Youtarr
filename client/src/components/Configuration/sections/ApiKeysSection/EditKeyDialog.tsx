@@ -76,7 +76,7 @@ export default function EditKeyDialog(props: Props) {
           <Typography variant="subtitle2" className="mb-2">
             Approved channels ({selectedChannelIds.length})
           </Typography>
-          {selectedChannelIds.length === 0 && (
+          {!loading && !editLoadError && selectedChannelIds.length === 0 && (
             <Alert
               severity="warning"
               className="mb-3"

@@ -38,7 +38,7 @@ describe('ChannelGrantPicker', () => {
     const user = userEvent.setup();
     render(<Harness />);
 
-    await user.click(screen.getByLabelText('Select all approved channels'));
+    await user.click(screen.getByLabelText('Select all channels'));
 
     expect(screen.getByLabelText('Selected ids')).toHaveTextContent('1,2,3');
   });
@@ -70,5 +70,6 @@ describe('ChannelGrantPicker', () => {
     await user.type(screen.getByLabelText('Search channels'), 'nothing matches');
 
     expect(screen.queryByLabelText('Select all shown channels')).not.toBeInTheDocument();
+    expect(screen.getByText('No channels match your search.')).toBeInTheDocument();
   });
 });

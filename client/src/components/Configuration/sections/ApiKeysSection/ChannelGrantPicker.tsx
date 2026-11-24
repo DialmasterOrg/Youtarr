@@ -73,7 +73,7 @@ const ChannelGrantPicker: React.FC<ChannelGrantPickerProps> = ({
               onChange={(event) => setVisibleSelected(event.target.checked)}
             />
           }
-          label={search.trim() ? 'Select all shown channels' : 'Select all approved channels'}
+          label={search.trim() ? 'Select all shown channels' : 'Select all channels'}
         />
       )}
       <TextField
@@ -87,6 +87,10 @@ const ChannelGrantPicker: React.FC<ChannelGrantPickerProps> = ({
       {channels.length === 0 ? (
         <Typography variant="body2" color="secondary">
           No enabled, non-terminated channels are available.
+        </Typography>
+      ) : visibleChannels.length === 0 ? (
+        <Typography variant="body2" color="secondary">
+          No channels match your search.
         </Typography>
       ) : (
         <Box

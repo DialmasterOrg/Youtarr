@@ -11,7 +11,7 @@ import {
   Select,
   MenuItem,
 } from '../../../ui';
-import { Video as ViewIcon } from '../../../../lib/icons';
+import { Eye as ViewIcon } from '../../../../lib/icons';
 import {
   EXTERNAL_RATING_BANDS,
   formatExternalRatingBand,

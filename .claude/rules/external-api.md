@@ -7,6 +7,9 @@ paths:
   - "client/src/components/ExternalRequests/**/*"
   - "client/src/components/Configuration/sections/ApiKeysSection.tsx"
   - "client/src/components/Configuration/sections/ApiKeysSection/**/*"
+  - "client/src/types/externalRequest.ts"
+  - "client/src/utils/externalRatingPolicy.ts"
+  - "client/src/utils/__tests__/externalRatingPolicy.test.ts"
 ---
 
 # External API

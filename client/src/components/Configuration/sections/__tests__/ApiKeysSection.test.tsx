@@ -462,7 +462,7 @@ describe('ApiKeysSection', () => {
     await user.click(await screen.findByRole('button', { name: 'Create external key' }));
     expect(screen.getByText(/Saving with zero approved channels is allowed, but the key will fail closed/i))
       .toBeInTheDocument();
-    const selectAll = await screen.findByLabelText('Select all approved channels');
+    const selectAll = await screen.findByLabelText('Select all channels');
     await user.click(selectAll);
     expect(screen.getByLabelText('Safe Channel')).toBeChecked();
     expect(screen.getByText('Approved channels (1)')).toBeInTheDocument();
@@ -479,7 +479,7 @@ describe('ApiKeysSection', () => {
     }));
     expect(await screen.findByText(/Saving with zero approved channels is allowed, but this key will fail closed/i))
       .toBeInTheDocument();
-    await user.click(await screen.findByLabelText('Select all approved channels'));
+    await user.click(await screen.findByLabelText('Select all channels'));
     expect(screen.getByLabelText('Safe Channel')).toBeChecked();
   });
 
