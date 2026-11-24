@@ -27,6 +27,20 @@ import {
 
 const SECTION_TITLE = 'API Keys & Bookmarklet';
 
+interface CreatedKey {
+  key: ApiKeyCreatedResponse;
+  role: ApiKeyRole;
+  action: 'created' | 'regenerated';
+}
+
+// The key a revoke or regenerate confirmation is for; a revoke needs only its id and name.
+interface KeyConfirm {
+  key: (Pick<ApiKey, 'id' | 'name'> & Partial<Pick<ApiKey, 'role'>>) | null;
+  busy: boolean;
+}
+
+const CLOSED_CONFIRM: KeyConfirm = { key: null, busy: false };
+
 interface ApiKeysSectionProps {
   token: string | null;
   apiKeyRateLimit: number;
@@ -46,34 +60,22 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
 }) => {
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [createKeyType, setCreateKeyType] = useState<'external' | 'legacy'>('external');
-  const [createdKeyDialogOpen, setCreatedKeyDialogOpen] = useState(false);
-  const [createdKey, setCreatedKey] = useState<ApiKeyCreatedResponse | null>(null);
-  const [createdKeyRole, setCreatedKeyRole] = useState<ApiKeyRole>('legacy_download');
-  const [createdKeyAction, setCreatedKeyAction] = useState<'created' | 'regenerated'>('created');
+  // The key type whose create dialog is open, or null when it is closed.
+  const [createKeyType, setCreateKeyType] = useState<'external' | 'legacy' | null>(null);
+  // The one-time secret on show, with how it came about.
+  const [created, setCreated] = useState<CreatedKey | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editKey, setEditKey] = useState<ApiKey | null>(null);
   const apiKeyApi = useApiKeys(token);
   const [snackbar, setSnackbar] = useState({ open: false, message: '' });
-  const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<{ open: boolean; keyId: number | null; keyName: string }>({
-    open: false,
-    keyId: null,
-    keyName: '',
-  });
-  const [regenerateConfirmDialog, setRegenerateConfirmDialog] = useState<{
-    open: boolean;
-    key: ApiKey | null;
-  }>({ open: false, key: null });
-  const [regenerating, setRegenerating] = useState(false);
-  const [isHttpWarning] = useState(
-    locationUtils.getProtocol() !== 'https:' && locationUtils.getHostname() !== 'localhost'
-  );
+  const [revokeConfirm, setRevokeConfirm] = useState<KeyConfirm>(CLOSED_CONFIRM);
+  const [regenerateConfirm, setRegenerateConfirm] = useState<KeyConfirm>(CLOSED_CONFIRM);
+  const isHttpWarning =
+    locationUtils.getProtocol() !== 'https:' && locationUtils.getHostname() !== 'localhost';
 
   const loadSequence = useRef(0);
   const sessionSequence = useRef(0);
   const mutationBusy = useRef(false);
-  const [revoking, setRevoking] = useState(false);
   const fetchApiKeys = useCallback(async () => {
     const sequence = ++loadSequence.current;
     try {
@@ -89,63 +91,54 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
   useEffect(() => {
     ++sessionSequence.current;
     setLoading(true);
-    setCreateDialogOpen(false); setEditKey(null); setCreatedKeyDialogOpen(false); setCreatedKey(null);
+    setCreateKeyType(null); setEditKey(null); setCreated(null);
     void fetchApiKeys();
     return () => { ++loadSequence.current; ++sessionSequence.current; };
   }, [fetchApiKeys]);
 
-  const openCreateDialog = (type: 'external' | 'legacy' = 'external') => {
-    setCreateKeyType(type); setCreateDialogOpen(true);
-  };
   const openEditDialog = (key: ApiKey) => {
     if (token && !isSimpleKeyRole(key.role) && !key.revoked_at) setEditKey(key);
   };
 
   const handleDeleteKey = async () => {
-    if (!token || !deleteConfirmDialog.keyId || mutationBusy.current) return;
-    mutationBusy.current = true; setRevoking(true); setError(null);
+    const { key } = revokeConfirm;
+    if (!token || !key || mutationBusy.current) return;
+    mutationBusy.current = true; setRevokeConfirm({ key, busy: true }); setError(null);
     const session = sessionSequence.current;
     try {
-      await apiKeyApi.revokeApiKey(deleteConfirmDialog.keyId);
+      await apiKeyApi.revokeApiKey(key.id);
       if (session !== sessionSequence.current) return;
       setSnackbar({ open: true, message: 'API key revoked' });
       void fetchApiKeys();
     } catch (err) {
       if (session === sessionSequence.current) setError(apiKeyError(err, 'Failed to revoke API key'));
     } finally {
-      mutationBusy.current = false; setRevoking(false);
-      setDeleteConfirmDialog({ open: false, keyId: null, keyName: '' });
+      mutationBusy.current = false;
+      setRevokeConfirm(CLOSED_CONFIRM);
     }
   };
 
   const openDeleteConfirmDialog = (id: number, name: string) => {
-    setDeleteConfirmDialog({ open: true, keyId: id, keyName: name });
+    setRevokeConfirm({ key: { id, name }, busy: false });
   };
 
   const handleRegenerateKey = async () => {
-    if (!token || !regenerateConfirmDialog.key || mutationBusy.current) return;
-    mutationBusy.current = true; setError(null);
+    const { key } = regenerateConfirm;
+    if (!token || !key?.role || mutationBusy.current) return;
+    const { role } = key;
+    mutationBusy.current = true; setRegenerateConfirm({ key, busy: true }); setError(null);
     const session = sessionSequence.current;
-    const key = regenerateConfirmDialog.key;
-    setRegenerating(true);
     try {
       const body = await apiKeyApi.regenerateApiKey(key.id);
       if (session !== sessionSequence.current) return;
-      setRegenerateConfirmDialog({ open: false, key: null });
-      setCreatedKey(body);
-      setCreatedKeyRole(key.role);
-      setCreatedKeyAction('regenerated');
-      setCreatedKeyDialogOpen(true);
+      setCreated({ key: body, role, action: 'regenerated' });
       await fetchApiKeys();
     } catch (err) {
-      if (session === sessionSequence.current) {
-        // Close the confirmation so the error alert behind it is visible.
-        setRegenerateConfirmDialog({ open: false, key: null });
-        setError(apiKeyError(err, 'Failed to regenerate API key'));
-      }
+      // The confirmation closes either way, so the error alert behind it is visible.
+      if (session === sessionSequence.current) setError(apiKeyError(err, 'Failed to regenerate API key'));
     } finally {
       mutationBusy.current = false;
-      setRegenerating(false);
+      setRegenerateConfirm(CLOSED_CONFIRM);
     }
   };
 
@@ -156,11 +149,6 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
     } catch {
       setSnackbar({ open: true, message: 'Unable to copy. Select and copy it manually.' });
     }
-  };
-
-  const closeCreatedKeyDialog = () => {
-    setCreatedKeyDialogOpen(false);
-    setCreatedKey(null);
   };
 
   if (loading) {
@@ -208,7 +196,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
         keys={bookmarkletKeys}
         rateLimit={apiKeyRateLimit}
         onRateLimitChange={onRateLimitChange}
-        onCreate={() => openCreateDialog('legacy')}
+        onCreate={() => setCreateKeyType('legacy')}
         onRevoke={openDeleteConfirmDialog}
       />
 
@@ -218,26 +206,23 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
           <ExternalKeysSection
             keys={externalKeys}
             externalApiEnabled={externalApiEnabled}
-            onCreate={() => openCreateDialog('external')}
+            onCreate={() => setCreateKeyType('external')}
             onEdit={openEditDialog}
-            onRegenerate={(key) => setRegenerateConfirmDialog({ open: true, key })}
+            onRegenerate={(key) => setRegenerateConfirm({ key, busy: false })}
             onRevoke={openDeleteConfirmDialog}
           />
         </>
       )}
 
-      {createDialogOpen && (createKeyType === 'legacy' || externalApiEnabled) && (
+      {createKeyType && (createKeyType === 'legacy' || externalApiEnabled) && (
         <CreateKeyDialog
           key={token}
           api={apiKeyApi}
           createKeyType={createKeyType}
-          onClose={() => setCreateDialogOpen(false)}
+          onClose={() => setCreateKeyType(null)}
           onCreated={(key, role) => {
-            setCreatedKey(key);
-            setCreatedKeyRole(role);
-            setCreatedKeyAction('created');
-            setCreateDialogOpen(false);
-            setCreatedKeyDialogOpen(true);
+            setCreated({ key, role, action: 'created' });
+            setCreateKeyType(null);
             void fetchApiKeys();
           }}
         />
@@ -257,28 +242,28 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
       )}
 
       <CreatedKeyDialog
-        open={createdKeyDialogOpen}
-        createdKey={createdKey}
-        role={createdKeyRole}
-        action={createdKeyAction}
-        onClose={closeCreatedKeyDialog}
+        open={created !== null}
+        createdKey={created?.key ?? null}
+        role={created?.role ?? 'legacy_download'}
+        action={created?.action ?? 'created'}
+        onClose={() => setCreated(null)}
         onCopy={(text, label) => void copyToClipboard(text, label)}
       />
 
       <ConfirmKeyActionDialog
-        open={regenerateConfirmDialog.open}
+        open={regenerateConfirm.key !== null}
         title="Regenerate API Key?"
         confirmLabel="Regenerate Key"
         busyLabel="Regenerating…"
-        busy={regenerating}
-        onCancel={() => setRegenerateConfirmDialog({ open: false, key: null })}
+        busy={regenerateConfirm.busy}
+        onCancel={() => setRegenerateConfirm(CLOSED_CONFIRM)}
         onConfirm={handleRegenerateKey}
       >
         <Alert severity="warning" className="mb-3">
           The current key will stop working immediately.
         </Alert>
         <Typography>
-          Regenerate <strong>&quot;{regenerateConfirmDialog.key?.name}&quot;</strong>?
+          Regenerate <strong>&quot;{regenerateConfirm.key?.name}&quot;</strong>?
         </Typography>
         <Typography variant="body2" color="secondary" className="mt-2">
           Its permissions and approved channels will stay the same. The replacement key is
@@ -287,15 +272,15 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
       </ConfirmKeyActionDialog>
 
       <ConfirmKeyActionDialog
-        open={deleteConfirmDialog.open}
+        open={revokeConfirm.key !== null}
         title="Revoke API Key?"
         confirmLabel="Revoke"
-        busy={revoking}
-        onCancel={() => setDeleteConfirmDialog({ open: false, keyId: null, keyName: '' })}
+        busy={revokeConfirm.busy}
+        onCancel={() => setRevokeConfirm(CLOSED_CONFIRM)}
         onConfirm={handleDeleteKey}
       >
         <Typography>
-          Are you sure you want to revoke the API key <strong>"{deleteConfirmDialog.keyName}"</strong>?
+          Are you sure you want to revoke the API key <strong>"{revokeConfirm.key?.name}"</strong>?
         </Typography>
         <Typography variant="body2" color="secondary" className="mt-2">
           Any integration using this key will stop working immediately. Its audit history is retained.
