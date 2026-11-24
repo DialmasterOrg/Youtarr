@@ -573,6 +573,39 @@ describe('App Component', () => {
     expect(screen.queryByTestId('requests-page')).not.toBeInTheDocument();
   });
 
+  test('waits for the config before deciding whether to open Requests', async () => {
+    localStorageMock.getItem.mockReturnValue('test-token');
+    window.history.replaceState({}, '', '/requests');
+    let resolveConfig: (value: unknown) => void = () => undefined;
+    (global.fetch as jest.Mock).mockImplementation((url) => {
+      if (url === '/getconfig') {
+        return new Promise((resolve) => { resolveConfig = resolve; });
+      }
+      if (url === '/api/db-status') {
+        return Promise.resolve({ ok: true, json: async () => ({ status: 'healthy' }) });
+      }
+      if (url === '/setup/status') {
+        return Promise.resolve({ ok: true, json: async () => ({ requiresSetup: false }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith('/getconfig', expect.anything());
+    });
+    expect(screen.queryByTestId('settings-page')).not.toBeInTheDocument();
+
+    resolveConfig({
+      ok: true,
+      json: async () => ({ isPlatformManaged: { externalApiEnabled: true } }),
+    });
+
+    expect(await screen.findByTestId('requests-page')).toBeInTheDocument();
+    expect(screen.queryByTestId('settings-page')).not.toBeInTheDocument();
+  });
+
   test('renders authenticated pages when user has token', async () => {
     localStorageMock.getItem.mockReturnValue('test-token');
 

@@ -88,7 +88,16 @@ function AppContent() {
   const location = useLocation();
 
   // Use config hook for global configuration access
-  const { config: appConfig, isPlatformManaged: platformManagedConfig, deploymentEnvironment } = useConfig(token);
+  const {
+    config: appConfig,
+    initialConfig: loadedConfig,
+    error: configError,
+    isPlatformManaged: platformManagedConfig,
+    deploymentEnvironment,
+  } = useConfig(token);
+  // externalApiEnabled reads false until /getconfig answers, so routes gated on
+  // it wait for the config instead of redirecting a reload or bookmark.
+  const configResolved = loadedConfig !== null || configError !== null;
   const { version } = packageJson;
   const clientVersion = `v${version}`; // Create a version with 'v' prefix for comparison
   const tmpDirectory = '/tmp';
@@ -575,7 +584,7 @@ function AppContent() {
                           <Route path="/downloads/*" element={<DownloadManager token={token} />} />
                           <Route path="/videos" element={<VideosPage token={token} />} />
                           <Route path="/videos/find" element={<FindVideos token={token} />} />
-                          <Route path="/requests" element={platformManagedConfig.externalApiEnabled ? <RequestsPage token={token} /> : <Navigate to="/settings/api-keys" replace />} />
+                          <Route path="/requests" element={!configResolved ? null : platformManagedConfig.externalApiEnabled ? <RequestsPage token={token} /> : <Navigate to="/settings/api-keys" replace />} />
                           <Route path="/channel/:channel_id" element={<ChannelPage token={token} />} />
                           <Route path="/playlist/:id" element={<PlaylistPage token={token} />} />
                           <Route path="/" element={<Navigate to="/subscriptions" replace />} />
