@@ -89,6 +89,10 @@ class CookieTest {
     return error?.code === IN_PROGRESS_CODE;
   }
 
+  isRunning() {
+    return this.running;
+  }
+
   /**
    * Ask YouTube whether the active cookies still belong to a signed-in session.
    * Uses the same common args (proxy, IP family, cookies, cache dir) as downloads.
@@ -143,4 +147,7 @@ class CookieTest {
   }
 }
 
-module.exports = new CookieTest();
+const cookieTest = new CookieTest();
+cookieTest.INVALID_COOKIE_FILE = INVALID_COOKIE_FILE;
+
+module.exports = cookieTest;

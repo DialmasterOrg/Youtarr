@@ -12,6 +12,8 @@ describe('CronJobs', () => {
   let mockConfigStore;
   let mockTabVideoCounts;
   let mockChannelFeedCheck;
+  let mockCookieHealth;
+  let mockCookieTest;
 
   beforeEach(() => {
     jest.resetModules();
@@ -95,10 +97,16 @@ describe('CronJobs', () => {
     };
     jest.doMock('../channel/channelFeedCheck', () => mockChannelFeedCheck);
 
+    mockCookieHealth = { runScheduledCheck: jest.fn() };
+    jest.doMock('../cookieHealth', () => mockCookieHealth);
+    mockCookieTest = { isRunning: jest.fn(() => false) };
+    jest.doMock('../cookieTest', () => mockCookieTest);
+
     // Mock configModule with a tiny in-memory store so the auto-update job can read/write
     mockConfigStore = { autoUpdateYtdlp: true };
     mockConfigModule = {
       getConfig: jest.fn(() => mockConfigStore),
+      getCookiesPath: jest.fn(() => null),
       onConfigChange: jest.fn(),
       updateConfig: jest.fn((next) => { mockConfigStore = next; }),
       isElfhostedPlatform: jest.fn(() => false)
@@ -985,6 +993,83 @@ describe('CronJobs', () => {
       const status = scheduledTaskManager.getStatus().find((task) => task.id === 'channelFeedCheckFrequency');
 
       expect(status.running).toBe(true);
+    });
+  });
+
+  describe('cookie check', () => {
+    const cookieCheckCalls = () => mockSchedule.schedule.mock.calls
+      .filter((call) => call[2].name === 'youtarr:cookieCheckFrequency');
+
+    test('is not scheduled while cookies are turned off', () => {
+      cronJobs.initialize();
+
+      expect(cookieCheckCalls()).toHaveLength(0);
+    });
+
+    describe('with cookies turned on', () => {
+      beforeEach(() => {
+        mockConfigStore.cookiesEnabled = true;
+        mockConfigModule.getCookiesPath.mockReturnValue('/config/cookies.user.txt');
+        cronJobs.initialize();
+      });
+
+      test('is scheduled every 8 hours by default', () => {
+        expect(cookieCheckCalls().map((call) => call[0])).toEqual(['10 */8 * * *']);
+      });
+
+      test('records the check summary', async () => {
+        const summary = { status: 'error', outcome: 'rejected', message: 'YouTube did not accept the cookies.' };
+        mockCookieHealth.runScheduledCheck.mockResolvedValue(summary);
+
+        await expect(cookieCheckCalls()[0][1]()).resolves.toEqual(expect.objectContaining(summary));
+      });
+
+      test('records an error run when the check throws', async () => {
+        mockCookieHealth.runScheduledCheck.mockRejectedValue(new Error('copy failed'));
+
+        await expect(cookieCheckCalls()[0][1]()).resolves.toEqual(
+          expect.objectContaining({ status: 'error', outcome: 'error', message: 'copy failed' })
+        );
+      });
+
+      test('a manual run enters cooldown until the next one is allowed', async () => {
+        const scheduledTaskManager = require('../scheduledTaskManager');
+        mockCookieHealth.runScheduledCheck.mockResolvedValue({ status: 'success', outcome: 'valid', message: 'ok' });
+
+        const first = await scheduledTaskManager.runNow('cookieCheckFrequency', { trigger: 'manual' });
+        await first.completion;
+
+        const blocker = await scheduledTaskManager.getRunBlocker('cookieCheckFrequency');
+
+        expect(blocker).toEqual(expect.objectContaining({ reason: 'cooldown' }));
+      });
+
+      test('reports the task as running while a cookie test is in progress', () => {
+        const scheduledTaskManager = require('../scheduledTaskManager');
+        mockCookieTest.isRunning.mockReturnValue(true);
+
+        const status = scheduledTaskManager.getStatus().find((task) => task.id === 'cookieCheckFrequency');
+
+        expect(status.running).toBe(true);
+      });
+
+      test('refuses a manual run while no cookie file is active', async () => {
+        const scheduledTaskManager = require('../scheduledTaskManager');
+        mockConfigModule.getCookiesPath.mockReturnValue(null);
+
+        const blocker = await scheduledTaskManager.getRunBlocker('cookieCheckFrequency');
+
+        expect(blocker).toEqual(expect.objectContaining({ reason: 'no-cookie-file' }));
+      });
+    });
+
+    test('reports a manual run as turned off, not as missing a file, while cookies are off', async () => {
+      const scheduledTaskManager = require('../scheduledTaskManager');
+      cronJobs.initialize();
+
+      const blocker = await scheduledTaskManager.getRunBlocker('cookieCheckFrequency');
+
+      expect(blocker).toEqual(expect.objectContaining({ reason: 'disabled' }));
     });
   });
 

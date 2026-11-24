@@ -10,6 +10,7 @@
   "ytdlpUpdateFrequency": "0 4 * * *",
   "channelFeedCheckFrequency": "30 * * * *",
   "channelVideoCountsFrequency": "45 4 * * *",
+  "cookieCheckFrequency": "10 */8 * * *",
   "preferredResolution": "1080",
   "videoCodec": "default",
   "defaultSubfolder": "",

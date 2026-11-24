@@ -1,3 +1,4 @@
+const { Op } = require('sequelize');
 const { ScheduledTaskRun } = require('../models');
 const logger = require('../logger');
 
@@ -164,11 +165,14 @@ class ScheduledTaskRuns {
 
   // Callers say which statuses count: a "last scan" wants runs that executed,
   // while a "last check" may also count a deferred (skipped) attempt.
-  async getLatestRun(taskKey, { outcome, statuses } = {}) {
+  // withDetails is for a task that keeps its state in the run details: a run
+  // recorded without any must not stand in for the last one that has them.
+  async getLatestRun(taskKey, { outcome, statuses, withDetails = false } = {}) {
     try {
       const where = { task_key: taskKey };
       if (outcome) where.outcome = outcome;
       if (statuses) where.status = statuses;
+      if (withDetails) where.details = { [Op.ne]: null };
       const row = await ScheduledTaskRun.findOne({ where, order: LATEST_FIRST });
       return row ? serialize(row) : null;
     } catch (err) {

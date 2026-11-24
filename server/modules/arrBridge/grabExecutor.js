@@ -218,7 +218,7 @@ function createGrabExecutor({
     let staged;
     try {
       staged = await staging.stage({
-        category: grab.category, releaseTitle: grab.release_title, sourcePath,
+        category: grab.category, releaseTitle: grab.release_title, sourcePath, youtubeId: grab.youtube_id,
       });
     } catch (error) {
       logger.warn({ err: error, grabId: grab.id }, 'Could not stage a file for Sonarr/Radarr');
@@ -236,7 +236,10 @@ function createGrabExecutor({
     if (completed) {
       holds.delete(grab.id);
       block.release(grab.id);
-      logger.info({ grabId: grab.id, youtubeId: grab.youtube_id, method: staged.method }, 'Sonarr/Radarr grab staged');
+      logger.info(
+        { grabId: grab.id, youtubeId: grab.youtube_id, method: staged.method, subtitles: staged.subtitles },
+        'Sonarr/Radarr grab staged'
+      );
       return true;
     }
     // Removed while the file was being staged: nobody will collect it.

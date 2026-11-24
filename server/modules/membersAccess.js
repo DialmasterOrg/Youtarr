@@ -329,17 +329,22 @@ class MembersAccess {
    * @param {Iterable<string>} outcome.membersOnlyIds - videos yt-dlp refused as members-only
    * @param {string[]} outcome.downloadedIds - videos that downloaded
    * @param {boolean} outcome.usedCookies - yt-dlp was actually given the configured cookies
+   * @param {string|null} [outcome.cookieKey] - getContext().cookieKey from when the run started;
+   *   left out, the run is taken to have used the cookie file configured now
    * @param {string} [outcome.stderr] - the run's stderr
    */
-  async recordDownloadOutcome({ membersOnlyIds, downloadedIds, usedCookies, stderr = '' }) {
+  async recordDownloadOutcome({ membersOnlyIds, downloadedIds, usedCookies, cookieKey, stderr = '' }) {
     const refused = uniqueIds([...(membersOnlyIds || [])]);
     const downloaded = uniqueIds(downloadedIds);
     const rejected = usedCookies && isCookiesRejected(stderr);
     if (refused.length === 0 && downloaded.length === 0 && !rejected) return;
 
     const context = this.getContext();
-    if (rejected) this.markCookiesRejected(context);
-    const canJudge = usedCookies && context.cookiesConfigured && Boolean(context.cookieKey);
+    // A run can outlive its cookie file. What it learned with cookies that
+    // were replaced meanwhile says nothing about the ones configured now.
+    const sameCookies = cookieKey === undefined || cookieKey === context.cookieKey;
+    if (rejected && sameCookies) this.markCookiesRejected(context);
+    const canJudge = usedCookies && sameCookies && context.cookiesConfigured && Boolean(context.cookieKey);
 
     if (refused.length > 0) {
       if (canJudge && context.loginCookiesLive && !isCookiesRejected(stderr)) {

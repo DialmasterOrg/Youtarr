@@ -1176,6 +1176,66 @@ describe('NotificationModule Integration', () => {
       expect(mockRequest.write).toHaveBeenCalledWith(expect.stringContaining('Downloads Paused'));
     });
   });
+
+  describe('sendCookiesInvalidNotification', () => {
+    const rejected = { reason: 'rejected', external: false, detail: null };
+
+    it('resolves true once a notification service accepted the message', async () => {
+      const sendPromise = notificationModule.sendCookiesInvalidNotification(rejected);
+
+      setImmediate(() => {
+        mockProcess.emit('close', 0);
+      });
+
+      await expect(sendPromise).resolves.toBe(true);
+    });
+
+    it('passes the cookies message to Apprise', async () => {
+      const sendPromise = notificationModule.sendCookiesInvalidNotification(rejected);
+
+      setImmediate(() => {
+        mockProcess.emit('close', 0);
+      });
+      await sendPromise;
+
+      expect(mockSpawn.mock.calls[0][1].join(' ')).toContain('YouTube no longer accepts');
+    });
+
+    it('resolves false without sending when notifications are not configured', async () => {
+      mockGetConfig.mockReturnValue({ notificationsEnabled: false, appriseUrls: [{ url: 'ntfy://test-topic' }] });
+
+      await expect(notificationModule.sendCookiesInvalidNotification(rejected)).resolves.toBe(false);
+      expect(mockSpawn).not.toHaveBeenCalled();
+    });
+
+    it('resolves false when every notification service refused the message', async () => {
+      const sendPromise = notificationModule.sendCookiesInvalidNotification(rejected);
+
+      setImmediate(() => {
+        mockProcess.emit('close', 1);
+      });
+
+      await expect(sendPromise).resolves.toBe(false);
+    });
+
+    it('sends a Discord embed for Discord URLs with rich formatting', async () => {
+      mockGetConfig.mockReturnValue({
+        notificationsEnabled: true,
+        appriseUrls: [{ url: 'https://discord.com/api/webhooks/123/abc', name: 'Discord', richFormatting: true }]
+      });
+
+      const sendPromise = notificationModule.sendCookiesInvalidNotification(rejected);
+
+      setImmediate(() => {
+        mockResponse.emit('data', '');
+        mockResponse.emit('end');
+      });
+
+      await sendPromise;
+
+      expect(mockRequest.write).toHaveBeenCalledWith(expect.stringContaining('YouTube no longer accepts'));
+    });
+  });
 });
 
 describe('Auto-Removal Utils', () => {

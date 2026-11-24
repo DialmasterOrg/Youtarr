@@ -386,6 +386,7 @@ class DownloadExecutor {
             enqueueAutoRetry: this.enqueueAutoRetry,
             cookiesEnabled,
             cookiesPassed: proc.cookiesPassed === true,
+            cookieKey: proc.cookieKey,
             anonymousRetry,
             stdioClosed,
             protectVideos: postProcessDirectives.protectVideos === true,

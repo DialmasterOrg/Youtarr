@@ -1,5 +1,7 @@
 import cronstrue from 'cronstrue';
-import { describeSchedule, isSupportedCronSyntax, runsMoreThanHourly, SCHEDULE_FIELDS } from '../schedules';
+import {
+  describeSchedule, getDefaultSchedule, isSupportedCronSyntax, runsMoreThanHourly, SCHEDULE_FIELDS,
+} from '../schedules';
 
 describe('runsMoreThanHourly', () => {
   test.each([
@@ -175,6 +177,27 @@ describe('frequentRunWarning', () => {
   test('every other schedule explains why frequent runs are unwise', () => {
     const others = SCHEDULE_FIELDS.filter((field) => field.key !== 'channelDownloadFrequency');
     expect(others.every((field) => typeof field.frequentRunWarning === 'string' && field.frequentRunWarning.length > 0)).toBe(true);
+  });
+});
+
+describe('cookie check schedule', () => {
+  const cookieCheck = SCHEDULE_FIELDS.find((field) => field.key === 'cookieCheckFrequency');
+
+  test('is listed as "Check YouTube cookies" with the maintenance schedules', () => {
+    expect(cookieCheck).toMatchObject({ label: 'Check YouTube cookies', group: 'maintenance' });
+  });
+
+  test('follows the cookies switch, so it shows as idle while cookies are off', () => {
+    expect(cookieCheck?.enabledKey).toBe('cookiesEnabled');
+    expect(cookieCheck?.disabledText).toMatch(/Cookies are off/);
+  });
+
+  test('links to the Cookies settings page', () => {
+    expect(cookieCheck).toMatchObject({ settingsPath: 'cookies', settingsLabel: 'Cookies settings' });
+  });
+
+  test('runs every 8 hours by default', () => {
+    expect(describeSchedule(getDefaultSchedule('cookieCheckFrequency'))).toBe('At 10 minutes past the hour, every 8 hours');
   });
 });
 

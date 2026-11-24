@@ -124,6 +124,12 @@ describe('describeRunNowBlockBrief', () => {
     }))).toBe('Run now unavailable: downloads are paused');
   });
 
+  test('says a cookie check has no cookie file to test', () => {
+    expect(describeRunNowBlockBrief(status({
+      runNow: { available: false, reason: 'no-cookie-file', message: 'No cookie file is active.', availableAt: null },
+    }))).toBe('Run now unavailable: no cookie file');
+  });
+
   test('leaves out reasons the row already shows', () => {
     expect(describeRunNowBlockBrief(status({
       runNow: { available: false, reason: 'disabled', message: null, availableAt: null },
