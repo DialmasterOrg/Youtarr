@@ -42,9 +42,18 @@ const ChannelGrantPicker: React.FC<ChannelGrantPickerProps> = ({
         .some((value) => value?.toLowerCase().includes(query))
     );
   });
-  const ids = channels
+  // Select all acts only on the channels the search shows, and leaves picks
+  // hidden by the search as they are.
+  const ids = visibleChannels
     .map((channel) => channel.database_id)
     .filter((id): id is number => typeof id === 'number');
+  const allVisibleSelected = ids.length > 0 && ids.every((id) => selectedIds.includes(id));
+  const setVisibleSelected = (checked: boolean) =>
+    onSelectedIdsChange(
+      checked
+        ? [...new Set([...selectedIds, ...ids])].sort((a, b) => a - b)
+        : selectedIds.filter((id) => !ids.includes(id))
+    );
   const update = (id: number, checked: boolean) =>
     onSelectedIdsChange(
       checked
@@ -53,21 +62,18 @@ const ChannelGrantPicker: React.FC<ChannelGrantPickerProps> = ({
     );
   return (
     <>
-      {channels.length > 0 && (
+      {ids.length > 0 && (
         <FormControlLabel
           control={
             <Checkbox
-              checked={ids.every((id) => selectedIds.includes(id))}
+              checked={allVisibleSelected}
               indeterminate={
-                ids.some((id) => selectedIds.includes(id)) &&
-                !ids.every((id) => selectedIds.includes(id))
+                ids.some((id) => selectedIds.includes(id)) && !allVisibleSelected
               }
-              onChange={(event) =>
-                onSelectedIdsChange(event.target.checked ? ids : [])
-              }
+              onChange={(event) => setVisibleSelected(event.target.checked)}
             />
           }
-          label="Select all approved channels"
+          label={search.trim() ? 'Select all shown channels' : 'Select all approved channels'}
         />
       )}
       <TextField
