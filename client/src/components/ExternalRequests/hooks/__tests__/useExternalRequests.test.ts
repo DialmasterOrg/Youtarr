@@ -28,6 +28,29 @@ describe('useExternalRequests', () => {
       expect.objectContaining({ params: expect.objectContaining({ page: 3, pageSize: 25 }) })
     );
   });
+  it('treats a filter change after a background poll as a normal load', async () => {
+    jest.useFakeTimers();
+    try {
+      const inFlight = { ...request, status: 'processing' as const };
+      mockedAxios.get.mockResolvedValue({ data: { ...page(), data: [inFlight] } });
+      const { result } = renderHook(() => useExternalRequests('token'));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      await act(async () => { jest.advanceTimersByTime(5000); });
+      await waitFor(() => expect(mockedAxios.get).toHaveBeenCalledTimes(2));
+
+      let rejectLoad: (reason: unknown) => void = () => undefined;
+      mockedAxios.get.mockImplementationOnce(() => new Promise((_, reject) => { rejectLoad = reject; }));
+      act(() => result.current.setFilter('status', 'pending'));
+      expect(result.current.loading).toBe(true);
+
+      await act(async () => { rejectLoad({ response: { status: 500, data: { error: 'boom' } } }); });
+      await waitFor(() => expect(result.current.error).not.toBeNull());
+      expect(result.current.loading).toBe(false);
+    } finally {
+      jest.runOnlyPendingTimers();
+      jest.useRealTimers();
+    }
+  });
   it('resets the channel grant choice for every new inline action', async () => {
     mockedAxios.get.mockResolvedValue({ data: page() });
     const { result } = renderHook(() => useExternalRequests('token'));

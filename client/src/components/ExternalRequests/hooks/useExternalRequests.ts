@@ -36,6 +36,7 @@ export function useExternalRequests(token: string) {
   // silent reloads (background polls) keep the current rows on screen.
   const [reload, setReload] = useState({ count: 0, silent: false });
   const loadSequence = useRef(0);
+  const lastQuery = useRef<string | null>(null);
   const refresh = useCallback(() => setReload((current) => ({ count: current.count + 1, silent: false })), []);
   const review = useRequestReview(token, refresh);
   const { syncFromList } = review;
@@ -44,7 +45,12 @@ export function useExternalRequests(token: string) {
     const controller = new AbortController();
     const sequence = ++loadSequence.current;
     const current = () => sequence === loadSequence.current && !controller.signal.aborted;
-    if (!reload.silent) {
+    // A poll is silent only while it reloads the query it was started for;
+    // a filter or page change after it gets a normal load.
+    const query = JSON.stringify([page, filters.status, filters.apiKeyId, filters.requestType]);
+    const silent = reload.silent && lastQuery.current === query;
+    lastQuery.current = query;
+    if (!silent) {
       setLoading(true);
       setError(null);
     }
@@ -75,7 +81,7 @@ export function useExternalRequests(token: string) {
       .catch((loadError) => {
         if (!current() || axios.isCancel(loadError)) return;
         // A failed background poll keeps the rows shown and tries again on the next tick.
-        if (reload.silent) {
+        if (silent) {
           setData((previous) => ({ ...previous }));
           return;
         }
