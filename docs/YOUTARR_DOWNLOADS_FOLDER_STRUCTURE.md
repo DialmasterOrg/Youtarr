@@ -6,7 +6,7 @@ By default, videos in each channel folder are placed into their own subfolders w
 
 ### File and Folder Names
 
-The examples below use the default **Video Filename Template** (Settings -> Core -> File Structure Settings), which names files `<Channel> - <Title>` with the title capped at 64 bytes. You can change the template or pick a preset (Date prefix, Plex YouTube-Agent, Plex TV Series, Title only); see [Video Filename Template](CONFIG.md#video-filename-template). Whatever template you choose, Youtarr always appends:
+The examples below use the default **Video filename template** (Settings -> Core -> **Naming**), which names files `<Channel> - <Title>` with the title capped at 64 bytes. You can change the template or pick a preset (Date prefix, Plex YouTube-Agent, Plex TV Series, Title only); see [Video Filename Template](CONFIG.md#video-filename-template). Whatever template you choose, Youtarr always appends:
 
 - ` [<youtube-id>]` to file names, for example `Channel - Title [dQw4w9WgXcQ].mp4`
 - ` - <youtube-id>` to per-video folder names, for example `Channel - Title - dQw4w9WgXcQ/` (a dash, not brackets)
@@ -22,15 +22,16 @@ is also used for manually downloaded files from channels that are not set up in 
 <YOUTUBE_OUTPUT_DIR>/
 ├── Channel Name/
 │   ├── poster.jpg                               # Channel poster
-│   ├── backdrop.jpg                             # Optional; written from the channel banner when "Create backdrop images" is on
+│   ├── backdrop.jpg                             # Optional; written from the channel banner when "Backdrop images" is on
 │   ├── Channel Name.m3u                         # Optional; written when the channel's "Generate channel playlist file" setting is on
+│   ├── Channel Name (MP3).m3u                   # Video + MP3 channels only: the same setting's list of the MP3s
 │   └── Channel - Title - id/
 │       ├── Channel - Title [id].mp4             # Video file
 │       ├── Channel - Title [id].nfo             # Video metadata
 │       ├── Channel - Title [id].[lang].srt      # Subtitle file(s)
 │       ├── Channel - Title [id].jpg             # Video thumbnail
-│       ├── Channel - Title [id]-fanart.jpg      # Optional; written when "Create video fanart files" is on
-│       └── Channel - Title [id]-backdrop.jpg    # Optional; written when "Create backdrop images" is on
+│       ├── Channel - Title [id]-fanart.jpg      # Optional; written when "Video fanart" is on
+│       └── Channel - Title [id]-backdrop.jpg    # Optional; written when "Backdrop images" is on
 ├── Another Channel/
 ```
 
@@ -60,7 +61,7 @@ YouTube Downloads/
 
 You can use a flat file structure, where video files are placed directly in the channel folder instead of individual video subfolders. It only affects new downloads. There are three places to set it:
 
-- **Global default**: turn on **Flat file structure by default** in Settings -> Core -> File Structure Settings. Every channel that has not chosen its own structure follows this, as do downloads from untracked channels. See [Flat File Structure Default](CONFIG.md#flat-file-structure-default).
+- **Global default**: turn on **Flat file structure by default** in Settings -> Core -> **Naming**. Every channel that has not chosen its own structure follows this, as do downloads from untracked channels. See [Flat File Structure Default](CONFIG.md#flat-file-structure-default).
 - **Per channel**: in the channel settings dialog, set "Video File Structure" to "Flat (no video subfolders)" or "Video subfolders" to override the global default. The default option, "Use global setting", follows the global default.
 - **One download**: the manual download settings dialog can force either structure for a single download.
 
@@ -95,19 +96,20 @@ YouTube Downloads/
 
 ## The `__playlists__` Folder
 
-If you subscribe to any YouTube playlists, Youtarr creates a `__playlists__` folder at the top of your download directory and writes one `.m3u` file per playlist into it. The videos themselves still live in their channel folders; the `.m3u` is just a list that points at them.
+If you subscribe to any YouTube playlists, Youtarr creates a `__playlists__` folder at the top of your download directory and writes one `.m3u` file per playlist into it (two for a Video + MP3 playlist). The videos themselves still live in their channel folders; the `.m3u` is just a list that points at them.
 
 ```
 <YOUTUBE_OUTPUT_DIR>/
 ├── __playlists__/
 │   ├── .ignore                                # Marker so Jellyfin/Emby skip this folder during library scans
 │   ├── My Favorite Talks.m3u
-│   └── Workout Mix.m3u
+│   ├── Workout Mix.m3u                        # A Video + MP3 playlist: the videos
+│   └── Workout Mix (MP3).m3u                  # ...and its MP3s
 ├── Channel Name/
 │   └── [videos]
 ```
 
-The `.m3u` files use relative paths, so they keep working if you move your library to a different location. Each one lists only the items you've actually downloaded, in playlist order (for MP3 Only playlists the entries are the MP3 files). The empty `.ignore` file is deliberate: it keeps Jellyfin and Emby from auto-importing every playlist during library scans.
+The `.m3u` files use relative paths, so they keep working if you move your library to a different location. Each one lists only the items you've actually downloaded, in playlist order (for MP3 Only playlists the entries are the MP3 files). A Video + MP3 playlist gets a second file, `<playlist title> (MP3).m3u`, with the MP3s, while its regular `.m3u` lists the videos; see [Playlist files](USAGE_GUIDE.md#playlist-files-m3u). The empty `.ignore` file is deliberate: it keeps Jellyfin and Emby from auto-importing every playlist during library scans.
 
 `playlists` is a reserved subfolder name, so Youtarr won't let you assign a channel to a subfolder called `playlists`. Channel subfolders also can't start with `__`, so they never collide with the `__playlists__` folder itself. See [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md) for how playlists download and sync.
 

@@ -178,6 +178,26 @@ describe('videoPersistence', () => {
       expect(JobVideo.create).not.toHaveBeenCalled();
     });
 
+    // Both saves of a protected download rely on this: the per-video
+    // post-processor, and the finalizer, by which time the row already exists.
+    test('writes protection onto an existing row when the video data carries it', async () => {
+      const update = jest.fn();
+      Video.findOne.mockResolvedValue({ id: 7, youtubeId: 'abc123', update });
+
+      await videoPersistence.upsertVideoForJob({ ...video, protected: true }, { id: 'job1' });
+
+      expect(update).toHaveBeenCalledWith(expect.objectContaining({ protected: true }));
+    });
+
+    test('leaves protection alone on an existing row when the video data has none', async () => {
+      const update = jest.fn();
+      Video.findOne.mockResolvedValue({ id: 7, youtubeId: 'abc123', update });
+
+      await videoPersistence.upsertVideoForJob(video, { id: 'job1' });
+
+      expect(update.mock.calls[0][0]).not.toHaveProperty('protected');
+    });
+
     test('links an existing video during recovery', async () => {
       Video.findOne.mockResolvedValue({ id: 7, youtubeId: 'abc123', update: jest.fn() });
       JobVideo.findOne.mockResolvedValue(null);
@@ -231,6 +251,19 @@ describe('videoPersistence', () => {
         })
       );
       expect(result).toEqual({ id: 7, youtubeId: 'abc123' });
+    });
+
+    test('saves the video as protected when the download was started with protection', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([metadata]);
+      Job.findOne.mockResolvedValue({ id: 'job1' });
+      const upsertVideoSpy = jest
+        .spyOn(videoPersistence, 'upsertVideoForJob')
+        .mockResolvedValue({ id: 7, youtubeId: 'abc123' });
+      jest.spyOn(videoPersistence, 'upsertChannelVideoFromInfo').mockResolvedValue(undefined);
+
+      await videoPersistence.persistDownloadedVideoForJob({ jobId: 'job1', youtubeId: 'abc123', protect: true });
+
+      expect(upsertVideoSpy).toHaveBeenCalledWith({ ...metadata, protected: true }, { id: 'job1' });
     });
 
     test('links a re-downloaded existing video to the job', async () => {

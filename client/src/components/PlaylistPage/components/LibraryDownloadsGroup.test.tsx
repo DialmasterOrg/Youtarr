@@ -122,3 +122,32 @@ test.each([0, null, undefined])('does not show an outstanding selection message 
   render(<LibraryDownloadsGroup {...baseProps} followingRequestedCount={count} />);
   expect(screen.queryByText(/selected videos? (is|are) not downloaded yet/)).not.toBeInTheDocument();
 });
+
+describe('download filters', () => {
+  test('says how many undownloaded videos the filters skip', () => {
+    render(<LibraryDownloadsGroup {...baseProps} filteredCount={4} />);
+    expect(screen.getByText(/4 undownloaded videos are skipped by this playlist's download filters/)).toBeInTheDocument();
+  });
+
+  test('uses the singular for one skipped video', () => {
+    render(<LibraryDownloadsGroup {...baseProps} filteredCount={1} />);
+    expect(screen.getByText(/1 undownloaded video is skipped by this playlist's download filters/)).toBeInTheDocument();
+  });
+
+  test.each([0, null, undefined])('says nothing about skipped videos for count=%s', (count) => {
+    render(<LibraryDownloadsGroup {...baseProps} filteredCount={count} />);
+    expect(screen.queryByText(/skipped by this playlist's download filters/)).not.toBeInTheDocument();
+  });
+
+  test('warns that automatic downloads are on hold when the title filter cannot be checked', () => {
+    render(<LibraryDownloadsGroup {...baseProps} hasFollowingBaseline filteredCount={4} filterError="Invalid regex pattern: bad" />);
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Automatic downloads and Download all are on hold');
+    expect(alert).toHaveTextContent('Invalid regex pattern: bad');
+  });
+
+  test('does not count videos as skipped while the title filter cannot be checked', () => {
+    render(<LibraryDownloadsGroup {...baseProps} hasFollowingBaseline filteredCount={4} filterError="Invalid regex pattern: bad" />);
+    expect(screen.queryByText(/skipped by this playlist's download filters/)).not.toBeInTheDocument();
+  });
+});

@@ -5,6 +5,7 @@ const YtdlpCommandBuilder = require('../download/ytdlpCommandBuilder');
 const createLimiter = require('../subscriptionImport/concurrencyLimiter');
 const parseReportedCount = require('../parseReportedCount');
 const { TAB_PLAYLIST_PREFIX, CHANNEL_ID_PATTERN } = require('../youtubeApi/constants');
+const { BOT_CHECK_CODE } = require('../ytdlpBotCheck');
 
 const YTDLP_COUNT_TIMEOUT_MS = 60 * 1000;
 // Opening a channel page counts at most three tabs; two at a time keeps the
@@ -21,7 +22,6 @@ const PLAYLIST_MISSING_PATTERN = /The playlist does not exist/i;
 const RATE_LIMIT_PATTERN = /HTTP Error 429|Too Many Requests|rate-limited|try again later/i;
 // Failures that belong to one channel and say nothing about YouTube's mood.
 const UNAVAILABLE_PATTERN = /account has been terminated|channel does not exist|channel is not available|playlist type is unviewable/i;
-const BOT_CHECK_CODE = 'COOKIES_REQUIRED';
 
 const FAILURE = {
   BOT_CHECK: 'bot-check',
@@ -213,5 +213,11 @@ class TabCountSources {
 
 const tabCountSources = new TabCountSources();
 tabCountSources.STOPPED_AFTER_FAILURES = STOPPED_AFTER_FAILURES;
+// Whether a yt-dlp failure means YouTube is throttling this IP (bot check or
+// rate limit), for other bulk callers that should stop and try again later.
+// channelYtdlpExecutor rejects with a generic message and keeps yt-dlp's own
+// words in `stderr`, so a rate limit is looked for there too.
+tabCountSources.isThrottleFailure = (err) =>
+  THROTTLE_FAILURES.has(classifyFailure(err)) || RATE_LIMIT_PATTERN.test(err.stderr || '');
 
 module.exports = tabCountSources;

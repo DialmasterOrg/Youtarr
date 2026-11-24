@@ -4,9 +4,12 @@ paths:
   - "server/modules/downloadModule.js"
   - "server/modules/jobModule.js"
   - "server/modules/jobAuxData.js"
+  - "server/modules/constants/jobOutputPrefixes.js"
   - "server/modules/ytdlpModule.js"
   - "server/modules/ytdlpProcess.js"
   - "server/modules/ytDlpRunner.js"
+  - "server/modules/ytdlpBotCheck.js"
+  - "server/modules/youtubeBlockAdvice.js"
   - "server/modules/ytdlpUpdateRunSummary.js"
   - "server/modules/storageGuard.js"
   - "server/modules/storageUsage.js"
@@ -57,6 +60,10 @@ yt-dlp runs, the job queue, the download archive, storage limits, and the activi
 ## Executor and yt-dlp output
 
 - `downloadExecutor` finalizes on the child's `close` event (stdio drained), not `exit`, with a 5 s `STDIO_DRAIN_TIMEOUT_MS` fallback for pipes an orphaned ffmpeg or post-process child holds open.
+- `ytdlpBotCheck` holds the bot check matcher and error code every yt-dlp caller uses. It matches around the apostrophe: YouTube sends U+2019, and a straight-quote match missed every bot check.
+- `youtubeBlockAdvice` words every bot check and HTTP 403 message by cookie state. Texts cover uploaded and external cookie files, since uploads are refused with an external one, and hold no underscores, which break Slack's italics.
+- Reword only its message bodies: Download History and the Sonarr/Radarr bridge show the diagnosis titles, `isYoutubeBlock` reads the keys, and the activity page matches the "Bot detection encountered" prefix.
+- `videoValidationModule` gives every failed validation an `errorCode` and never returns yt-dlp output (unrecognized failures become `FETCH_FAILED`), because the manual download page and `/api/videos/download` show a coded error's text as is.
 - `outputDirHealthCheckConfig` (pure) reads `OUTPUT_DIR_HEALTHCHECK_TIMEOUT` (seconds, default 10) once for the executor's pre-download output-directory probe; an invalid value warns and keeps the default. A job failing on the timeout names the variable in its notes; a permission failure does not.
 - `YtdlpOutputRouter` classifies complete stderr lines only, holding a split line until its newline; after `dispose()` output is logged but never classified or broadcast. Its 25 s heartbeat rebroadcasts the monitor snapshot while yt-dlp is silent during merges.
 - `ytdlpStderrSignals.containsHttp403` ignores yt-dlp's "require a GVS PO Token ... may yield HTTP Error 403" advisory, printed on every free-account cookie run; `isSabrRestriction` matches the account-level SABR warning.
@@ -72,12 +79,15 @@ yt-dlp runs, the job queue, the download archive, storage limits, and the activi
 
 ## Finalizer, retries, diagnoses
 
-- `downloadJobFinalizer` persists the terminal status, broadcasts the final state, reports to the run tracker and dispatches notifications; `downloadCompletionEffects` owns the side effects after completion (temp cleanup, poster backfill, playlist hooks, Plex refresh, next-job kickoff).
+- `downloadJobFinalizer` persists the terminal status, broadcasts the final state, reports to the run tracker and dispatches notifications; `downloadCompletionEffects` owns the side effects after completion (temp cleanup, poster backfill, playlist hooks, media server refresh, next-job kickoff).
+- `overrideSettings.protect` (manual, playlist and download-all dialogs) becomes the `protectVideos` directive: the per-video post-processor (`YOUTARR_PROTECT_VIDEOS`) and the finalizer's end-of-batch save both mark videos `protected`. Never written false, so a re-download keeps protection.
+- Media servers are refreshed once per job: by `downloadCompletionEffects` for single jobs and by `doGroupedChannelDownloads`' wrap-up for grouped ones (intermediate groups skip it). A job that downloaded nothing refreshes no server.
 - `transient403RetryPlanner` (pure) picks failures to auto-retry: transient mid-stream 403s and cookie-specific `Video unavailable`. The finalizer enqueues an "Auto-retry" URL-list job through a callback injected from downloadModule, capped by `downloadAutoRetryCount`.
 - Handed-off failures are tagged `autoRetryQueued` so run summaries report the post-retry outcome instead of the first failure.
 - `failureAdvisor` (pure) maps known failure signatures (temp space, 403 with or without cookies, bot check) to plain-language diagnoses; the finalizer stamps `diagnosisKey` on failed videos and emits a deduped `diagnoses` list.
 - That list flows into job data, run summaries, the Download History UI and the notification "Likely cause" lines.
-- `failedVideoEnricher` backfills title and channel onto failed-video records from videos, channelvideos + channels, and playlistvideos, once, right after result partitioning; the client falls back to a linked YouTube ID.
+- `quietBlockedFailure` in job data (set by the Sonarr/Radarr bridge, copied to auto-retry jobs) skips the failure-only notification when every diagnosis is a YouTube block (`failureAdvisor.isYoutubeBlock`); any other outcome still notifies.
+- `failedVideoEnricher` backfills title and channel onto failed-video records from videos, channelvideos + channels, and playlistvideos, once, right after result partitioning; ids still untitled (brand-new uploads) go to `videoOembedEnricher`, capped at 20 per job; the client falls back to a linked YouTube ID.
 
 ## Run tracker (sweep summaries)
 
@@ -96,6 +106,7 @@ yt-dlp runs, the job queue, the download archive, storage limits, and the activi
 - `customArgsParser.checkCustomArgs` resolves every token to its canonical option the way optparse does (exact name, unique prefix, short alias, grouped shorts) and checks it against `ytdlpOptionTable`; blocked and malformed tokens are skipped individually and the rest still apply.
 - It is an allowlist because a denylist can be bypassed (GHSA-xj5v-qwfw-gp7j, GHSA-jprg-87hp-2phh). `args` are canonical names plus values, so yt-dlp reads them as the check did, even after a runtime yt-dlp update; `buildCustomArgs` re-checks at download time.
 - `ytdlpOptionTable` is the hand-maintained ALLOW/WARN/BLOCK policy over `ytdlpOptionSpecs` (generated by `scripts/generate-ytdlp-option-specs.py`). ALLOW and WARN are explicit allowlists; every other option and unknown token blocks, so a dangerous future flag is denied until classified.
+- `--trim-filenames` is blocked: yt-dlp trims the whole path, cutting off the trailing `[id]`, and the post-processor then reads a title's bracket token as the ID. Block any option that can drop that suffix.
 
 ## Subtitles
 
@@ -111,6 +122,9 @@ yt-dlp runs, the job queue, the download archive, storage limits, and the activi
 - `archiveOnlyIds` finds ids in `complete.list` with no Videos row (yt-dlp would skip them). It requires only the ChannelVideo model, not the models index: `downloadModule.test.js` replaces model files with plain objects, and the index's association setup throws on them.
 - `storageUsage` is `SUM(file_size + audio_file_size)` over non-removed rows, never a disk walk; its `STORED_BYTES_SQL` fragment is shared with the oldest-first auto-removal queries so MP3-only videos count their real size.
 - `storageGuard`: optional `downloadPauseUsageLimit` and `downloadPauseMinFreeSpace` triggers, both off by default; a failed measurement never pauses (fail open). The usage SUM runs only when a usage limit is set; `GET /api/jobs/download-pause` opts in with `refresh({ includeUsage: true })`.
+- A third, always-on reason (`library`) comes from `libraryRootCheck.downloadsFolderBlock`: a root-level failure covering present or missing rows (subfolders never pause). server.js injects it via `setLibraryCheck`, since downloadModule's tests cannot load models.
+- That check is cached 30 s, one at a time, with a 10 s timeout (serialized refreshes would stall job starts). A timeout keeps the last answer, failing open only with none: reading it as "fine" flapped pause and resume.
+- A finished rescan calls `recheckLibrary()` (and clears the presence probe cache), so a pause based on stale paths lifts at once, not at the 5-minute re-check.
 - `assertDownloadsAllowed()` throws `DownloadsPausedError` (code `DOWNLOADS_PAUSED`) from downloadModule's fresh-request entry points; queued jobs started with isNextJob skip it; routes map it to 409 through the injected `storageGuard.isPausedError`.
 - Download New reaches `doChannelAndPlaylistDownloads` through the scheduler's `channelDownloadFrequency` task, so the pause check runs first in `autoDownloadScheduler.getRunBlocker` and a paused request gets the `downloads-paused` reason, not a bare 409.
 - A pause hit mid-sweep stops the playlist loop and is reported as `pausedReason`, not a failure; the scheduled sweep records a skipped run first.

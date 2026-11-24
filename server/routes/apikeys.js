@@ -1,4 +1,5 @@
 const express = require('express');
+const { STATUS_READ_ROLE } = require('../modules/constants/apiKeyRoles');
 
 /**
  * Creates API key management routes
@@ -109,6 +110,13 @@ module.exports = function createApiKeyRoutes({ verifyToken }) {
    *                 type: string
    *                 maxLength: 100
    *                 description: Human-readable name for the key
+   *               role:
+   *                 type: string
+   *                 enum: [status_read]
+   *                 description: >
+   *                   Creates a read-only status key that reaches only
+   *                   GET /api/status/summary. Omit it for a download key.
+   *                   Cannot be combined with policy or channelIds.
    *               policy:
    *                 $ref: '#/components/schemas/ExternalApiKeyPolicy'
    *               channelIds:
@@ -148,12 +156,20 @@ module.exports = function createApiKeyRoutes({ verifyToken }) {
     }
 
     if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body) ||
-        Object.keys(req.body).some((field) => !['name', 'policy', 'channelIds'].includes(field))) {
+        Object.keys(req.body).some((field) => !['name', 'role', 'policy', 'channelIds'].includes(field))) {
       return res.status(400).json({ error: 'Request body contains unsupported fields' });
     }
-    const { name, policy, channelIds } = req.body;
+    const { name, role, policy, channelIds } = req.body;
     if (!name || typeof name !== 'string' || name.trim().length < 1 || name.length > 100) {
       return res.status(400).json({ error: 'Name is required (1-100 characters)' });
+    }
+    if (role !== undefined && role !== STATUS_READ_ROLE) {
+      return res.status(400).json({ error: 'Invalid API key role' });
+    }
+    if (role !== undefined && (policy !== undefined || channelIds !== undefined)) {
+      return res.status(400).json({
+        error: 'A status key cannot have an external policy or channel grants',
+      });
     }
 
     // Sanitize name: remove control characters, trim whitespace
@@ -173,7 +189,9 @@ module.exports = function createApiKeyRoutes({ verifyToken }) {
             error: 'channelIds can only be supplied for an external API key',
           });
         }
-        result = await apiKeyModule.createApiKey(sanitizedName);
+        result = role === undefined
+          ? await apiKeyModule.createApiKey(sanitizedName)
+          : await apiKeyModule.createApiKey(sanitizedName, undefined, { role });
       } else {
         result = await sequelize.transaction(async (transaction) => {
           const created = await apiKeyModule.createApiKey(

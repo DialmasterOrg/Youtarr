@@ -65,6 +65,7 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
   const configModuleMock = {
     directoryPath: '/downloads',
     getConfig: jest.fn(() => fakeConfig),
+    onConfigChange: jest.fn(),
     updateConfig: jest.fn((nextConfig) => Object.assign(fakeConfig, nextConfig)),
     getImagePath: jest.fn(() => '/images'),
     getCookiesStatus: jest.fn(() => ({ cookiesEnabled: false })),
@@ -176,6 +177,7 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
   jest.doMock('../modules/notificationModule', () => ({
     sendTestNotification: jest.fn().mockResolvedValue({ success: true })
   }));
+  jest.doMock('../modules/membersAccess');
   jest.doMock('../models/channelvideo', () => ({
     update: jest.fn().mockResolvedValue([1])
   }));
@@ -190,6 +192,7 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
   jest.doMock('../modules/logLevelSync', () => ({ apply: jest.fn(), subscribe: jest.fn() }));
   jest.doMock('../modules/storageGuard', () => ({
     initialize: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
+    setLibraryCheck: jest.fn(),
     refresh: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
     isPausedError: jest.fn(() => false),
     describe: jest.fn(() => ''),

@@ -1,4 +1,11 @@
-jest.mock('child_process');
+jest.mock('../ytdlpProcess', () => ({ spawnYtDlp: jest.fn() }));
+jest.mock('../configModule', () => ({
+  getConfig: jest.fn(() => ({})),
+  getCookiesPath: jest.fn(() => null),
+  getYtdlpCacheDir: jest.fn(() => '/config/.yt-dlp-cache'),
+}));
+jest.mock('../download/tempPathManager', () => ({ getTempBasePath: jest.fn(() => '/tmp/youtarr') }));
+jest.mock('../archiveModule', () => ({ getArchivePath: jest.fn(() => '/config/complete.list') }));
 jest.mock('../../logger', () => ({
   info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn(),
 }));
@@ -65,7 +72,8 @@ describe('playlistModule', () => {
   let channelModule;
   let downloadModule;
   let jobModule;
-  let childProcess;
+  let ytdlpProcess;
+  let configModule;
   let youtubeApi;
   let db;
   let flatPlaylistSpawn;
@@ -75,21 +83,18 @@ describe('playlistModule', () => {
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
-    // Set up spawn on the mock BEFORE requiring playlistModule so the
-    // destructured `const { spawn } = require('child_process')` in the module
-    // captures our jest.fn().
-    childProcess = require('child_process');
+    ytdlpProcess = require('../ytdlpProcess');
+    configModule = require('../configModule');
     flatPlaylistSpawn = jest.fn();
     metadataCount = null;
     fallbackMetadataCount = null;
-    childProcess.spawn = jest.fn((binary, args) => {
+    ytdlpProcess.spawnYtDlp.mockImplementation((args) => {
       if (args.includes('--playlist-items')) {
         const count = args.includes('--extractor-args') ? fallbackMetadataCount : metadataCount;
         return completedChild({ playlist_count: count });
       }
-      return flatPlaylistSpawn(binary, args);
+      return flatPlaylistSpawn(args);
     });
-    // Now require the module — its top-level destructure picks up the mock.
     playlistModule = require('../playlistModule');
     ({ Playlist, PlaylistVideo, Channel, Video } = require('../../models'));
     PlaylistVideo.count.mockResolvedValue(0);
@@ -105,7 +110,7 @@ describe('playlistModule', () => {
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();
       mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      ytdlpProcess.spawnYtDlp.mockReturnValue(mockChild);
 
       const promise = playlistModule.getPlaylistInfo(
         'https://www.youtube.com/playlist?list=PLabc123'
@@ -139,7 +144,7 @@ describe('playlistModule', () => {
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();
       mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      ytdlpProcess.spawnYtDlp.mockReturnValue(mockChild);
 
       const promise = playlistModule.getPlaylistInfo('https://www.youtube.com/playlist?list=nope');
       mockChild.stderr.emit('data', 'ERROR: The playlist does not exist');
@@ -147,15 +152,43 @@ describe('playlistModule', () => {
 
       await expect(promise).rejects.toThrow('PLAYLIST_NOT_FOUND');
     });
-  });
 
-  describe('buildTitleFilterRegExp', () => {
-    test('matches case-insensitively', () => {
-      expect(playlistModule.buildTitleFilterRegExp('review').test('GAME REVIEW')).toBe(true);
+    test('sends the configured cookies and skips the request sleep', async () => {
+      configModule.getCookiesPath.mockReturnValue('/config/cookies.user.txt');
+      ytdlpProcess.spawnYtDlp.mockImplementation(() => completedChild({ id: 'WL', title: 'Watch later' }));
+
+      await playlistModule.getPlaylistInfo('https://www.youtube.com/playlist?list=WL');
+
+      const args = ytdlpProcess.spawnYtDlp.mock.calls[0][0];
+      expect(args).toEqual(expect.arrayContaining(['--cookies', '/config/cookies.user.txt', '--playlist-items', '0']));
+      expect(args).not.toContain('--sleep-requests');
     });
 
-    test('throws for a pattern JavaScript cannot compile', () => {
-      expect(() => playlistModule.buildTitleFilterRegExp('[unclosed')).toThrow(SyntaxError);
+    test('sends the configured proxy', async () => {
+      configModule.getConfig.mockReturnValue({ proxy: 'http://proxy:8080' });
+      ytdlpProcess.spawnYtDlp.mockImplementation(() => completedChild({ id: 'PLabc123', title: 'Test Playlist' }));
+
+      await playlistModule.getPlaylistInfo('https://www.youtube.com/playlist?list=PLabc123');
+
+      expect(ytdlpProcess.spawnYtDlp.mock.calls[0][0]).toEqual(expect.arrayContaining(['--proxy', 'http://proxy:8080']));
+    });
+
+    test('reports that cookies reached yt-dlp when the playlist does not exist', async () => {
+      ytdlpProcess.spawnYtDlp.mockImplementation(() => {
+        const child = completedChild(new Error('ERROR: [youtube:tab] WL: YouTube said: The playlist does not exist.'));
+        child.cookiesPassed = true;
+        return child;
+      });
+
+      await expect(playlistModule.getPlaylistInfo('https://www.youtube.com/playlist?list=WL'))
+        .rejects.toMatchObject({ message: 'PLAYLIST_NOT_FOUND', usedCookies: true });
+    });
+
+    test('reports that no cookies reached yt-dlp when a sign-in is demanded', async () => {
+      ytdlpProcess.spawnYtDlp.mockImplementation(() => completedChild(new Error('ERROR: Sign in to confirm you\'re not a bot')));
+
+      await expect(playlistModule.getPlaylistInfo('https://www.youtube.com/playlist?list=PLabc123'))
+        .rejects.toMatchObject({ message: 'COOKIES_REQUIRED', usedCookies: false });
     });
   });
 
@@ -516,7 +549,7 @@ describe('playlistModule', () => {
       mockChild.emit('close', 0);
       await promise;
 
-      const spawnArgs = flatPlaylistSpawn.mock.calls[0][1];
+      const spawnArgs = flatPlaylistSpawn.mock.calls[0][0];
       expect(spawnArgs).toEqual(expect.arrayContaining([
         '--playlist-end', '5000',
       ]));
@@ -578,7 +611,9 @@ describe('playlistModule', () => {
       );
     });
 
-    test('keeps entries whose titles match the title filter, ignoring case', async () => {
+    // Download filters decide what downloads (playlistDownloadModule); a refresh
+    // tracks every available entry so skipped videos stay visible and selectable.
+    test('tracks entries the title filter does not match', async () => {
       Playlist.findOne.mockResolvedValue({
         id: 1, playlist_id: 'PLabc', url: 'https://u',
         min_duration: null, max_duration: null, title_filter_regex: 'review',
@@ -594,10 +629,10 @@ describe('playlistModule', () => {
       await playlistModule.fetchAllPlaylistVideos('PLabc');
 
       const call = PlaylistVideo.bulkCreate.mock.calls[0][0];
-      expect(call.map((v) => v.youtube_id)).toEqual(['v1']);
+      expect(call.map((v) => v.youtube_id)).toEqual(['v1', 'v2']);
     });
 
-    test('applies min_duration filter', async () => {
+    test('tracks entries shorter than the minimum duration', async () => {
       Playlist.findOne.mockResolvedValue({
         id: 1, playlist_id: 'PLabc', url: 'https://u',
         min_duration: 250, max_duration: null, title_filter_regex: null,
@@ -625,7 +660,7 @@ describe('playlistModule', () => {
       await promise;
 
       const call = PlaylistVideo.bulkCreate.mock.calls[0][0];
-      expect(call.map((v) => v.youtube_id)).toEqual(['v2']);
+      expect(call.map((v) => v.youtube_id)).toEqual(['v1', 'v2']);
     });
 
     test('backfills playlist thumbnail from first video when null', async () => {
@@ -992,8 +1027,10 @@ describe('playlistModule', () => {
       mockChild.emit('close', 0);
       await promise;
 
-      expect(flatPlaylistSpawn).toHaveBeenCalledWith('yt-dlp', [
-        '--flat-playlist', '--dump-json',
+      expect(flatPlaylistSpawn).toHaveBeenCalledWith([
+        '-4', '--sleep-requests', '1',
+        '--paths', 'temp:/tmp/youtarr', '--cache-dir', '/config/.yt-dlp-cache',
+        '--skip-download', '--dump-json', '--flat-playlist',
         '--playlist-end', '5000',
         'https://u',
       ]);
@@ -1041,7 +1078,7 @@ describe('playlistModule', () => {
       await promise;
 
       expect(flatPlaylistSpawn).toHaveBeenCalledTimes(2);
-      const secondCallArgs = flatPlaylistSpawn.mock.calls[1][1];
+      const secondCallArgs = flatPlaylistSpawn.mock.calls[1][0];
       expect(secondCallArgs).toEqual(expect.arrayContaining([
         '--extractor-args', 'youtubetab:skip=webpage',
       ]));
@@ -1086,7 +1123,7 @@ describe('playlistModule', () => {
       await promise;
 
       expect(flatPlaylistSpawn).toHaveBeenCalledTimes(2);
-      const secondCallArgs = flatPlaylistSpawn.mock.calls[1][1];
+      const secondCallArgs = flatPlaylistSpawn.mock.calls[1][0];
       expect(secondCallArgs).toEqual(expect.arrayContaining([
         '--extractor-args', 'youtubetab:skip=webpage',
       ]));
@@ -1244,6 +1281,55 @@ describe('playlistModule', () => {
       await promise;
 
       expect(flatPlaylistSpawn).toHaveBeenCalledTimes(2);
+    });
+
+    describe('cookies', () => {
+      const cookieChild = (output) => () => {
+        const child = completedChild(output);
+        child.cookiesPassed = true;
+        return child;
+      };
+
+      beforeEach(() => {
+        configModule.getCookiesPath.mockReturnValue('/config/cookies.user.txt');
+        Playlist.findOne.mockResolvedValue({
+          id: 1, playlist_id: 'WL', url: 'https://www.youtube.com/playlist?list=WL',
+          min_duration: null, max_duration: null, title_filter_regex: null,
+          update: jest.fn().mockResolvedValue(true),
+        });
+        PlaylistVideo.findAll.mockResolvedValue([]);
+        PlaylistVideo.bulkCreate.mockResolvedValue([]);
+      });
+
+      test('sends the configured cookies with the listing', async () => {
+        flatPlaylistSpawn.mockImplementation(cookieChild([{ id: 'v1', title: 'Video 1' }]));
+
+        await playlistModule.fetchAllPlaylistVideos('WL');
+
+        expect(flatPlaylistSpawn.mock.calls[0][0]).toEqual(expect.arrayContaining(['--cookies', '/config/cookies.user.txt']));
+      });
+
+      test('adds skip=authcheck to the InnerTube fallback', async () => {
+        flatPlaylistSpawn
+          .mockImplementationOnce(cookieChild(new Error('ERROR: network unreachable')))
+          .mockImplementationOnce(cookieChild([{ id: 'v1', title: 'Video 1' }]));
+
+        await playlistModule.fetchAllPlaylistVideos('WL');
+
+        expect(flatPlaylistSpawn.mock.calls[1][0]).toEqual(expect.arrayContaining([
+          '--extractor-args', 'youtubetab:skip=webpage,authcheck',
+        ]));
+      });
+
+      test('does not retry via InnerTube when YouTube says the playlist does not exist', async () => {
+        flatPlaylistSpawn.mockImplementation(
+          cookieChild(new Error('ERROR: [youtube:tab] WL: YouTube said: The playlist does not exist.'))
+        );
+
+        await expect(playlistModule.fetchAllPlaylistVideos('WL'))
+          .rejects.toMatchObject({ message: 'PLAYLIST_NOT_FOUND', usedCookies: true });
+        expect(flatPlaylistSpawn).toHaveBeenCalledTimes(1);
+      });
     });
 
     test('rejects when both fetch paths fail', async () => {
@@ -1499,10 +1585,21 @@ describe('playlistModule', () => {
         expect.objectContaining({
           sub_folder: '__Learning',
           video_quality: '720',
-          min_duration: 60,
           default_rating: 'PG-13',
         })
       );
+    });
+
+    test('does not copy the playlist download filters into the channel', async () => {
+      channelModule.upsertChannel.mockResolvedValue({ id: 9, channel_id: 'UC9' });
+
+      await playlistModule.ensureSourceChannel(
+        { channel_id: 'UC9', uploader: 'Creator X' },
+        { min_duration: 60, max_duration: 600, title_filter_regex: 'Episode', video_quality: '720' }
+      );
+
+      const seed = channelModule.upsertChannel.mock.calls[0][3];
+      expect(Object.keys(seed).sort()).toEqual(['audio_format', 'default_rating', 'sub_folder', 'video_quality']);
     });
 
     test('seeds title and uploader from the channel name so the row is not left nameless', async () => {
@@ -1960,6 +2057,33 @@ describe('playlistModule', () => {
         pausedReason: null,
       });
       expect(downloadModule.doPlaylistDownloads).toHaveBeenCalledTimes(2);
+    });
+
+    // A playlist whose download filters cannot be evaluated still queues the
+    // videos the user selected, then fails so the sweep is not a clean one.
+    describe('when a playlist fails after queueing some videos', () => {
+      const filterError = () => Object.assign(new Error('Download filters could not be evaluated'), { queued: 2 });
+
+      beforeEach(() => {
+        Playlist.findAll.mockResolvedValue([{ playlist_id: 'PL1', title: 'One' }]);
+        downloadModule.doPlaylistDownloads.mockRejectedValueOnce(filterError());
+      });
+
+      test('counts what it queued and reports the playlist as failed', async () => {
+        await expect(playlistModule.playlistAutoDownload()).resolves.toEqual({
+          playlists: 1,
+          enqueued: 2,
+          failed: 1,
+          errors: [{ playlistId: 'PL1', message: 'Download filters could not be evaluated' }],
+          pausedReason: null,
+        });
+      });
+
+      test('does not record an idle sweep job', async () => {
+        await playlistModule.playlistAutoDownload();
+
+        expect(jobModule.addJob).not.toHaveBeenCalled();
+      });
     });
 
     describe('when downloads are paused for storage', () => {

@@ -16,6 +16,8 @@ interface Candidate {
   title: string;
   position: number;
   published_at: string | null;
+  // Skipped by the playlist's download filters: never preselected, still selectable.
+  filtered?: boolean;
 }
 
 interface Preview {
@@ -76,6 +78,7 @@ export default function PlaylistFollowingDialog({ playlist, token, mode, default
     return (currentPreview?.candidates || []).slice().sort((a, b) =>
       Number(chosen.has(b.youtube_id)) - Number(chosen.has(a.youtube_id)) || a.position - b.position);
   }, [currentPreview, selected]);
+  const filteredCandidateCount = (currentPreview?.candidates || []).filter((video) => video.filtered).length;
 
   const submit = async () => {
     if (!token) return;
@@ -165,6 +168,11 @@ export default function PlaylistFollowingDialog({ playlist, token, mode, default
                 <>
                   <p className="text-sm font-medium" aria-live="polite">{selectedIds.length} {selectedIds.length === 1 ? 'video' : 'videos'} selected. Review or adjust the checkboxes before queuing.</p>
                   <p className="text-xs text-muted-foreground">Previously downloaded, excluded, and unavailable videos are omitted. Downloads use your saved playlist and channel settings.</p>
+                  {filteredCandidateCount > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {`${filteredCandidateCount} ${filteredCandidateCount === 1 ? 'video' : 'videos'} skipped by this playlist's download filters ${filteredCandidateCount === 1 ? 'is' : 'are'} not preselected. Check any you want anyway.`}
+                    </p>
+                  )}
                   <p className="text-xs text-muted-foreground">The full selection queues now. With following enabled, each scheduled run can queue up to your limit in new discoveries, plus the same number of older saved selections to retry. Older retries take turns; a selected video that is also a new discovery uses only the discovery allowance.</p>
                   <div className="max-h-72 overflow-y-auto rounded-md border border-border divide-y divide-border">
                     {candidates.slice(0, Math.max(visibleCount, selected.length)).map((video) => {
@@ -178,6 +186,7 @@ export default function PlaylistFollowingDialog({ playlist, token, mode, default
                             <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
                               <span className="whitespace-nowrap">Published {formatDate(video.published_at) || 'Unknown'}</span>
                               <span className="whitespace-nowrap">Position {video.position}</span>
+                              {video.filtered && <span>Skipped by download filters</span>}
                               {active && <span>Already queued or downloading</span>}
                             </span>
                           </span>

@@ -26,6 +26,8 @@ This guide provides a manual configuration approach that works reliably on Synol
 
 > **Installation Overview**: This guide walks you through installing Youtarr on Synology. The most critical step for Synology users is **Step 4.5** where you must configure the database volume before first start. Unlike standard installations, Synology requires either named volumes or the LinuxServer MariaDB image to avoid permission issues.
 
+**VPN (Gluetun):** this guide uses the repository's compose files with `COMPOSE_FILE`, so the [Gluetun guide](../GLUETUN_INTEGRATION.md) applies here too. If your `.env` already has a `COMPOSE_FILE` line (Step 4.5 adds one), add `:docker-compose.gluetun.yml` to the end of it instead of adding a second line, then start with `docker compose up -d`.
+
 ### Step 1: Enable SSH and Configure Docker Access
 
 1. **Enable SSH** (if not already enabled):
@@ -797,7 +799,7 @@ If you have existing data in `./database/` that you want to preserve:
 
 **Solutions**:
 - Schedule downloads during off-peak hours (configure via Youtarr UI)
-- Lower **Files to Download per Channel/Playlist** in Settings -> Core, or set a **Download Rate Limit** in Settings -> YT-DLP
+- Lower **Videos per channel tab and playlist** in Settings -> Core -> **Downloads**, or set a **Download Rate Limit** in Settings -> YT-DLP
 - Lower video quality settings to reduce processing time
 - Disable SponsorBlock integration (if enabled)
 
@@ -952,8 +954,8 @@ If your NAS has SSD cache:
 
 ### Schedule Downloads During Low-Activity Periods
 
-Configure Youtarr's cron schedule for late night:
-- Settings -> Core, "Download Frequency" field
+Configure Youtarr's download schedule for late night:
+- Settings -> **Scheduling**, the **Automatic downloads** schedule (a daily time, or a custom cron expression)
 - Example: `0 2 * * *` (runs at 2 AM daily)
 
 ---

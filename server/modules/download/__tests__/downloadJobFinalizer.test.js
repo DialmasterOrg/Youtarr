@@ -1,6 +1,7 @@
 /* eslint-env jest */
 
 jest.mock('../../../logger');
+jest.mock('../../membersAccess');
 
 jest.mock('../../jobModule', () => ({
   updateJob: jest.fn().mockResolvedValue(),
@@ -62,6 +63,9 @@ jest.mock('../tempSpaceProbe', () => ({
 const jobModule = require('../../jobModule');
 const configModule = require('../../configModule');
 const failureAdvisor = require('../failureAdvisor');
+// The wording itself is tested with youtubeBlockAdvice; these tests check
+// which of its texts the finalizer stores.
+const { KIND, adviceFor, botCheckSummary } = require('../../youtubeBlockAdvice');
 const MessageEmitter = require('../../messageEmitter');
 const notificationModule = require('../../notificationModule');
 const downloadRunTracker = require('../downloadRunTracker');
@@ -165,6 +169,49 @@ describe('downloadJobFinalizer', () => {
       expect('endDate' in fields).toBe(false);
     });
 
+    it('records members-only refusals from a run that used the cookies', async () => {
+      const membersAccess = require('../../membersAccess');
+      const membersOnlyVideoIds = new Set(['members1234']);
+
+      await finalizeDownloadJob(makeContext({
+        cookiesEnabled: true,
+        errorTracker: makeErrorTracker({ membersOnlyVideoIds }),
+        router: makeRouter({ stderrBuffer: 'ERROR: Join this channel' }),
+      }));
+
+      expect(membersAccess.recordDownloadOutcome).toHaveBeenCalledWith({
+        membersOnlyIds: membersOnlyVideoIds,
+        downloadedIds: [],
+        usedCookies: true,
+        stderr: 'ERROR: Join this channel',
+      });
+    });
+
+    it('does not count an anonymous retry as a run with cookies', async () => {
+      const membersAccess = require('../../membersAccess');
+
+      await finalizeDownloadJob(makeContext({ cookiesEnabled: true, anonymousRetry: true }));
+
+      expect(membersAccess.recordDownloadOutcome).toHaveBeenCalledWith(expect.objectContaining({ usedCookies: false }));
+    });
+
+    it('does not count a run whose cookies were dropped before yt-dlp started', async () => {
+      const membersAccess = require('../../membersAccess');
+
+      await finalizeDownloadJob(makeContext({ cookiesEnabled: true, cookiesPassed: false }));
+
+      expect(membersAccess.recordDownloadOutcome).toHaveBeenCalledWith(expect.objectContaining({ usedCookies: false }));
+    });
+
+    it('still finishes the job when members-only access cannot be recorded', async () => {
+      const membersAccess = require('../../membersAccess');
+      membersAccess.recordDownloadOutcome.mockRejectedValueOnce(new Error('db down'));
+
+      await finalizeDownloadJob(makeContext());
+
+      expect(jobModule.updateJob.mock.calls[0][1].status).toBe('Complete');
+    });
+
     it('excludes the run\'s archive skips from the downloaded videos', async () => {
       const archiveSkippedIds = new Set(['skip1234567']);
 
@@ -173,6 +220,35 @@ describe('downloadJobFinalizer', () => {
       expect(downloadResultProcessor.partitionDownloadResults).toHaveBeenCalledWith(
         expect.anything(), expect.anything(), expect.anything(), archiveSkippedIds
       );
+    });
+
+    it('saves the downloaded videos as protected when the download was started with protection', async () => {
+      jobModule.getJob.mockReturnValue({ data: {} });
+      downloadResultProcessor.partitionDownloadResults.mockReturnValue({
+        successfulVideos: [{ youtubeId: 'abc123def45', fileSize: '1000' }],
+        failedVideosList: []
+      });
+
+      await finalizeDownloadJob(makeContext({ protectVideos: true }));
+
+      expect(jobModule.saveJobOnly).toHaveBeenCalledWith(mockJobId, expect.objectContaining({
+        data: expect.objectContaining({
+          videos: [{ youtubeId: 'abc123def45', fileSize: '1000', protected: true }]
+        })
+      }));
+    });
+
+    it('never writes a protection value for a download started without protection', async () => {
+      jobModule.getJob.mockReturnValue({ data: {} });
+      downloadResultProcessor.partitionDownloadResults.mockReturnValue({
+        successfulVideos: [{ youtubeId: 'abc123def45', fileSize: '1000' }],
+        failedVideosList: []
+      });
+
+      await finalizeDownloadJob(makeContext());
+
+      const savedVideos = jobModule.saveJobOnly.mock.calls[0][1].data.videos;
+      expect(savedVideos).toEqual([{ youtubeId: 'abc123def45', fileSize: '1000' }]);
     });
 
     it('marks the job Error with COOKIES_REQUIRED when bot detection was seen', async () => {
@@ -185,6 +261,17 @@ describe('downloadJobFinalizer', () => {
       }));
     });
 
+    it('records a cookieless bot check with the summary and diagnosis for a run without cookies', async () => {
+      await finalizeDownloadJob(makeContext({ code: 1, router: makeRouter({ botDetected: true }) }));
+
+      const [, fields] = jobModule.updateJob.mock.calls.find(
+        ([id, update]) => id === mockJobId && update.error === 'COOKIES_REQUIRED'
+      );
+      // Run summaries quote the output, so it says what stopped the job and no more.
+      expect(fields.output).toBe(botCheckSummary({ cookiesEnabled: false }));
+      expect(fields.notes).toBe(adviceFor(KIND.BOT_CHECK, { cookiesEnabled: false }).message);
+    });
+
     it('uses stale-cookie messaging for bot detection when cookies are enabled', async () => {
       configModule.getCookiesPath.mockReturnValue('/app/config/cookies.user.txt');
 
@@ -193,8 +280,8 @@ describe('downloadJobFinalizer', () => {
       expect(jobModule.updateJob).toHaveBeenCalledWith(mockJobId, expect.objectContaining({
         status: 'Error',
         error: 'COOKIES_REQUIRED',
-        output: expect.stringMatching(/expired or rotated/i),
-        notes: expect.stringMatching(/re-export fresh cookies/i)
+        output: botCheckSummary({ cookiesEnabled: true }),
+        notes: adviceFor(KIND.BOT_CHECK, { cookiesEnabled: true }).message
       }));
 
       // The broadcast final presentation must match the persisted advice.
@@ -916,6 +1003,46 @@ describe('downloadJobFinalizer', () => {
             })
           })
         );
+      });
+
+      describe('a quiet repeat try of a blocked Sonarr/Radarr grab', () => {
+        beforeEach(() => {
+          jobModule.getJob.mockReturnValue({ data: { quietBlockedFailure: true } });
+        });
+
+        it('does not notify when the block is the only failure', async () => {
+          primeFailure(make403Failure());
+
+          await finalizeDownloadJob(makeContext({ code: 1 }));
+
+          expect(emittedFinalSummary().diagnoses).toEqual([expect.objectContaining({ key: 'http-403-cookies-disabled' })]);
+          expect(notificationModule.sendDownloadNotification).not.toHaveBeenCalled();
+        });
+
+        it('reads the flag from a queued job, whose data is nested', async () => {
+          jobModule.getJob.mockReturnValue({ data: { data: { quietBlockedFailure: true } } });
+          primeFailure(make403Failure());
+
+          await finalizeDownloadJob(makeContext({ code: 1 }));
+
+          expect(notificationModule.sendDownloadNotification).not.toHaveBeenCalled();
+        });
+
+        it('still notifies for a failure that is not a block', async () => {
+          const failure = make403Failure({ youtubeId: 'bigvideo001', error: 'Conversion failed!' });
+          primeFailure(failure);
+          tempSpaceProbe.findOutOfSpaceFailures.mockResolvedValue(new Set(['bigvideo001']));
+
+          await finalizeDownloadJob(makeContext({ code: 1 }));
+
+          expect(notificationModule.sendDownloadNotification).toHaveBeenCalled();
+        });
+
+        it('still notifies when the download succeeded', async () => {
+          await finalizeDownloadJob(makeContext());
+
+          expect(notificationModule.sendDownloadNotification).toHaveBeenCalled();
+        });
       });
 
       it('does not notify for an undiagnosed failure-only job', async () => {

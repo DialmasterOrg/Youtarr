@@ -95,6 +95,19 @@ describe('useResultDownload', () => {
     expect(result.current.dialogOpen).toBe(false);
   });
 
+  test('confirming with protection on sends the protect choice', async () => {
+    const selection = makeSelection(['aaaaaaaaaaa']);
+    const { result } = renderHook(() => useResultDownload({ token: 't', results, selection, activeVideos: {} }));
+
+    act(() => { result.current.openForSelection(); });
+    await act(async () => { await result.current.confirm({ protect: true }); });
+
+    expect(mockTriggerDownloads).toHaveBeenCalledWith({
+      urls: ['https://www.youtube.com/watch?v=aaaaaaaaaaa'],
+      overrideSettings: expect.objectContaining({ protect: true }),
+    });
+  });
+
   test('confirming a single video leaves the selection alone', async () => {
     const selection = makeSelection(['aaaaaaaaaaa']);
     const { result } = renderHook(() => useResultDownload({ token: 't', results, selection, activeVideos: {} }));

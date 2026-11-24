@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import type { Location } from 'react-router-dom';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
@@ -12,7 +12,7 @@ import {
   Typography,
 } from '../ui';
 import { StorageFooterWidget } from './StorageFooterWidget';
-import { NavItem, isNavItemExpanded, isNavPathActive } from './navigation';
+import { NavItem, isNavItemExpanded, isNavSubItemActive } from './navigation';
 import type { ThemeSidebarBehavior } from '../../themes/types';
 import {
   NAV_MAIN_BUTTON_SIDE_PADDING,
@@ -76,13 +76,18 @@ export const NavDrawerContent: React.FC<NavDrawerContentProps> = ({
 
   useEffect(() => {
     const activeItem = navItems.find((item) =>
-      item.subItems?.some((subItem) => isNavPathActive(location.pathname, subItem.to))
+      item.subItems?.some((subItem) => isNavSubItemActive(location.pathname, subItem))
     );
 
     if (activeItem?.key) {
       setExpandedItems((prev) => ({ ...prev, [activeItem.key]: true }));
     }
   }, [location.pathname, navItems]);
+
+  // A long sub-item list (Settings) scrolls on a short window, so bring the current page's row into view
+  const scrollSelectedIntoView = useCallback((node: HTMLButtonElement | null) => {
+    node?.scrollIntoView?.({ block: 'nearest' });
+  }, []);
 
   const toggleExpand = (key: string, e: React.MouseEvent) => {
     e.preventDefault();
@@ -237,11 +242,13 @@ export const NavDrawerContent: React.FC<NavDrawerContentProps> = ({
                 <Collapse in={isExpanded} timeout="auto" unmountOnExit overflowVisible>
                   {item.subItems && (
                     <List disablePadding style={{ marginTop: NAV_SUB_VERTICAL_GAP * 8, display: 'flex', flexDirection: 'column', gap: `${NAV_SUB_VERTICAL_GAP * 8}px` }}>
-                      {item.subItems.map((subItem) => {
-                        const subSelected = isNavPathActive(location.pathname, subItem.to);
-                        return (
+                      {item.subItems.flatMap((subItem, index, subItems) => {
+                        const subSelected = isNavSubItemActive(location.pathname, subItem);
+                        const startsGroup = Boolean(subItem.group) && subItem.group !== subItems[index - 1]?.group;
+                        const link = (
                           <ListItemButton
                             key={subItem.key}
+                            ref={subSelected ? scrollSelectedIntoView : undefined}
                             component={RouterLink}
                             to={subItem.to}
                             selected={subSelected}
@@ -285,6 +292,17 @@ export const NavDrawerContent: React.FC<NavDrawerContentProps> = ({
                             />
                           </ListItemButton>
                         );
+                        if (!startsGroup) return [link];
+                        return [
+                          <li
+                            key={`group-${subItem.group}`}
+                            className="truncate text-[0.62rem] font-bold uppercase leading-4 tracking-wide text-muted-foreground [&:not(:first-child)]:mt-1"
+                            style={{ marginLeft: sp(NAV_SUB_TEXT_INDENT), paddingLeft: sp(NAV_SUB_HIGHLIGHT_LEFT_PADDING) }}
+                          >
+                            {subItem.group}
+                          </li>,
+                          link,
+                        ];
                       })}
                     </List>
                   )}

@@ -53,10 +53,10 @@ interface VideosPageProps {
 const VIEW_MODE_STORAGE_KEY = 'youtarr:videosPageViewMode';
 // Deleted videos are hidden by default; showing them is remembered in this browser.
 const DELETED_FILTER_STORAGE_KEY = 'youtarr:videosPageDeletedFilter';
-// Check results that can mean the user emptied the folder on purpose, the only
+// Check results that can mean the user removed the files on purpose, the only
 // ones Maintenance offers "Rescan anyway" for (a mix with an unreadable share is
 // reported as unreadable, so it never qualifies).
-const EMPTY_FOLDER_REASONS = ['empty', 'subfolder-empty'];
+const EMPTY_FOLDER_REASONS = ['empty', 'subfolder-empty', 'not-found'];
 
 const YOUTUBE_CHANNEL_ID_PATTERN = /^UC[a-zA-Z0-9_-]{22}$/;
 
@@ -516,6 +516,7 @@ function VideosPage({ token }: VideosPageProps) {
           audioFormat: settings.audioFormat,
           rating: settings.rating,
           skipVideoFolder: settings.skipVideoFolder,
+          protect: settings.protect,
         }
       : undefined;
 
@@ -627,7 +628,7 @@ function VideosPage({ token }: VideosPageProps) {
       {libraryWarning && libraryWarning.message !== dismissedLibraryWarning && (
         <Alert severity="warning" className="mt-2 break-words" onClose={() => setDismissedLibraryWarning(libraryWarning.message)}>
           {libraryWarning.message} Until that changes, videos stored there are not being marked missing; check
-          that the drive or share is mounted.
+          that the drive or share is mounted and that the volume mapping points at your library.
           {EMPTY_FOLDER_REASONS.includes(libraryWarning.reason) && (
             <>
               {' '}If you removed the files yourself, you can rescan anyway from{' '}
@@ -819,6 +820,7 @@ function VideosPage({ token }: VideosPageProps) {
         unavailableVideoCount={downloadCounts.unavailable}
         defaultResolution={configState?.config?.preferredResolution || '1080'}
         defaultResolutionSource="global"
+        defaultProtect={configState?.config?.protectManualDownloads}
         mode="manual"
         token={token}
       />

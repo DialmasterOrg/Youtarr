@@ -127,6 +127,132 @@ describe('storageGuard', () => {
       expect(status.paused).toBe(false);
     });
 
+    test('pauses while the downloads folder looks unavailable, describing it in plain language', async () => {
+      storageGuard.setLibraryCheck(jest.fn().mockResolvedValue({
+        ok: false, reason: 'empty', path: '/data', message: 'The downloads folder is empty.',
+      }));
+
+      const status = await storageGuard.refresh();
+
+      expect(status.paused).toBe(true);
+      expect(status.reasons).toEqual([{ type: 'library', libraryReason: 'empty', text: 'the downloads folder is empty' }]);
+      expect(storageGuard.describe(status)).toBe('Downloads are paused: the downloads folder is empty');
+    });
+
+    test('does not pause for the downloads folder while it is fine', async () => {
+      storageGuard.setLibraryCheck(jest.fn().mockResolvedValue(null));
+
+      const status = await storageGuard.refresh();
+
+      expect(status.paused).toBe(false);
+    });
+
+    test('fails open when the downloads folder cannot be checked', async () => {
+      storageGuard.setLibraryCheck(jest.fn().mockRejectedValue(new Error('db down')));
+
+      const status = await storageGuard.refresh();
+
+      expect(status.paused).toBe(false);
+    });
+
+    describe('the downloads folder check', () => {
+      const emptyFolder = { ok: false, reason: 'empty', path: '/data', message: 'The downloads folder is empty.' };
+
+      afterEach(() => jest.useRealTimers());
+
+      test('is reused for a while instead of listing the folder on every refresh', async () => {
+        jest.useFakeTimers();
+        const checkLibrary = jest.fn().mockResolvedValue(emptyFolder);
+        storageGuard.setLibraryCheck(checkLibrary);
+
+        await storageGuard.refresh();
+        await storageGuard.refresh();
+        expect(checkLibrary).toHaveBeenCalledTimes(1);
+
+        jest.advanceTimersByTime(storageGuard.LIBRARY_CHECK_CACHE_MS);
+        await storageGuard.refresh();
+        expect(checkLibrary).toHaveBeenCalledTimes(2);
+      });
+
+      test('looks again right away when asked to, as after a rescan', async () => {
+        const checkLibrary = jest.fn().mockResolvedValue(emptyFolder);
+        storageGuard.setLibraryCheck(checkLibrary);
+        await storageGuard.refresh();
+        checkLibrary.mockResolvedValue(null);
+
+        const status = await storageGuard.recheckLibrary();
+
+        expect(status.paused).toBe(false);
+        expect(checkLibrary).toHaveBeenCalledTimes(2);
+      });
+
+      test('fails open when the folder does not answer in time, without stalling later refreshes', async () => {
+        jest.useFakeTimers();
+        // A share that hangs: the check never settles.
+        const checkLibrary = jest.fn(() => new Promise(() => {}));
+        storageGuard.setLibraryCheck(checkLibrary);
+
+        const first = storageGuard.refresh();
+        await jest.advanceTimersByTimeAsync(storageGuard.LIBRARY_CHECK_TIMEOUT_MS);
+        await expect(first).resolves.toEqual(expect.objectContaining({ paused: false }));
+
+        // The hung check keeps its slot, and nobody waits for it again.
+        await expect(storageGuard.refresh()).resolves.toEqual(expect.objectContaining({ paused: false }));
+        expect(checkLibrary).toHaveBeenCalledTimes(1);
+      });
+
+      test('stays paused when a re-check of an unavailable folder times out', async () => {
+        jest.useFakeTimers();
+        const checkLibrary = jest.fn().mockResolvedValue(emptyFolder);
+        storageGuard.setLibraryCheck(checkLibrary);
+        await storageGuard.refresh();
+        const onResumed = jest.fn();
+        storageGuard.on('resumed', onResumed);
+
+        // The cached answer expires and the dead share now answers too slowly.
+        jest.advanceTimersByTime(storageGuard.LIBRARY_CHECK_CACHE_MS);
+        checkLibrary.mockImplementation(() => new Promise(() => {}));
+        const recheck = storageGuard.refresh();
+        await jest.advanceTimersByTimeAsync(storageGuard.LIBRARY_CHECK_TIMEOUT_MS);
+
+        await expect(recheck).resolves.toEqual(expect.objectContaining({ paused: true }));
+        expect(onResumed).not.toHaveBeenCalled();
+        expect(mockNotificationModule.sendDownloadPauseNotification).toHaveBeenCalledTimes(1);
+        storageGuard._setRecheckTimer(false);
+      });
+
+      test('keeps downloads running when a re-check of a fine folder times out', async () => {
+        jest.useFakeTimers();
+        const checkLibrary = jest.fn().mockResolvedValue(null);
+        storageGuard.setLibraryCheck(checkLibrary);
+        await storageGuard.refresh();
+
+        jest.advanceTimersByTime(storageGuard.LIBRARY_CHECK_CACHE_MS);
+        checkLibrary.mockImplementation(() => new Promise(() => {}));
+        const recheck = storageGuard.refresh();
+        await jest.advanceTimersByTimeAsync(storageGuard.LIBRARY_CHECK_TIMEOUT_MS);
+
+        await expect(recheck).resolves.toEqual(expect.objectContaining({ paused: false }));
+        expect(mockNotificationModule.sendDownloadPauseNotification).not.toHaveBeenCalled();
+      });
+
+      test('uses a late answer from a check that had timed out', async () => {
+        jest.useFakeTimers();
+        let finish;
+        const checkLibrary = jest.fn(() => new Promise((resolve) => { finish = resolve; }));
+        storageGuard.setLibraryCheck(checkLibrary);
+
+        const first = storageGuard.refresh();
+        await jest.advanceTimersByTimeAsync(storageGuard.LIBRARY_CHECK_TIMEOUT_MS);
+        await first;
+        finish(emptyFolder);
+        await jest.advanceTimersByTimeAsync(0);
+
+        await expect(storageGuard.refresh()).resolves.toEqual(expect.objectContaining({ paused: true }));
+        expect(checkLibrary).toHaveBeenCalledTimes(1);
+      });
+    });
+
     test('keeps the original pausedSince while staying paused', async () => {
       config.downloadPauseUsageLimit = '5GB';
       const first = await storageGuard.refresh();
@@ -158,6 +284,22 @@ describe('storageGuard', () => {
       expect(mockNotificationModule.sendDownloadPauseNotification).toHaveBeenLastCalledWith(
         expect.objectContaining({ paused: false })
       );
+    });
+
+    test('names what was holding downloads when it clears', async () => {
+      const checkLibrary = jest.fn().mockResolvedValue({
+        ok: false, reason: 'not-found', path: '/data', message: 'Most downloaded videos are not where Youtarr saved them.',
+      });
+      storageGuard.setLibraryCheck(checkLibrary);
+      await storageGuard.refresh();
+      checkLibrary.mockResolvedValue(null);
+
+      await storageGuard.recheckLibrary();
+
+      expect(mockNotificationModule.sendDownloadPauseNotification).toHaveBeenLastCalledWith(expect.objectContaining({
+        paused: false,
+        resumedFrom: [expect.objectContaining({ type: 'library' })],
+      }));
     });
 
     test('does not notify on a first check that is not paused', async () => {

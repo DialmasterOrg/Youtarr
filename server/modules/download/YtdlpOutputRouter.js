@@ -10,6 +10,8 @@ const filesystem = require('../filesystem');
 const { JobVideoDownload } = require('../../models');
 const { VIDEO_PERSISTED_MARKER } = require('../constants/outputMarkers');
 const { containsHttp403, isSabrRestriction } = require('./ytdlpStderrSignals');
+const { isBotCheck } = require('../ytdlpBotCheck');
+const { botCheckText, http403Hint } = require('../youtubeBlockAdvice');
 
 const PROGRESS_THROTTLE_MS = 250;
 // yt-dlp prints "<id>: has already been recorded in the archive" when it skips
@@ -280,14 +282,12 @@ class YtdlpOutputRouter {
       this.errorTracker.handleWarningLine(line, 'stderr');
     }
 
-    // Check for bot detection message (handle different quote types and patterns)
-    if (line.includes('Sign in to confirm') && line.includes('not a bot')) {
+    if (isBotCheck(line)) {
       this.botDetected = true;
-      const botMessage = this.anonymousRetry
-        ? 'Bot detection encountered during the no-cookies fallback. The fallback also failed, so this video may be genuinely unavailable.'
-        : this.cookiesEnabled
-          ? 'Bot detection encountered even though cookies are configured - they are likely expired or rotated. Re-export fresh cookies from your browser and upload them again.'
-          : 'Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.';
+      const botMessage = botCheckText({
+        cookiesEnabled: this.cookiesEnabled,
+        anonymousRetry: this.anonymousRetry,
+      });
       MessageEmitter.emitMessage(
         'broadcast',
         null,
@@ -307,11 +307,10 @@ class YtdlpOutputRouter {
       return;
     }
     this.cookiesSuggestionEmitted = true;
-    const message = this.anonymousRetry
-      ? 'HTTP 403 detected during the no-cookies fallback. If this retry fails, the video may be genuinely unavailable.'
-      : this.cookiesEnabled
-        ? 'HTTP 403 detected while using your uploaded cookies. If the download fails, try re-exporting fresh cookies from your browser, or disable cookies in Settings -> Cookies.'
-        : 'HTTP 403 detected: YouTube may be blocking requests. If download fails, try setting cookies in Configuration.';
+    const message = http403Hint({
+      cookiesEnabled: this.cookiesEnabled,
+      anonymousRetry: this.anonymousRetry,
+    });
     // Don't set monitor.hasError here - let the final exit code determine success/failure
     // 403s on HLS fragments are often recoverable and don't indicate actual failure
     MessageEmitter.emitMessage(

@@ -60,10 +60,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
     [location.pathname, navItems]
   );
 
-  const activeItemWithSubItems = React.useMemo(
-    () => navItems.find((item) => isNavItemExpanded(location.pathname, item)) || null,
-    [location.pathname, navItems]
-  );
+  const activeItemWithSubItems = activeItem?.hideSubItemsOnMobile ? null : activeItem;
 
   useEffect(() => {
     const root = document.documentElement;

@@ -1,11 +1,12 @@
 import React from 'react';
 import { Box, Card, CardContent, Chip, Stack, Tooltip, Typography } from '../../ui';
-import { MediaServerStatus, MediaServerType, Playlist } from '../../../types/playlist';
+import { MediaServerStatus, MediaServerType, Playlist, PlaylistSyncStatus } from '../../../types/playlist';
 import LibraryDownloadsGroup from './LibraryDownloadsGroup';
 import MediaServerSyncGroup from './MediaServerSyncGroup';
 import OpenInYouTubeLink, { youtubePlaylistUrl } from '../../shared/OpenInYouTubeLink';
 import PlaylistCountsInfo from '../../shared/PlaylistCountsInfo';
 import { formatPlaylistCounts } from '../../../utils/playlistCounts';
+import { hasDownloadFilters } from '../hooks/usePlaylistFilterPreview';
 
 interface PlaylistHeaderProps {
   playlist: Playlist;
@@ -17,6 +18,8 @@ interface PlaylistHeaderProps {
   newCount: number | null;
   followingExistingCount?: number | null;
   followingRequestedCount?: number | null;
+  filteredCount?: number | null;
+  filterError?: string | null;
   onChooseExisting?: () => void;
   togglePending: boolean;
   actionRunning: boolean;
@@ -30,6 +33,7 @@ interface PlaylistHeaderProps {
   onSyncNow: () => void;
   onRegenerateM3U: () => void;
   unsyncableCount?: number | null;
+  syncStatus?: PlaylistSyncStatus | null;
 }
 
 function formatTimestamp(value: string | null): string {
@@ -51,6 +55,8 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
   newCount,
   followingExistingCount,
   followingRequestedCount,
+  filteredCount,
+  filterError,
   onChooseExisting,
   togglePending,
   actionRunning,
@@ -64,8 +70,10 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
   onSyncNow,
   onRegenerateM3U,
   unsyncableCount,
+  syncStatus,
 }) => {
   const isAudioPlaylist = playlist.audio_format === 'mp3_only';
+  const filtersOn = hasDownloadFilters(playlist);
   return (
     <Card elevation={8} className="mb-4" style={{ borderRadius: 'var(--radius-ui)', overflow: 'hidden' }}>
       <CardContent
@@ -113,6 +121,13 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
                     />
                   </span>
                 </Tooltip>
+                {filtersOn && (
+                  <Tooltip title="Automatic downloads and Download all skip videos that do not pass this playlist's title or duration filters. Change them in Playlist settings.">
+                    <span className="inline-flex">
+                      <Chip label="Download filters on" size="small" variant="outlined" />
+                    </span>
+                  </Tooltip>
+                )}
                 <Typography variant="body2" color="text.secondary" className="inline-flex items-center gap-1">
                   {formatPlaylistCounts(playlist.video_count, downloadedCount)}
                   <PlaylistCountsInfo />
@@ -133,6 +148,8 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
                 setupError={playlist.auto_download_setup_error}
                 followingExistingCount={followingExistingCount}
                 followingRequestedCount={followingRequestedCount}
+                filteredCount={filteredCount}
+                filterError={filterError}
                 onChooseExisting={onChooseExisting}
                 onRefresh={onRefresh}
                 onDownloadAll={onDownloadAll}
@@ -152,6 +169,7 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
                 anyConfigured={anyConfigured}
                 actionRunning={actionRunning}
                 unsyncableCount={unsyncableCount}
+                syncStatus={syncStatus}
               />
             </div>
           </div>

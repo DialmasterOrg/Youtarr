@@ -119,6 +119,7 @@ jest.mock('../../filesystem', () => {
 });
 
 const DownloadExecutor = require('../downloadExecutor');
+const { KIND, adviceFor } = require('../../youtubeBlockAdvice');
 const filesystem = require('../../filesystem');
 const configModule = require('../../configModule');
 const plexModule = require('../../plexModule');
@@ -1045,6 +1046,26 @@ describe('DownloadExecutor', () => {
       recordSpy.mockRestore();
     });
 
+    it('saves the videos of a protected download as protected', async () => {
+      const video = { youtubeId: 'success1234', filePath: '/output/video.mp4', fileSize: '1024' };
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([video]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/success1234']);
+      jobModule.getJob.mockReturnValue({ data: {} });
+
+      setTimeout(() => {
+        endProcess(0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { protectVideos: true });
+
+      expect(jobModule.saveJobOnly).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          data: expect.objectContaining({ videos: [{ ...video, protected: true }] })
+        })
+      );
+    });
+
     it('should persist successful videos before terminal update when yt-dlp exits non-zero', async () => {
       const mockVideoData = [
         { youtubeId: 'success1234', filePath: '/output/video.mp4', fileSize: '1024' }
@@ -1656,7 +1677,7 @@ describe('DownloadExecutor', () => {
       expect(jobModule.updateJob).toHaveBeenCalledWith(
         mockJobId,
         expect.objectContaining({
-          notes: 'YouTube denied access (HTTP 403). Configure cookies in Settings -> Cookies to resolve this issue.',
+          notes: adviceFor(KIND.HTTP_403, { cookiesEnabled: false }).message,
           error: 'COOKIES_RECOMMENDED'
         })
       );

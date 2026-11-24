@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useId, useEffect } from 'react';
 import {
+  InputLabel,
   Select,
   MenuItem,
   Typography,
@@ -52,6 +53,8 @@ interface SubfolderAutocompleteProps {
   createSubfolder?: (name: string) => Promise<void>;
   /** Whether to render the inline "Add Subfolder" action (default true). Set false when the parent provides its own add flow */
   showAddAction?: boolean;
+  /** 'download' mode only: what the "no override" choice is called where "channel settings" would not fit */
+  noOverrideLabel?: string;
 }
 
 const ADD_NEW_SENTINEL = '__ADD_NEW__';
@@ -75,6 +78,7 @@ export function SubfolderAutocomplete({
   label = 'Subfolder',
   createSubfolder,
   showAddAction = true,
+  noOverrideLabel = 'No override (use channel settings)',
 }: SubfolderAutocompleteProps) {
   // State for the Add Subfolder dialog
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -139,7 +143,7 @@ export function SubfolderAutocomplete({
     } else if (mode === 'download') {
       // "No override" option - maps to null (no override)
       opts.push({
-        label: 'No override (use channel settings)',
+        label: noOverrideLabel,
         value: null,
         isSpecial: true,
         isAddNew: false,
@@ -182,7 +186,7 @@ export function SubfolderAutocomplete({
     // This makes it reliably clickable in tests without depending on Radix Select portal events.
 
     return opts;
-  }, [mode, allSubfolders, defaultSubfolderDisplay]);
+  }, [mode, allSubfolders, defaultSubfolderDisplay, noOverrideLabel]);
 
   // Find the current option based on value
   const currentOption = useMemo((): SubfolderOption | null => {
@@ -296,9 +300,9 @@ export function SubfolderAutocomplete({
           for test queries (getByLabelText, getByRole, toHaveValue). */}
       <div style={{ position: 'relative', width: '100%' }}>
         {/* Accessible label – found by getByLabelText */}
-        <label htmlFor={inputId} style={{ display: 'block', fontSize: '0.75rem', marginBottom: 2, color: 'var(--muted-foreground)' }}>
+        <InputLabel htmlFor={inputId} className="mb-1 block">
           {label}
-        </label>
+        </InputLabel>
 
         {/* Visually-hidden accessible input: role="combobox", holds the display
             value when the dropdown is closed (cleared when open so that the option

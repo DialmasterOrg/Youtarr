@@ -99,9 +99,12 @@ jest.mock('react-router-dom', () => ({
 }));
 
 // Mock sub-components that don't need full rendering
+// Latest props the modal passed to the player, for driving its callbacks.
+const mockVideoPlayerProps: { current: { video?: { status?: string }; membersAccessCheck?: { onCheck: () => void } } | null } = { current: null };
 jest.mock('../components/VideoPlayer', () => ({
   __esModule: true,
-  default: function MockVideoPlayer() {
+  default: function MockVideoPlayer(props: { video?: { status?: string }; membersAccessCheck?: { onCheck: () => void } }) {
+    mockVideoPlayerProps.current = props;
     const React = require('react');
     return React.createElement('div', { 'data-testid': 'video-player' }, 'VideoPlayer');
   },
@@ -150,12 +153,13 @@ jest.mock('../../DeleteVideosDialog', () => ({
 
 jest.mock('../../../DownloadManager/ManualDownload/DownloadSettingsDialog', () => ({
   __esModule: true,
-  default: function MockDownloadDialog(props: { open: boolean; onConfirm: (settings: null) => void; onClose: () => void; missingVideoCount?: number }) {
+  default: function MockDownloadDialog(props: { open: boolean; onConfirm: (settings: { protect: boolean } | null) => void; onClose: () => void; missingVideoCount?: number }) {
     const React = require('react');
     if (!props.open) return null;
     return React.createElement('div', { 'data-testid': 'download-dialog' },
       React.createElement('div', { 'data-testid': 'download-dialog-missing-count' }, String(props.missingVideoCount)),
       React.createElement('button', { 'data-testid': 'confirm-download', onClick: () => props.onConfirm(null) }, 'Confirm Download'),
+      React.createElement('button', { 'data-testid': 'confirm-protected-download', onClick: () => props.onConfirm({ protect: true }) }, 'Confirm Protected Download'),
     );
   },
 }));
@@ -354,6 +358,7 @@ describe('VideoModal', () => {
       expect(onAvailabilityDetected).toHaveBeenCalledWith(
         neverDownloadedVideo.youtubeId,
         'subscriber_only',
+        undefined,
       );
     });
     expect(onAvailabilityDetected).toHaveBeenCalledTimes(1);
@@ -385,6 +390,70 @@ describe('VideoModal', () => {
     });
 
     expect(onAvailabilityDetected).not.toHaveBeenCalled();
+  });
+
+  test('a successful access check makes a denied members-only video downloadable', async () => {
+    axios.get.mockResolvedValue({ data: {} });
+    axios.post.mockResolvedValueOnce({ data: { membersAccess: 'confirmed' } });
+    const onAvailabilityDetected = jest.fn();
+
+    renderModal({
+      video: { ...neverDownloadedVideo, status: 'members_only', membersAccess: 'denied' },
+      onAvailabilityDetected,
+    });
+    await act(async () => { mockVideoPlayerProps.current?.membersAccessCheck?.onCheck(); });
+
+    await waitFor(() => {
+      expect(onAvailabilityDetected).toHaveBeenCalledWith(neverDownloadedVideo.youtubeId, 'subscriber_only', 'confirmed');
+    });
+    expect(mockVideoPlayerProps.current?.video?.status).toBe('never_downloaded');
+  });
+
+  test('reports a check answer once to a parent that re-renders with a new callback', async () => {
+    axios.get.mockResolvedValue({ data: {} });
+    axios.post.mockResolvedValueOnce({ data: { membersAccess: 'confirmed' } });
+    const notified = jest.fn();
+    // Like ChannelVideos: an inline callback that updates the parent's state.
+    function Parent() {
+      const [, setOverrides] = React.useState<Record<string, unknown>>({});
+      return (
+        <MemoryRouter>
+          <VideoModal
+            open
+            onClose={jest.fn()}
+            video={{ ...neverDownloadedVideo, status: 'members_only', membersAccess: 'denied' }}
+            token="test-token"
+            onAvailabilityDetected={(id, availability, access) => {
+              notified(id, availability, access);
+              setOverrides((prev) => ({ ...prev, [id]: { availability, access } }));
+            }}
+          />
+        </MemoryRouter>
+      );
+    }
+    render(<Parent />);
+
+    await act(async () => { mockVideoPlayerProps.current?.membersAccessCheck?.onCheck(); });
+
+    await waitFor(() => { expect(notified).toHaveBeenCalledWith(neverDownloadedVideo.youtubeId, 'subscriber_only', 'confirmed'); });
+    expect(notified).toHaveBeenCalledTimes(1);
+  });
+
+  test('a check that finds the video is not members-only makes it downloadable', async () => {
+    axios.get.mockResolvedValue({ data: {} });
+    axios.post.mockResolvedValueOnce({ data: { membersAccess: null } });
+    const onAvailabilityDetected = jest.fn();
+
+    renderModal({
+      video: { ...neverDownloadedVideo, status: 'members_only', membersAccess: 'denied' },
+      onAvailabilityDetected,
+    });
+    await act(async () => { mockVideoPlayerProps.current?.membersAccessCheck?.onCheck(); });
+
+    await waitFor(() => {
+      expect(onAvailabilityDetected).toHaveBeenCalledWith(neverDownloadedVideo.youtubeId, null, null);
+    });
+    expect(mockVideoPlayerProps.current?.video?.status).toBe('never_downloaded');
   });
 
   test('does not fire onAvailabilityDetected for non-members-only availability', () => {
@@ -508,6 +577,17 @@ describe('VideoModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /download video/i }));
 
     expect(screen.getByTestId('download-dialog-missing-count')).toHaveTextContent('0');
+  });
+
+  test('sends the protect choice from the download dialog', async () => {
+    renderModal({ video: neverDownloadedVideo });
+
+    fireEvent.click(screen.getByRole('button', { name: /download video/i }));
+    fireEvent.click(screen.getByTestId('confirm-protected-download'));
+
+    await waitFor(() => expect(mockTriggerDownloads).toHaveBeenCalledWith(
+      expect.objectContaining({ overrideSettings: expect.objectContaining({ protect: true }) })
+    ));
   });
 
   test('passes missingVideoCount 1 to the download dialog when the page reports the video is in the download archive', () => {

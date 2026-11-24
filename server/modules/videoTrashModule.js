@@ -11,15 +11,19 @@ const messageEmitter = require('./messageEmitter');
 const archiveModule = require('./archiveModule');
 const archiveAccess = require('./download/archiveAccess');
 const logger = require('../logger');
-const { LIBRARY_CHECK_REASONS, checkLibraryRoot, libraryCheckCoversRows } = require('./libraryRootCheck');
+const {
+  LIBRARY_CHECK_REASONS, checkLibraryAvailable, libraryCheckCoversRows, countRowsUnderLibraryCheck,
+} = require('./libraryRootCheck');
 const createLimiter = require('./subscriptionImport/concurrencyLimiter');
 const { REMOVAL_REASONS, REMOVAL_STATES, stateWhere, notStateWhere, removedColumns } = require('./videoRemovalState');
 
 // Rows are forgotten in chunks of this size, each in its own transaction.
 const PURGE_CHUNK_SIZE = 500;
-// Check results that can also mean the user emptied the folder on purpose,
+// Check results that can also mean the user removed the files on purpose,
 // the only ones "mark all missing as deleted" may be told to look past.
-const EMPTY_FOLDER_REASONS = [LIBRARY_CHECK_REASONS.EMPTY, LIBRARY_CHECK_REASONS.SUBFOLDER_EMPTY];
+const OVERRIDABLE_REASONS = [
+  LIBRARY_CHECK_REASONS.EMPTY, LIBRARY_CHECK_REASONS.SUBFOLDER_EMPTY, LIBRARY_CHECK_REASONS.NOT_FOUND,
+];
 const PASSING_CHECK = { ok: true };
 // Cached files (info.json, thumbnails) are unlinked this many at a time.
 const UNLINK_CONCURRENCY = 16;
@@ -58,9 +62,11 @@ class VideoTrashModule {
   }
 
   /**
-   * @returns {Promise<{deleted: number, missing: number, legacy: number, libraryCheck: Object,
-   *   missingActionsBlocked: boolean, downloadsActive: boolean}>}
+   * @returns {Promise<{deleted: number, missing: number, legacy: number, present: number, presentCovered: number,
+   *   libraryCheck: Object, missingActionsBlocked: boolean, downloadsActive: boolean}>}
    *   legacy: deleted rows removed before the reason was recorded (a subset of deleted);
+   *   present: downloaded videos whose files are on record as there;
+   *   presentCovered: those the failing check puts in doubt (what Rescan anyway could mark missing), else 0;
    *   libraryCheck: failing while it covers present or missing videos (the Maintenance card warns and
    *   offers Rescan anyway), passing otherwise; missingActionsBlocked: it covers missing videos, so
    *   marking all of them as deleted or emptying them from the trash is refused;
@@ -70,16 +76,20 @@ class VideoTrashModule {
     const deleted = await Video.count({ where: stateWhere(REMOVAL_STATES.DELETED) });
     const missing = await Video.count({ where: stateWhere(REMOVAL_STATES.MISSING) });
     const legacy = await Video.count({ where: { removed: true, removed_reason: null } });
-    const libraryCheck = await checkLibraryRoot(configModule.directoryPath);
+    const present = await Video.count({ where: { removed: false } });
+    const libraryCheck = await checkLibraryAvailable(configModule.directoryPath, Video);
     // Present videos count for the warning: their missing marks are held back,
     // and Rescan anyway is how a user who emptied the folder releases them.
     const coversRecorded = await libraryCheckCoversRows(libraryCheck, Video, notStateWhere(REMOVAL_STATES.DELETED));
     const missingActionsBlocked = coversRecorded
       && await libraryCheckCoversRows(libraryCheck, Video, stateWhere(REMOVAL_STATES.MISSING));
+    const presentCovered = coversRecorded ? await countRowsUnderLibraryCheck(libraryCheck, Video, { removed: false }) : 0;
     return {
       deleted,
       missing,
       legacy,
+      present,
+      presentCovered,
       libraryCheck: normalizeLibraryCheck(coversRecorded ? libraryCheck : PASSING_CHECK),
       missingActionsBlocked,
       downloadsActive: archiveAccess.isDownloading(),
@@ -90,7 +100,7 @@ class VideoTrashModule {
   // missing-video actions touch nothing else: present videos under a failing
   // folder are already held back by the file check and the rescan.
   async _checkCoveringMissing() {
-    const libraryCheck = await checkLibraryRoot(configModule.directoryPath);
+    const libraryCheck = await checkLibraryAvailable(configModule.directoryPath, Video);
     const covers = await libraryCheckCoversRows(libraryCheck, Video, stateWhere(REMOVAL_STATES.MISSING));
     return covers ? libraryCheck : null;
   }
@@ -99,8 +109,8 @@ class VideoTrashModule {
    * Turn missing videos into deleted ones. Only rows that are missing change;
    * present and deleted ids in the selection are left alone.
    * @param {{videoIds?: (number[]|null), all?: boolean, ignoreLibraryCheck?: boolean}} options -
-   *   ignoreLibraryCheck: the user emptied the downloads folder (or a subfolder) on purpose; honoured
-   *   only while the check fails because a folder is empty, never because one is gone or unreadable
+   *   ignoreLibraryCheck: the user removed the files on purpose; honoured only while the check fails
+   *   because a folder is empty or most videos are not found, never because one is gone or unreadable
    * @returns {Promise<{updated: number}>}
    * @throws {LibraryUnavailableError} for `all` while the downloads folder looks unmounted
    */
@@ -108,7 +118,7 @@ class VideoTrashModule {
     if (all) {
       const libraryCheck = await this._checkCoveringMissing();
       if (libraryCheck) {
-        if (!ignoreLibraryCheck || !EMPTY_FOLDER_REASONS.includes(libraryCheck.reason)) {
+        if (!ignoreLibraryCheck || !OVERRIDABLE_REASONS.includes(libraryCheck.reason)) {
           throw new LibraryUnavailableError(libraryCheck);
         }
         logger.warn({ libraryCheck }, 'Marking every missing video as deleted without the downloads folder check, by request');

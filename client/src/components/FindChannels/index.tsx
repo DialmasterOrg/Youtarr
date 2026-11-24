@@ -1,5 +1,5 @@
-import React, { useCallback, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Box, Typography } from '../ui';
 import AddChannelDialog from '../shared/AddChannelDialog';
 import SearchBar from './components/SearchBar';
@@ -7,13 +7,19 @@ import ResultsGrid from './components/ResultsGrid';
 import { useChannelSearch } from './hooks/useChannelSearch';
 import { ChannelSearchResult, DEFAULT_PAGE_SIZE, PageSize } from './types';
 
+const QUERY_PARAM = 'q';
+
 interface FindChannelsProps {
   token: string | null;
 }
 
 export default function FindChannels({ token }: FindChannelsProps) {
   const navigate = useNavigate();
-  const [query, setQuery] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Only the query the page was opened with counts; the ones it writes to the
+  // URL itself must not trigger a second search.
+  const openedWithQuery = useRef((searchParams.get(QUERY_PARAM) ?? '').trim());
+  const [query, setQuery] = useState(openedWithQuery.current);
   const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
   const [hasSearched, setHasSearched] = useState(false);
   const [addChannelTarget, setAddChannelTarget] = useState<{ name: string; url: string } | null>(null);
@@ -22,14 +28,26 @@ export default function FindChannels({ token }: FindChannelsProps) {
 
   const { results, loading, error, search, cancel } = useChannelSearch(token);
 
+  const runSearch = useCallback((trimmed: string, count: PageSize) => {
+    lastQueryRef.current = trimmed;
+    lastPageSizeRef.current = count;
+    setHasSearched(true);
+    setSearchParams({ [QUERY_PARAM]: trimmed }, { replace: true });
+    search(trimmed, count);
+  }, [search, setSearchParams]);
+
+  // Opened with ?q= (the Channels page hands a name over this way): run it once.
+  useEffect(() => {
+    if (!openedWithQuery.current) return;
+    runSearch(openedWithQuery.current, DEFAULT_PAGE_SIZE);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const doSearch = useCallback(() => {
     const trimmed = query.trim();
     if (!trimmed) return;
-    lastQueryRef.current = trimmed;
-    lastPageSizeRef.current = pageSize;
-    setHasSearched(true);
-    search(trimmed, pageSize);
-  }, [query, pageSize, search]);
+    runSearch(trimmed, pageSize);
+  }, [query, pageSize, runSearch]);
 
   const onRetry = useCallback(() => {
     if (!lastQueryRef.current) return;

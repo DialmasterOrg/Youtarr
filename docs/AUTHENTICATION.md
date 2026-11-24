@@ -129,13 +129,13 @@ The schema and migration history are authoritative for field details. API-key va
 
 ### Key Features
 - **Persistent**: No expiration (unlike session tokens)
-- **Scoped**: Limited to single video downloads only
+- **Scoped**: A download key can only queue single videos; a read-only status key can only read the status summary
 - **Secure**: SHA-256 hashed, stored securely
 - **Rate Limited**: Configurable requests per minute
 - **Revocable**: Can be deleted instantly if compromised
 
 ### Current Limitations
-- API keys can only download **individual videos**
+- Download keys can only download **individual videos**; read-only status keys cannot download at all
 - Playlists, channels, and batch operations require the web UI
 - API keys cannot open the live-update WebSocket connection
 - Maximum of 20 active API keys per instance
@@ -145,7 +145,8 @@ The schema and migration history are authoritative for field details. API-key va
 1. Navigate to **Settings -> API Keys & Bookmarklet** in the web UI
 2. Click **Create Key**
 3. Enter a descriptive name (e.g., "iPhone Shortcut", "Bookmarklet")
-4. **Important**: Copy and save the key immediately - it will not be shown again!
+4. For a dashboard or monitoring tool, tick **Read-only status key**. That key reads `GET /api/status/summary` and nothing else, so it cannot start downloads
+5. **Important**: Copy and save the key immediately - it will not be shown again!
 
 ### Using API Keys
 

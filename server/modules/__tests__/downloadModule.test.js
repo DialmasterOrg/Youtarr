@@ -1,6 +1,7 @@
 /* eslint-env jest */
 
 // Mock fs first to prevent configModule from reading files
+jest.mock('../membersAccess');
 jest.mock('fs');
 
 // Mock all modules before requiring them
@@ -28,6 +29,9 @@ jest.mock('../jobModule', () => ({
   startNextJob: jest.fn().mockResolvedValue()
 }));
 
+jest.mock('../mediaServers/libraryRefresh', () => ({
+  refreshAfterDownload: jest.fn().mockResolvedValue()
+}));
 jest.mock('../download/downloadExecutor');
 jest.mock('../download/ytdlpCommandBuilder');
 jest.mock('../channelModule', () => ({
@@ -453,7 +457,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doChannelDownloads(queuedJob, true);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('720', true);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('720', true, null, null, null, false, { membersFilter: null });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalled();
       const doDownloadCall = mockDownloadExecutor.doDownload.mock.calls[0];
       const args = doDownloadCall[0];
@@ -691,7 +695,7 @@ describe('DownloadModule', () => {
         false
       );
       expect(channelModuleMock.generateChannelsFile).toHaveBeenCalled();
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('1080', false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('1080', false, null, null, null, false, { membersFilter: null });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--format', 'best[height<=1080]',
@@ -711,7 +715,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSingleChannelDownloadJob(jobData);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('720', false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('720', false, null, null, null, false, { membersFilter: null });
     });
 
     it('should use override settings when provided', async () => {
@@ -726,7 +730,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSingleChannelDownloadJob(jobData);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('720', true);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('720', true, null, null, null, false, { membersFilter: null });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--playlist-end', '10'
@@ -747,7 +751,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSingleChannelDownloadJob(jobData);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('480', false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('480', false, null, null, null, false, { membersFilter: null });
     });
 
     it('should handle existing job id', async () => {
@@ -1137,6 +1141,7 @@ describe('DownloadModule', () => {
       ];
       const plexModuleMock = require('../plexModule');
       plexModuleMock.refreshLibrariesForSubfolders = jest.fn().mockReturnValue(Promise.resolve());
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress', data: { videos: [{ youtubeId: 'vid00000001' }] } });
 
       await downloadModule.doGroupedChannelDownloads({}, groups);
 
@@ -1151,10 +1156,46 @@ describe('DownloadModule', () => {
       ];
       const plexModuleMock = require('../plexModule');
       plexModuleMock.refreshLibrariesForSubfolders = jest.fn().mockReturnValue(Promise.resolve());
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress', data: { videos: [{ youtubeId: 'vid00000001' }] } });
 
       await downloadModule.doGroupedChannelDownloads({}, groups);
 
+      expect(plexModuleMock.refreshLibrariesForSubfolders).toHaveBeenCalledTimes(1);
       expect(plexModuleMock.refreshLibrariesForSubfolders).toHaveBeenCalledWith(['kids', 'music']);
+    });
+
+    it('refreshes Jellyfin and Emby once after all groups when the job downloaded videos', async () => {
+      const groups = [
+        { quality: '1080', subFolder: 'kids', channels: [{ channel_id: 'UC1' }] },
+        { quality: '720', subFolder: 'music', channels: [{ channel_id: 'UC2' }] },
+      ];
+      jest.spyOn(downloadModule, 'executeGroupDownload').mockResolvedValue();
+      jobModuleMock.getJob.mockReturnValue({
+        status: 'In Progress',
+        data: { videos: [{ youtubeId: 'vid00000001' }, { youtubeId: 'vid00000002' }] }
+      });
+      const libraryRefresh = require('../mediaServers/libraryRefresh');
+
+      await downloadModule.doGroupedChannelDownloads({}, groups);
+
+      expect(libraryRefresh.refreshAfterDownload).toHaveBeenCalledTimes(1);
+    });
+
+    it('skips every media server refresh when no group downloaded anything', async () => {
+      const groups = [
+        { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1' }] }
+      ];
+      jest.spyOn(downloadModule, 'executeGroupDownload').mockResolvedValue();
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress', data: { videos: [] } });
+      const libraryRefresh = require('../mediaServers/libraryRefresh');
+      const plexModuleMock = require('../plexModule');
+      plexModuleMock.refreshLibrariesForSubfolders = jest.fn().mockReturnValue(Promise.resolve());
+
+      await downloadModule.doGroupedChannelDownloads({}, groups);
+
+      expect(plexModuleMock.refreshLibrariesForSubfolders).not.toHaveBeenCalled();
+      expect(libraryRefresh.refreshAfterDownload).not.toHaveBeenCalled();
+      expect(jobModuleMock.startNextJob).toHaveBeenCalled();
     });
 
     it('should hand accumulated diagnoses to the run tracker on completion', async () => {
@@ -1239,6 +1280,33 @@ describe('DownloadModule', () => {
       YtdlpCommandBuilderMock = require('../download/ytdlpCommandBuilder');
     });
 
+    it('passes the fresh-denial filter of the cookies to yt-dlp on a scheduled run', async () => {
+      const membersAccess = require('../membersAccess');
+      membersAccess.buildDownloadFilter.mockResolvedValueOnce('id!~=\'^(?:aaaaaaaaaaa)$\'');
+      const group = { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1', auto_download_enabled_tabs: 'video' }] };
+
+      await downloadModule.executeGroupDownload(group, mockJobId, 'Channel Downloads - Group 1/1 (1080p)', {}, true);
+
+      expect(membersAccess.buildDownloadFilter).toHaveBeenCalledWith({ cookiesEnabled: true });
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith(
+        '1080', false, null, undefined, null, false, { membersFilter: 'id!~=\'^(?:aaaaaaaaaaa)$\'' }
+      );
+    });
+
+    it('keeps members-only videos out of a scheduled run without cookies', async () => {
+      const membersAccess = require('../membersAccess');
+      const configModule = require('../configModule');
+      configModule.getCookiesPath.mockReturnValueOnce(null);
+      const group = { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1', auto_download_enabled_tabs: 'video' }] };
+
+      await downloadModule.executeGroupDownload(group, mockJobId, 'Channel Downloads - Group 1/1 (1080p)', {}, true);
+
+      expect(membersAccess.buildDownloadFilter).toHaveBeenCalledWith({ cookiesEnabled: false });
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith(
+        '1080', false, null, undefined, null, false, { membersFilter: 'availability!=subscriber_only' }
+      );
+    });
+
     it('should generate channels file from group channels', async () => {
       const group = {
         quality: '1080',
@@ -1279,7 +1347,7 @@ describe('DownloadModule', () => {
       await downloadModule.executeGroupDownload(group, mockJobId, 'Channel Downloads - Group 1/1 (480p, lowres)', jobData, true);
 
       // Subfolder should NOT be passed to download - post-processing handles subfolder routing
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('480', false, null, undefined, null, false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('480', false, null, undefined, null, false, { membersFilter: null });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--playlist-end', '5'
@@ -1310,7 +1378,7 @@ describe('DownloadModule', () => {
       await downloadModule.executeGroupDownload(group, mockJobId, 'Channel Downloads - Group 1/1 (1080p)', jobData, true);
 
       // Subfolder should NOT be passed - post-processing handles it
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('1080', true, null, undefined, null, false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('1080', true, null, undefined, null, false, { membersFilter: null });
     });
 
     it('should pass filterConfig to YtdlpCommandBuilder when group has filters', async () => {
@@ -1335,7 +1403,7 @@ describe('DownloadModule', () => {
       await downloadModule.executeGroupDownload(group, mockJobId, 'Channel Downloads - Group 1/1 (1080p)', {}, true);
 
       // Verify filterConfig is passed as the 4th parameter, audioFormat is null when not in filterConfig
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('1080', false, null, mockFilterConfig, null, false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('1080', false, null, mockFilterConfig, null, false, { membersFilter: null });
     });
 
     it('should pass skipJobTransition flag to doDownload', async () => {
@@ -1432,6 +1500,48 @@ describe('DownloadModule', () => {
           runId: 'run-cookie',
         }),
       }, false, { includeJobId: true });
+    });
+
+    it.each([
+      ['an External API request', { jobLabel: 'Manually Added Urls (external request)' }],
+      ['a retry of one', { jobLabel: 'Auto-retry: 1 video', externalRequest: true }],
+    ])('marks the retry of %s as an External API request', async (_name, sourceJobData) => {
+      await downloadModule.enqueueAutoRetryJob({ retryVideos: [retryVideo], autoRetryAttempt: 1, sourceJobData });
+
+      expect(doSpecificDownloadsSpy.mock.calls[0][0].body.externalRequest).toBe(true);
+    });
+
+    it.each([
+      ['a Sonarr/Radarr grab', 'Manually Added Urls (Sonarr/Radarr grab)'],
+      ['a retry of one', 'Auto-retry: 1 video (Sonarr/Radarr grab)'],
+    ])('names the retry of %s after the grab', async (_name, jobLabel) => {
+      await downloadModule.enqueueAutoRetryJob({
+        retryVideos: [retryVideo], autoRetryAttempt: 1, sourceJobData: { jobLabel },
+      });
+
+      expect(doSpecificDownloadsSpy.mock.calls[0][0].body.jobLabel).toBe('Auto-retry: 1 video (Sonarr/Radarr grab)');
+    });
+
+    it('keeps the retry of a quiet blocked grab quiet', async () => {
+      await downloadModule.enqueueAutoRetryJob({
+        retryVideos: [retryVideo], autoRetryAttempt: 1, sourceJobData: { quietBlockedFailure: true },
+      });
+
+      expect(doSpecificDownloadsSpy.mock.calls[0][0].body.quietBlockedFailure).toBe(true);
+    });
+
+    it('leaves the quiet flag off the retry of any other job', async () => {
+      await downloadModule.enqueueAutoRetryJob({ retryVideos: [retryVideo], autoRetryAttempt: 1, sourceJobData: {} });
+
+      expect(doSpecificDownloadsSpy.mock.calls[0][0].body).not.toHaveProperty('quietBlockedFailure');
+    });
+
+    it('leaves the retry of a manual download with the plain label', async () => {
+      await downloadModule.enqueueAutoRetryJob({
+        retryVideos: [retryVideo], autoRetryAttempt: 1, sourceJobData: { jobLabel: 'Manually Added Urls' },
+      });
+
+      expect(doSpecificDownloadsSpy.mock.calls[0][0].body.jobLabel).toBe('Auto-retry: 1 video');
     });
 
     it('splits mixed authenticated and anonymous retries into separate jobs', async () => {
@@ -1724,6 +1834,63 @@ describe('DownloadModule', () => {
       jobModuleMock.addOrUpdateJob.mockResolvedValue(mockJobId);
     });
 
+    it('asks again about members-only videos the user picked', async () => {
+      const membersAccess = require('../membersAccess');
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+
+      await downloadModule.doSpecificDownloads({ body: { urls: ['https://youtube.com/watch?v=abcdefghijk'] } });
+
+      expect(membersAccess.clearVerdicts).toHaveBeenCalledWith(['abcdefghijk']);
+    });
+
+    it('attempts denied members-only videos in a manual job', async () => {
+      const membersAccess = require('../membersAccess');
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+
+      await downloadModule.doSpecificDownloads({ body: { urls: ['https://youtube.com/watch?v=abcdefghijk'] } });
+
+      expect(membersAccess.buildDownloadFilter).toHaveBeenCalledWith({ cookiesEnabled: true, skipDenied: false });
+    });
+
+    it('keeps the cookies on record for a playlist job, whose denials were left out when it was queued', async () => {
+      const membersAccess = require('../membersAccess');
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+
+      await downloadModule.doSpecificDownloads({
+        body: { urls: ['https://youtube.com/watch?v=abcdefghijk'], jobLabel: 'Playlist: Test Playlist' },
+      });
+
+      expect(membersAccess.clearVerdicts).not.toHaveBeenCalled();
+      expect(membersAccess.buildDownloadFilter).toHaveBeenCalledWith({ cookiesEnabled: true, skipDenied: false });
+    });
+
+    it('keeps members-only videos out of an External API request', async () => {
+      const membersAccess = require('../membersAccess');
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+
+      await downloadModule.doSpecificDownloads({
+        body: { urls: ['https://youtube.com/watch?v=abcdefghijk'], jobLabel: 'Manually Added Urls (external request)' },
+      });
+
+      expect(membersAccess.clearVerdicts).not.toHaveBeenCalled();
+      expect(membersAccess.buildDownloadFilter).toHaveBeenCalledWith({ cookiesEnabled: false, skipDenied: false });
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith(
+        '1080', false, null, false,
+        { cookiesEnabled: true, membersFilter: 'availability!=subscriber_only' }
+      );
+    });
+
+    it('keeps members-only videos out of an auto-retry of an External API request', async () => {
+      const membersAccess = require('../membersAccess');
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+
+      await downloadModule.doSpecificDownloads({
+        body: { urls: ['https://youtube.com/watch?v=abcdefghijk'], jobLabel: 'Auto-retry: 1 video', externalRequest: true },
+      });
+
+      expect(membersAccess.buildDownloadFilter).toHaveBeenCalledWith({ cookiesEnabled: false, skipDenied: false });
+    });
+
     it('should handle request object with body', async () => {
       jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
       const request = {
@@ -1749,7 +1916,7 @@ describe('DownloadModule', () => {
         }),
         false
       );
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, false, { cookiesEnabled: true });
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, false, { cookiesEnabled: true, membersFilter: null });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--format', 'best[height<=1080]',
@@ -1776,6 +1943,24 @@ describe('DownloadModule', () => {
           anonymousRetry: false
         })
       );
+    });
+
+    it('tells the executor to protect the videos of a download the user chose to protect', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+
+      await downloadModule.doSpecificDownloads({
+        body: { urls: ['https://youtube.com/watch?v=abc123'], overrideSettings: { protect: true } },
+      });
+
+      expect(mockDownloadExecutor.doDownload.mock.calls[0][7]).toMatchObject({ protectVideos: true });
+    });
+
+    it('does not ask the executor to protect videos by default', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+
+      await downloadModule.doSpecificDownloads({ body: { urls: ['https://youtube.com/watch?v=abc123'] } });
+
+      expect(mockDownloadExecutor.doDownload.mock.calls[0][7]).toMatchObject({ protectVideos: false });
     });
 
     it('uses a job id passed in options and returns it', async () => {
@@ -1908,7 +2093,7 @@ describe('DownloadModule', () => {
         false,
         null,
         false,
-        { cookiesEnabled: true }
+        { cookiesEnabled: true, membersFilter: null }
       );
     });
 
@@ -1929,7 +2114,7 @@ describe('DownloadModule', () => {
         false,
         null,
         false,
-        { cookiesEnabled: false }
+        { cookiesEnabled: false, membersFilter: 'availability!=subscriber_only' }
       );
 
       let directives = mockDownloadExecutor.doDownload.mock.calls[0][7];
@@ -1952,7 +2137,7 @@ describe('DownloadModule', () => {
         false,
         null,
         false,
-        { cookiesEnabled: true }
+        { cookiesEnabled: true, membersFilter: null }
       );
 
       directives = mockDownloadExecutor.doDownload.mock.calls[0][7];
@@ -1977,7 +2162,7 @@ describe('DownloadModule', () => {
         where: { channel_id: 'UC123456' },
         attributes: ['video_quality', 'audio_format', 'skip_video_folder']
       });
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', false, null, false, { cookiesEnabled: true });
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', false, null, false, { cookiesEnabled: true, membersFilter: null });
     });
 
     it('should respect channel-level audio_format when no override provided', async () => {
@@ -1993,7 +2178,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', false, 'mp3_only', false, { cookiesEnabled: true });
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', false, 'mp3_only', false, { cookiesEnabled: true, membersFilter: null });
     });
 
     it('should prioritize override audioFormat over channel audio_format', async () => {
@@ -2012,7 +2197,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', false, 'video_mp3', false, { cookiesEnabled: true });
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', false, 'video_mp3', false, { cookiesEnabled: true, membersFilter: null });
     });
 
     it('should allow null audioFormat override to bypass channel mp3_only setting', async () => {
@@ -2031,7 +2216,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', false, null, false, { cookiesEnabled: true });
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', false, null, false, { cookiesEnabled: true, membersFilter: null });
     });
 
     it('should handle allowRedownload override setting', async () => {
@@ -2048,7 +2233,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', true, null, false, { cookiesEnabled: true });
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', true, null, false, { cookiesEnabled: true, membersFilter: null });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--format', 'best[height<=720]',
@@ -2093,7 +2278,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('480', false, null, false, { cookiesEnabled: true });
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('480', false, null, false, { cookiesEnabled: true, membersFilter: null });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--format', 'best[height<=480]',
@@ -2134,7 +2319,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, false, { cookiesEnabled: true });
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, false, { cookiesEnabled: true, membersFilter: null });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--download-archive', './config/complete.list',
@@ -2282,7 +2467,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, true, { cookiesEnabled: true });
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, true, { cookiesEnabled: true, membersFilter: null });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.any(Array),
         mockJobId,
@@ -2318,7 +2503,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, true, { cookiesEnabled: true });
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, true, { cookiesEnabled: true, membersFilter: null });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.any(Array),
         mockJobId,
@@ -2357,7 +2542,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, false, { cookiesEnabled: true });
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, false, { cookiesEnabled: true, membersFilter: null });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.any(Array),
         mockJobId,
@@ -2395,7 +2580,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, true, { cookiesEnabled: true });
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, true, { cookiesEnabled: true, membersFilter: null });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.any(Array),
         mockJobId,
@@ -2433,7 +2618,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, false, { cookiesEnabled: true });
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, false, { cookiesEnabled: true, membersFilter: null });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.any(Array),
         mockJobId,
@@ -2541,7 +2726,7 @@ describe('DownloadModule', () => {
           false,
           null,
           false,
-          { cookiesEnabled: true }
+          { cookiesEnabled: true, membersFilter: null }
         );
       // Executor options (8th positional arg) carry the per-video directives
       const options = mockDownloadExecutor.doDownload.mock.calls[0][7];
@@ -2622,6 +2807,22 @@ describe('DownloadModule', () => {
       await downloadModule.doPlaylistDownloads(mockPlaylist);
 
       expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('leaves videos the cookies were recently denied out of the queued URLs', async () => {
+      const membersAccess = require('../membersAccess');
+      membersAccess.getFreshDeniedIdSet.mockResolvedValueOnce(new Set(['vid002']));
+      PlaylistVideoMock.findAll.mockResolvedValue([
+        { youtube_id: 'vid001', channel_id: 'UC1' },
+        { youtube_id: 'vid002', channel_id: 'UC1' },
+      ]);
+      VideoMock.findOne.mockResolvedValue(null);
+      ChannelMock.findOne.mockResolvedValue({ channel_id: 'UC1' });
+      const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockImplementation(async ({ body }) => ({ queued: body.urls.length, acceptedIds: [], alreadyActiveIds: [] }));
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist);
+
+      expect(spy.mock.calls[0][0].body.urls).toEqual(['https://www.youtube.com/watch?v=vid001']);
     });
 
     it('returns without calling download machinery when all videos are already downloaded', async () => {
@@ -2896,6 +3097,19 @@ describe('DownloadModule', () => {
       expect(body.overrideSettings).toMatchObject({ subfolder: 'DialogFolder', rating: 'R', subfolderFallback: 'PLFolder' });
     });
 
+    it('carries the dialog protect choice into each queued playlist job', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([{ youtube_id: 'a', channel_id: null }]);
+      VideoMock.findOne.mockResolvedValue(null);
+      grouperMock.buildGroups.mockResolvedValue([
+        { resolution: '1080', audioFormat: null, skipVideoFolder: false, youtubeIds: ['a'] },
+      ]);
+      const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockImplementation(async ({ body }) => ({ queued: body.urls.length, acceptedIds: [], alreadyActiveIds: [] }));
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist, { youtubeIds: ['a'], overrideSettings: { protect: true } });
+
+      expect(spy.mock.calls[0][0].body.overrideSettings).toMatchObject({ protect: true });
+    });
+
     it('does not send any rating keys when neither dialog nor playlist set a rating', async () => {
       PlaylistVideoMock.findAll.mockResolvedValue([{ youtube_id: 'a', channel_id: null }]);
       VideoMock.findOne.mockResolvedValue(null);
@@ -2953,9 +3167,87 @@ describe('DownloadModule', () => {
       const callArgs = PlaylistVideoMock.findAll.mock.calls[0][0];
       expect(callArgs.order).toEqual([['position', 'ASC']]);
       expect(callArgs.attributes).toEqual(
-        ['id', 'youtube_id', 'channel_id', 'channel_name', 'title', 'position', 'published_at', 'added_at', 'first_seen_at', 'auto_download_requested', 'auto_download_last_attempt_at']
+        ['id', 'youtube_id', 'channel_id', 'channel_name', 'title', 'duration', 'position', 'published_at', 'added_at', 'first_seen_at', 'auto_download_requested', 'auto_download_last_attempt_at']
       );
       expect(callArgs.limit).toBeUndefined();
+    });
+
+    describe('with playlist download filters', () => {
+      const filteredPlaylist = { ...mockPlaylist, min_duration: 600, max_duration: null, title_filter_regex: null };
+      const queuedUrls = (spy) => spy.mock.calls.map(([{ body }]) => body.urls);
+
+      beforeEach(() => {
+        PlaylistVideoMock.findAll.mockResolvedValue([
+          { id: 1, youtube_id: 'short', channel_id: 'UC1', title: 'Short', duration: 30 },
+          { id: 2, youtube_id: 'long', channel_id: 'UC1', title: 'Long', duration: 900 },
+        ]);
+        VideoMock.findOne.mockResolvedValue(null);
+        ChannelMock.findOne.mockResolvedValue({ channel_id: 'UC1' });
+      });
+
+      it('download all leaves out the videos the filters skip', async () => {
+        const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockImplementation(async ({ body }) => ({ queued: body.urls.length }));
+        await downloadModule.doPlaylistDownloads(filteredPlaylist);
+        expect(queuedUrls(spy)).toEqual([['https://www.youtube.com/watch?v=long']]);
+      });
+
+      it('an explicit selection downloads a video the filters skip', async () => {
+        PlaylistVideoMock.findAll.mockResolvedValue([
+          { id: 1, youtube_id: 'short', channel_id: 'UC1', title: 'Short', duration: 30 },
+        ]);
+        const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockImplementation(async ({ body }) => ({ queued: body.urls.length }));
+        await downloadModule.doPlaylistDownloads(filteredPlaylist, { youtubeIds: ['short'] });
+        expect(queuedUrls(spy)).toEqual([['https://www.youtube.com/watch?v=short']]);
+      });
+
+      it('a scheduled run skips filtered discoveries without spending their allowance', async () => {
+        const p = { ...filteredPlaylist, auto_download_baseline_at: new Date('2026-07-01'), auto_download_baseline_id: 0 };
+        const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockImplementation(async ({ body }) => ({ queued: body.urls.length }));
+        await downloadModule.doPlaylistDownloads(p, { limitToRecent: true, overrideSettings: { videoCount: 1 } });
+        expect(queuedUrls(spy)).toEqual([['https://www.youtube.com/watch?v=long']]);
+      });
+
+      // The title pattern goes through the real Python matcher, which rejects it.
+      describe('when the title filter cannot be evaluated on a scheduled run', () => {
+        const brokenPlaylist = () => ({
+          ...filteredPlaylist, min_duration: null, title_filter_regex: '[unclosed',
+          auto_download_baseline_at: new Date('2026-07-01'), auto_download_baseline_id: 0,
+        });
+        const run = (p) => downloadModule.doPlaylistDownloads(p, { limitToRecent: true, overrideSettings: { videoCount: 5 } });
+
+        beforeEach(() => {
+          PlaylistVideoMock.findAll.mockResolvedValue([
+            { id: 1, youtube_id: 'unselected', channel_id: 'UC1', title: 'Unselected', duration: 900 },
+            { id: 2, youtube_id: 'selected', channel_id: 'UC1', title: 'Selected', duration: 900, auto_download_requested: true },
+          ]);
+        });
+
+        it('fails the playlist with the reason, so the sweep is not recorded as finding nothing', async () => {
+          jest.spyOn(downloadModule, 'doSpecificDownloads').mockImplementation(async ({ body }) => ({ queued: body.urls.length }));
+          await expect(run(brokenPlaylist())).rejects.toThrow(/Download filters could not be evaluated.*Invalid regex pattern/);
+        });
+
+        it('queues the videos the user selected before failing, and holds the rest', async () => {
+          const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockImplementation(async ({ body }) => ({ queued: body.urls.length }));
+          await run(brokenPlaylist()).catch(() => {});
+          expect(queuedUrls(spy)).toEqual([['https://www.youtube.com/watch?v=selected']]);
+        });
+
+        it('reports how many videos it queued on the error', async () => {
+          jest.spyOn(downloadModule, 'doSpecificDownloads').mockImplementation(async ({ body }) => ({ queued: body.urls.length }));
+          await expect(run(brokenPlaylist())).rejects.toMatchObject({ queued: 1 });
+        });
+      });
+
+      it('a scheduled run still retries a filtered video the user selected', async () => {
+        const p = { ...filteredPlaylist, auto_download_baseline_at: new Date('2026-07-01'), auto_download_baseline_id: 10 };
+        PlaylistVideoMock.findAll.mockResolvedValue([
+          { id: 1, youtube_id: 'short', channel_id: 'UC1', title: 'Short', duration: 30, auto_download_requested: true },
+        ]);
+        const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockImplementation(async ({ body }) => ({ queued: body.urls.length }));
+        await downloadModule.doPlaylistDownloads(p, { limitToRecent: true, overrideSettings: { videoCount: 1 } });
+        expect(queuedUrls(spy)).toEqual([['https://www.youtube.com/watch?v=short']]);
+      });
     });
 
     it('uses ASC order on unlimited bulk runs (no limitToRecent)', async () => {

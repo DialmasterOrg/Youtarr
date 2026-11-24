@@ -4,6 +4,12 @@ const { EventEmitter } = require('events');
 
 jest.mock('../../logger', () => ({ warn: jest.fn(), info: jest.fn() }));
 
+// stderr of a real bot-checked metadata fetch (yt-dlp 2026.11.22).
+const BOT_CHECK_STDERR =
+  'WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing\n' +
+  'ERROR: [youtube] DpCGv8hzK2I: Sign in to confirm you’re not a bot. This helps protect our community. ' +
+  'Use --cookies-from-browser or --cookies for the authentication.\n';
+
 describe('YtDlpRunner', () => {
   class MockChildProcess extends EventEmitter {
     constructor() {
@@ -180,9 +186,49 @@ describe('YtDlpRunner', () => {
     proc.emit('close', 1);
 
     await expect(runPromise).rejects.toMatchObject({
-      message: 'Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.',
+      message: expect.stringMatching(/^Bot detection encountered/),
       code: 'COOKIES_REQUIRED'
     });
+  });
+
+  it('detects the bot check in the wording YouTube sends, with a typographic apostrophe', async () => {
+    const runPromise = ytDlpRunner.run(['--some-flag'], { timeoutMs: 0 });
+    emitDataAndClose(getLastProcess(), { stderr: BOT_CHECK_STDERR, code: 1 });
+
+    await expect(runPromise).rejects.toMatchObject({ code: 'COOKIES_REQUIRED' });
+  });
+
+  it('says the block is usually temporary when the bot-checked run sent no cookies', async () => {
+    const runPromise = ytDlpRunner.run(['--some-flag'], { timeoutMs: 0 });
+    emitDataAndClose(getLastProcess(), { stderr: BOT_CHECK_STDERR, code: 1 });
+
+    await expect(runPromise).rejects.toMatchObject({
+      usedCookies: false,
+      message: expect.stringMatching(/usually clears on its own/),
+    });
+  });
+
+  it('points at the cookies when the bot-checked run sent them', async () => {
+    const runPromise = ytDlpRunner.run(['--some-flag'], { timeoutMs: 0 });
+    const proc = getLastProcess();
+    proc.cookiesPassed = true;
+    emitDataAndClose(proc, { stderr: BOT_CHECK_STDERR, code: 1 });
+
+    await expect(runPromise).rejects.toMatchObject({
+      usedCookies: true,
+      message: expect.stringMatching(/likely expired or rotated/),
+    });
+  });
+
+  it('fetchMetadata passes a bot check through with its code and message', async () => {
+    const botCheck = Object.assign(new Error('Bot detection encountered. Try again later.'), {
+      code: 'COOKIES_REQUIRED',
+      usedCookies: false,
+    });
+    const runSpy = jest.spyOn(ytDlpRunner, 'run').mockRejectedValueOnce(botCheck);
+
+    await expect(ytDlpRunner.fetchMetadata('https://example.com')).rejects.toBe(botCheck);
+    runSpy.mockRestore();
   });
 
   it('rejects with a YTDLP_TIMEOUT code when the process reports a timeout', async () => {
@@ -276,6 +322,25 @@ describe('YtDlpRunner', () => {
 
     await expect(ytDlpRunner.fetchMetadata('https://example.com')).rejects.toThrow('Failed to fetch video metadata: Request timed out');
     expect(runSpy).toHaveBeenCalled();
+    runSpy.mockRestore();
+  });
+
+  it('tells a failed run that got cookies from one that did not', async () => {
+    const withCookies = ytDlpRunner.run(['--dump-json']);
+    const first = getLastProcess();
+    first.cookiesPassed = true;
+    emitDataAndClose(first, { stderr: 'ERROR: Join this channel', code: 1 });
+    await expect(withCookies).rejects.toMatchObject({ usedCookies: true });
+
+    const anonymous = ytDlpRunner.run(['--dump-json']);
+    emitDataAndClose(getLastProcess(), { stderr: 'ERROR: Join this channel', code: 1 });
+    await expect(anonymous).rejects.toMatchObject({ usedCookies: false });
+  });
+
+  it('fetchMetadata keeps whether the failed run got cookies', async () => {
+    const runSpy = jest.spyOn(ytDlpRunner, 'run').mockRejectedValueOnce(Object.assign(new Error('Join this channel'), { usedCookies: true }));
+
+    await expect(ytDlpRunner.fetchMetadata('https://example.com')).rejects.toMatchObject({ usedCookies: true });
     runSpy.mockRestore();
   });
 

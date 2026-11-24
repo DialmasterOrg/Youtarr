@@ -16,6 +16,7 @@ These settings can be changed from the Settings pages in the web UI.
 - [Cookie Config](#cookie-config)
 - [Notifications](#notifications)
 - [RSS Feeds](#rss-feeds)
+- [Sonarr / Radarr](#sonarr--radarr)
 - [Download Performance](#download-performance)
 - [Advanced Settings](#advanced-settings)
 - [Auto-Removal Settings](#auto-removal-settings)
@@ -72,7 +73,7 @@ Configuration can be modified through:
 
 ### Scheduling
 
-All eight recurring tasks can be configured in **Settings -> Scheduling**. Schedules are stored in `config.json` as cron expressions. Every schedule offers a daily time picker, preset intervals, or a custom cron expression. The 15 and 30 minute presets are available for every task, but the page shows a warning when any task other than automatic downloads is set to run more than once an hour, because those tasks do full-library or network work on every run; the choice is still yours. **Custom cron** accepts five fields (minute, hour, day of month, month, day of week), or six fields with seconds first. Runs must be at least 15 minutes apart: an expression such as `*/5 * * * *` is rejected, and a six-field expression needs a single fixed seconds value.
+All nine recurring tasks can be configured in **Settings -> Scheduling**. Schedules are stored in `config.json` as cron expressions. Every schedule offers a daily time picker, preset intervals, or a custom cron expression. The 15 and 30 minute presets are available for every task, but the page shows a warning when any task other than automatic downloads is set to run more than once an hour, because those tasks do full-library or network work on every run; the choice is still yours. **Custom cron** accepts five fields (minute, hour, day of month, month, day of week), or six fields with seconds first. Runs must be at least 15 minutes apart: an expression such as `*/5 * * * *` is rejected, and a six-field expression needs a single fixed seconds value.
 
 | Config key | Default | Task |
 | --- | --- | --- |
@@ -83,6 +84,7 @@ All eight recurring tasks can be configured in **Settings -> Scheduling**. Sched
 | `sessionCleanupFrequency` | `0 3 * * *` | Expired and old inactive session cleanup |
 | `videoRescanFrequency` | `30 3 * * *` | Filesystem rescan and metadata backfill |
 | `ytdlpUpdateFrequency` | `0 4 * * *` | Automatic yt-dlp update checks |
+| `channelFeedCheckFrequency` | `30 * * * *` | Read each subscribed channel's YouTube RSS feeds (its public uploads, and its members-only uploads when it has any) and, only when one shows an upload Youtarr has not listed yet, list that channel's tabs with yt-dlp so its video list is current before you open it. At most 60 tab listings per run, one at a time with a pause between them; the rest wait for the next run. A channel that has never had a members-only video is asked for that feed once a day. The feeds do not show everything (a changed title, a live stream that ended), so each tab is still listed in full at least once a day when its channel page is opened. YouTube's feeds are often unavailable for a while (hours at a time on some days). Such a run is recorded as skipped and changes nothing: no video list is altered, and channel pages still refresh themselves when opened. |
 | `channelVideoCountsFrequency` | `45 4 * * *` | Look up subscribed channel tabs' public video counts on YouTube for the download percentages. With a YouTube API key every channel is counted each run. Without one, yt-dlp counts up to 200 tabs per run, one at a time with a pause between lookups and without cookies, choosing channels whose counts are at least three days old (oldest attempt first), so a large library fills in over several runs; channel pages you open are counted on demand. A run stops at the next channel while a download is running and continues on a later run. If YouTube rate-limits or bot-checks the lookups, refreshes pause for 6 hours (doubling up to 24 hours while it keeps happening). If cookies are configured and YouTube bot-checks two runs in a row that send no cookies (common on VPS and datacenter IPs), these runs switch to sending your cookies, still one lookup at a time, and try again without them after 30 days; on an IP that always needs cookies, that retry costs about a day of missed counts each month. Startup also counts channels whose counts are missing or old. |
 
 Times use the server timezone, shown on the Scheduling page and configured through `TZ`. Interval presets follow the clock: "Every 4 hours" runs at 00:00, 04:00, 08:00, and so on. Changing a schedule takes effect after saving, without a restart or immediate execution. To run a task immediately, use its **Run now** button. Running tasks are allowed to finish. Invalid schedule submissions are rejected without saving other changes.
@@ -94,7 +96,7 @@ The Scheduling page also shows what the scheduler is actually doing: an **Upcomi
 **Run now** starts a task immediately with the saved settings, and the run appears in the history with the `manual` trigger. The button is disabled, with the reason shown next to it:
 - while the task is running, whether that run came from its schedule, a startup pass, or another manual start (the Maintenance rescan, Watch Status **Sync Now**, the YT-DLP page's update button, or **Download new** in Downloads). For automatic downloads, "running" lasts until the sweep's last download finishes, including its playlist downloads and any automatic retries. The run's history entry records the check for new videos and the queuing of downloads; the downloads themselves are summarized in Download History and notifications;
 - while its feature is turned off (watch status sync, automatic yt-dlp updates; the card links to the page that turns it on);
-- for automatic downloads, while downloads are paused by a storage limit;
+- for automatic downloads, while downloads are paused (by a storage limit, or because the downloads folder looks unavailable);
 - for watch status sync, while no media server is connected;
 - for channel video counts without a YouTube API key, while YouTube has paused lookups or a download is running.
 
@@ -165,6 +167,15 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
   - **"Video subfolders"** (`false`): channel always uses per-video subfolders, even when the global default is flat
 - **Note**: Only affects new downloads; existing files are not moved. The manual download dialog can override the structure for a single download ("Force flat" or "Force individual video subfolders"); its default option ("Use channel/global settings") follows the channel setting and this global default.
 
+### Protect Manual Downloads
+- **Config Key**: `protectManualDownloads`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Description**: The download dialog has a **Protect this download from auto-removal** switch. When it is on, every video that download brings in is marked Protected, so [auto-removal](#auto-removal-settings) never deletes it. This setting decides whether that switch starts on or off; you can still change it for each download.
+- **Applies to**: downloads you start yourself through the download dialog (pasted URLs, videos picked on a channel, playlist, Videos or Find Videos page, a single video's download button, and a channel's Download All). Scheduled automatic downloads, the **Download new from all channels** run, and downloads sent with an API key are never protected by it.
+- **Note**: Protection is only ever added. Re-downloading a video that is already Protected with the switch off leaves it Protected, and a video that was skipped because it is already downloaded is not changed. Remove protection from the video itself.
+- **UI**: Settings -> Core -> **Downloads** -> **Protect manual downloads**.
+
 ### Video Filename Template
 - **Config Key**: `videoFilenamePrefix`
 - **Type**: `string`
@@ -178,7 +189,7 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
   - **Date prefix** (`%(upload_date>%Y-%m-%d)s - %(title).64B`): `2025-10-17 - ESCAPING 99 Nights ... [Cbq15X05wyY].mp4`
   - **Plex YouTube-Agent** (`%(upload_date>%Y_%m_%d)s %(title).64B`): `2025_10_17 ESCAPING 99 Nights ... [Cbq15X05wyY].mp4` (compatible with [Absolute-Series-Scanner](https://github.com/ZeroQI/Absolute-Series-Scanner) and [YouTube-Agent.bundle](https://github.com/ZeroQI/YouTube-Agent.bundle))
   - **Title only** (`%(title).64B`): `ESCAPING 99 Nights ... [Cbq15X05wyY].mp4`
-- **UI**: A live preview in **Settings -> Core Settings -> File Structure Settings** shows the rendered folder and file names against a sample video, with length warnings (yellow > 110 chars, red > 130 chars on the rendered name).
+- **UI**: A live preview under **Video filename template** in Settings -> Core -> **Naming** shows the rendered folder and file names against a sample video, with length warnings (yellow > 110 chars, red > 130 chars on the rendered name).
 
 ### Enable Subtitles
 - **Config Key**: `subtitlesEnabled`
@@ -191,7 +202,7 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
 - **Type**: `string`
 - **Default**: `"en"`
 - **Description**: Preferred subtitle language(s) when downloading subtitle files for videos (ISO 639-1 code)
-- **Examples**: `"en"` (English), `"es"` (Spanish), `"fr"` (French)
+- **Examples**: `"en"` (English), `"es"` (Spanish), `"fr"` (French), `"pl"` (Polish)
 - **Variants**: Each selected language also matches YouTube's regional and script variants of it, so `"en"` downloads an uploaded `en-GB` or `en-US` track and `"zh"` downloads `zh-Hans`, `zh-Hant` or `zh-SG`. Each track is written as its own `.srt` file (for example `.en-GB.srt`). yt-dlp requests the auto-generated track for the bare code as well, and YouTube's machine translations include `pt-PT` next to `pt`, so after the download Youtarr prunes per selected language: when the video has uploaded tracks for it, only those are kept; otherwise the auto-generated track for the bare code is kept and other auto-generated variants are dropped (`pt-PT`); when there is no bare track either, everything is kept (Chinese has no bare `zh` auto-generated track, so `zh-Hans` and `zh-Hant` are both kept). Every requested track costs one subtitle request plus a 5-second pause, including the ones pruned afterwards: `pt` fetches `pt-PT` on every video with auto-generated captions, and `zh` fetches both scripts.
 - **Auto-generated captions**: With no uploaded track for a selected language, the auto-generated captions are kept: the video's own when it is spoken in that language, otherwise YouTube's machine translation into it, as before. The original-language auto captions (`en-orig`) are never matched by a bare code; `"en-orig"` is the "English (Original/Uploaded)" option in the UI.
 - **Note**: Only displayed when subtitles are enabled. A value hand-edited into `config.json` that is not a bare language code (such as `"pt-BR"`, yt-dlp's `"all"` alias, an exclusion like `"-live_chat"`, or a yt-dlp regex) is passed to yt-dlp unchanged. Pruning runs only when every entry is a plain language code (`"en"`, `"en-orig"`, `"pt-BR"`) and the custom yt-dlp arguments do not set `--sub-langs`, `--srt-langs` or `--all-subs` (or an abbreviation yt-dlp accepts, such as `--sub-lang`); a code listed verbatim is never pruned.
@@ -276,7 +287,7 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
 
 ## Jellyfin Integration
 
-These fields are required only when you want Youtarr to mirror playlists to Jellyfin as native playlists. Channel downloads work without them.
+These fields are required only when you want Youtarr to refresh your Jellyfin libraries after downloads, mirror playlists to Jellyfin as native playlists, or sync watch status. Channel downloads work without them.
 
 ### Enable Jellyfin
 - **Config Key**: `jellyfinEnabled`
@@ -305,19 +316,19 @@ These fields are required only when you want Youtarr to mirror playlists to Jell
 - **Config Key**: `jellyfinVideoLibraryIds`
 - **Type**: `array<string>`
 - **Default**: `[]`
-- **Description**: Library IDs that contain your Youtarr videos. Optional and safe to leave blank; Youtarr matches downloaded videos to Jellyfin items across all of your libraries.
+- **Description**: Library IDs that contain your Youtarr videos. Optional. When set, Youtarr refreshes only these libraries after a download job adds videos; when blank, it asks Jellyfin to refresh every library. To find an ID, open the library from Jellyfin's home screen and copy the `topParentId` value from the address bar. Playlist and watch status sync ignore this field and match videos across all of your libraries.
 
 ## Emby Integration
 
-These fields work like the Jellyfin fields above, with `emby*` names. They're required only when you want Youtarr to mirror playlists to Emby as native playlists; channel downloads work without them. See [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md) for setup details.
+These fields work like the Jellyfin fields above, with `emby*` names. They're required only when you want Youtarr to refresh your Emby libraries after downloads, mirror playlists to Emby as native playlists, or sync watch status; channel downloads work without them. See [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md) for setup details.
 
 | Config Key | Type | Default | Description |
 | :--------- | :--- | :------ | :---------- |
-| `embyEnabled` | `boolean` | `false` | Turn Emby playlist sync on or off. |
+| `embyEnabled` | `boolean` | `false` | Turn the Emby connection (library refresh after downloads, playlist sync, watch status sync) on or off. |
 | `embyUrl` | `string` | `""` | Base URL of your Emby server (e.g., `http://192.168.1.100:8096`). |
 | `embyApiKey` | `string` | `""` | Created in Emby under **Settings -> Advanced -> API Keys**. Redacted in logs. |
 | `embyUserId` | `string` | `""` | User account that will own Youtarr-managed playlists. Open the **Emby User** dropdown in the UI to load accounts from your server and pick one. |
-| `embyVideoLibraryIds` | `array<string>` | `[]` | Library IDs that contain your Youtarr videos. Optional and safe to leave blank; Youtarr matches videos across all of your libraries. |
+| `embyVideoLibraryIds` | `array<string>` | `[]` | Library IDs that contain your Youtarr videos. Optional. When set, Youtarr refreshes only these libraries after a download job adds videos; when blank, it asks Emby to refresh every library. To find an ID, open the library from Emby's home screen and copy the `parentId` value from the address bar (a short number, not the longer `serverId`). Playlist and watch status sync ignore this field. |
 
 ## Watch Status Sync
 
@@ -434,6 +445,41 @@ Sync is one-way (server -> Youtarr). Non-owner Plex users come from the server's
 - **Default**: `false`
 - **Description**: Use cookies for YouTube authentication
 - **Note**: May be required in some cases to get around YouTube bot detection. Enable only when needed: logged-in sessions use different YouTube player clients, and YouTube has been restricting stream formats on those for some accounts. When cookies are enabled Youtarr adds the `mweb` and `web_safari` player clients to every video download and metadata fetch; free (non-Premium) accounts affected by the restriction top out at 1080p. See "Downloads Are Only 360p With Cookies Enabled" in [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
+### Members-Only Videos
+With cookies enabled, members-only videos are downloaded like any other video
+when the account in the cookies is a member of the channel. Without cookies they
+are skipped, as before.
+
+Using cookies from your main YouTube account, usually the one with the
+membership, is at your own risk: YouTube can restrict or ban accounts used for
+automated downloads. See the yt-dlp warning in
+[Exporting YouTube cookies](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies).
+
+- Each download, URL check, or first look at a video asks YouTube whether the
+  cookies can open the video and remembers the answer for 24 hours. Replacing or
+  editing the cookie file forgets every answer. A video Youtarr has already
+  saved details for is not asked again on its own: once its answer is older
+  than 24 hours it shows as **Members: not checked** until the next download or
+  until you open it and choose **Check access**.
+- A video the account is not a member of is shown as **Members: no access** and
+  is left out of automatic channel and playlist downloads and Download All for
+  24 hours. Open the video and choose **Check again** after joining the
+  channel, or add it manually: a manual download always asks again.
+- Nothing is recorded about membership when the cookies could not really be
+  used: the file has no signed-in YouTube session, its login cookies have
+  expired, YouTube rejected them (rotated), or the file could not be read for
+  the run. Downloads then skip members-only videos as without cookies, manual
+  ones included. Refresh the cookies and try again.
+- When YouTube rejects cookies whose login cookies have not expired yet, the
+  download or check that saw it still tries the video. After that, Youtarr
+  remembers the rejection for those cookies and skips members-only videos until
+  the cookie file changes, 24 hours pass, or a members-only video opens with
+  them. A restart forgets the rejection, so the next run tries once more.
+- A video that stops being members-only is noticed on its next check. Without
+  cookies, open it and choose **Check again**.
+- Downloads requested through the External API never use the cookies'
+  membership: their members-only videos are skipped as without cookies.
 
 ### Custom Cookies Uploaded
 - **Config Key**: `customCookiesUploaded`
@@ -705,6 +751,82 @@ Settings for the private RSS feed of downloaded videos, served at `/feeds/downlo
 - **Default**: Not set; Youtarr creates it the first time the feed is turned on
 - **Description**: The secret in the feed URL. Youtarr manages it: use **Create new URL** in Settings -> RSS Feeds to replace it. Settings saves never change it.
 
+## Sonarr / Radarr
+
+Settings for the Sonarr/Radarr bridge, served under `/arr/`. See [Sonarr and Radarr](SONARR_RADARR.md) for setup. A value outside its range is corrected at startup.
+
+### Bridge Enabled
+- **Config Key**: `arrBridgeEnabled`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Description**: Turns the bridge on. While it's off, every `/arr/` path answers 404.
+
+### Categories
+- **Config Key**: `arrBridgeCategories`
+- **Type**: `array` of `{ "name": string, "subfolder": string | null }`
+- **Default**: `[{ "name": "tv", "subfolder": null }, { "name": "movies", "subfolder": null }]`
+- **Range**: 1 to 10 categories; a name uses letters, digits, `-` and `_` (up to 32 characters) and must be unique
+- **Description**: The download client categories Youtarr answers to. Each Sonarr or Radarr instance uses one. `subfolder` is where that category's videos are downloaded: a subfolder name, `null` for your normal download settings, `"##ROOT##"` for the downloads folder itself, or `"##USE_GLOBAL_DEFAULT##"` for the default subfolder.
+
+### Loose Matching
+- **Config Key**: `arrBridgeLooseMatching`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Description**: Accepts an episode number without a season and a movie without its year. It can offer the wrong video, so turn off automatic search for the Youtarr indexer in Sonarr and Radarr while it's on.
+
+### Excluded Words
+- **Config Key**: `arrBridgeExcludeTerms`
+- **Type**: `array` of strings
+- **Default**: a list of words such as `trailer`, `clip`, `reaction` and `recap`
+- **Range**: at most 100 entries of up to 60 characters
+- **Description**: A video whose title has one of these words or phrases is never offered.
+
+### Shortest Episode and Shortest Movie
+- **Config Keys**: `arrBridgeMinTvMinutes`, `arrBridgeMinMovieMinutes`
+- **Type**: `number`
+- **Default**: `10` and `60`
+- **Range**: 0 to 600
+- **Description**: Shorter videos are never offered. With a Sonarr or Radarr connection, the runtime the app reports is used instead.
+
+### Staging Path
+- **Config Key**: `arrBridgeStagingPath`
+- **Type**: `string`
+- **Default**: `""`
+- **Description**: The staging folder (`.arr-staging` in your downloads folder) as Sonarr and Radarr see it. Leave it empty when it's mounted at the same path as in Youtarr. An absolute path: a Linux or macOS path (`/data/youtube/.arr-staging`), a Windows drive path (`E:\Youtube\.arr-staging`) or a Windows share path (`\\nas\youtube\.arr-staging`).
+
+### Staged File Retention
+- **Config Key**: `arrBridgeStagingRetentionDays`
+- **Type**: `number`
+- **Default**: `7`
+- **Range**: 1 to 365
+- **Description**: A staged file that Sonarr or Radarr never imported is removed after this many days. The copy in your Youtarr library stays.
+
+### Resolution for Sonarr and Radarr
+- **Config Key**: `arrBridgeResolution`
+- **Type**: `string`
+- **Default**: `""` (use [`preferredResolution`](#preferred-resolution))
+- **Values**: `""`, `"2160"`, `"1080"`, `"720"`, `"480"`
+- **Description**: The resolution Youtarr downloads grabs at, as set when the download starts. It is a ceiling: a video that only exists in a lower resolution downloads at that, and Sonarr or Radarr read the real resolution from the file on import. A release is labeled with the video's real resolution, never more than this one. 1440p and 360p are not offered because Sonarr and Radarr have no quality for them. A video that is already in your Youtarr library is handed over as it is. See [Resolution](SONARR_RADARR.md#resolution).
+
+### Label Limit for Sonarr and Radarr
+- **Config Key**: `arrBridgeLabelLimit`
+- **Type**: `string`
+- **Default**: `""` (no limit: a release is labeled with the video's real resolution)
+- **Values**: `""`, `"1080"`, `"720"`, `"480"`
+- **Description**: The highest resolution a release is labeled with. A lower label makes Sonarr and Radarr pick Youtarr only when nothing better is offered. It only changes the label: the video is still downloaded at [`arrBridgeResolution`](#resolution-for-sonarr-and-radarr), and Sonarr and Radarr read its real quality from the file when they import it. See [Using Youtarr beside other indexers](SONARR_RADARR.md#using-youtarr-beside-other-indexers).
+
+### Remove After Import
+- **Config Key**: `arrBridgeRemoveAfterImport`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Description**: When on, Youtarr deletes its own copy of a grabbed video once Sonarr or Radarr has imported it. It needs the connection to that Sonarr or Radarr, which is how Youtarr confirms the import; a video whose import is not confirmed is kept. Only a video Youtarr downloaded for the grab is removed, never one that was already in your library. See [Removing Youtarr's copy after the import](SONARR_RADARR.md#removing-youtarrs-copy-after-the-import).
+
+### Bridge Key and Connections
+- **Config Keys**: `arrBridgeApiKey`, `arrBridgeSonarrUrl`, `arrBridgeSonarrApiKey`, `arrBridgeRadarrUrl`, `arrBridgeRadarrApiKey`
+- **Type**: `string`
+- **Default**: Not set
+- **Description**: The key Sonarr and Radarr send to Youtarr, and the optional connections to your own Sonarr and Radarr. Youtarr manages them: use **Create new key** and **Test and save** in Settings -> Sonarr / Radarr. Settings saves never change them.
+
 ## Download Performance
 
 ### Download Socket Timeout
@@ -773,7 +895,7 @@ Settings for the private RSS feed of downloaded videos, served at `/feeds/downlo
 - **Default**: `""` (empty)
 - **Description**: HTTP/HTTPS proxy for downloads
 - **Format**: `"http://proxy:port"` or `"socks5://proxy:port"`
-- **Note**: The proxy is used by yt-dlp for all YouTube requests (downloads, metadata, thumbnails). Some operations like thumbnail downloads and RSS feed checks first attempt a direct HTTP request with a 15-second timeout before falling back to yt-dlp. SOCKS5 proxy users may notice brief delays (~15 seconds) during these fallbacks when adding or refreshing channels, but the operations will complete successfully via yt-dlp.
+- **Note**: The proxy is used by yt-dlp for all YouTube requests (downloads, metadata, thumbnails). Some operations like thumbnail downloads and RSS feed checks first attempt a direct HTTP request with a 15-second timeout before falling back to yt-dlp. SOCKS5 proxy users may notice brief delays (~15 seconds) during these fallbacks when adding or refreshing channels, but the operations will complete successfully via yt-dlp. The hourly check of subscribed channels' RSS feeds ("Check channels for new videos") and the check for videos removed from YouTube also connect to YouTube directly, without the proxy.
 
 ### IP Family
 - **Config Key**: `ytdlpIpFamily`
@@ -799,7 +921,7 @@ Settings for the private RSS feed of downloaded videos, served at `/feeds/downlo
 - **Allowed options**: Each option you enter is resolved to its canonical yt-dlp name (so shortened names and short forms like `-N 4` or `--embed-th` work) and checked against an allowlist in `server/modules/download/ytdlpOptionTable.js`. Options fall into three groups:
   - **Allowed**: safe tuning knobs (format, retries, subtitles, geo-bypass, ffmpeg embeds, etc.) are accepted as entered.
   - **Allowed with a warning**: safe options that usually break downloads or override something Youtarr manages (e.g. `--simulate`, `--quiet`, `--extract-audio`, `--no-match-filters`), including options that change the file types Youtarr looks for (`.mp4` video, `.mp3` audio, `.jpg` thumbnails), such as `--merge-output-format`, `--recode-video`, `--audio-format`, and `--convert-thumbnails`. They still run; the Settings page shows why they may cause problems.
-  - **Blocked**: options that can run programs or load code (`--exec`, `--use-postprocessor`, `--plugin-dirs`, ...) or pass raw arguments to other programs (`--postprocessor-args`, `--downloader-args`), read or write files on the server (`--batch-file`, `--load-info-json`, `--config-locations`, ...), rewrite the video details Youtarr names files from (`--parse-metadata`, `--replace-in-metadata`), replace the yt-dlp binary (`--update`, `--update-to`), put credentials or sign-in data in plain text or in the logs (`--username`, `--password`, `--netrc`, `--add-headers`, `--print-traffic`, ...), remove Youtarr's own post-processing (`--no-exec`), or take over a resource Youtarr manages (`--output`/`--paths`, `--cookies`, `--download-archive`, `--proxy`, `-4`/`-6`, `--limit-rate`, `--sleep-requests`). Anything Youtarr does not recognize is blocked too (fail closed).
+  - **Blocked**: options that can run programs or load code (`--exec`, `--use-postprocessor`, `--plugin-dirs`, ...) or pass raw arguments to other programs (`--postprocessor-args`, `--downloader-args`), read or write files on the server (`--batch-file`, `--load-info-json`, `--config-locations`, ...), rewrite the video details Youtarr names files from (`--parse-metadata`, `--replace-in-metadata`), cut the video ID off file names, which Youtarr needs to identify each download (`--trim-filenames`), replace the yt-dlp binary (`--update`, `--update-to`), put credentials or sign-in data in plain text or in the logs (`--username`, `--password`, `--netrc`, `--add-headers`, `--print-traffic`, ...), remove Youtarr's own post-processing (`--no-exec`), or take over a resource Youtarr manages (`--output`/`--paths`, `--cookies`, `--download-archive`, `--proxy`, `-4`/`-6`, `--limit-rate`, `--sleep-requests`). Anything Youtarr does not recognize is blocked too (fail closed).
 - **What happens to a blocked option**: a blocked option (and its values) is skipped; the rest of your options still apply. Options Youtarr cannot read are skipped too: a missing value skips everything after it, and an unclosed quote skips all custom args. The Settings page lists what is skipped and why for the saved args (on load and after each Save), and for unsaved edits when you click Validate. Saving a *changed* value that contains a blocked option is rejected (400); an unchanged value is not re-checked, so saving other settings is never blocked by previously-saved custom args.
 - **Order**: Custom args are appended LAST in the yt-dlp command, after Youtarr's managed flags. Per yt-dlp's last-wins semantics, your flags can override managed ones (e.g. `--retries 5` overrides Youtarr's default `--retries 2`).
 - **Note**: Power-user feature. Incorrect flags can prevent downloads from working entirely or break Youtarr's behavior in unexpected ways. Use the "Validate Arguments" button in the UI to check your args before saving; it reports blocked and risky options and argparse-checks the rest against yt-dlp.
@@ -942,6 +1064,8 @@ While paused:
 
 If a measurement fails (for example, disk space cannot be read), that limit does not pause downloads.
 
+Downloads also pause the same way, with no setting to configure, while the downloads folder looks unavailable and videos are on record there: it does not exist, cannot be read, is empty, or most downloaded videos are not where Youtarr saved them (a share that is not mounted, or a volume mapping that points at a different folder). New files would otherwise land outside your library. They resume on their own once the folder is back, or as soon as a rescan repairs the stored paths of files you moved yourself. The folder check is reused for 30 seconds. If a check takes longer than 10 seconds, Youtarr keeps its previous answer until the share responds, so a slow, dead share does not resume downloads; with no previous answer, it does not pause them. See [Every Video Shows as Missing After I Moved the Library](TROUBLESHOOTING.md#every-video-shows-as-missing-after-i-moved-the-library).
+
 Size values must be a positive whole number followed by `MB`, `GB` or `TB` (for example `500GB`), or blank for off. Saving any other value from the UI or API is rejected. A malformed value hand-edited into `config.json` is fixed when the file is loaded (at startup, or when Youtarr notices the edit while running): spacing and unit case are corrected where possible (`"500 gb"` becomes `"500GB"`), and anything else, including `0`, is cleared to off, with a warning in the logs. This also applies to `autoRemovalUsageLimit`.
 
 When combining these with Auto Removal, set the pause usage limit at or above `autoRemovalUsageLimit`, and the pause free-space minimum at or below `autoRemovalFreeSpaceThreshold`. Otherwise cleanup stops before storage is back within the pause limit and downloads stay paused. The settings page warns about this.
@@ -1033,10 +1157,12 @@ The Maintenance page's last-run summary comes from the scheduled task run histor
     "videosMarkedMissing": 3,
     "videosScanned": 8421,
     "filesFoundOnDisk": 8423,
+    "videosNotMarkedMissing": 0,
+    "videosMissing": 2,
     "errorMessage": null
   }
   ```
-- **Description**: The outcome of the most recent filesystem reconciliation pass (the `backfillVideoMetadata` run), whether it was started by the schedule, the server-startup pass, or the manual "Rescan files on disk" action on the Maintenance & Rescan settings page. Surfaced read-only on that page so users can see when the last scan ran and what it found or fixed.
+- **Description**: The outcome of the most recent filesystem reconciliation pass (the `backfillVideoMetadata` run), whether it was started by the schedule, the server-startup pass, or the manual "Rescan files on disk" action on the Maintenance & Rescan settings page. Surfaced read-only on that page so users can see when the last scan ran and what it found or fixed. `videosNotMarkedMissing` counts videos left alone because their folder looked unmounted or most of its videos were not found; `videosMissing` is how many videos were missing after the run (`null` for runs recorded before it was counted). `timed-out` only appears for runs from releases before the folder scan was exempt from the time limit. While a rescan runs, the same endpoint also returns `progress` (`phase` `walk` or `rows`, folders and video files found so far, videos checked out of the total).
 - **Note**: Managed by the application; do not edit by hand.
 
 ## Logging
@@ -1076,6 +1202,12 @@ These fields are managed automatically by the application:
 **Default**: Auto-generated
 **Description**: Unique installation identifier, used as the Plex client identifier
 **Note**: Sent to Plex as `X-Plex-Client-Identifier` and as the `clientID` in the Plex OAuth URL. Editing it by hand changes the device identity Plex sees, so leave it alone.
+
+### supportPromptShownAt
+**Type**: `string | null` (ISO 8601 timestamp)
+**Default**: `null`
+**Description**: When the one-time "support Youtarr" prompt was shown. Youtarr shows that prompt a single time, after at least 200 downloaded videos and 14 days of use, and never on Elfhosted. Once this is set the prompt never appears again. The donation links stay available under Settings > About.
+**Note**: Set it back to `null` to let the prompt appear again.
 
 ## Configuration Examples
 

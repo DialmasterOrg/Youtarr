@@ -1,5 +1,7 @@
 'use strict';
 
+const { BOT_CHECK_PATTERN } = require('../ytdlpBotCheck');
+
 const ERROR_CODES = Object.freeze({
   EXPIRED_COOKIES: 'EXPIRED_COOKIES',
   BOT_CHECK: 'BOT_CHECK',
@@ -34,7 +36,7 @@ const HTTP_STATUS = {
 };
 
 const PATTERNS = [
-  { re: /sign in to confirm you are not a bot/i, code: ERROR_CODES.BOT_CHECK },
+  { re: BOT_CHECK_PATTERN, code: ERROR_CODES.BOT_CHECK },
   { re: /captcha/i, code: ERROR_CODES.BOT_CHECK },
   { re: /please sign in/i, code: ERROR_CODES.EXPIRED_COOKIES },
   { re: /cookie.*expired/i, code: ERROR_CODES.EXPIRED_COOKIES },

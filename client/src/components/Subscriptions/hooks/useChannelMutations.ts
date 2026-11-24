@@ -110,7 +110,8 @@ export const useChannelMutations = ({ token, onRefresh }: UseChannelMutationsOpt
       if (response?.status === 403) {
         return {
           success: false,
-          message: 'Authentication issue. Please check your cookies configuration.',
+          // The server sends 403 for YouTube's bot check and explains it.
+          message: response.data?.message || 'Authentication issue. Please check your cookies configuration.',
         };
       }
       if (response?.status === 404) {

@@ -13,6 +13,8 @@ describe('VideosModule', () => {
   let mockSequelize;
   let mockVideo;
   let mockLibraryRootCheck;
+  let mockMissingGate;
+  let mockStorageGuard;
   let mockWatchStatusQueries;
   let mockFs;
   let mockConfigModule;
@@ -145,11 +147,23 @@ describe('VideosModule', () => {
     jest.doMock('../youtubeExistenceCheck', () => mockYoutubeExistenceCheck);
 
     // The downloads folder looks mounted unless a test says otherwise.
+    // checkLibraryRoot for the rescan, checkLibraryAvailable for the page-load file check.
     mockLibraryRootCheck = {
       ...jest.requireActual('../libraryRootCheck'),
       checkLibraryRoot: jest.fn().mockResolvedValue({ ok: true }),
+      checkLibraryAvailable: jest.fn().mockResolvedValue({ ok: true }),
+      forgetStoredFilesProbe: jest.fn(),
     };
     jest.doMock('../libraryRootCheck', () => mockLibraryRootCheck);
+
+    // The walk finds the library unless a test says otherwise.
+    mockMissingGate = {
+      loadMissingGate: jest.fn().mockResolvedValue({ held: [], holdsBack: () => false, message: null }),
+    };
+    jest.doMock('../rescanMissingGate', () => mockMissingGate);
+
+    mockStorageGuard = { recheckLibrary: jest.fn().mockResolvedValue({ paused: false, reasons: [] }) };
+    jest.doMock('../storageGuard', () => mockStorageGuard);
 
     jest.doMock('../nfoGenerator', () => mockNfoGenerator);
 
@@ -782,7 +796,7 @@ describe('VideosModule', () => {
         }
       ];
       const failedCheck = { ok: false, reason: 'empty', path: '/test/output/dir', message: 'The downloads folder is empty.' };
-      mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(failedCheck);
+      mockLibraryRootCheck.checkLibraryAvailable.mockResolvedValue(failedCheck);
       mockVideo.count.mockResolvedValue(1);
       mockVideo.findAll.mockResolvedValue(mockVideos);
       mockVideo.aggregate.mockResolvedValue([]);
@@ -1086,6 +1100,25 @@ describe('VideosModule', () => {
       expect(duplicates.size).toBe(0);
     });
 
+    test('never walks the Sonarr/Radarr staging folder, whose hardlinks are not library files', async () => {
+      mockFs.readdir.mockImplementation(async (dir) => {
+        if (dir === '/test/dir') {
+          return [
+            { name: '.arr-staging', isDirectory: () => true, isFile: () => false },
+            { name: 'Channel1', isDirectory: () => true, isFile: () => false },
+          ];
+        }
+        return [{ name: 'video [abc123].mp4', isDirectory: () => false, isFile: () => true }];
+      });
+      mockFs.stat.mockResolvedValue({ size: 2000 });
+
+      const { fileMap, duplicates } = await VideosModule.scanForVideoFiles('/test/dir');
+
+      expect(mockFs.readdir).not.toHaveBeenCalledWith('/test/dir/.arr-staging', expect.anything());
+      expect(fileMap.get('abc123').videoFilePath).toBe('/test/dir/Channel1/video [abc123].mp4');
+      expect(duplicates.size).toBe(0);
+    });
+
     test('should handle duplicate files and keep larger one', async () => {
       mockFs.readdir.mockResolvedValueOnce([
         { name: 'video1 [abc123].mp4', isDirectory: () => false, isFile: () => true },
@@ -1311,9 +1344,9 @@ describe('VideosModule', () => {
       );
     });
 
-    test('preserves already-flushed probe results when the time limit trips mid-chunk', async () => {
-      // Fake clock: each ffprobe costs 1s, so the 50s limit trips after the
-      // first 100 probes have been flushed but before the chunk completes.
+    test('stops probing once the probe budget is spent but finishes the run', async () => {
+      // Fake clock: each ffprobe costs 1s, so the 50s budget is spent during
+      // the first 100-row slice; the second slice is reconciled unprobed.
       let clock = 0;
       const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => clock);
       mockExecFile.mockImplementation((file, args, opts, cb) => {
@@ -1350,8 +1383,37 @@ describe('VideosModule', () => {
       const result = await VideosModule.backfillVideoMetadata({ timeLimit: 50000 });
       nowSpy.mockRestore();
 
-      expect(result.timedOut).toBe(true);
+      expect(result.status).toBe('completed');
+      expect(result.processed).toBe(VIDEO_COUNT);
+      expect(result.probesDeferred).toBe(50);
+      expect(mockExecFile).toHaveBeenCalledTimes(100);
       expect(mockVideo.update).toHaveBeenCalledTimes(100);
+    });
+
+    test('starts the probe budget after the walk, however long the walk took', async () => {
+      let clock = 0;
+      const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => clock);
+      // The walk alone takes far longer than the budget.
+      mockFs.readdir.mockImplementationOnce(async () => {
+        clock += 60 * 60 * 1000;
+        return [{ name: 'Video [abc12345678].mp4', isDirectory: () => false, isFile: () => true }];
+      });
+      mockFs.stat.mockResolvedValue(fileStat(1000));
+      mockExecFile.mockImplementation((file, args, opts, cb) => cb(null, '1920,1080\n'));
+      mockVideo.count.mockResolvedValueOnce(1);
+      mockVideo.findAll.mockResolvedValueOnce([
+        dbRow({ filePath: '/test/output/dir/Video [abc12345678].mp4', fileSize: '1000' })
+      ]);
+
+      const result = await VideosModule.backfillVideoMetadata({ timeLimit: 50000 });
+      nowSpy.mockRestore();
+
+      expect(result.status).toBe('completed');
+      expect(result.probesDeferred).toBe(0);
+      expect(mockVideo.update).toHaveBeenCalledWith(
+        { ...PRESENT_COLUMNS, video_resolution: '1920x1080' },
+        { where: expect.objectContaining({ id: 1 }) },
+      );
     });
 
     test('runs ffprobes concurrently but never more than 4 at once', async () => {
@@ -1477,24 +1539,175 @@ describe('VideosModule', () => {
       expect(result.updated).toBe(0);
     });
 
-    test('should respect time limit', async () => {
-      // Create a long-running scenario
-      // Mock readdir to take a long time (this will cause time limit to exceed during file scanning)
+    test('finishes a walk that takes longer than the time limit and reconciles every row', async () => {
       mockFs.readdir.mockImplementation(() =>
         new Promise(resolve => setTimeout(() => resolve([]), 200))
       );
-
-      mockVideo.count.mockResolvedValueOnce(1000);
-      // Don't need to mock findAll since we'll timeout during the file scan
+      mockVideo.count.mockResolvedValueOnce(1);
+      mockVideo.findAll.mockResolvedValueOnce([
+        dbRow({ youtubeId: 'missing123', filePath: '/test/missing.mp4', fileSize: '1000', video_resolution: '1920x1080' })
+      ]);
+      mockFs.stat.mockRejectedValue(fsError('ENOENT'));
 
       const result = await VideosModule.backfillVideoMetadata(100); // 100ms limit
 
-      expect(result.timedOut).toBe(true);
-      expect(result.timeElapsed).toBeDefined();
+      expect(result.status).toBe('completed');
+      expect(result.timedOut).toBeUndefined();
+      expect(result.processed).toBe(1);
+      expect(result.removed).toBe(1);
+    });
+
+    test('logs walk progress while a long walk runs', async () => {
+      let clock = 0;
+      const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => clock);
+      // Each folder listing takes 20 seconds: the 30-second log interval passes during the walk.
+      mockFs.readdir.mockImplementation(async (dir) => {
+        clock += 20 * 1000;
+        if (dir === '/test/output/dir') {
+          return ['A', 'B', 'C'].map((name) => ({ name, isDirectory: () => true, isFile: () => false }));
+        }
+        return [];
+      });
+      mockVideo.count.mockResolvedValueOnce(0);
+
+      await VideosModule.backfillVideoMetadata();
+      nowSpy.mockRestore();
+
       expect(mockLogger.info).toHaveBeenCalledWith(
-        { elapsed: expect.any(Number) },
-        'Video metadata backfill stopped (time limit reached), will continue at next scheduled run'
+        expect.objectContaining({ context: 'backfill' }),
+        expect.stringMatching(/^Scanning the downloads folder: \d+ folders, 0 video files so far$/)
       );
+    });
+
+    test('broadcasts walk and row progress to open Maintenance pages', async () => {
+      let clock = 0;
+      const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => clock);
+      mockFs.readdir.mockImplementation(async () => {
+        clock += 2000;
+        return [{ name: 'Video [abc12345678].mp4', isDirectory: () => false, isFile: () => true }];
+      });
+      mockFs.stat.mockResolvedValue(fileStat(1000));
+      mockVideo.count.mockResolvedValueOnce(1);
+      mockVideo.findAll.mockResolvedValueOnce([
+        dbRow({ filePath: '/test/output/dir/Video [abc12345678].mp4', fileSize: '1000', video_resolution: '1920x1080' })
+      ]);
+
+      await VideosModule.backfillVideoMetadata({ trigger: 'manual' });
+      nowSpy.mockRestore();
+
+      expect(mockMessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast', null, 'server', 'rescanStatus',
+        expect.objectContaining({
+          running: true,
+          trigger: 'manual',
+          progress: expect.objectContaining({ phase: 'walk', foldersScanned: 1, filesFound: 1 }),
+        })
+      );
+    });
+
+    test('keeps scanning when a progress broadcast fails', async () => {
+      mockMessageEmitter.emitMessage.mockImplementation((...args) => {
+        if (args[4]?.progress) throw new Error('websocket unavailable');
+      });
+      mockFs.readdir.mockResolvedValueOnce([]);
+      mockVideo.count.mockResolvedValueOnce(0);
+
+      const result = await VideosModule.backfillVideoMetadata();
+
+      expect(result.status).toBe('completed');
+    });
+
+    test('reports its progress while running and nothing once finished', async () => {
+      let seenDuringWalk;
+      mockFs.readdir.mockImplementationOnce(async () => {
+        seenDuringWalk = VideosModule.getRescanProgress();
+        return [];
+      });
+      mockVideo.count.mockResolvedValueOnce(0);
+
+      await VideosModule.backfillVideoMetadata();
+
+      expect(seenDuringWalk).toEqual(expect.objectContaining({ phase: 'walk', startedAt: expect.any(String) }));
+      expect(VideosModule.getRescanProgress()).toBeNull();
+    });
+
+    test('counts the videos still missing after the scan', async () => {
+      mockFs.readdir.mockResolvedValueOnce([]);
+      mockVideo.count.mockResolvedValueOnce(0); // total rows
+      mockVideo.count.mockResolvedValueOnce(42); // missing rows afterwards
+
+      const result = await VideosModule.backfillVideoMetadata();
+
+      expect(result.missing).toBe(42);
+      expect(mockVideo.count).toHaveBeenLastCalledWith({ where: stateWhere('missing') });
+    });
+
+    test('leaves the missing count unknown when it cannot be read', async () => {
+      mockFs.readdir.mockResolvedValueOnce([]);
+      mockVideo.count.mockResolvedValueOnce(0); // total rows
+      mockVideo.count.mockRejectedValueOnce(new Error('db gone')); // missing rows afterwards
+
+      const result = await VideosModule.backfillVideoMetadata();
+
+      expect(result.status).toBe('completed');
+      expect(result.missing).toBeNull();
+    });
+
+    describe('when most downloaded videos are not found', () => {
+      const heldRoot = {
+        held: [{ dir: '/test/output/dir', total: 16801, notFound: 16799 }],
+        holdsBack: () => true,
+        message: 'Only 2 of the 16,801 downloaded videos stored in the downloads folder were found.',
+      };
+
+      test('marks nothing missing there and says why', async () => {
+        mockMissingGate.loadMissingGate.mockResolvedValue(heldRoot);
+        mockFs.readdir.mockResolvedValueOnce([]);
+        mockVideo.count.mockResolvedValueOnce(1);
+        mockVideo.findAll.mockResolvedValueOnce([
+          dbRow({ youtubeId: 'missing123', filePath: '/test/output/dir/Channel/missing.mp4', fileSize: '1000' })
+        ]);
+        mockFs.stat.mockRejectedValue(fsError('ENOENT'));
+
+        const result = await VideosModule.backfillVideoMetadata();
+
+        expect(mockMissingGate.loadMissingGate).toHaveBeenCalledWith(mockVideo, expect.any(Map), '/test/output/dir');
+        expect(result.removed).toBe(0);
+        expect(result.notMarkedMissing).toBe(1);
+        expect(result.libraryCheckMessage).toBe(heldRoot.message);
+        expect(mockVideo.update).not.toHaveBeenCalled();
+      });
+
+      test('still restores a video whose file it did find', async () => {
+        mockMissingGate.loadMissingGate.mockResolvedValue(heldRoot);
+        mockFs.readdir.mockResolvedValueOnce([
+          { name: 'video [restored1].mp4', isDirectory: () => false, isFile: () => true }
+        ]);
+        mockFs.stat.mockResolvedValue(fileStat(1000));
+        mockVideo.count.mockResolvedValueOnce(1);
+        mockVideo.findAll.mockResolvedValueOnce([
+          dbRow({ youtubeId: 'restored1', filePath: '/test/output/dir/video [restored1].mp4', fileSize: '1000', removed: 1, video_resolution: '1920x1080' })
+        ]);
+
+        const result = await VideosModule.backfillVideoMetadata();
+
+        expect(result.updated).toBe(1);
+      });
+
+      test('is skipped by Rescan anyway', async () => {
+        mockMissingGate.loadMissingGate.mockResolvedValue(heldRoot);
+        mockFs.readdir.mockResolvedValueOnce([]);
+        mockVideo.count.mockResolvedValueOnce(1);
+        mockVideo.findAll.mockResolvedValueOnce([
+          dbRow({ youtubeId: 'missing123', filePath: '/test/output/dir/Channel/missing.mp4', fileSize: '1000' })
+        ]);
+        mockFs.stat.mockRejectedValue(fsError('ENOENT'));
+
+        const result = await VideosModule.backfillVideoMetadata({ trigger: 'manual', ignoreLibraryCheck: true });
+
+        expect(mockMissingGate.loadMissingGate).not.toHaveBeenCalled();
+        expect(result.removed).toBe(1);
+      });
     });
 
     test('should handle no output directory configured', async () => {
@@ -1545,7 +1758,10 @@ describe('VideosModule', () => {
         const result = await VideosModule.backfillVideoMetadata();
 
         expect(result.status).toBe('error');
-        expect(result.errorMessage).toBe('The downloads folder does not exist. Nothing was marked missing; is the drive mounted?');
+        expect(result.errorMessage).toBe(
+          'The downloads folder does not exist. Nothing was marked missing. Check that the drive or network share '
+          + 'is mounted and that the volume mapping points at your library.'
+        );
         expect(result.libraryCheckMessage).toBe(missingRoot.message);
         expect(mockFs.readdir).not.toHaveBeenCalled();
         expect(mockVideo.update).not.toHaveBeenCalled();
@@ -1836,7 +2052,7 @@ describe('VideosModule', () => {
             running: false,
             lastRun: expect.objectContaining({
               status: 'error',
-              errorMessage: 'Scanned 1 videos: 0 updated, 0 marked missing, 1 failed.',
+              errorMessage: 'Scanned 1 videos and found 1 video files on disk: 0 updated, 0 marked missing, 1 failed.',
             }),
           })
         );
@@ -1960,6 +2176,16 @@ describe('VideosModule', () => {
       await VideosModule.backfillVideoMetadata({ trigger: 'manual' });
 
       expect(mockM3uGenerator.regenerateAllChannelM3Us).toHaveBeenCalledTimes(1);
+    });
+
+    test('re-checks the download pause with a fresh look at stored files after the rescan completes', async () => {
+      mockFs.readdir.mockResolvedValueOnce([]);
+      mockVideo.count.mockResolvedValueOnce(0);
+
+      await VideosModule.backfillVideoMetadata({ trigger: 'manual' });
+
+      expect(mockLibraryRootCheck.forgetStoredFilesProbe).toHaveBeenCalledTimes(1);
+      expect(mockStorageGuard.recheckLibrary).toHaveBeenCalledTimes(1);
     });
 
     test('prunes the cached metadata of never-downloaded videos after the rescan completes', async () => {

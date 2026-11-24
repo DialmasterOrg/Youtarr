@@ -95,6 +95,10 @@ describe('CookieFileCard', () => {
 
       expect(screen.getByRole('button', { name: 'Upload cookie file' })).toBeEnabled();
       expect(screen.getByText('Use a throwaway account')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'yt-dlp warning' })).toHaveAttribute(
+        'href',
+        'https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies'
+      );
       expect(screen.queryByRole('button', { name: 'Test cookies' })).not.toBeInTheDocument();
     });
 

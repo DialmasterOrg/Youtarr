@@ -3,6 +3,10 @@ const playlistSelection = require('./download/playlistAutoSelection');
 const logger = require('../logger');
 const videoActivity = require('./download/videoActivity');
 const { findArchiveOnlyIds } = require('./archiveOnlyIds');
+const playlistFilters = require('./playlistFilters');
+
+// Videos listed by the settings dialog's filter preview; its counts cover all.
+const FILTER_PREVIEW_LIMIT = 50;
 
 // Raw SQL: one grouped count for a whole page of playlists. "Downloaded" means
 // a usable file on disk, the same predicate as the playlist videos listing's
@@ -21,12 +25,19 @@ const DOWNLOADED_COUNT_SQL = `
 // Dependencies are passed at call time, as in playlistVideoFilters, to keep
 // download orchestration out of the route without introducing a module cycle.
 class PlaylistDownloadModule {
+  /**
+   * The tracked videos a download path may queue. Pass the playlist as
+   * `filterBy` on paths where Youtarr picks the videos (scheduled runs,
+   * download all, the suggested batch): `filteredIds` then holds the candidates
+   * its download filters skip. They stay in `candidates`, so a path where the
+   * user picks the videos can ignore `filteredIds` and queue them anyway.
+   */
   async getTrackedVideos(playlistId, { PlaylistVideo, Video, playlistModule }, {
-    youtubeIds, includeIgnored = false, allowRedownload = false, excludeActive = false,
+    youtubeIds, includeIgnored = false, allowRedownload = false, excludeActive = false, filterBy = null,
   } = {}) {
     const rows = await PlaylistVideo.findAll({
       where: { playlist_id: playlistId, ...(!includeIgnored && { ignored: false }), ...(youtubeIds && { youtube_id: youtubeIds }) },
-      attributes: ['id', 'youtube_id', 'channel_id', 'channel_name', 'title', 'position', 'published_at', 'added_at', 'first_seen_at', 'auto_download_requested', 'auto_download_last_attempt_at'],
+      attributes: ['id', 'youtube_id', 'channel_id', 'channel_name', 'title', 'duration', 'position', 'published_at', 'added_at', 'first_seen_at', 'auto_download_requested', 'auto_download_last_attempt_at'],
       order: [['position', 'ASC']],
     });
     const candidates = rows.filter((row) => row.youtube_id && !playlistModule.isUnavailableTitle(row.title));
@@ -41,8 +52,28 @@ class PlaylistDownloadModule {
     const archiveOnly = allowRedownload ? new Set() : await findArchiveOnlyIds(
       candidates.map((row) => row.youtube_id).filter((id) => !downloaded.has(id))
     );
-    return { candidates: candidates.filter((row) => !downloaded.has(row.youtube_id) &&
-      !archiveOnly.has(row.youtube_id) && (!excludeActive || !videoActivity.isActive(row.youtube_id))), existing };
+    const eligible = candidates.filter((row) => !downloaded.has(row.youtube_id) &&
+      !archiveOnly.has(row.youtube_id) && (!excludeActive || !videoActivity.isActive(row.youtube_id)));
+    const { filteredIds, error: filterError } = filterBy
+      ? await this.findSkippedIds(filterBy, eligible)
+      : { filteredIds: new Set(), error: null };
+    return { candidates: eligible, existing, filteredIds, filterError };
+  }
+
+  /**
+   * The rows a playlist's download filters skip. A video the user selected
+   * (a saved batch request) is never skipped, even when a filter that cannot
+   * be evaluated holds everything else.
+   * @param {Object} settings - Playlist row, or its filter fields
+   * @param {Array<Object>} rows - Playlist video rows with title, duration and auto_download_requested
+   * @returns {Promise<{ filteredIds: Set<string>, error: ?string }>}
+   */
+  async findSkippedIds(settings, rows) {
+    const { filteredIds, error } = await playlistFilters.findFilteredIds(settings, rows);
+    for (const row of rows) {
+      if (row.auto_download_requested) filteredIds.delete(row.youtube_id);
+    }
+    return { filteredIds, error };
   }
 
   /**
@@ -62,7 +93,9 @@ class PlaylistDownloadModule {
   }
 
   async getCounts(playlist, deps) {
-    const { candidates, existing } = await this.getTrackedVideos(playlist.playlist_id, deps);
+    const { candidates, existing, filteredIds, filterError } = await this.getTrackedVideos(
+      playlist.playlist_id, deps, { filterBy: playlist }
+    );
     const downloadedCounts = await this.getDownloadedCounts([playlist.playlist_id], deps);
     const pending = playlist.auto_download_baseline_at ? playlistSelection.selectNewSinceBaseline({
       candidates,
@@ -80,16 +113,79 @@ class PlaylistDownloadModule {
         const matching = targetsAudio ? video.audioFilePath : video.filePath;
         return !matching && (video.filePath || video.audioFilePath);
       }).length,
+      // Skipped by the download filters; following_existing_count is left as
+      // the older videos, whether or not a filter would also skip them.
+      filtered_count: filteredIds.size,
+      filter_error: filterError,
     };
   }
 
-  async getPreview(playlistId, { order, count }, deps) {
-    const { candidates: rows } = await this.getTrackedVideos(playlistId, deps, { excludeActive: true });
+  async getPreview(playlist, { order, count }, deps) {
+    const { candidates: rows, filteredIds } = await this.getTrackedVideos(
+      playlist.playlist_id, deps, { excludeActive: true, filterBy: playlist }
+    );
     const candidates = rows.map((row) => ({
       youtube_id: row.youtube_id, title: row.title, position: row.position, published_at: row.published_at,
+      filtered: filteredIds.has(row.youtube_id),
     }));
-    const { selected, missingDates } = playlistSelection.selectBatchEntries({ candidates, order, limit: count });
+    const { selected, missingDates } = playlistSelection.selectBatchEntries({ candidates, order, limit: count, filteredIds });
     return { candidates, selectedIds: selected.map((row) => row.youtube_id), missingDates };
+  }
+
+  /**
+   * What proposed download filters would do to this playlist, before they are
+   * saved: how many tracked videos match, which of the most recently
+   * discovered ones do, and how many waiting discoveries would then download
+   * automatically (null before a starting point exists).
+   * @param {Object} playlist
+   * @param {{ title_filter_regex: ?string, min_duration: ?number, max_duration: ?number }} proposed
+   * @returns {Promise<Object>} The preview, or { error } when the pattern cannot be evaluated
+   */
+  async getFilterPreview(playlist, proposed, deps) {
+    const rows = await deps.PlaylistVideo.findAll({
+      where: { playlist_id: playlist.playlist_id },
+      attributes: ['id', 'youtube_id', 'title', 'duration'],
+      order: [['id', 'DESC']],
+    });
+    const available = rows.filter((row) => row.youtube_id && !deps.playlistModule.isUnavailableTitle(row.title));
+    const { filteredIds, error } = await playlistFilters.findFilteredIds(
+      { ...proposed, playlist_id: playlist.playlist_id }, available
+    );
+    if (error) return { error };
+
+    let waitingCount = null;
+    if (playlist.auto_download_baseline_at) {
+      // Count what a scheduled run could still queue: active downloads are
+      // already admitted, and a row a refresh added since the read above was
+      // never checked against the proposed filters.
+      const evaluatedIds = new Set(available.map((row) => row.youtube_id));
+      const tracked = await this.getTrackedVideos(playlist.playlist_id, deps, { excludeActive: true });
+      const candidates = tracked.candidates.filter((row) => evaluatedIds.has(row.youtube_id));
+      const skipped = new Set(candidates
+        .filter((row) => filteredIds.has(row.youtube_id) && !row.auto_download_requested)
+        .map((row) => row.youtube_id));
+      waitingCount = playlistSelection.selectNewSinceBaseline({
+        candidates,
+        baselineAt: playlist.auto_download_baseline_at,
+        baselineId: playlist.auto_download_baseline_id,
+        limit: candidates.length,
+        filteredIds: skipped,
+      }).discoveries.length;
+    }
+
+    const videos = available.slice(0, FILTER_PREVIEW_LIMIT).map((row) => ({
+      youtube_id: row.youtube_id,
+      title: row.title,
+      duration: row.duration ?? null,
+      matches: !filteredIds.has(row.youtube_id),
+    }));
+    return {
+      totalCount: available.length,
+      matchCount: available.length - filteredIds.size,
+      waitingCount,
+      videos,
+      truncated: available.length > videos.length,
+    };
   }
 
   async queueBatch(playlist, videoIds, deps) {

@@ -72,8 +72,9 @@ function PlaylistHelpDialog({ open, onClose, isMobile }: PlaylistHelpDialogProps
               playlist changes on YouTube.
             </p>
             <p>
-              Private and members-only videos can&apos;t be accessed, so they&apos;re left out of the
-              list and never downloaded. The video count reflects only the videos Youtarr can see.
+              Private videos can&apos;t be accessed, so they&apos;re left out of the list and never
+              downloaded. The video count reflects only the videos Youtarr can see. Members-only
+              videos download only with cookies from an account that is a member of the channel.
             </p>
           </Section>
 
@@ -137,7 +138,10 @@ function PlaylistHelpDialog({ open, onClose, isMobile }: PlaylistHelpDialogProps
               you&apos;ve connected a media server. Any player that reads <code>.m3u</code> files can
               open it. The file has one entry per downloaded item: the MP3 for MP3 Only playlists,
               the video file otherwise. If an item wasn&apos;t downloaded in that format, its other
-              file is listed instead, so nothing is left out.
+              file is listed instead. Video + MP3 playlists get two files once an MP3 has been
+              downloaded: the usual one lists the videos, and a second one ending
+              in <code>(MP3).m3u</code> lists the MP3s. Each has only the items downloaded in that
+              format.
             </p>
           </Section>
 

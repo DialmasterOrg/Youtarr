@@ -374,18 +374,33 @@ function groupVideosByChannel(sampleVideos, maxVideos = 5, totalCount = null) {
   return { groups, truncatedCount };
 }
 
+// Which kinds of trigger a list of storageGuard reasons holds: the downloads
+// folder ('library') and/or a storage limit (every other type).
+function pauseCauses(reasons) {
+  const list = Array.isArray(reasons) ? reasons : [];
+  return {
+    library: list.some((reason) => reason.type === 'library'),
+    storage: list.some((reason) => reason.type !== 'library'),
+  };
+}
+
 /**
  * Build the shared content of a downloads paused/resumed notification.
  * Reason texts come from storageGuard so the notification, the UI banner and
  * API errors describe the pause the same way.
- * @param {Object} status - storageGuard status ({ paused, reasons: [{ text }] })
+ * @param {Object} status - storageGuard status ({ paused, reasons: [{ type, text }] }); a resumed status may
+ *   carry `resumedFrom`, the reasons that were holding downloads
  * @returns {{title: string, summary: string, reasons: string[], footer: string|null}}
  */
 function buildDownloadPauseContent(status = {}) {
   if (!status.paused) {
+    const cleared = pauseCauses(status.resumedFrom);
+    const back = cleared.library && !cleared.storage
+      ? 'The downloads folder is available again'
+      : 'Storage is back within your configured limits';
     return {
       title: '▶️ Downloads Resumed',
-      summary: 'Storage is back within your configured limits, so downloads have resumed.',
+      summary: `${back}, so downloads have resumed.`,
       reasons: [],
       footer: null
     };
@@ -396,12 +411,23 @@ function buildDownloadPauseContent(status = {}) {
     .filter(Boolean)
     .map((text) => text.charAt(0).toUpperCase() + text.slice(1));
 
+  const causes = pauseCauses(status.reasons);
+  const because = [
+    causes.library && 'the downloads folder looks unavailable',
+    (causes.storage || !causes.library) && 'storage is over your configured limits',
+  ].filter(Boolean).join(' and ');
+  const footers = [
+    causes.library && 'Queued downloads are held and start automatically once the downloads folder is back. ' +
+      'Check that the drive or network share is mounted and that the volume mapping points at your library.',
+    (causes.storage || !causes.library) && 'Queued downloads are held and start automatically once storage is back within your limits. ' +
+      'Free up space, remove videos, or change the limits in Settings > Storage Limits.',
+  ].filter(Boolean);
+
   return {
     title: '⏸️ Downloads Paused',
-    summary: 'Youtarr has stopped downloading because storage is over your configured limits.',
+    summary: `Youtarr has stopped downloading because ${because}.`,
     reasons,
-    footer: 'Queued downloads are held and start automatically once storage is back within your limits. ' +
-      'Free up space, remove videos, or change the limits in Settings > Storage Limits.'
+    footer: footers.join(' ')
   };
 }
 

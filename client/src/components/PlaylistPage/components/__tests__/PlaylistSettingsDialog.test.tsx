@@ -38,6 +38,13 @@ jest.mock('../../../../hooks/useConfig', () => {
   return { useConfig: () => ({ config, refetch }) };
 });
 
+// The filter preview is the only request the dialog makes itself.
+const mockAxiosPost = jest.fn();
+jest.mock('axios', () => ({
+  post: (...args: unknown[]) => mockAxiosPost(...args),
+  isAxiosError: jest.fn(() => false),
+}));
+
 let mockMutationsReturn: {
   updateSettings: jest.Mock;
   pending: boolean;
@@ -110,7 +117,7 @@ describe('PlaylistSettingsDialog', () => {
     expect(screen.getByTestId('subfolder-mock')).toHaveTextContent('subfolder:null');
   });
 
-  test('saves only the surfaced fields and leaves filter columns untouched', async () => {
+  test('saves the settings, without filters that were not edited, then closes', async () => {
     const props = setupDialog();
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -124,13 +131,194 @@ describe('PlaylistSettingsDialog', () => {
         sort_order: 'default',
       });
     });
-    const payload = mockMutationsReturn.updateSettings.mock.calls[0][1];
-    expect(payload).not.toHaveProperty('min_duration');
-    expect(payload).not.toHaveProperty('max_duration');
-    expect(payload).not.toHaveProperty('title_filter_regex');
 
     await waitFor(() => expect(props.onSaved).toHaveBeenCalled());
     expect(props.onClose).toHaveBeenCalled();
+  });
+
+  describe('download filters', () => {
+    const savedSettings = () => mockMutationsReturn.updateSettings.mock.calls[0][1];
+    const save = async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() => expect(mockMutationsReturn.updateSettings).toHaveBeenCalled());
+    };
+
+    test('shows the saved filters', () => {
+      setupDialog();
+      expect(screen.getByLabelText('Title Filter (Python Regex)')).toHaveValue('keepme');
+      expect(screen.getByLabelText('Min Duration (mins)')).toHaveValue(5);
+      expect(screen.getByLabelText('Max Duration (mins)')).toHaveValue(10);
+    });
+
+    test('saves an edited title filter', async () => {
+      setupDialog();
+      fireEvent.change(screen.getByLabelText('Title Filter (Python Regex)'), { target: { value: '(?i)full episode' } });
+      await save();
+      expect(savedSettings().title_filter_regex).toBe('(?i)full episode');
+    });
+
+    test('saves a title filter without surrounding spaces', async () => {
+      setupDialog();
+      fireEvent.change(screen.getByLabelText('Title Filter (Python Regex)'), { target: { value: '  Episode  ' } });
+      await save();
+      expect(savedSettings().title_filter_regex).toBe('Episode');
+    });
+
+    test.each(['', '   '])('saves a blank title filter %j as no filter', async (blank) => {
+      setupDialog();
+      fireEvent.change(screen.getByLabelText('Title Filter (Python Regex)'), { target: { value: blank } });
+      await save();
+      expect(savedSettings().title_filter_regex).toBeNull();
+    });
+
+    test('saves edited durations in seconds', async () => {
+      setupDialog();
+      fireEvent.change(screen.getByLabelText('Min Duration (mins)'), { target: { value: '2' } });
+      fireEvent.change(screen.getByLabelText('Max Duration (mins)'), { target: { value: '' } });
+      await save();
+      expect(savedSettings()).toMatchObject({ min_duration: 120, max_duration: null });
+    });
+
+    test('sends only the filter that was edited', async () => {
+      setupDialog();
+      fireEvent.change(screen.getByLabelText('Min Duration (mins)'), { target: { value: '2' } });
+      await save();
+      expect(savedSettings()).toMatchObject({ min_duration: 120 });
+      expect(savedSettings()).not.toHaveProperty('max_duration');
+      expect(savedSettings()).not.toHaveProperty('title_filter_regex');
+    });
+
+    // Filters set through the API before this dialog existed were not checked,
+    // so the server may reject one now; it must not block an unrelated edit.
+    test('saves another setting without resending filters the server would now reject', async () => {
+      setupDialog({ playlist: { ...basePlaylist, min_duration: 600, max_duration: 600 } });
+      fireEvent.click(screen.getByTestId('subfolder-mock'));
+      await save();
+      expect(savedSettings()).toMatchObject({ default_sub_folder: 'Kids' });
+      expect(savedSettings()).not.toHaveProperty('min_duration');
+      expect(savedSettings()).not.toHaveProperty('max_duration');
+    });
+
+    describe('when the page refreshes the playlist while the dialog is open', () => {
+      const dialog = (playlist: Playlist, open = true) => (
+        <PlaylistSettingsDialog open={open} playlist={playlist} token="tok" onClose={jest.fn()} onSaved={jest.fn()} />
+      );
+      const titleFilter = () => screen.getByLabelText('Title Filter (Python Regex)');
+
+      test('keeps an unsaved edit', () => {
+        const { rerender } = render(dialog(basePlaylist));
+        fireEvent.change(titleFilter(), { target: { value: 'draft' } });
+        rerender(dialog({ ...basePlaylist, video_count: 11 }));
+        expect(titleFilter()).toHaveValue('draft');
+      });
+
+      // Another session saved a filter meanwhile; saving an unrelated edit must not clear it.
+      test('does not send a filter that another session saved and this one never edited', async () => {
+        const unfiltered = { ...basePlaylist, title_filter_regex: null };
+        const { rerender } = render(dialog(unfiltered));
+        fireEvent.click(screen.getByTestId('subfolder-mock'));
+        rerender(dialog({ ...unfiltered, title_filter_regex: 'theirs' }));
+        await save();
+        expect(savedSettings()).toMatchObject({ default_sub_folder: 'Kids' });
+        expect(savedSettings()).not.toHaveProperty('title_filter_regex');
+      });
+
+      test('shows the refreshed value of a field that was not edited', () => {
+        const { rerender } = render(dialog(basePlaylist));
+        fireEvent.click(screen.getByTestId('subfolder-mock'));
+        rerender(dialog({ ...basePlaylist, title_filter_regex: 'theirs' }));
+        expect(titleFilter()).toHaveValue('theirs');
+        expect(screen.getByTestId('subfolder-mock')).toHaveTextContent('subfolder:Kids');
+      });
+
+      test('saves the refreshed value of another setting that was not edited', async () => {
+        const { rerender } = render(dialog(basePlaylist));
+        fireEvent.change(titleFilter(), { target: { value: 'draft' } });
+        rerender(dialog({ ...basePlaylist, default_sub_folder: 'Theirs' }));
+        await save();
+        expect(savedSettings()).toMatchObject({ default_sub_folder: 'Theirs', title_filter_regex: 'draft' });
+      });
+
+      test('treats a field set back to its saved value as not edited', () => {
+        const { rerender } = render(dialog(basePlaylist));
+        fireEvent.change(titleFilter(), { target: { value: 'draft' } });
+        fireEvent.change(titleFilter(), { target: { value: 'keepme' } });
+        rerender(dialog({ ...basePlaylist, title_filter_regex: 'theirs' }));
+        expect(titleFilter()).toHaveValue('theirs');
+      });
+
+      test('shows a preview of the draft that was still running', async () => {
+        let finish: (value: unknown) => void = () => {};
+        mockAxiosPost.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+        const { rerender } = render(dialog(basePlaylist));
+        fireEvent.change(titleFilter(), { target: { value: 'draft' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Preview filters' }));
+        rerender(dialog({ ...basePlaylist, video_count: 11 }));
+        finish({ data: { totalCount: 4, matchCount: 3, waitingCount: null, truncated: false, videos: [] } });
+        expect(await screen.findByText('3 of 4 videos in this playlist match.')).toBeInTheDocument();
+      });
+
+      test('discards the edit when the dialog is closed and opened again', () => {
+        const { rerender } = render(dialog(basePlaylist));
+        fireEvent.change(titleFilter(), { target: { value: 'draft' } });
+        rerender(dialog(basePlaylist, false));
+        rerender(dialog(basePlaylist));
+        expect(titleFilter()).toHaveValue('keepme');
+      });
+
+      test('discards the edit when the dialog switches to another playlist', () => {
+        const { rerender } = render(dialog(basePlaylist));
+        fireEvent.change(titleFilter(), { target: { value: 'draft' } });
+        rerender(dialog({ ...basePlaylist, playlist_id: 'PL456', title_filter_regex: 'other' }));
+        expect(titleFilter()).toHaveValue('other');
+      });
+    });
+
+    test('lets the user preview removing all of a playlist\'s saved filters', async () => {
+      mockAxiosPost.mockResolvedValue({
+        data: { totalCount: 1, matchCount: 1, waitingCount: null, truncated: false, videos: [] },
+      });
+      setupDialog();
+      fireEvent.change(screen.getByLabelText('Title Filter (Python Regex)'), { target: { value: '' } });
+      fireEvent.change(screen.getByLabelText('Min Duration (mins)'), { target: { value: '' } });
+      fireEvent.change(screen.getByLabelText('Max Duration (mins)'), { target: { value: '' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Preview filters' }));
+      await waitFor(() => expect(mockAxiosPost).toHaveBeenCalledWith(
+        '/api/playlists/PL123/filter-preview',
+        { title_filter_regex: null, min_duration: null, max_duration: null },
+        expect.any(Object)
+      ));
+    });
+
+    test('offers no preview for a playlist with no filters saved or entered', () => {
+      setupDialog({ playlist: { ...basePlaylist, title_filter_regex: null, min_duration: null, max_duration: null } });
+      expect(screen.getByRole('button', { name: 'Preview filters' })).toBeDisabled();
+    });
+
+    test('counts a filter edit as an unsaved change', () => {
+      setupDialog({
+        playlist: { ...basePlaylist, auto_download_baseline_at: '2026-09-01T00:00:00Z' },
+        onFollowFromNow: jest.fn(),
+      });
+      fireEvent.change(screen.getByLabelText('Title Filter (Python Regex)'), { target: { value: 'other' } });
+      expect(screen.getByRole('button', { name: 'Follow from now...' })).toBeDisabled();
+    });
+
+    test('loads the filters of the playlist it is reopened for', () => {
+      const { rerender } = render(
+        <PlaylistSettingsDialog open playlist={basePlaylist} token="tok" onClose={jest.fn()} onSaved={jest.fn()} />
+      );
+      rerender(
+        <PlaylistSettingsDialog
+          open
+          playlist={{ ...basePlaylist, title_filter_regex: null, min_duration: null, max_duration: null }}
+          token="tok"
+          onClose={jest.fn()}
+          onSaved={jest.fn()}
+        />
+      );
+      expect(screen.getByLabelText('Title Filter (Python Regex)')).toHaveValue('');
+    });
   });
 
   test('persists an edited download type', async () => {
@@ -153,6 +341,19 @@ describe('PlaylistSettingsDialog', () => {
         expect.objectContaining({ audio_format: 'mp3_only' })
       );
     });
+  });
+
+  test('explains that a Video + MP3 playlist syncs as a video playlist', async () => {
+    setupDialog();
+
+    fireEvent.mouseDown(screen.getByLabelText('Download Type'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Video + MP3' }));
+
+    expect(
+      screen.getByText(
+        'MP3 files are saved at 192kbps in the same folder as videos. Video + MP3 playlists sync to media servers as video playlists: the server needs a video-type library that includes your Youtarr output folder.'
+      )
+    ).toBeInTheDocument();
   });
 
   test('persists a subfolder change', async () => {
@@ -180,10 +381,56 @@ describe('PlaylistSettingsDialog', () => {
     expect(props.onClose).not.toHaveBeenCalled();
   });
 
-  test('surfaces a save error from the mutations hook', () => {
+  describe('when a save fails', () => {
+    const failSave = async () => {
+      mockMutationsReturn.updateSettings = jest.fn().mockResolvedValue(false);
+      mockMutationsReturn.error = 'Invalid regex pattern: unterminated character set';
+      setupDialog();
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      await screen.findByText('Invalid regex pattern: unterminated character set');
+    };
+
+    test('shows the error from the mutations hook, once', async () => {
+      await failSave();
+      expect(screen.getAllByText('Invalid regex pattern: unterminated character set')).toHaveLength(1);
+    });
+
+    test('hides the error once a setting is edited, since it described the earlier values', async () => {
+      await failSave();
+      fireEvent.change(screen.getByLabelText('Title Filter (Python Regex)'), { target: { value: 'fixed' } });
+      expect(screen.queryByText('Invalid regex pattern: unterminated character set')).not.toBeInTheDocument();
+    });
+
+    test('hides the error when another kind of setting is edited', async () => {
+      await failSave();
+      fireEvent.click(screen.getByTestId('subfolder-mock'));
+      expect(screen.queryByText('Invalid regex pattern: unterminated character set')).not.toBeInTheDocument();
+    });
+
+    test('shows the error again when the next save also fails', async () => {
+      await failSave();
+      fireEvent.change(screen.getByLabelText('Title Filter (Python Regex)'), { target: { value: 'still[bad' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      expect(await screen.findByText('Invalid regex pattern: unterminated character set')).toBeInTheDocument();
+    });
+  });
+
+  test('does not show an error left over from an earlier save when it opens', () => {
     mockMutationsReturn.error = 'Failed to update settings';
     setupDialog();
-    expect(screen.getByText('Failed to update settings')).toBeInTheDocument();
+    expect(screen.queryByText('Failed to update settings')).not.toBeInTheDocument();
+  });
+
+  test.each([
+    [true, /are waiting to download automatically/],
+    [false, /will download once auto-download is resumed/],
+  ])('describes waiting videos by whether auto-download is on (%s)', async (autoDownload, expected) => {
+    mockAxiosPost.mockResolvedValue({
+      data: { totalCount: 1, matchCount: 1, waitingCount: 2, truncated: false, videos: [] },
+    });
+    setupDialog({ playlist: { ...basePlaylist, auto_download: autoDownload } });
+    fireEvent.click(screen.getByRole('button', { name: 'Preview filters' }));
+    expect(await screen.findByText(expected)).toBeInTheDocument();
   });
 
   test('warns that the synced playlist becomes a music playlist when switching to MP3 Only', async () => {

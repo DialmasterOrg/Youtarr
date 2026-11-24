@@ -66,7 +66,7 @@ function AutoDownloadTabToggles({
       {globalAutoDownloadOff && !isMobile && (
         <RouterLink
           to={GLOBAL_AUTO_DOWNLOAD_SETTINGS_PATH}
-          title="Enable Automatic Downloads in Core settings for these tabs to download on schedule"
+          title="Turn on Automatic downloads in Core settings for these tabs to download on schedule"
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline"
         >
           <WarningIcon size={12} className="text-warning shrink-0" />

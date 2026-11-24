@@ -16,6 +16,7 @@ Plex, Jellyfin and Emby: library refresh, native playlist sync, and watch status
 - Plex login uses OAuth and must be the server admin; an unclaimed server has no accounts and runs anonymously. A library scan is triggered after downloads.
 - "Other Videos" with the "Personal Media" agent is the documented baseline, not an enforced requirement: `plexAdapter` also lists TV-type sections for video and Music sections for audio playlists.
 - Jellyfin 12.1 and Emby 4.10.1 (tested 2026-10-03) leave a library empty when its folder sits inside another library's folder, so a root library breaks per-subfolder ones. Jellyfin logs `Found duplicate path`; Plex shows the files in both.
+- `libraryRefresh.refreshAfterDownload` scans Jellyfin and Emby once per job that downloaded videos: the `*VideoLibraryIds` libraries when set, else all. It never rejects, and requires `serverRegistry` directly, since downloadModule's tests cannot load the models index.
 - `serverRegistry` + `adapters/` (`plexAdapter`, `jellyfinAdapter`, `embyAdapter`, `baseAdapter`) wrap each server's REST API; `mediaServerSync` decides which adapters apply to a playlist and updates `playlist_sync_state`.
 
 ## Playlist sync
@@ -23,9 +24,12 @@ Plex, Jellyfin and Emby: library refresh, native playlist sync, and watch status
 - Playlists are media-typed by the Download Type SETTING, not by what is on disk: an MP3 Only playlist syncs as audio using `Video.audioFilePath` (Plex resolves tracks by listing artist sections with type=10); others sync `Video.filePath` in the saved `sort_order`.
 - Items lacking a file of the playlist's type are left out (`unsyncable_count` on the detail route, shown only while the playlist syncs to a server), as are deleted rows; missing rows still sync, since their file may come back.
 - With zero resolved items the sync defers instead of creating or emptying a server playlist, except a deliberately emptied playlist (every video ignored, or none with a file left) with an existing server playlist, which is emptied.
+- A deferral writes its reason to `playlist_sync_state.last_error` and leaves `server_playlist_id` and `last_synced_at` alone. The playlist page shows `last_error` as is (#994), so every recorded message must be a user-readable sentence, never raw error text.
+- `getSyncStatus` (detail route `sync_status`) and the `playlistSyncUpdated` broadcast (`{ playlistDbId }`, at run start and after the in-flight entry clears) keep that page current; a failed broadcast never fails the sync.
 - `replacePlaylistItems` never creates an empty playlist: Jellyfin/Emby (replace = delete + recreate) delete it and return `{ id: null }`, which clears `playlist_sync_state.server_playlist_id` so the next sync with items creates a fresh one.
 - Plex empties in place when the stored id is visible in its current scope. Otherwise it deletes the stranded copy, then adopts a same-named playlist or, with no items, returns `{ id: null }`.
 - Audio syncs trigger a scan of Plex's music sections before resolving; video sections rely on the post-download refresh; Jellyfin/Emby refresh all libraries in one call.
+- Playlist sync keeps that all-library refresh even when video library ids are set, because audio playlists live in music libraries those ids leave out.
 
 ## Watch status sync
 

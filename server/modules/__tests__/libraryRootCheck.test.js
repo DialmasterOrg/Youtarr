@@ -1,4 +1,5 @@
 /* eslint-env jest */
+jest.mock('../../logger');
 const path = require('path');
 const { Op } = require('sequelize');
 const {
@@ -65,6 +66,11 @@ describe('checkLibraryRoot', () => {
 
   test('reports empty when the root holds only Youtarr\'s temp folder', async () => {
     const result = await checkLibraryRoot(ROOT, { readdir: diskWith({ [ROOT]: [dir('.youtarr_tmp')] }) });
+    expect(result).toEqual(expect.objectContaining({ ok: false, reason: 'empty', path: ROOT }));
+  });
+
+  test('reports empty when the root holds only the Sonarr/Radarr staging folder', async () => {
+    const result = await checkLibraryRoot(ROOT, { readdir: diskWith({ [ROOT]: [dir('.arr-staging')] }) });
     expect(result).toEqual(expect.objectContaining({ ok: false, reason: 'empty', path: ROOT }));
   });
 
@@ -179,6 +185,9 @@ describe('describeLibraryCheck', () => {
     expect(describeLibraryCheck({ reason: 'missing', path: '/d' })).toBe('The downloads folder does not exist.');
     expect(describeLibraryCheck({ reason: 'empty', path: '/d' })).toBe('The downloads folder is empty.');
     expect(describeLibraryCheck({ reason: 'unreadable', path: '/d' })).toBe('The downloads folder could not be read.');
+    expect(describeLibraryCheck({ reason: 'not-found', path: '/d' })).toBe(
+      'Most downloaded videos are not where Youtarr saved them; if you moved files inside the downloads folder, run a rescan.'
+    );
     expect(describeLibraryCheck({ reason: 'subfolder-empty', path: '/d/__Music' })).toBe('The subfolder __Music is empty.');
     expect(describeLibraryCheck({ reason: 'subfolder-unreadable', path: '/d/__Music' })).toBe('The subfolder __Music could not be read.');
   });
@@ -291,5 +300,188 @@ describe('libraryCheckCoversRows', () => {
         ],
       },
     });
+  });
+});
+
+describe('checkLibraryAvailable', () => {
+  let checkLibraryAvailable;
+  let forgetStoredFilesProbe;
+  const mountedRoot = diskWith({ [ROOT]: [dir('Channel A')] });
+  const fileStat = { isFile: () => true };
+  const storedAt = (n) => Array.from({ length: n }, (_, i) => ({ filePath: `${ROOT}/Channel A/v${i} [id${i}].mp4`, audioFilePath: null }));
+  const videoModel = (rows) => ({ findAll: jest.fn().mockResolvedValue(rows), sequelize: { random: () => 'RAND()' } });
+  // A stat that finds the first `present` of the given rows' files.
+  const statFinding = (rows, present) => jest.fn(async (filePath) => {
+    const index = rows.findIndex((row) => row.filePath === filePath);
+    if (index >= 0 && index < present) return fileStat;
+    throw fsError('ENOENT');
+  });
+
+  beforeEach(() => {
+    // The probe caches its answer per folder; each test starts without one.
+    jest.isolateModules(() => {
+      ({ checkLibraryAvailable, forgetStoredFilesProbe } = require('../libraryRootCheck'));
+    });
+  });
+
+  test('returns a failing root check without probing', async () => {
+    const Video = videoModel(storedAt(20));
+    const result = await checkLibraryAvailable(ROOT, Video, { readdir: diskWith({ [ROOT]: [] }) });
+    expect(result).toEqual(expect.objectContaining({ ok: false, reason: 'empty' }));
+    expect(Video.findAll).not.toHaveBeenCalled();
+  });
+
+  test('samples present videos stored under the root, at random', async () => {
+    const rows = storedAt(20);
+    const Video = videoModel(rows);
+    await checkLibraryAvailable(ROOT, Video, { readdir: mountedRoot, stat: statFinding(rows, 20) });
+
+    const prefix = `${ROOT}/%`;
+    expect(Video.findAll).toHaveBeenCalledWith(expect.objectContaining({
+      where: { removed: false, [Op.or]: [{ filePath: { [Op.like]: prefix } }, { audioFilePath: { [Op.like]: prefix } }] },
+      order: 'RAND()',
+      limit: 20,
+    }));
+  });
+
+  test('passes when at least half of the sampled videos are on disk', async () => {
+    const rows = storedAt(20);
+    const result = await checkLibraryAvailable(ROOT, videoModel(rows), { readdir: mountedRoot, stat: statFinding(rows, 10) });
+    expect(result).toEqual({ ok: true });
+  });
+
+  test('fails as not-found when most sampled videos are gone from a folder that is not empty', async () => {
+    const rows = storedAt(20);
+    const result = await checkLibraryAvailable(ROOT, videoModel(rows), { readdir: mountedRoot, stat: statFinding(rows, 2) });
+    expect(result).toEqual(expect.objectContaining({ ok: false, reason: LIBRARY_CHECK_REASONS.NOT_FOUND, path: ROOT }));
+  });
+
+  test('looks again once a rescan has made its cached answer stale', async () => {
+    const rows = storedAt(20);
+    const Video = videoModel(rows);
+    await checkLibraryAvailable(ROOT, Video, { readdir: mountedRoot, stat: statFinding(rows, 0) });
+
+    forgetStoredFilesProbe();
+    const result = await checkLibraryAvailable(ROOT, Video, { readdir: mountedRoot, stat: statFinding(rows, 20) });
+
+    expect(result).toEqual({ ok: true });
+    expect(Video.findAll).toHaveBeenCalledTimes(2);
+  });
+
+  test('counts a video whose audio file is still there as found', async () => {
+    const rows = storedAt(10).map((row) => ({ ...row, audioFilePath: row.filePath.replace('.mp4', '.mp3') }));
+    const stat = jest.fn(async (filePath) => {
+      if (filePath.endsWith('.mp3')) return fileStat;
+      throw fsError('ENOENT');
+    });
+    await expect(checkLibraryAvailable(ROOT, videoModel(rows), { readdir: mountedRoot, stat })).resolves.toEqual({ ok: true });
+  });
+
+  test('passes with too few videos to judge', async () => {
+    const rows = storedAt(9);
+    const result = await checkLibraryAvailable(ROOT, videoModel(rows), { readdir: mountedRoot, stat: statFinding(rows, 0) });
+    expect(result).toEqual({ ok: true });
+  });
+
+  test('leaves files that could not be checked out of the judgement', async () => {
+    const rows = storedAt(20);
+    // 12 unreadable, 3 found, 5 gone: only 8 definite answers, too few to judge.
+    const stat = jest.fn(async (filePath) => {
+      const index = rows.findIndex((row) => row.filePath === filePath);
+      if (index < 12) throw fsError('EACCES');
+      if (index < 15) return fileStat;
+      throw fsError('ENOENT');
+    });
+    await expect(checkLibraryAvailable(ROOT, videoModel(rows), { readdir: mountedRoot, stat })).resolves.toEqual({ ok: true });
+  });
+
+  test('reuses its answer for a while, then probes again', async () => {
+    const rows = storedAt(20);
+    const Video = videoModel(rows);
+    let clock = 1000;
+    const deps = { readdir: mountedRoot, stat: statFinding(rows, 0), now: () => clock };
+
+    await checkLibraryAvailable(ROOT, Video, deps);
+    clock += 29 * 1000;
+    await expect(checkLibraryAvailable(ROOT, Video, deps)).resolves.toEqual(expect.objectContaining({ reason: 'not-found' }));
+    expect(Video.findAll).toHaveBeenCalledTimes(1);
+
+    clock += 2 * 1000;
+    await checkLibraryAvailable(ROOT, Video, deps);
+    expect(Video.findAll).toHaveBeenCalledTimes(2);
+  });
+
+  test('passes, without remembering it, when the sample cannot be read', async () => {
+    const Video = { findAll: jest.fn().mockRejectedValue(new Error('db down')), sequelize: { random: () => 'RAND()' } };
+    await expect(checkLibraryAvailable(ROOT, Video, { readdir: mountedRoot })).resolves.toEqual({ ok: true });
+    await checkLibraryAvailable(ROOT, Video, { readdir: mountedRoot });
+    expect(Video.findAll).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('countRowsUnderLibraryCheck', () => {
+  const { countRowsUnderLibraryCheck } = require('../libraryRootCheck');
+
+  test('counts nothing for a passing check', async () => {
+    const Video = { count: jest.fn() };
+    await expect(countRowsUnderLibraryCheck({ ok: true }, Video, { removed: false })).resolves.toBe(0);
+    expect(Video.count).not.toHaveBeenCalled();
+  });
+
+  test('counts every matching row for a failing root', async () => {
+    const Video = { count: jest.fn().mockResolvedValue(16800) };
+    await expect(countRowsUnderLibraryCheck({ ok: false, reason: 'empty', path: ROOT }, Video, { removed: false })).resolves.toBe(16800);
+    expect(Video.count).toHaveBeenCalledWith({ where: { removed: false } });
+  });
+});
+
+describe('downloadsFolderBlock', () => {
+  const { notStateWhere } = require('../videoRemovalState');
+  const fileStat = { isFile: () => true };
+  let downloadsFolderBlock;
+
+  beforeEach(() => {
+    jest.isolateModules(() => {
+      ({ downloadsFolderBlock } = require('../libraryRootCheck'));
+    });
+  });
+
+  // The real check reads the disk through fs; these tests point it at a fake root.
+  const withDisk = (listing) => {
+    const fs = require('fs');
+    jest.spyOn(fs.promises, 'readdir').mockImplementation(diskWith(listing));
+    jest.spyOn(fs.promises, 'stat').mockResolvedValue(fileStat);
+  };
+  afterEach(() => jest.restoreAllMocks());
+
+  test('holds downloads while the downloads folder is empty and videos are on record', async () => {
+    withDisk({ [ROOT]: [] });
+    const Video = { count: jest.fn().mockResolvedValue(3) };
+
+    await expect(downloadsFolderBlock(ROOT, Video)).resolves.toEqual(expect.objectContaining({ ok: false, reason: 'empty' }));
+  });
+
+  test('lets a fresh install download into an empty folder', async () => {
+    withDisk({ [ROOT]: [] });
+    await expect(downloadsFolderBlock(ROOT, { count: jest.fn().mockResolvedValue(0) })).resolves.toBeNull();
+  });
+
+  test('never holds downloads for a subfolder', async () => {
+    withDisk({ [ROOT]: [dir('Channel'), dir('__Music')], [path.join(ROOT, '__Music')]: [] });
+    const Video = {
+      count: jest.fn().mockResolvedValue(3),
+      findAll: jest.fn().mockResolvedValue([]),
+      sequelize: { random: () => 'RAND()' },
+    };
+    await expect(downloadsFolderBlock(ROOT, Video)).resolves.toBeNull();
+  });
+
+  test('counts videos that are present or missing, not deleted ones', async () => {
+    withDisk({ [ROOT]: [] });
+    const Video = { count: jest.fn().mockResolvedValue(1) };
+
+    await downloadsFolderBlock(ROOT, Video);
+
+    expect(Video.count).toHaveBeenCalledWith({ where: notStateWhere('deleted') });
   });
 });

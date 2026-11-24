@@ -6,7 +6,7 @@ import {
   Typography,
 } from '../ui';
 import { Info as InfoIcon } from '../../lib/icons';
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Link as RouterLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import PlexLibrarySelector from '../PlexLibrarySelector';
 import PlexAuthDialog from '../PlexAuthDialog';
 import ConfigurationSkeleton from '../Configuration/common/ConfigurationSkeleton';
@@ -20,6 +20,7 @@ import { SponsorBlockSection } from '../Configuration/sections/SponsorBlockSecti
 import { CookieConfigSection } from '../Configuration/sections/CookieConfigSection';
 import { NotificationsSection } from '../Configuration/sections/NotificationsSection';
 import { RssFeedsSection } from '../Configuration/sections/RssFeedsSection';
+import { ArrBridgeSection } from '../Configuration/sections/ArrBridgeSection';
 import { DownloadPerformanceSection } from '../Configuration/sections/DownloadPerformanceSection';
 import { YtdlpOptionsSection } from '../Configuration/sections/YtdlpOptionsSection';
 import { YtdlpUpdateSection } from '../Configuration/sections/YtdlpUpdateSection';
@@ -47,6 +48,7 @@ import { FILENAME_PRESETS } from '../../utils/filenameTemplate/presets';
 import { validatePrefix } from '../../utils/filenameTemplate/validate';
 import { SETTINGS_PAGES, SettingsIndex } from './SettingsIndex';
 import { MaintenanceSection } from './MaintenanceSection';
+import { AboutSection } from './AboutSection';
 import { SchedulingSection } from '../Configuration/sections/SchedulingSection';
 import { LoggingSection } from '../Configuration/sections/LoggingSection';
 
@@ -267,11 +269,12 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
     setHasUnsavedChanges(changed);
   }, [config, initialConfig]);
 
-  const pageTitle = useMemo(() => {
-    if (location.pathname === '/settings') return 'Settings';
+  // null on the index itself
+  const subPageTitle = useMemo(() => {
+    if (location.pathname === '/settings') return null;
     const suffix = location.pathname.replace('/settings/', '');
     const page = SETTINGS_PAGES.find((entry) => entry.key === suffix);
-    return `Settings / ${page?.title || suffix}`;
+    return page?.title || suffix;
   }, [location.pathname]);
 
   return (
@@ -301,7 +304,11 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
 
       <div style={{ marginBottom: 16 }}>
         <Typography variant="h5" style={{ fontWeight: 800 }}>
-          {pageTitle}
+          {subPageTitle === null ? 'Settings' : (
+            <>
+              <RouterLink to="/settings" className="hover:underline">Settings</RouterLink> / {subPageTitle}
+            </>
+          )}
         </Typography>
       </div>
 
@@ -435,6 +442,18 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
             }
           />
           <Route
+            path="sonarr-radarr"
+            element={
+              <ArrBridgeSection
+                token={token}
+                config={config}
+                savedConfig={initialConfig}
+                onConfigChange={handleConfigChange}
+                setSnackbar={setSnackbar}
+              />
+            }
+          />
+          <Route
             path="downloading"
             element={
               <>
@@ -545,6 +564,8 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
               />
             }
           />
+
+          <Route path="about" element={<AboutSection />} />
 
           <Route path="*" element={<Navigate to="/settings" replace />} />
         </Routes>

@@ -82,6 +82,12 @@ describe('API key channel grants', () => {
     expect(ApiKeyChannelGrant.destroy).not.toHaveBeenCalled();
   });
 
+  test('rejects status keys before changing grants', async () => {
+    ApiKey.findByPk.mockResolvedValue({ id: 8, role: 'status_read', is_active: true, revoked_at: null });
+    await expect(grants.replaceChannelGrants(8, [3])).rejects.toThrow('Only active external API keys');
+    expect(ApiKeyChannelGrant.destroy).not.toHaveBeenCalled();
+  });
+
   test('rejects disabled or unknown channel IDs before changing grants', async () => {
     ApiKey.findByPk.mockResolvedValue({ id: 7, role: 'view', is_active: true, revoked_at: null });
     Channel.count.mockResolvedValue(1);

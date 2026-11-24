@@ -14,21 +14,33 @@ const infoJsonCachePruner = require('./infoJsonCachePruner');
 const { slimInfoJson } = require('./infoJsonSlimmer');
 const scheduledTaskRuns = require('./scheduledTaskRuns');
 const rescanRunSummary = require('./rescanRunSummary');
-const { AUDIO_EXTENSIONS, MEDIA_EXTENSIONS } = require('./filesystem/constants');
+const { AUDIO_EXTENSIONS, MEDIA_EXTENSIONS, ARR_STAGING_DIR_NAME } = require('./filesystem/constants');
 const { probeVideoDimensions } = require('./resolutionTier');
 const createLimiter = require('./subscriptionImport/concurrencyLimiter');
 const { isRescanCandidate, resolveRescanUpdate } = require('./rescanRowUpdate');
 const { unchangedSinceRead, GUARDED_COLUMNS } = require('./videoRowGuard');
 const youtubeExistenceCheck = require('./youtubeExistenceCheck');
-const { LIBRARY_CHECK_REASONS, checkLibraryRoot, isRowUnderLibraryCheck, libraryCheckCoversRows } = require('./libraryRootCheck');
+const {
+  LIBRARY_CHECK_REASONS, checkLibraryRoot, isRowUnderLibraryCheck, libraryCheckCoversRows, forgetStoredFilesProbe,
+} = require('./libraryRootCheck');
+const { loadMissingGate } = require('./rescanMissingGate');
+const storageGuard = require('./storageGuard');
 const { REMOVAL_STATES, stateWhere, notStateWhere } = require('./videoRemovalState');
 
 const { EXISTENCE } = youtubeExistenceCheck;
 
 // Backfill row updates are applied in parameterized batches of this size,
-// and flushed mid-chunk at the same cadence so completed work survives a
-// time-limit abort.
+// and flushed mid-chunk at the same cadence.
 const BACKFILL_UPDATE_BATCH_SIZE = 100;
+
+// The ffprobe resolution backfill may run this long after the walk. The walk
+// and the file reconciliation always finish: on a slow share the walk alone
+// can outlast any fixed limit, and a run that discards it never converges.
+const RESCAN_PROBE_BUDGET_MS = 5 * 60 * 1000;
+// During the walk, progress is logged this often...
+const RESCAN_PROGRESS_LOG_MS = 30 * 1000;
+// ...and broadcast to open Maintenance pages at most this often.
+const RESCAN_PROGRESS_BROADCAST_MS = 1000;
 
 // ffprobes are I/O-bound, so running 4 at once cuts backfill wall time
 // ~4x without piling up subprocesses next to downloads and Plex.
@@ -42,6 +54,7 @@ const RESCAN_WRITE_CONCURRENCY = 4;
 class VideosModule {
   constructor() {
     this._backfillRunning = false;
+    this._rescanProgress = null;
   }
 
   async getVideosPaginated(options = {}) {
@@ -473,9 +486,11 @@ class VideosModule {
    * A folder or file that can't be read is skipped and counted in `unreadable`,
    * so callers can tell a partial walk from a complete one; a file deleted
    * mid-walk is simply absent.
+   * @param {function({folders: number, files: number}): void} [onFolderScanned] - called after each
+   *   folder with the folders listed and video files found so far
    * @returns {Promise<{fileMap: Map, duplicates: Map, unreadable: number}>}
    */
-  async scanForVideoFiles(dir, fileMap = new Map(), duplicates = new Map(), problems = { unreadable: 0 }) {
+  async scanForVideoFiles(dir, fileMap = new Map(), duplicates = new Map(), problems = { unreadable: 0 }, onFolderScanned = null) {
     const result = () => ({ fileMap, duplicates, unreadable: problems.unreadable });
     let entries;
     try {
@@ -485,6 +500,7 @@ class VideosModule {
       logger.error({ err, dir }, 'Error scanning directory');
       return result();
     }
+    problems.folders = (problems.folders || 0) + 1;
 
     // Files in this folder that couldn't be checked, logged once per folder:
     // a folder listable but not searchable (e.g. after chmod -R 644) fails
@@ -495,7 +511,10 @@ class VideosModule {
       const fullPath = path.join(dir, entry.name);
 
       if (entry.isDirectory()) {
-        await this.scanForVideoFiles(fullPath, fileMap, duplicates, problems);
+        // Hardlinks staged for Sonarr and Radarr are not library files: a
+        // row must never be repointed at one.
+        if (entry.name === ARR_STAGING_DIR_NAME) continue;
+        await this.scanForVideoFiles(fullPath, fileMap, duplicates, problems, onFolderScanned);
         continue;
       }
 
@@ -567,6 +586,7 @@ class VideosModule {
     if (uncheckedFiles > 0) {
       logger.warn({ err: firstCheckError, dir, uncheckedFiles }, 'Could not check files while scanning');
     }
+    if (onFolderScanned) onFolderScanned({ folders: problems.folders, files: fileMap.size });
     return result();
   }
 
@@ -614,9 +634,35 @@ class VideosModule {
     return counts;
   }
 
+  // Missing rows right now, for the run summary; null if they cannot be counted.
+  async _countMissingVideos() {
+    try {
+      return await Video.count({ where: stateWhere(REMOVAL_STATES.MISSING) });
+    } catch (err) {
+      logger.warn({ err }, 'Could not count missing videos for the rescan summary');
+      return null;
+    }
+  }
+
+  /**
+   * The running rescan's progress, or null when none is running.
+   * @returns {{phase: ('walk'|'rows'), foldersScanned: number, filesFound: number, videosProcessed: number,
+   *   videosTotal: number, startedAt: string}|null}
+   */
+  getRescanProgress() {
+    return this._backfillRunning ? this._rescanProgress : null;
+  }
+
+  /**
+   * The filesystem rescan: walk the downloads folder, then reconcile every row with what is on disk.
+   * @param {{timeLimit?: number, trigger?: string, ignoreLibraryCheck?: boolean}|number} [arg] -
+   *   timeLimit: how long (ms) the ffprobe resolution backfill may run after the walk (a bare number is
+   *   the legacy form); ignoreLibraryCheck: "Rescan anyway", skipping the unmounted-folder check and the
+   *   mostly-missing gate
+   */
   async backfillVideoMetadata(arg = {}) {
     const opts = typeof arg === 'number' ? { timeLimit: arg } : arg;
-    const timeLimit = opts.timeLimit ?? 5 * 60 * 1000;
+    const probeBudget = opts.timeLimit ?? RESCAN_PROBE_BUDGET_MS;
     const trigger = opts.trigger ?? 'scheduled';
     // Rescan anyway: a manual run over a folder the user emptied on purpose.
     const ignoreLibraryCheck = opts.ignoreLibraryCheck === true;
@@ -634,6 +680,25 @@ class VideosModule {
       logger.info({ elapsed, context: 'backfill' }, message);
     };
 
+    this._rescanProgress = {
+      phase: 'walk', foldersScanned: 0, filesFound: 0, videosProcessed: 0, videosTotal: 0, startedAt: startedAtIso,
+    };
+    let lastProgressBroadcastAt = 0;
+    const reportProgress = (update) => {
+      this._rescanProgress = { ...this._rescanProgress, ...update };
+      const now = Date.now();
+      if (now - lastProgressBroadcastAt < RESCAN_PROGRESS_BROADCAST_MS) return;
+      lastProgressBroadcastAt = now;
+      // Progress is a nicety: a broadcast failure must never stop the scan.
+      try {
+        messageEmitter.emitMessage('broadcast', null, 'server', 'rescanStatus', {
+          running: true, trigger, progress: this._rescanProgress,
+        });
+      } catch (err) {
+        logger.debug({ err }, 'Could not broadcast rescan progress');
+      }
+    };
+
     let totalProcessed = 0;
     let totalUpdated = 0;
     let totalRemoved = 0;
@@ -641,6 +706,7 @@ class VideosModule {
     let totalSkipped = 0;
     let totalFailed = 0;
     let totalNotMarkedMissing = 0;
+    let probesDeferred = 0;
     let fileMapSize = 0;
     let unreadableOnDisk = 0;
     // Set when the downloads folder looks partly unmounted: the scan runs, but
@@ -686,7 +752,8 @@ class VideosModule {
             startedAt: startedAtIso,
             completedAt: new Date().toISOString(),
             status: 'error',
-            errorMessage: `${libraryCheck.message} Nothing was marked missing; is the drive mounted?`,
+            errorMessage: `${libraryCheck.message} Nothing was marked missing. Check that the drive or network share `
+              + 'is mounted and that the volume mapping points at your library.',
             libraryCheckMessage: libraryCheck.message,
             processed: 0,
             filesOnDisk: 0,
@@ -696,22 +763,26 @@ class VideosModule {
             kept: 0,
             skippedChanged: 0,
             failed: 0,
-            notMarkedMissing: 0
+            notMarkedMissing: 0,
+            missing: await this._countMissingVideos(),
           };
           return result;
         }
       }
 
-      // Check time limit before expensive operations
-      const checkTimeLimit = () => {
-        if (Date.now() - startTime > timeLimit) {
-          throw new Error(`Time limit exceeded (${timeLimit / 1000}s)`);
-        }
-      };
-
-      // First, scan filesystem for all video files
+      // First, scan filesystem for all video files. Logged as it goes: on a
+      // slow share this alone can take most of an hour.
       logProgress('Scanning filesystem for video files...');
-      const { fileMap, duplicates, unreadable } = await this.scanForVideoFiles(outputDir);
+      let lastWalkLogAt = Date.now();
+      const onFolderScanned = ({ folders, files }) => {
+        reportProgress({ foldersScanned: folders, filesFound: files });
+        if (Date.now() - lastWalkLogAt < RESCAN_PROGRESS_LOG_MS) return;
+        lastWalkLogAt = Date.now();
+        logProgress(`Scanning the downloads folder: ${folders} folders, ${files} video files so far`);
+      };
+      const { fileMap, duplicates, unreadable } = await this.scanForVideoFiles(
+        outputDir, new Map(), new Map(), { unreadable: 0 }, onFolderScanned
+      );
       fileMapSize = fileMap.size;
       unreadableOnDisk = unreadable;
       // Rows whose files sit in unreadable parts are re-checked by path below.
@@ -727,7 +798,21 @@ class VideosModule {
         }
       }
 
-      checkTimeLimit();
+      // A folder where most downloaded videos were not found is far more
+      // likely the wrong folder than a library deleted by hand: mark nothing
+      // missing there (see rescanMissingGate). Rescan anyway looks past it.
+      if (!ignoreLibraryCheck) {
+        const missingGate = await loadMissingGate(Video, fileMap, outputDir);
+        if (missingGate.held.length > 0) {
+          logger.warn({ held: missingGate.held }, 'Most downloaded videos were not found; the rescan will not mark them missing');
+          libraryCheckMessage = [libraryCheckMessage, missingGate.message].filter(Boolean).join(' ');
+          const heldBySubfolderCheck = holdBackMissing;
+          holdBackMissing = (row) => heldBySubfolderCheck(row) || missingGate.holdsBack(row);
+        }
+      }
+
+      // Only the resolution probes are bounded; everything else finishes.
+      const probeDeadline = Date.now() + probeBudget;
 
       // Process videos in chunks to avoid memory issues
       const VIDEO_CHUNK_SIZE = 1000; // Process 1000 videos at a time
@@ -737,10 +822,9 @@ class VideosModule {
       // Get total count first
       const totalCount = await Video.count();
       logProgress(`Processing ${totalCount} videos from database...`);
+      reportProgress({ phase: 'rows', videosTotal: totalCount });
 
       while (offset < totalCount) {
-        checkTimeLimit();
-
         // Fetch a chunk of videos. Every guarded column is read so the write
         // can require the row to be unchanged since this read.
         const videos = await Video.findAll({
@@ -754,7 +838,6 @@ class VideosModule {
 
         // Process the chunk in 100-row slices: probe, nominate, write.
         for (let sliceStart = 0; sliceStart < videos.length; sliceStart += BACKFILL_UPDATE_BATCH_SIZE) {
-          checkTimeLimit();
           await new Promise(resolve => setImmediate(resolve)); // Yield control
 
           const slice = videos.slice(sliceStart, sliceStart + BACKFILL_UPDATE_BATCH_SIZE);
@@ -764,11 +847,17 @@ class VideosModule {
           // while the column is NULL. "0x0" = probed but undeterminable,
           // which stops failed rows from being re-probed every night (the
           // file may sit on a network share); a later re-download re-stamps
-          // at download time regardless.
+          // at download time regardless. Past the probe budget, rows still
+          // needing a probe wait for the next run.
+          const probesAllowed = Date.now() < probeDeadline;
           const probeResults = new Map();
           await Promise.all(slice.map((video) => {
             const fileInfo = fileMap.get(video.youtubeId);
             if (!fileInfo || !fileInfo.videoFilePath || video.video_resolution != null) {
+              return null;
+            }
+            if (!probesAllowed) {
+              probesDeferred++;
               return null;
             }
             return probeLimit(async () => {
@@ -805,6 +894,7 @@ class VideosModule {
 
         totalProcessed += videos.length;
         offset += VIDEO_CHUNK_SIZE;
+        reportProgress({ videosProcessed: totalProcessed });
 
         // Log progress every few chunks
         if (offset % (VIDEO_CHUNK_SIZE * 5) === 0) {
@@ -812,6 +902,7 @@ class VideosModule {
         }
       }
 
+      const missingAfter = await this._countMissingVideos();
       const elapsed = Math.round((Date.now() - startTime) / 1000);
       logger.info({
         elapsed,
@@ -823,7 +914,9 @@ class VideosModule {
         kept: totalKept,
         skippedChanged: totalSkipped,
         failed: totalFailed,
-        notMarkedMissing: totalNotMarkedMissing
+        notMarkedMissing: totalNotMarkedMissing,
+        probesDeferred,
+        missing: missingAfter
       }, 'Video metadata backfill completed');
 
       result = {
@@ -836,6 +929,8 @@ class VideosModule {
         skippedChanged: totalSkipped,
         failed: totalFailed,
         notMarkedMissing: totalNotMarkedMissing,
+        probesDeferred,
+        missing: missingAfter,
         libraryCheckMessage,
         libraryCheckSkipped: ignoreLibraryCheck,
         timeElapsed: elapsed,
@@ -846,30 +941,6 @@ class VideosModule {
       };
       return result;
     } catch (err) {
-      const elapsed = Math.round((Date.now() - startTime) / 1000);
-      if (err.message && err.message.includes('Time limit exceeded')) {
-        logger.info({ elapsed }, 'Video metadata backfill stopped (time limit reached), will continue at next scheduled run');
-        result = {
-          timedOut: true,
-          timeElapsed: elapsed,
-          trigger,
-          startedAt: startedAtIso,
-          completedAt: new Date().toISOString(),
-          status: 'timed-out',
-          processed: totalProcessed,
-          filesOnDisk: fileMapSize,
-          unreadableOnDisk,
-          updated: totalUpdated,
-          removed: totalRemoved,
-          kept: totalKept,
-          skippedChanged: totalSkipped,
-          failed: totalFailed,
-          notMarkedMissing: totalNotMarkedMissing,
-          libraryCheckMessage,
-          libraryCheckSkipped: ignoreLibraryCheck
-        };
-        return result;
-      }
       logger.error({ err }, 'Error during video metadata backfill');
       result = {
         trigger,
@@ -924,6 +995,7 @@ class VideosModule {
       }
 
       this._backfillRunning = false;
+      this._rescanProgress = null;
 
       try {
         messageEmitter.emitMessage('broadcast', null, 'server', 'rescanStatus', {
@@ -942,6 +1014,12 @@ class VideosModule {
         // Metadata cached for videos that were only looked at has no other sweep.
         infoJsonCachePruner.pruneUntracked().catch((err) => {
           logger.error({ err }, 'Failed to prune cached metadata after rescan');
+        });
+        // Stored paths may have just been repaired (files moved by hand): a
+        // download pause based on them should lift now, not at the next re-check.
+        forgetStoredFilesProbe();
+        storageGuard.recheckLibrary().catch((err) => {
+          logger.error({ err }, 'Failed to re-check the download pause after rescan');
         });
       }
     }

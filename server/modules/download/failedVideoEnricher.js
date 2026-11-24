@@ -1,21 +1,40 @@
 // Best-effort backfill of title/channel onto failed-video records whose
 // download died before any metadata reached jobs/info/ (so they are absent
 // from videoData). Sources, in precedence order: videos, channelvideos
-// (channel name via channels.uploader, then channels.title), playlistvideos.
-// Fills only missing fields and never throws: enrichment must not break job
-// finalization.
+// (channel name via channels.uploader, then channels.title), playlistvideos,
+// then YouTube's public oEmbed endpoint for ids the database has never seen
+// (a brand-new upload that failed at extraction). Fills only missing fields
+// and never throws: enrichment must not break job finalization.
 const logger = require('../../logger');
 const Video = require('../../models/video');
 const Channel = require('../../models/channel');
 const ChannelVideo = require('../../models/channelvideo');
 const PlaylistVideo = require('../../models/playlistvideo');
+const videoOembedEnricher = require('../videoOembedEnricher');
 
 // videoMetadataProcessor writes this placeholder into Videos rows when
 // info.json has no uploader/channel field; never treat it as a real name.
 const UNKNOWN_CHANNEL_PLACEHOLDER = 'Unknown Channel';
 
+// oEmbed lookups are rate-limited to a few per second and run before the
+// job's final status is broadcast, so a mass failure must not stall it.
+const OEMBED_LOOKUP_LIMIT = 20;
+
 function needsMetadata(video) {
   return Boolean(video && video.youtubeId && (!video.title || !video.channel));
+}
+
+function uniqueIds(videos) {
+  return [...new Set(videos.map((video) => video.youtubeId))];
+}
+
+function applyMetadata(videos, metaById) {
+  for (const video of videos) {
+    const meta = metaById.get(video.youtubeId);
+    if (!meta) continue;
+    if (!video.title && meta.title) video.title = meta.title;
+    if (!video.channel && meta.channel) video.channel = meta.channel;
+  }
 }
 
 async function lookupKnownMetadata(youtubeIds) {
@@ -79,25 +98,44 @@ async function lookupKnownMetadata(youtubeIds) {
   return metaById;
 }
 
+async function lookupOembedMetadata(youtubeIds) {
+  const enriched = await videoOembedEnricher.enrichByIds(youtubeIds);
+  const metaById = new Map();
+  for (const [id, data] of Object.entries(enriched || {})) {
+    metaById.set(id, { title: data.title, channel: data.channelName });
+  }
+  return metaById;
+}
+
 async function enrichFailedVideos(failedVideos = []) {
   const needing = failedVideos.filter(needsMetadata);
   if (needing.length === 0) return;
 
   try {
-    const ids = [...new Set(needing.map((video) => video.youtubeId))];
-    const metaById = await lookupKnownMetadata(ids);
-    for (const video of needing) {
-      const meta = metaById.get(video.youtubeId);
-      if (!meta) continue;
-      if (!video.title && meta.title) video.title = meta.title;
-      if (!video.channel && meta.channel) video.channel = meta.channel;
-    }
+    const metaById = await lookupKnownMetadata(uniqueIds(needing));
+    applyMetadata(needing, metaById);
   } catch (err) {
     logger.warn(
       { err, videoCount: needing.length },
       'Failed to enrich failed-video metadata; continuing with ids only'
     );
   }
+
+  // Only a missing title sends a video to oEmbed: the title is what makes
+  // a failed-video line readable, and a channel-only gap is rare.
+  const untitled = needing.filter((video) => !video.title);
+  if (untitled.length === 0) return;
+
+  try {
+    const ids = uniqueIds(untitled).slice(0, OEMBED_LOOKUP_LIMIT);
+    const metaById = await lookupOembedMetadata(ids);
+    applyMetadata(untitled, metaById);
+  } catch (err) {
+    logger.warn(
+      { err, videoCount: untitled.length },
+      'Failed to enrich failed-video metadata via oEmbed; continuing with ids only'
+    );
+  }
 }
 
-module.exports = { enrichFailedVideos };
+module.exports = { enrichFailedVideos, OEMBED_LOOKUP_LIMIT };

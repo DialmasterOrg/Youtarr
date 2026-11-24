@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import PlaylistPage from '../PlaylistPage';
-import { renderWithProviders } from '../../test-utils';
+import { createMockWebSocketContext, renderWithProviders } from '../../test-utils';
 import { PlaylistVideo } from '../../types/playlist';
 
 const mockTriggerDownload = jest.fn();
@@ -13,6 +13,7 @@ const mockRefetchMeta = jest.fn();
 const mockIgnoreVideo = jest.fn();
 const mockUnignoreVideo = jest.fn();
 const mockDeleteVideosByYoutubeIds = jest.fn();
+const mockRefresh = jest.fn();
 let mockLocationState: unknown = null;
 
 const mockVideo: PlaylistVideo = {
@@ -69,6 +70,7 @@ const mockExcludedVideo: PlaylistVideo = {
 };
 
 const mockPlaylist = {
+  id: 42,
   playlist_id: 'PL1',
   title: 'My Playlist',
   uploader: 'Owner',
@@ -80,7 +82,11 @@ const mockPlaylist = {
   auto_download_baseline_at: null as string | null,
 };
 
-jest.mock('axios', () => ({ get: jest.fn(), post: jest.fn(), isAxiosError: () => false }));
+jest.mock('axios', () => ({
+  get: jest.fn(),
+  post: jest.fn(),
+  isAxiosError: (err: unknown) => (err as { isAxiosError?: boolean } | null)?.isAxiosError === true,
+}));
 const http = require('axios');
 
 jest.mock('react-router-dom', () => ({
@@ -96,8 +102,9 @@ jest.mock('react-router-dom', () => ({
   }),
 }));
 
+const mockConfig: { preferredResolution: string; protectManualDownloads?: boolean } = { preferredResolution: '1080' };
 jest.mock('../../hooks/useConfig', () => ({
-  useConfig: () => ({ config: { preferredResolution: '1080' } }),
+  useConfig: () => ({ config: mockConfig }),
 }));
 
 jest.mock('../DownloadManager/ManualDownload/DownloadSettingsDialog', () => ({
@@ -106,10 +113,12 @@ jest.mock('../DownloadManager/ManualDownload/DownloadSettingsDialog', () => ({
     open,
     onConfirm,
     missingVideoCount,
+    defaultProtect,
   }: {
     open: boolean;
     onConfirm: (s: unknown) => void;
     missingVideoCount?: number;
+    defaultProtect?: boolean;
   }) => {
     const React = require('react');
     if (!open) return null;
@@ -122,9 +131,19 @@ jest.mock('../DownloadManager/ManualDownload/DownloadSettingsDialog', () => ({
         String(missingVideoCount)
       ),
       React.createElement(
+        'div',
+        { 'data-testid': 'mock-dialog-default-protect' },
+        String(defaultProtect)
+      ),
+      React.createElement(
         'button',
         { 'data-testid': 'mock-confirm-download', onClick: () => onConfirm(null) },
         'confirm'
+      ),
+      React.createElement(
+        'button',
+        { 'data-testid': 'mock-confirm-protected-download', onClick: () => onConfirm({ protect: true }) },
+        'confirm protected'
       )
     );
   },
@@ -134,10 +153,15 @@ jest.mock('../../hooks/useMediaQuery', () => ({
   useMediaQuery: () => true, // mobile: cards + a directly-clickable selection action
 }));
 
+// Replaces the listed videos for one test.
+const mockVideosOverride: { current: PlaylistVideo[] | null } = { current: null };
+// Extra or replaced fields of the playlist detail hook for one test.
+const mockDetailOverride: { current: Record<string, unknown> } = { current: {} };
+
 jest.mock('../../hooks/usePlaylistDetail', () => ({
   usePlaylistDetail: () => ({
     playlist: mockPlaylist,
-    videos: [mockVideo, mockMissingVideo, mockDownloadedVideo, mockExcludedVideo],
+    videos: mockVideosOverride.current ?? [mockVideo, mockMissingVideo, mockDownloadedVideo, mockExcludedVideo],
     notDownloadedCount: 1,
     loading: false,
     loadingMore: false,
@@ -148,10 +172,11 @@ jest.mock('../../hooks/usePlaylistDetail', () => ({
     refetchMeta: (...args: unknown[]) => mockRefetchMeta(...args),
     markVideoIgnored: jest.fn(),
     markVideoDeleted: (...args: unknown[]) => mockMarkVideoDeleted(...args),
-    refresh: jest.fn(),
+    refresh: (...args: unknown[]) => mockRefresh(...args),
     sync: jest.fn(),
     regenerateM3U: jest.fn(),
     triggerDownload: (...args: unknown[]) => mockTriggerDownload(...args),
+    ...mockDetailOverride.current,
   }),
 }));
 
@@ -207,18 +232,32 @@ jest.mock('../shared/VideoModal', () => ({
   default: ({
     video,
     onVideoDeleted,
+    onAvailabilityDetected,
   }: {
     video: { youtubeId: string };
     onVideoDeleted?: (ytId: string) => void;
+    onAvailabilityDetected?: (ytId: string, availability: string | null, membersAccess?: string | null) => void;
   }) => {
     const React = require('react');
     return React.createElement(
-      'button',
-      {
-        'data-testid': 'mock-modal-delete-video',
-        onClick: () => onVideoDeleted?.(video.youtubeId),
-      },
-      'delete video'
+      React.Fragment,
+      null,
+      React.createElement(
+        'button',
+        {
+          'data-testid': 'mock-modal-delete-video',
+          onClick: () => onVideoDeleted?.(video.youtubeId),
+        },
+        'delete video'
+      ),
+      React.createElement(
+        'button',
+        {
+          'data-testid': 'mock-modal-access-confirmed',
+          onClick: () => onAvailabilityDetected?.(video.youtubeId, 'subscriber_only', 'confirmed'),
+        },
+        'access confirmed'
+      )
     );
   },
 }));
@@ -263,6 +302,36 @@ describe('PlaylistPage selected-download selection lifecycle', () => {
     await waitFor(() => expect(screen.queryByText('1 selected')).not.toBeInTheDocument());
   });
 
+  test('sends the protect choice from the download dialog', async () => {
+    const user = userEvent.setup();
+    mockTriggerDownload.mockResolvedValue(undefined);
+
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select Vid A' }));
+    await user.click(screen.getByTestId('selection-action-download'));
+    await user.click(await screen.findByTestId('mock-confirm-protected-download'));
+
+    await waitFor(() => expect(mockTriggerDownload).toHaveBeenCalledWith(
+      ['vidA'], expect.objectContaining({ protect: true })
+    ));
+  });
+
+  test('opens the download dialog with protection on when protecting manual downloads is the default', async () => {
+    const user = userEvent.setup();
+    mockConfig.protectManualDownloads = true;
+    try {
+      renderWithProviders(<PlaylistPage token="t" />);
+
+      await user.click(screen.getByRole('checkbox', { name: 'Select Vid A' }));
+      await user.click(screen.getByTestId('selection-action-download'));
+
+      expect(await screen.findByTestId('mock-dialog-default-protect')).toHaveTextContent('true');
+    } finally {
+      delete mockConfig.protectManualDownloads;
+    }
+  });
+
   test('Download all opens the dialog and downloads all videos on confirm', async () => {
     const user = userEvent.setup();
     mockTriggerDownload.mockResolvedValue(undefined);
@@ -274,6 +343,30 @@ describe('PlaylistPage selected-download selection lifecycle', () => {
 
     await waitFor(() => expect(mockTriggerDownload).toHaveBeenCalledWith(undefined, undefined));
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/downloads/activity'));
+  });
+
+  describe('with download filters', () => {
+    afterEach(() => {
+      mockDetailOverride.current = {};
+    });
+
+    test('Download all counts only the videos the filters do not skip', () => {
+      mockDetailOverride.current = { notDownloadedCount: 5, filteredCount: 3 };
+      renderWithProviders(<PlaylistPage token="t" />);
+      expect(screen.getByRole('button', { name: 'Download all 2 videos' })).toBeInTheDocument();
+    });
+
+    test('says how many undownloaded videos the filters skip', () => {
+      mockDetailOverride.current = { notDownloadedCount: 5, filteredCount: 3 };
+      renderWithProviders(<PlaylistPage token="t" />);
+      expect(screen.getByText(/3 undownloaded videos are skipped by this playlist's download filters/)).toBeInTheDocument();
+    });
+
+    test('warns when the filters cannot be evaluated', () => {
+      mockDetailOverride.current = { notDownloadedCount: 5, filteredCount: 5, filterError: 'Invalid regex pattern: bad' };
+      renderWithProviders(<PlaylistPage token="t" />);
+      expect(screen.getByText(/Invalid regex pattern: bad/)).toBeInTheDocument();
+    });
   });
 
   test('passes missingVideoCount 1 when a previously-downloaded video is selected', async () => {
@@ -316,6 +409,23 @@ describe('PlaylistPage selected-download selection lifecycle', () => {
     expect(screen.getByRole('radio', { name: 'Only download future additions' })).toBeChecked();
     expect(mockToggleAutoDownload).not.toHaveBeenCalled();
     expect(mockTriggerDownload).not.toHaveBeenCalled();
+  });
+
+  test('updates the row when the modal finds the cookies can open a members-only video', async () => {
+    const user = userEvent.setup();
+    mockVideosOverride.current = [{ ...mockVideo, members_access: 'denied' }];
+
+    try {
+      renderWithProviders(<PlaylistPage token="t" />);
+      expect(screen.queryByRole('checkbox', { name: 'Select Vid A' })).not.toBeInTheDocument();
+
+      await user.click(screen.getByText('Vid A'));
+      await user.click(await screen.findByTestId('mock-modal-access-confirmed'));
+
+      expect(await screen.findByRole('checkbox', { name: 'Select Vid A' })).toBeInTheDocument();
+    } finally {
+      mockVideosOverride.current = null;
+    }
   });
 
   test('marks the row deleted in place and refreshes meta when the modal reports a deletion', async () => {
@@ -522,11 +632,43 @@ describe('PlaylistPage video list notices', () => {
     renderWithProviders(<PlaylistPage token="t" />);
 
     expect(
-      screen.getByText(/private, members-only, and deleted videos/i)
+      screen.getByText(/private and deleted videos/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/members-only videos download only with cookies/i)
     ).toBeInTheDocument();
     expect(
       screen.getByText(/fewer videos here than YouTube reports/i)
     ).toBeInTheDocument();
+  });
+});
+
+describe('PlaylistPage action errors', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('shows the server explanation when a refresh is refused', async () => {
+    const user = userEvent.setup();
+    mockRefresh.mockRejectedValue(Object.assign(new Error('Request failed with status code 404'), {
+      isAxiosError: true,
+      response: { status: 404, data: { error: 'YouTube says this playlist does not exist.' } },
+    }));
+
+    renderWithProviders(<PlaylistPage token="t" />);
+    await user.click(screen.getByRole('button', { name: 'Refresh from YouTube' }));
+
+    expect(await screen.findByText('YouTube says this playlist does not exist.')).toBeInTheDocument();
+  });
+
+  test('falls back to the error message when the server sent no explanation', async () => {
+    const user = userEvent.setup();
+    mockRefresh.mockRejectedValue(Object.assign(new Error('Network Error'), { isAxiosError: true }));
+
+    renderWithProviders(<PlaylistPage token="t" />);
+    await user.click(screen.getByRole('button', { name: 'Refresh from YouTube' }));
+
+    expect(await screen.findByText('Network Error')).toBeInTheDocument();
   });
 });
 
@@ -557,6 +699,24 @@ describe('PlaylistPage restored-subscription notice', () => {
     expect(
       screen.queryByText('Playlist restored with its previous settings')
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('PlaylistPage media server sync updates', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('re-reads the playlist meta when a sync of this playlist starts or ends', () => {
+    const websocketValue = createMockWebSocketContext();
+    renderWithProviders(<PlaylistPage token="t" />, { websocketValue });
+
+    const syncUpdated = { destination: 'broadcast', type: 'playlistSyncUpdated', payload: { playlistDbId: 42 } };
+    const listeners = websocketValue.subscribe.mock.calls.filter(([filter]) => filter(syncUpdated));
+    expect(listeners).toHaveLength(1);
+    listeners[0][1](syncUpdated);
+
+    expect(mockRefetchMeta).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -5,6 +5,9 @@ import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeEngineProvider } from '../../../contexts/ThemeEngineContext';
 import { AppShell } from '../AppShell';
+import { NavItem, NavSubItem, isNavSubItemActive } from '../navigation';
+
+const mockNav: { items: NavItem[] } = { items: [] };
 
 jest.mock('../BackgroundDecorations', () => ({
   BackgroundDecorations: () => null,
@@ -37,13 +40,36 @@ jest.mock('../DownloadPauseBanner', () => ({
   },
 }));
 
-jest.mock('../NavSidebar', () => ({
-  NavSidebar: ({ collapsed, isTopNav }: { collapsed: boolean; isTopNav: boolean }) => (
-    <div data-testid="nav-sidebar">
-      collapsed:{String(collapsed)}|topnav:{String(isTopNav)}
-    </div>
-  ),
+jest.mock('../SupportPromptDialog', () => ({
+  __esModule: true,
+  default: function MockSupportPromptDialog({ token }: { token: string | null }) {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'support-prompt-dialog', 'data-token': token ?? '' });
+  },
 }));
+
+jest.mock('../NavSidebar', () => ({
+  NavSidebar: ({ collapsed, isTopNav, navItems }: { collapsed: boolean; isTopNav: boolean; navItems: NavItem[] }) => {
+    mockNav.items = navItems;
+    return (
+      <div data-testid="nav-sidebar">
+        collapsed:{String(collapsed)}|topnav:{String(isTopNav)}
+      </div>
+    );
+  },
+}));
+
+function navItem(key: string): NavItem {
+  const found = mockNav.items.find((item) => item.key === key);
+  if (!found) throw new Error(`No nav item ${key}`);
+  return found;
+}
+
+function navSubItem(key: string): NavSubItem {
+  const found = mockNav.items.flatMap((item) => item.subItems ?? []).find((subItem) => subItem.key === key);
+  if (!found) throw new Error(`No nav sub-item ${key}`);
+  return found;
+}
 
 function setViewportMatch(isMobile: boolean, isLandscape = false) {
   Object.defineProperty(window, 'matchMedia', {
@@ -152,6 +178,12 @@ describe('AppShell', () => {
     expect(within(getContentFrame()).getByTestId('download-pause-banner')).toBeInTheDocument();
   });
 
+  it('mounts the one-time support prompt with the session token', () => {
+    renderShell('playful');
+
+    expect(screen.getByTestId('support-prompt-dialog')).toHaveAttribute('data-token', 'test-token');
+  });
+
   it('uses top-nav layout width rules for flat theme', async () => {
     renderShell('flat');
 
@@ -196,6 +228,30 @@ describe('AppShell', () => {
     expect(screen.getByRole('main')).toHaveAttribute('data-nav-placement', 'top');
     expect(getLayoutRoot().style.getPropertyValue('--layout-main-padding')).toBe('8px 4px calc(20px + env(safe-area-inset-bottom))');
     expect(getLayoutRoot().style.getPropertyValue('--layout-content-padding')).toBe('8px 4px');
+  });
+
+  it('lists the settings sub-items under their Settings page groups, in group order', () => {
+    renderShell('playful');
+
+    const groups = (navItem('settings').subItems ?? []).map((subItem) => subItem.group);
+    expect(groups.filter((group, index) => group !== groups[index - 1])).toEqual([
+      'Downloads & library', 'Media servers', 'Automation & storage', 'Integrations', 'System',
+    ]);
+    expect(navSubItem('plex').group).toBe('Media servers');
+  });
+
+  it('leaves the settings sub-items off the phone strip, and keeps the other sections on it', () => {
+    renderShell('playful');
+
+    expect(navItem('settings').hideSubItemsOnMobile).toBe(true);
+    expect(navItem('downloads').hideSubItemsOnMobile).toBeUndefined();
+  });
+
+  it('matches the Channels and Videos sub-items exactly', () => {
+    renderShell('playful');
+
+    expect(isNavSubItemActive('/subscriptions/find', navSubItem('subscriptions-list'))).toBe(false);
+    expect(isNavSubItemActive('/videos/find', navSubItem('videos-downloaded'))).toBe(false);
   });
 
   it('removes landscape mobile side gutters so the content fills the window', () => {

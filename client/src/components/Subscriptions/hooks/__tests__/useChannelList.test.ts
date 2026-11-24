@@ -655,6 +655,55 @@ describe('useChannelList', () => {
     });
   });
 
+  describe('Out-of-order responses', () => {
+    const responseFor = (uploader: string) => ({
+      data: { channels: [{ ...mockChannel, uploader }], total: 1, totalPages: 1 },
+    });
+
+    const renderWithTwoPendingSearches = () => {
+      const resolvers: Array<(value: unknown) => void> = [];
+      axios.get.mockImplementation(() => new Promise((resolve) => { resolvers.push(resolve); }));
+
+      const view = renderHook(
+        ({ searchTerm }: { searchTerm: string }) => useChannelList({ ...defaultParams, searchTerm }),
+        { initialProps: { searchTerm: 'a' } }
+      );
+      view.rerender({ searchTerm: 'ab' });
+
+      return { ...view, resolvers };
+    };
+
+    test('ignores a response that arrives after a newer request has answered', async () => {
+      const { result, resolvers } = renderWithTwoPendingSearches();
+      await waitFor(() => {
+        expect(resolvers).toHaveLength(2);
+      });
+
+      await act(async () => {
+        resolvers[1](responseFor('Newer'));
+      });
+      await act(async () => {
+        resolvers[0](responseFor('Older'));
+      });
+
+      expect(result.current.channels[0].uploader).toBe('Newer');
+    });
+
+    test('keeps loading until the newest request answers', async () => {
+      const { result, resolvers } = renderWithTwoPendingSearches();
+      await waitFor(() => {
+        expect(resolvers).toHaveLength(2);
+      });
+
+      await act(async () => {
+        resolvers[0](responseFor('Older'));
+      });
+
+      expect(result.current.loading).toBe(true);
+      expect(result.current.channels).toEqual([]);
+    });
+  });
+
   describe('Loading State Management', () => {
     test('sets loading to true during fetch', async () => {
       let resolvePromise: (value: any) => void;

@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import {
   Alert,
   Button,
@@ -21,6 +21,8 @@ import { useSubfolders } from '../../../hooks/useSubfolders';
 import { useConfig } from '../../../hooks/useConfig';
 import { usePlaylistMutations } from '../../../hooks/usePlaylistMutations';
 import { Playlist, PlaylistSortOrderSetting, PlaylistSubscribeSettings } from '../../../types/playlist';
+import PlaylistDownloadFilters from './PlaylistDownloadFilters';
+import { hasDownloadFilters, PlaylistFilterValues } from '../hooks/usePlaylistFilterPreview';
 
 interface PlaylistSettingsDialogProps {
   open: boolean;
@@ -31,11 +33,7 @@ interface PlaylistSettingsDialogProps {
   onFollowFromNow?: () => void;
 }
 
-// Settings surfaced by this dialog. The playlist also has min_duration,
-// max_duration and title_filter_regex columns; they only pre-seed auto-created
-// source channels (not the playlist download resolver) and are intentionally not
-// exposed here yet. They are left untouched on save.
-interface FormState {
+interface FormState extends PlaylistFilterValues {
   default_sub_folder: string | null;
   video_quality: string | null;
   audio_format: string | null;
@@ -50,12 +48,27 @@ function fromPlaylist(p: Playlist): FormState {
     audio_format: p.audio_format ?? null,
     default_rating: p.default_rating ?? null,
     sort_order: p.sort_order ?? 'default',
+    min_duration: p.min_duration ?? null,
+    max_duration: p.max_duration ?? null,
+    title_filter_regex: p.title_filter_regex ?? null,
   };
 }
 
-const MP3_HELPER_TEXT = 'MP3 files are saved at 192kbps in the same folder as videos.';
+/** The fields of a draft that differ from the saved values it started from. */
+function changedFields(draft: FormState, saved: FormState): Partial<FormState> {
+  const changed: Partial<FormState> = {};
+  const keep = <K extends keyof FormState>(field: K) => {
+    if (draft[field] !== saved[field]) changed[field] = draft[field];
+  };
+  (Object.keys(saved) as (keyof FormState)[]).forEach(keep);
+  return changed;
+}
+
+const MP3_HELPER_TEXT ='MP3 files are saved at 192kbps in the same folder as videos.';
 const MP3_ONLY_SYNC_HINT =
   ' MP3 Only playlists sync to media servers as music playlists: the server needs a music-type library that includes your Youtarr output folder.';
+const VIDEO_MP3_SYNC_HINT =
+  ' Video + MP3 playlists sync to media servers as video playlists: the server needs a video-type library that includes your Youtarr output folder.';
 
 const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
   open,
@@ -71,18 +84,44 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
   const { subfolders, loading: subfoldersLoading, createSubfolder } = useSubfolders(token);
   const { config, refetch: refetchConfig } = useConfig(token);
   const { updateSettings, pending, error } = usePlaylistMutations({ token });
+  // The hook keeps its last error until the next save. It described the values
+  // sent then, so it is hidden once they are edited or the dialog is reopened.
+  const [errorDismissed, setErrorDismissed] = useState(true);
+  const saveError = errorDismissed ? null : error;
 
+  // The saved values the form was last brought up to date with; null until
+  // the dialog opens, and again when it switches playlists.
+  const syncedRef = useRef<FormState | null>(null);
   useEffect(() => {
-    if (open) {
-      setForm(fromPlaylist(playlist));
-      refetchConfig().catch(() => {
-        /* non-critical: dialog still works without the latest global default */
-      });
+    syncedRef.current = null;
+  }, [open, playlist.playlist_id]);
+
+  // The page refetches the playlist on download and sync events, and another
+  // session may have saved settings meanwhile. A refresh updates every field
+  // the user has not changed and keeps the ones they have, so it never
+  // discards a draft and a save never writes back a value the user did not pick.
+  useEffect(() => {
+    if (!open) return;
+    const saved = fromPlaylist(playlist);
+    const synced = syncedRef.current;
+    syncedRef.current = saved;
+    if (synced) {
+      setForm((draft) => ({ ...saved, ...changedFields(draft, synced) }));
+      return;
     }
+    setErrorDismissed(true);
+    setForm(saved);
+    refetchConfig().catch(() => {
+      /* non-critical: dialog still works without the latest global default */
+    });
   }, [open, playlist, refetchConfig]);
 
+  const changeForm = (changes: Partial<FormState>) => {
+    setErrorDismissed(true);
+    setForm((prev) => ({ ...prev, ...changes }));
+  };
   const update = <K extends keyof FormState>(field: K, value: FormState[K]) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    changeForm({ [field]: value } as Pick<FormState, K>);
   };
 
   // Media-server playlists are typed by the Download Type setting (MP3 Only =
@@ -97,13 +136,24 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
   const sortOrderChanges = form.sort_order !== (playlist.sort_order ?? 'default');
 
   const handleSave = async () => {
+    const saved = fromPlaylist(playlist);
+    // Only edited filters are sent. Filters set through the API before this
+    // dialog existed were not validated, and resending one the server now
+    // rejects would block saving an unrelated setting. Unedited fields track
+    // the playlist (see the refresh effect), so comparing with it finds the edits.
     const settings: PlaylistSubscribeSettings = {
       default_sub_folder: form.default_sub_folder,
       video_quality: form.video_quality,
       audio_format: form.audio_format,
       default_rating: form.default_rating,
       sort_order: form.sort_order,
+      ...(form.min_duration !== saved.min_duration && { min_duration: form.min_duration }),
+      ...(form.max_duration !== saved.max_duration && { max_duration: form.max_duration }),
+      ...(form.title_filter_regex !== saved.title_filter_regex && {
+        title_filter_regex: form.title_filter_regex?.trim() || null,
+      }),
     };
+    setErrorDismissed(false);
     const ok = await updateSettings(playlist.playlist_id, settings);
     if (ok) {
       onSaved(settings);
@@ -116,7 +166,6 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
       <DialogTitle>Playlist Settings</DialogTitle>
       <DialogContent>
         <div className="flex flex-col gap-4 mt-2">
-          {error && <Alert severity="error">{error}</Alert>}
           {playlist.auto_download_baseline_at && onFollowFromNow && (
             <div className="rounded-md border border-border p-3 flex flex-col gap-2">
               <Typography variant="subtitle2">Automatic downloads</Typography>
@@ -181,7 +230,7 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
                 form.audio_format
                   ? form.audio_format === 'mp3_only'
                     ? MP3_HELPER_TEXT + MP3_ONLY_SYNC_HINT
-                    : MP3_HELPER_TEXT
+                    : MP3_HELPER_TEXT + VIDEO_MP3_SYNC_HINT
                   : undefined
               }
             />
@@ -246,8 +295,30 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
               label="Default Rating"
             />
           </div>
+
+          <Divider />
+
+          <PlaylistDownloadFilters
+            value={{
+              min_duration: form.min_duration,
+              max_duration: form.max_duration,
+              title_filter_regex: form.title_filter_regex,
+            }}
+            onChange={changeForm}
+            playlistId={playlist.playlist_id}
+            token={token}
+            hasSavedFilters={hasDownloadFilters(playlist)}
+            autoDownload={playlist.auto_download}
+            disabled={pending}
+          />
         </div>
       </DialogContent>
+      {/* Outside the scrolling content, so it shows wherever the dialog is scrolled to. */}
+      {saveError && (
+        <div className="px-6 py-3">
+          <Alert severity="error">{saveError}</Alert>
+        </div>
+      )}
       <DialogActions>
         <Button variant="text" onClick={onClose} disabled={pending}>
           Cancel

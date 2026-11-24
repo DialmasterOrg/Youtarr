@@ -25,6 +25,17 @@ const videoLookupLimiter = rateLimit({
   validate: { trustProxy: false },
 });
 
+// Members-only access check limiter. Each check is one signed-in YouTube
+// request on the user's account, so it is capped well below the metadata route.
+const membersAccessCheckLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // 10 checks per minute per IP
+  message: { error: 'Too many access checks, please try again shortly' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { trustProxy: false },
+});
+
 /**
  * Creates video detail routes for a single video, its metadata and streaming
  * @param {Object} deps - Dependencies
@@ -110,6 +121,20 @@ function createVideoDetailRoutes({ verifyToken, videosModule, videoMetadataModul
    *     responses:
    *       200:
    *         description: Video metadata
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 availability:
+   *                   type: string
+   *                   nullable: true
+   *                   description: YouTube availability; `subscriber_only` marks a members-only video
+   *                 membersAccess:
+   *                   type: string
+   *                   nullable: true
+   *                   enum: [no_cookies, unchecked, confirmed, denied, null]
+   *                   description: Whether the configured cookies can open a members-only video; null when the video is not members-only
    *       400:
    *         description: Invalid YouTube ID
    *       500:
@@ -128,6 +153,61 @@ function createVideoDetailRoutes({ verifyToken, videosModule, videoMetadataModul
     } catch (err) {
       req.log.error({ err, youtubeId }, 'Failed to get video metadata');
       res.status(500).json({ error: 'Failed to retrieve video metadata' });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/videos/{youtubeId}/members-access/check:
+   *   post:
+   *     summary: Check whether the configured cookies can open a members-only video
+   *     description: Asks YouTube with the configured cookies, records the answer for 24 hours, and returns the video's members-only access state. Downloads and listings use the recorded answer.
+   *     tags: [Videos]
+   *     parameters:
+   *       - in: path
+   *         name: youtubeId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: YouTube video ID
+   *     responses:
+   *       200:
+   *         description: The access state after the check
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 membersAccess:
+   *                   type: string
+   *                   nullable: true
+   *                   enum: [no_cookies, unchecked, confirmed, denied]
+   *                   description: null when the video is not members-only
+   *       400:
+   *         description: Invalid YouTube ID
+   *       429:
+   *         description: Too many checks
+   *       503:
+   *         description: YouTube could not be asked (timeout, network or bot check); nothing was recorded
+   *       500:
+   *         description: Internal server error
+   */
+  router.post('/api/videos/:youtubeId/members-access/check', membersAccessCheckLimiter, verifyToken, async (req, res) => {
+    const { youtubeId } = req.params;
+
+    if (!youtubeId || !/^[A-Za-z0-9_-]{6,20}$/.test(youtubeId)) {
+      return res.status(400).json({ error: 'Invalid YouTube ID' });
+    }
+
+    try {
+      const result = await videoMetadataModule.checkMembersAccess(youtubeId);
+      if (!result.checked) {
+        return res.status(503).json({ error: 'YouTube could not be reached to check access. Try again later.' });
+      }
+      res.json({ membersAccess: result.membersAccess });
+    } catch (err) {
+      req.log.error({ err, youtubeId }, 'Failed to check members-only access');
+      res.status(500).json({ error: 'Failed to check members-only access' });
     }
   });
 

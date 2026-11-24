@@ -44,7 +44,7 @@ describe('VideoDeletionModule', () => {
   let mockFilesystem;
   let m3uGenerator;
   let playlistOutputRefresh;
-  let mockCheckLibraryRoot;
+  let mockCheckLibraryAvailable;
 
   beforeEach(() => {
     jest.resetModules();
@@ -64,9 +64,9 @@ describe('VideoDeletionModule', () => {
     };
 
     // The downloads folder looks mounted unless a test says otherwise.
-    mockCheckLibraryRoot = jest.fn().mockResolvedValue({ ok: true });
+    mockCheckLibraryAvailable = jest.fn().mockResolvedValue({ ok: true });
     jest.doMock('../libraryRootCheck', () => ({
-      checkLibraryRoot: mockCheckLibraryRoot,
+      checkLibraryAvailable: mockCheckLibraryAvailable,
       isUnderLibraryCheckPath,
       libraryCheckCoversRows
     }));
@@ -89,7 +89,8 @@ describe('VideoDeletionModule', () => {
       cleanupEmptyParents: jest.fn().mockResolvedValue(),
       isSubfolderDir: jest.fn((name) => name.startsWith('__')),
       listSubdirectories: jest.fn().mockResolvedValue([]),
-      removeDirectoryResilient: jest.fn().mockResolvedValue()
+      removeDirectoryResilient: jest.fn().mockResolvedValue(),
+      removeEmptyVideoDirectory: jest.fn().mockResolvedValue(false)
     };
 
     // Mock the models
@@ -592,6 +593,39 @@ describe('VideoDeletionModule', () => {
 
         expect(mockFilesystem.removeDirectoryResilient).not.toHaveBeenCalled();
       });
+
+      describe.each([
+        ['outside the downloads folder', '/old/output/Channel/Channel - Song - dQw4w9WgXcQ'],
+        ['one level deeper than a channel folder', '/test/output/youtube/Channel/Channel - Song - dQw4w9WgXcQ']
+      ])('with a video folder %s', (_label, videoDir) => {
+        beforeEach(() => {
+          mockVideo.findByPk.mockResolvedValue({
+            id: 1,
+            youtubeId: 'dQw4w9WgXcQ',
+            filePath: `${videoDir}/Song [dQw4w9WgXcQ].mp4`,
+            removed: false,
+            update: jest.fn().mockResolvedValue()
+          });
+          mockFs.readdir.mockResolvedValue(['Song [dQw4w9WgXcQ].mp4', 'Song [dQw4w9WgXcQ].nfo']);
+        });
+
+        test('removes the folder once the video\'s files are deleted, if nothing else is in it', async () => {
+          await VideoDeletionModule.deleteVideoById(1);
+
+          expect(mockFs.unlink).toHaveBeenCalledTimes(2);
+          expect(mockFilesystem.removeEmptyVideoDirectory).toHaveBeenCalledWith(videoDir, 'dQw4w9WgXcQ');
+        });
+
+        test('keeps the folder when one of the video\'s files could not be deleted', async () => {
+          const permissionError = new Error('EACCES');
+          permissionError.code = 'EACCES';
+          mockFs.unlink.mockRejectedValueOnce(permissionError);
+
+          await VideoDeletionModule.deleteVideoById(1);
+
+          expect(mockFilesystem.removeEmptyVideoDirectory).not.toHaveBeenCalled();
+        });
+      });
     });
   });
 
@@ -612,7 +646,7 @@ describe('VideoDeletionModule', () => {
       expect(mockFilesystem.cleanupEmptyChannelDirectory).toHaveBeenCalledWith(
         '/test/output/Channel Name',
         '/test/output',
-        { includeIgnorableFiles: true }
+        { includeIgnorableFiles: true, anyDepth: false }
       );
     });
 
@@ -633,8 +667,39 @@ describe('VideoDeletionModule', () => {
       expect(mockFilesystem.cleanupEmptyChannelDirectory).toHaveBeenCalledWith(
         '/test/output/Channel Name',
         '/test/output',
-        { includeIgnorableFiles: true }
+        { includeIgnorableFiles: true, anyDepth: false }
       );
+    });
+
+    describe('after removing a video folder that sits deeper than a channel folder', () => {
+      beforeEach(() => {
+        mockVideo.findByPk.mockResolvedValue({
+          id: 1,
+          youtubeId: 'abc123',
+          filePath: '/test/output/youtube/Channel Name/Channel Name - Video Title - abc123/Video Title [abc123].mp4',
+          removed: false,
+          update: jest.fn().mockResolvedValue()
+        });
+        mockFilesystem.removeEmptyVideoDirectory.mockResolvedValue(true);
+      });
+
+      test('cleans up the folder that held it, whatever its depth', async () => {
+        await VideoDeletionModule.deleteVideoById(1);
+
+        expect(mockFilesystem.cleanupEmptyChannelDirectory).toHaveBeenCalledWith(
+          '/test/output/youtube/Channel Name',
+          '/test/output',
+          { includeIgnorableFiles: true, anyDepth: true }
+        );
+      });
+
+      test('leaves the folders above it alone', async () => {
+        mockFilesystem.cleanupEmptyChannelDirectory.mockResolvedValueOnce(true);
+
+        await VideoDeletionModule.deleteVideoById(1);
+
+        expect(mockFilesystem.cleanupEmptyParents).not.toHaveBeenCalled();
+      });
     });
 
     test('should NOT call cleanup when video has no filePath', async () => {
@@ -798,7 +863,7 @@ describe('VideoDeletionModule', () => {
       const video = (id, youtubeId, filePath) => ({ id, youtubeId, filePath, removed: false, update: jest.fn().mockResolvedValue() });
 
       test('refuses every video with the check message and touches nothing', async () => {
-        mockCheckLibraryRoot.mockResolvedValue(emptyRoot);
+        mockCheckLibraryAvailable.mockResolvedValue(emptyRoot);
         const mockVideo1 = video(1, 'abc123', '/test/output/Channel/Channel - Video1 - abc123/video.mp4');
         const mockVideo2 = video(2, 'def456', '/test/output/Channel/Channel - Video2 - def456/video.mp4');
         mockVideo.findByPk.mockResolvedValueOnce(mockVideo1).mockResolvedValueOnce(mockVideo2);
@@ -812,7 +877,7 @@ describe('VideoDeletionModule', () => {
       });
 
       test('refuses only the videos under an empty subfolder', async () => {
-        mockCheckLibraryRoot.mockResolvedValue(emptySubfolder);
+        mockCheckLibraryAvailable.mockResolvedValue(emptySubfolder);
         const inMusic = video(1, 'abc123', '/test/output/__Music/Channel/Channel - Video1 - abc123/video.mp4');
         const inRoot = video(2, 'def456', '/test/output/Channel/Channel - Video2 - def456/video.mp4');
         mockVideo.findByPk.mockResolvedValueOnce(inMusic).mockResolvedValueOnce(inRoot);
@@ -832,7 +897,7 @@ describe('VideoDeletionModule', () => {
 
         await VideoDeletionModule.deleteVideos([1, 2]);
 
-        expect(mockCheckLibraryRoot).toHaveBeenCalledTimes(1);
+        expect(mockCheckLibraryAvailable).toHaveBeenCalledTimes(1);
       });
     });
 
@@ -1543,7 +1608,7 @@ describe('VideoDeletionModule', () => {
 
       beforeEach(() => {
         mockConfigModule.getConfig.mockReturnValue({ autoRemovalEnabled: true, autoRemovalVideoAgeThreshold: '30' });
-        mockCheckLibraryRoot.mockResolvedValue(emptyRoot);
+        mockCheckLibraryAvailable.mockResolvedValue(emptyRoot);
         mockSequelize.query.mockResolvedValue([]);
       });
 
@@ -1568,7 +1633,7 @@ describe('VideoDeletionModule', () => {
       });
 
       test('runs normally when only an empty subfolder no video is stored in fails the check', async () => {
-        mockCheckLibraryRoot.mockResolvedValue({ ok: false, reason: 'subfolder-empty', path: '/test/__Kids', message: 'The subfolder __Kids is empty.' });
+        mockCheckLibraryAvailable.mockResolvedValue({ ok: false, reason: 'subfolder-empty', path: '/test/__Kids', message: 'The subfolder __Kids is empty.' });
         mockVideo.count.mockImplementation(countNoneUnderSubfolder(12));
 
         const result = await VideoDeletionModule.performAutomaticCleanup();
@@ -1580,7 +1645,7 @@ describe('VideoDeletionModule', () => {
       test('does not consult the check for a dry run', async () => {
         const result = await VideoDeletionModule.performAutomaticCleanup({ dryRun: true });
 
-        expect(mockCheckLibraryRoot).not.toHaveBeenCalled();
+        expect(mockCheckLibraryAvailable).not.toHaveBeenCalled();
         expect(result.skipped).toBeUndefined();
       });
     });
@@ -2558,7 +2623,7 @@ describe('VideoDeletionModule', () => {
     });
 
     test('skips the sweep while the downloads folder looks unmounted and videos are recorded', async () => {
-      mockCheckLibraryRoot.mockResolvedValue({ ok: false, reason: 'empty', path: '/test/output', message: 'The downloads folder is empty.' });
+      mockCheckLibraryAvailable.mockResolvedValue({ ok: false, reason: 'empty', path: '/test/output', message: 'The downloads folder is empty.' });
       mockVideo.count.mockResolvedValue(3);
       mockFilesystem.listSubdirectories.mockResolvedValue(['/test/output/__Music']);
 
@@ -2570,7 +2635,7 @@ describe('VideoDeletionModule', () => {
     });
 
     test('sweeps normally when the folder looks unmounted but nothing downloaded is recorded', async () => {
-      mockCheckLibraryRoot.mockResolvedValue({ ok: false, reason: 'empty', path: '/test/output', message: 'The downloads folder is empty.' });
+      mockCheckLibraryAvailable.mockResolvedValue({ ok: false, reason: 'empty', path: '/test/output', message: 'The downloads folder is empty.' });
       mockVideo.count.mockResolvedValue(0);
       mockFilesystem.listSubdirectories.mockResolvedValue([]);
 
@@ -2581,7 +2646,7 @@ describe('VideoDeletionModule', () => {
     });
 
     test('sweeps an empty subfolder that no recorded video is stored in, so the check passes again', async () => {
-      mockCheckLibraryRoot.mockResolvedValue({ ok: false, reason: 'subfolder-empty', path: '/test/output/__Kids', message: 'The subfolder __Kids is empty.' });
+      mockCheckLibraryAvailable.mockResolvedValue({ ok: false, reason: 'subfolder-empty', path: '/test/output/__Kids', message: 'The subfolder __Kids is empty.' });
       mockVideo.count.mockImplementation(countNoneUnderSubfolder(3));
       mockFilesystem.listSubdirectories
         .mockResolvedValueOnce(['/test/output/__Kids'])
@@ -2591,6 +2656,21 @@ describe('VideoDeletionModule', () => {
 
       expect(result.skipped).toBeUndefined();
       expect(mockFilesystem.cleanupEmptyParents).toHaveBeenCalledWith('/test/output/__Kids', '/test/output');
+    });
+
+    test('leaves the Sonarr/Radarr staging folder alone, which is not a channel folder', async () => {
+      mockFilesystem.listSubdirectories.mockResolvedValue([
+        '/test/output/.arr-staging',
+        '/test/output/Empty Channel'
+      ]);
+      mockFilesystem.cleanupEmptyChannelDirectory.mockResolvedValue(true);
+
+      const result = await VideoDeletionModule.cleanupOrphanDirectories();
+
+      expect(result.removed).toEqual(['/test/output/Empty Channel']);
+      expect(mockFilesystem.cleanupEmptyChannelDirectory).not.toHaveBeenCalledWith(
+        '/test/output/.arr-staging', expect.anything(), expect.anything()
+      );
     });
 
     test('should clean up root-level empty channel directories', async () => {

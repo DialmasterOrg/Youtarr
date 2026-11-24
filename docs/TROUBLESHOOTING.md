@@ -129,6 +129,8 @@ See [Authentication - Cannot Find the Setup Token](AUTHENTICATION.md#cannot-find
 **Problem**: New downloads are refused (HTTP 409 from the API), scheduled downloads show as skipped, and a "Downloads are paused" banner appears.
 
 **Solution**:
+- If the banner says the downloads folder is empty, does not exist, could not be read, or that most downloaded videos are not where Youtarr saved them, the downloads folder looks unavailable: a drive or network share is not mounted, or the container's volume mapping points at a different folder than your library. Youtarr holds downloads so new files do not land outside your library. See [Every Video Shows as Missing After I Moved the Library](#every-video-shows-as-missing-after-i-moved-the-library). Downloads resume on their own once the folder is back.
+- If you moved files around inside the downloads folder yourself, the stored paths are out of date: run **Settings -> Maintenance & Rescan -> Rescan files on disk**. Downloads resume as soon as the rescan finishes.
 - A storage limit on **Settings -> Storage Limits** was reached. The banner and the notification say which one and by how much.
 - Usage further past the limit than one video is expected: limits are checked between download jobs, so a job that was already running when the limit was crossed finishes all of its videos first.
 - Free space or remove videos (manually, or with Auto Removal), or raise or clear the limit. Downloads resume on their own: Youtarr re-checks after deletions, on settings changes, and every 5 minutes while paused. Queued downloads then start automatically.
@@ -155,6 +157,23 @@ See [Authentication - Cannot Find the Setup Token](AUTHENTICATION.md#cannot-find
 
 The rescan recognizes `.mp4`, `.webm`, `.mkv`, `.m4v`, `.avi`, and `.mp3`. Files that no longer have the `[<youtube-id>]` segment in their name (for example, if you renamed `Channel - Video [abc123XYZ01].mp4` to `My Movie.mp4`) cannot be matched and will continue to show as missing.
 
+On a large library on a network share, the scan can take a while (most of an hour on slow disks while backups run). **Settings -> Maintenance & Rescan** shows how far it has got, and the log prints its progress every 30 seconds.
+
+### Every Video Shows as Missing After I Moved the Library
+
+**Problem**: After moving the whole library to another folder on the host (or changing the compose file), the rescan says the downloads folder is empty, or that most downloaded videos were not found, and downloads are paused.
+
+**Cause**: Youtarr only sees the host folder that the container's volume mapping points at (the line ending in `:/usr/src/app/data` in your compose file). The `YOUTUBE_OUTPUT_DIR` variable in the `environment:` section is only the label Youtarr shows for it. If you moved the library and changed only `YOUTUBE_OUTPUT_DIR`, Youtarr is still looking at the old, now empty, folder.
+
+**Solution**:
+1. Point the volume mapping at the folder that now holds your library (in our `docker-compose.yml` that is `YOUTUBE_OUTPUT_DIR` in `.env`, which feeds both), then restart Youtarr.
+2. Let the startup rescan finish, or run **Rescan files on disk**. It finds every video by the `[<youtube-id>]` in its filename and marks it downloaded again; nothing in the database needs editing.
+3. Until the rescan has finished, do not use **Mark all missing as deleted** or **Empty trash**: emptying missing videos from the trash forgets them for good.
+
+Videos that Youtarr downloaded while the mapping pointed at the old folder are still in that old folder on the host. Move them into the library and rescan.
+
+While the downloads folder looks empty, or most videos are not where they were saved, Youtarr marks nothing missing and holds downloads (see "The downloads folder looks unmounted" under [Deleted vs. Missing Videos, and Emptying the Trash](#deleted-vs-missing-videos-and-emptying-the-trash)). **Rescan anyway...** would mark them all missing, so it says how many videos it would affect and asks you to confirm you removed the files yourself.
+
 ### Deleted vs. Missing Videos, and Emptying the Trash
 
 Youtarr keeps a record of every video it has downloaded, even after the file is gone, so the video can be re-downloaded and so automatic downloads do not fetch it again. A video without a file is shown in one of two ways:
@@ -162,7 +181,13 @@ Youtarr keeps a record of every video it has downloaded, even after the file is 
 - **Deleted** (neutral grey chip): Youtarr removed the file on purpose, through a delete in the app or automatic cleanup, or you marked a missing video as deleted. Videos removed before Youtarr started recording the reason also show as Deleted ("Removed before Youtarr recorded why"). The Videos page hides deleted videos by default; the **Deleted** filter chip (set to "Hide" unless you change it, which is remembered in your browser) and the "N deleted videos hidden. Show" note bring them back. Channel and playlist pages keep listing them.
 - **Missing** (red chip): Youtarr expected a file on disk and could not find it. Missing videos stay visible so you can look into them. Hover or tap the chip, or open the video, to see the path Youtarr looked at and when.
 
-**The downloads folder looks unmounted**: if your downloads live on a drive or network share and it is not mounted, every file looks gone. Youtarr checks that the downloads folder (and each `__subfolder` in it) exists and is not empty before marking anything missing. While that check fails, the Videos page shows a warning instead of marking videos missing, the scheduled rescan records a partial run that names the folder, automatic cleanup records a skipped run instead of stamping videos it cannot reach as deleted, and deleting a video in the app is refused with the same message. If missing videos are stored in the failing folder, **Empty trash** cannot remove them, and **Mark all missing as deleted** is disabled, or, when the folder is only empty (not gone or unreadable), asks you to confirm that you removed the files yourself. Failing `__subfolders` only affect the videos stored in them (every subfolder is checked, so two shares down at once are both covered), and an empty one that no video is stored in (for example one a channel was moved out of) is ignored. Mount the share and the warning goes away on its own; nothing was changed in the meantime. If the folder really is empty because you removed the files yourself, use **Settings -> Maintenance & Rescan -> Rescan anyway...**: it runs the rescan without the check and marks every video whose file is not found as missing; then use **Mark all missing as deleted**. Only do this when you know the files are gone.
+**The downloads folder looks unmounted**: if your downloads live on a drive or network share and it is not mounted, every file looks gone. Youtarr checks that the downloads folder (and each `__subfolder` in it) exists and is not empty before marking anything missing. Because a bare mount point stops being empty as soon as something is written into it, Youtarr also looks for a random sample of downloaded videos where it saved them, and treats the folder the same way when most of them are not there. The rescan judges by what its walk of the folder finds instead: if it finds fewer than half of a folder's downloaded videos (and at least 25 are gone), it marks none of them missing that run and says how many it found.
+
+While a check fails, the Videos page shows a warning instead of marking videos missing, the scheduled rescan records a partial run that names the folder, automatic cleanup records a skipped run instead of stamping videos it cannot reach as deleted, deleting a video in the app is refused with the same message, and downloads are paused (only for the downloads folder itself, not a single `__subfolder`) so new files do not land outside your library. If missing videos are stored in the failing folder, **Empty trash** cannot remove them, and **Mark all missing as deleted** is disabled, or, when the folder is only empty or most videos are not found (not gone or unreadable), asks you to confirm that you removed the files yourself. Failing `__subfolders` only affect the videos stored in them (every subfolder is checked, so two shares down at once are both covered), and an empty one that no video is stored in (for example one a channel was moved out of) is ignored. Mount the share (or fix the volume mapping) and the warning goes away on its own; nothing was changed in the meantime.
+
+If you moved files inside the downloads folder yourself, run **Rescan files on disk** instead: it finds them by their `[<youtube-id>]` and updates the stored paths, and the warnings and the download pause clear when it finishes.
+
+If you really removed the files yourself, use **Settings -> Maintenance & Rescan -> Rescan anyway...**: it says how many videos it would mark missing, asks you to confirm, then runs the rescan without these checks; then use **Mark all missing as deleted**. Only do this when you know the files are gone. While at least as many videos are missing as present, **Mark all missing as deleted** and emptying missing videos from the trash also ask you to confirm that you removed the files yourself.
 
 **Mark as deleted**: when a missing video's file really is gone, select it on the Videos page and choose **Mark as deleted** (the video's window has the same button on every page), or use **Settings -> Maintenance & Rescan -> Mark all missing as deleted**. The record is kept (the video can still be re-downloaded, and a file that turns up again is marked downloaded by the rescan); only how the Videos page treats it changes.
 
@@ -184,7 +209,7 @@ If you choose to remove download archive entries, wait for active downloads to f
 
 **Diagnosis**: Measure the full path as Plex sees it (drive letter through `.mp4`). At 260 characters or more, this is your problem.
 
-**Solution**: Shorten the video's folder and file names on disk, keeping the `[<youtube-id>]` segment in the filename. Then run **Settings -> Maintenance & Rescan -> Rescan files on disk** so Youtarr picks up the new path, let Plex scan the library, and (for playlists) run **Sync now**. To prevent recurrence, shorten the filename template under **Settings -> Core Settings -> Video Filename Template**: reduce the title truncation to the current recommended `%(title).64B` (or smaller), or use a preset without the channel-name prefix; see [Video Filename Template](CONFIG.md#video-filename-template). Only new downloads are affected; existing files keep their names.
+**Solution**: Shorten the video's folder and file names on disk, keeping the `[<youtube-id>]` segment in the filename. Then run **Settings -> Maintenance & Rescan -> Rescan files on disk** so Youtarr picks up the new path, let Plex scan the library, and (for playlists) run **Sync now**. To prevent recurrence, shorten the filename template under **Settings -> Core -> Naming -> Video filename template**: reduce the title truncation to the current recommended `%(title).64B` (or smaller), or use a preset without the channel-name prefix; see [Video Filename Template](CONFIG.md#video-filename-template). Only new downloads are affected; existing files keep their names.
 
 ## Docker Issues
 
@@ -818,7 +843,7 @@ An error starting with `Preprocessing: Unable to communicate with SponsorBlock A
 
 `Conversion failed!` is what ffmpeg reports when it cannot write the merged file. Merging the video and audio streams needs a second copy of the video, so the folder downloads are staged in needs free space of about **twice the video's size**. When Youtarr measures that this is what happened, the failed job shows a "Not enough disk space to finish the download" diagnosis (Downloads page, Download History, and notifications) and the log has a `Download failed because the temporary download folder is out of space` line with the folder and its free space. Youtarr normally removes the failed video's leftover files when that download run ends, so the space comes back on its own; anything left is cleared when the next download job starts.
 
-Which disk is full depends on **Use external temp directory** (Settings -> Core):
+Which disk is full depends on **External temp directory** (Settings -> Core -> **Advanced**):
 
 - **Off (default)**: downloads are staged in `.youtarr_tmp/` inside your output folder, so your media drive is the one that is short on space.
 - **On**: downloads are staged inside the container (`/tmp/youtarr-downloads` unless you changed it). Unless you mounted a volume there, this is Docker's own storage. On Docker Desktop (Windows/macOS) that is a virtual disk with a fixed maximum size, shared with every image, the build cache, and every other container; free space on your drives does not count.
@@ -847,9 +872,9 @@ docker exec youtarr df -h /tmp/youtarr-downloads
   docker image prune -a
   ```
 
-If large videos regularly do not fit in the external temp path, mount a volume with enough room there, or turn **Use external temp directory** off so staging uses your output drive (some managed platforms, such as ElfHosted, choose the staging location for you).
+If large videos regularly do not fit in the external temp path, mount a volume with enough room there, or turn **External temp directory** off so staging uses your output drive (some managed platforms, such as ElfHosted, choose the staging location for you).
 
-A channel video that failed this way is retried by each scheduled download for as long as it is still among the most recent videos the check looks at (**Files to Download per Channel**) and passes the channel's filters, so it normally completes once there is room. If it has dropped out of that window, download it manually.
+A channel video that failed this way is retried by each scheduled download for as long as it is still among the most recent videos the check looks at (**Videos per channel tab and playlist**, Settings -> Core -> **Downloads**) and passes the channel's filters, so it normally completes once there is room. If it has dropped out of that window, download it manually.
 
 ### No Download Progress Shown (Downloads Work, Videos "Just Appear")
 
@@ -1087,7 +1112,7 @@ The cookies preview endpoint is rate-limited to 3 requests per minute because ea
 
 **Solution**:
 - Verify poster.jpg exists in each channel folder
-- Check that "Copy channel poster.jpg files" is enabled in **Settings -> Core**
+- Check that **Channel poster.jpg** is enabled in **Settings -> Core -> Media server files**
 - Ensure media server has read permissions for image files
 - Some servers cache artwork - try:
   - Clearing server cache
@@ -1111,7 +1136,7 @@ The cookies preview endpoint is rate-limited to 3 requests per minute because ea
 **Problem**: Videos download but no .nfo files are generated.
 
 **Solution**:
-- Check that "Generate video .nfo files" is enabled in **Settings -> Core**
+- Check that **Video .nfo files** is enabled in **Settings -> Core -> Media server files**
 - Verify post-processing completed (check container logs)
 - Ensure write permissions in video directories
 - Look for errors in logs during post-processing phase

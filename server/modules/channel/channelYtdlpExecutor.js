@@ -6,6 +6,7 @@ const { pipeline } = require('stream/promises');
 const { v4: uuidv4 } = require('uuid');
 const { spawnYtDlp } = require('../ytdlpProcess');
 const tempPathManager = require('../download/tempPathManager');
+const { isBotCheck, createBotCheckError } = require('../ytdlpBotCheck');
 
 class ChannelYtdlpExecutor {
   /**
@@ -73,12 +74,8 @@ class ChannelYtdlpExecutor {
 
       ytDlp.on('exit', (code) => {
         clearTimeout(forceKill);
-        // Check for bot detection
-        if (stderrBuffer.includes('Sign in to confirm you\'re not a bot') ||
-            stderrBuffer.includes('Sign in to confirm that you\'re not a bot')) {
-          const error = new Error('Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.');
-          error.code = 'COOKIES_REQUIRED';
-          finish(reject, error);
+        if (isBotCheck(stderrBuffer)) {
+          finish(reject, createBotCheckError({ usedCookies: ytDlp.cookiesPassed === true }));
         } else if (code === 0) {
           finish(resolve);
         } else {

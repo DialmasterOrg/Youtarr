@@ -29,6 +29,8 @@ describe('m3uGenerator', () => {
       mkdirSync: jest.fn(),
       writeFileSync: jest.fn(),
       existsSync: jest.fn().mockReturnValue(true),
+      // Existing files read as ones Youtarr did not generate unless a test says otherwise.
+      readFileSync: jest.fn().mockReturnValue('#EXTM3U\n'),
       unlinkSync: jest.fn(),
       renameSync: jest.fn(),
       promises: {
@@ -188,6 +190,215 @@ describe('m3uGenerator', () => {
     expect(contents).toMatch(/\n\.\.\/ChanB\/Vid 1\/v1\.mp4/);
   });
 
+  describe('Video + MP3 playlist', () => {
+    const MAIN_PATH = '/youtube/__playlists__/My PL.m3u';
+    const MP3_PATH = '/youtube/__playlists__/My PL (MP3).m3u';
+    const rows = {
+      both: { filePath: '/youtube/Chan/Both/both.mp4', audioFilePath: '/youtube/Chan/Both/both.mp3', duration: 10, youTubeVideoName: 'Both', youTubeChannelName: 'Chan' },
+      vid: { filePath: '/youtube/Chan/Vid/vid.mp4', audioFilePath: null, duration: 20, youTubeVideoName: 'Vid', youTubeChannelName: 'Chan' },
+      aud: { filePath: null, audioFilePath: '/youtube/Chan/Aud/aud.mp3', duration: 30, youTubeVideoName: 'Aud', youTubeChannelName: 'Chan' },
+    };
+
+    const generate = async ({ audioFormat = 'video_mp3', ids = ['both', 'vid', 'aud'], overrides = {} } = {}) => {
+      Playlist.findByPk.mockResolvedValue({ id: 1, playlist_id: 'PL1', title: 'My PL', audio_format: audioFormat });
+      PlaylistVideo.findAll.mockResolvedValue(ids.map((id, i) => ({ youtube_id: id, position: i + 1, ignored: false })));
+      Video.findOne.mockImplementation(({ where }) => Promise.resolve(
+        rows[where.youtubeId] ? { ...rows[where.youtubeId], ...overrides[where.youtubeId] } : null
+      ));
+      return m3uGenerator.generatePlaylistM3U(1);
+    };
+
+    const written = (filePath) => {
+      const call = fs.writeFileSync.mock.calls.find((c) => c[0] === filePath);
+      return call ? call[1] : null;
+    };
+
+    test('lists only items with a video file in the main list', async () => {
+      await generate();
+
+      const main = written(MAIN_PATH);
+      expect(main).toContain('both.mp4');
+      expect(main).toContain('vid.mp4');
+      expect(main).not.toContain('.mp3');
+    });
+
+    const OWN_MP3_LIST = '#EXTM3U\n#PLAYLIST:My PL (MP3)\n#YOUTARR-MP3-LIST:playlist:PL1\n#EXTINF:1,x\nx.mp3\n';
+
+    // What sits at the MP3 list's path: null for nothing, else the file's contents.
+    const mp3ListOnDisk = (contents) => {
+      fs.existsSync.mockImplementation((p) => p !== MP3_PATH || contents !== null);
+      fs.readFileSync.mockImplementation((p) => (p === MP3_PATH ? contents : '#EXTM3U\n'));
+    };
+
+    beforeEach(() => mp3ListOnDisk(null));
+
+    describe('when a playlist really titled like the MP3 list is subscribed afterwards', () => {
+      let disk;
+
+      beforeEach(() => {
+        // The real sanitizer keeps parentheses; the file-level mock does not.
+        require('../filesystem/sanitizer').sanitizeNameLikeYtDlp.mockImplementation((s) => s);
+        disk = new Map();
+        fs.existsSync.mockImplementation((p) => disk.has(p));
+        fs.readFileSync.mockImplementation((p) => disk.get(p));
+        fs.writeFileSync.mockImplementation((p, contents) => disk.set(p, contents));
+        fs.unlinkSync.mockImplementation((p) => disk.delete(p));
+      });
+
+      const generateOther = (title) => {
+        Playlist.findByPk.mockResolvedValue({ id: 2, playlist_id: 'PL2', title, audio_format: null });
+        PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'vid', position: 1, ignored: false }]);
+        Video.findOne.mockResolvedValue(rows.vid);
+        return m3uGenerator.generatePlaylistM3U(2);
+      };
+
+      test('its main list does not replace the first playlist\'s MP3 list', async () => {
+        await generate();
+        const firstPlaylistsMp3List = disk.get(MP3_PATH);
+
+        const result = await generateOther('My PL (MP3)');
+
+        expect(result).toBe(false);
+        expect(disk.get(MP3_PATH)).toBe(firstPlaylistsMp3List);
+        expect(disk.get(MP3_PATH)).toContain('#YOUTARR-MP3-LIST:playlist:PL1');
+      });
+
+      test('its main list is written once the first playlist no longer has an MP3 list', async () => {
+        await generate();
+        await generate({ audioFormat: null });
+
+        const result = await generateOther('My PL (MP3)');
+
+        expect(result).toBe(true);
+        expect(disk.get(MP3_PATH)).toContain('#PLAYLIST:My PL (MP3)');
+        expect(disk.get(MP3_PATH)).toContain('vid.mp4');
+        expect(disk.get(MP3_PATH)).not.toContain('#YOUTARR-MP3-LIST');
+      });
+    });
+
+    test('writes its main list over its own leftover MP3 list after being retitled to that name', async () => {
+      require('../filesystem/sanitizer').sanitizeNameLikeYtDlp.mockImplementation((s) => s);
+      mp3ListOnDisk(OWN_MP3_LIST);
+      Playlist.findByPk.mockResolvedValue({ id: 1, playlist_id: 'PL1', title: 'My PL (MP3)', audio_format: null });
+      PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'vid', position: 1, ignored: false }]);
+      Video.findOne.mockResolvedValue(rows.vid);
+
+      const result = await m3uGenerator.generatePlaylistM3U(1);
+
+      expect(result).toBe(true);
+      expect(written(MP3_PATH)).toContain('vid.mp4');
+    });
+
+    test('lists only items with an mp3 in a separate (MP3) list', async () => {
+      await generate();
+
+      const mp3 = written(MP3_PATH);
+      expect(mp3).toContain('#EXTM3U');
+      expect(mp3).toContain('#PLAYLIST:My PL (MP3)');
+      expect(mp3).toMatch(/#EXTINF:10,Chan - Both\n\.\.\/Chan\/Both\/both\.mp3/);
+      expect(mp3).toMatch(/#EXTINF:30,Chan - Aud\n\.\.\/Chan\/Aud\/aud\.mp3/);
+      expect(mp3).not.toContain('.mp4');
+    });
+
+    test('marks the MP3 list as generated for this playlist', async () => {
+      await generate();
+
+      expect(written(MP3_PATH).split('\n')).toContain('#YOUTARR-MP3-LIST:playlist:PL1');
+      expect(written(MAIN_PATH)).not.toContain('#YOUTARR-MP3-LIST');
+    });
+
+    test('rewrites the MP3 list it generated earlier', async () => {
+      mp3ListOnDisk(OWN_MP3_LIST);
+
+      await generate();
+
+      expect(written(MP3_PATH)).toContain('both.mp3');
+    });
+
+    test('writes no MP3 list and removes its stale one when no item has an mp3', async () => {
+      mp3ListOnDisk(OWN_MP3_LIST);
+
+      await generate({ ids: ['vid'] });
+
+      expect(written(MP3_PATH)).toBeNull();
+      expect(fs.unlinkSync).toHaveBeenCalledWith(MP3_PATH);
+    });
+
+    test('leaves a deleted video out of the MP3 list', async () => {
+      await generate({ overrides: { aud: { removed: true, removed_reason: 'user_deleted' } } });
+
+      const mp3 = written(MP3_PATH);
+      expect(mp3).toContain('both.mp3');
+      expect(mp3).not.toContain('aud.mp3');
+    });
+
+    test.each([[null], ['mp3_only']])('audio_format %s removes its stale MP3 list', async (audioFormat) => {
+      mp3ListOnDisk(OWN_MP3_LIST);
+
+      await generate({ audioFormat });
+
+      expect(written(MP3_PATH)).toBeNull();
+      expect(fs.unlinkSync).toHaveBeenCalledWith(MP3_PATH);
+    });
+
+    // A file at that path Youtarr did not generate for this playlist: a
+    // hand-made one, another playlist's main list (a playlist really titled
+    // "My PL (MP3)", or the same name under a case-folding mount), or the MP3
+    // list of another playlist whose title sanitizes to the same name.
+    describe.each([
+      ['a file without a marker', '#EXTM3U\n#PLAYLIST:My PL (MP3)\n#EXTINF:1,mine\nmine.mp3\n'],
+      ['another playlist\'s MP3 list', '#EXTM3U\n#PLAYLIST:My PL (MP3)\n#YOUTARR-MP3-LIST:playlist:PL2\n'],
+      ['a channel\'s MP3 list with the same id text', '#EXTM3U\n#PLAYLIST:My PL (MP3)\n#YOUTARR-MP3-LIST:channel:PL1\n'],
+    ])('when the MP3 list path holds %s', (_label, contents) => {
+      beforeEach(() => mp3ListOnDisk(contents));
+
+      test('does not overwrite it, and still writes the main list', async () => {
+        const result = await generate();
+
+        expect(result).toBe(true);
+        expect(written(MAIN_PATH)).toContain('both.mp4');
+        expect(written(MP3_PATH)).toBeNull();
+        expect(fs.unlinkSync).not.toHaveBeenCalled();
+      });
+
+      test.each([[null], ['mp3_only'], ['video_mp3']])('does not remove it (audio_format %s, no mp3s)', async (audioFormat) => {
+        await generate({ audioFormat, ids: ['vid'] });
+
+        expect(fs.unlinkSync).not.toHaveBeenCalled();
+      });
+    });
+
+    test('a rebuild requested while another runs waits for it and reads the settings afterwards', async () => {
+      // The first rebuild read Video + MP3 and is stuck on a slow lookup when
+      // the Download Type changes to Video Only and a second rebuild is asked for.
+      let releaseSlowLookup;
+      const slowLookup = new Promise((resolve) => { releaseSlowLookup = () => resolve(rows.both); });
+      Playlist.findByPk
+        .mockResolvedValueOnce({ id: 1, playlist_id: 'PL1', title: 'My PL', audio_format: 'video_mp3' })
+        .mockResolvedValueOnce({ id: 1, playlist_id: 'PL1', title: 'My PL', audio_format: null });
+      PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'both', position: 1, ignored: false }]);
+      Video.findOne.mockReturnValueOnce(slowLookup).mockResolvedValue(rows.both);
+      // Once the first rebuild writes the MP3 list, it is on disk as this playlist's own.
+      fs.writeFileSync.mockImplementation((p, contents) => {
+        if (p === MP3_PATH) mp3ListOnDisk(contents);
+      });
+      fs.unlinkSync.mockImplementation((p) => {
+        if (p === MP3_PATH) mp3ListOnDisk(null);
+      });
+
+      const first = m3uGenerator.generatePlaylistM3U(1);
+      const second = m3uGenerator.generatePlaylistM3U(1);
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(Playlist.findByPk).toHaveBeenCalledTimes(1);
+
+      releaseSlowLookup();
+      await Promise.all([first, second]);
+
+      expect(Playlist.findByPk).toHaveBeenCalledTimes(2);
+      expect(fs.existsSync(MP3_PATH)).toBe(false);
+    });
+  });
+
   test('reversed sort order queries positions descending', async () => {
     Playlist.findByPk.mockResolvedValue({ id: 1, playlist_id: 'PL1', title: 'PL', sort_order: 'reversed' });
     PlaylistVideo.findAll.mockResolvedValue([]);
@@ -320,6 +531,150 @@ describe('m3uGenerator', () => {
       expect(fs.mkdirSync).not.toHaveBeenCalled();
     });
 
+    describe('MP3 list', () => {
+      const MAIN_PATH = '/youtube/Chan A/Chan A.m3u';
+      const MP3_PATH = '/youtube/Chan A/Chan A (MP3).m3u';
+      const both = { youtubeId: 'both', filePath: '/youtube/Chan A/Both/both.mp4', audioFilePath: '/youtube/Chan A/Both/both.mp3', duration: 10, youTubeVideoName: 'Both' };
+      const vid = { youtubeId: 'vid', filePath: '/youtube/Chan A/Vid/vid.mp4', audioFilePath: null, duration: 20, youTubeVideoName: 'Vid' };
+      const aud = { youtubeId: 'aud', filePath: null, audioFilePath: '/youtube/Chan A/Aud/aud.mp3', duration: 30, youTubeVideoName: 'Aud' };
+
+      const generate = async (videos, audioFormat = 'video_mp3') => {
+        Channel.findOne.mockResolvedValue({ ...baseChannel, audio_format: audioFormat });
+        Video.findAll.mockResolvedValue(videos);
+        return m3uGenerator.generateChannelM3U('UC1');
+      };
+
+      const written = (filePath) => {
+        const call = fs.writeFileSync.mock.calls.find((c) => c[0] === `${filePath}.tmp`);
+        return call ? call[1] : null;
+      };
+
+      const OWN_MP3_LIST = '#EXTM3U\n#PLAYLIST:Chan A (MP3)\n#YOUTARR-MP3-LIST:channel:UC1\n#EXTINF:1,x\nx.mp3\n';
+
+      // What sits at the MP3 list's path: null for nothing, else the file's contents.
+      const mp3ListOnDisk = (contents) => {
+        fs.existsSync.mockImplementation((p) => p !== MP3_PATH || contents !== null);
+        fs.readFileSync.mockReturnValue(contents);
+      };
+
+      beforeEach(() => mp3ListOnDisk(null));
+
+      test('marks the MP3 list as generated for this channel', async () => {
+        await generate([both]);
+
+        expect(written(MP3_PATH).split('\n')).toContain('#YOUTARR-MP3-LIST:channel:UC1');
+        expect(written(MAIN_PATH)).not.toContain('#YOUTARR-MP3-LIST');
+      });
+
+      describe.each([
+        ['a file without a marker', '#EXTM3U\n#EXTINF:1,mine\nmine.mp3\n'],
+        ['another channel\'s MP3 list', '#EXTM3U\n#PLAYLIST:Chan A (MP3)\n#YOUTARR-MP3-LIST:channel:UC2\n'],
+      ])('when the MP3 list path holds %s', (_label, contents) => {
+        beforeEach(() => mp3ListOnDisk(contents));
+
+        test('does not overwrite it, and still writes the main list', async () => {
+          const result = await generate([both, vid, aud]);
+
+          expect(result).toBe(true);
+          expect(written(MAIN_PATH)).toContain('both.mp4');
+          expect(written(MP3_PATH)).toBeNull();
+          expect(fs.unlinkSync).not.toHaveBeenCalledWith(MP3_PATH);
+        });
+
+        test.each([[null], ['mp3_only'], ['video_mp3']])('does not remove it (audio_format %s, no mp3s)', async (audioFormat) => {
+          await generate([vid], audioFormat);
+
+          expect(fs.unlinkSync).not.toHaveBeenCalledWith(MP3_PATH);
+        });
+
+        test('is kept when the channel playlist file is deleted', async () => {
+          Channel.findOne.mockResolvedValue({ ...baseChannel });
+
+          await m3uGenerator.deleteChannelM3U('UC1');
+
+          expect(fs.unlinkSync).toHaveBeenCalledWith(MAIN_PATH);
+          expect(fs.unlinkSync).not.toHaveBeenCalledWith(MP3_PATH);
+        });
+      });
+
+      test('a rebuild requested while another runs waits for it', async () => {
+        let releaseSlowQuery;
+        const slowQuery = new Promise((resolve) => { releaseSlowQuery = () => resolve([both]); });
+        Channel.findOne.mockResolvedValue({ ...baseChannel, audio_format: 'video_mp3' });
+        Video.findAll.mockReturnValueOnce(slowQuery).mockResolvedValue([both]);
+
+        const first = m3uGenerator.generateChannelM3U('UC1');
+        const second = m3uGenerator.generateChannelM3U('UC1');
+        await new Promise((resolve) => setImmediate(resolve));
+        expect(Channel.findOne).toHaveBeenCalledTimes(1);
+
+        releaseSlowQuery();
+        await Promise.all([first, second]);
+
+        expect(Channel.findOne).toHaveBeenCalledTimes(2);
+      });
+
+      test('Video + MP3 channel lists only items with a video file in the main list', async () => {
+        await generate([both, vid, aud]);
+
+        const main = written(MAIN_PATH);
+        expect(main).toContain('Both/both.mp4');
+        expect(main).toContain('Vid/vid.mp4');
+        expect(main).not.toContain('.mp3');
+        expect(fs.renameSync).toHaveBeenCalledWith(`${MAIN_PATH}.tmp`, MAIN_PATH);
+      });
+
+      test('Video + MP3 channel lists only items with an mp3 in a separate (MP3) list', async () => {
+        await generate([both, vid, aud]);
+
+        const mp3 = written(MP3_PATH);
+        expect(mp3).toContain('#PLAYLIST:Chan A (MP3)');
+        expect(mp3).toMatch(/#EXTINF:10,Both\nBoth\/both\.mp3/);
+        expect(mp3).toMatch(/#EXTINF:30,Aud\nAud\/aud\.mp3/);
+        expect(mp3).not.toContain('.mp4');
+        expect(fs.renameSync).toHaveBeenCalledWith(`${MP3_PATH}.tmp`, MP3_PATH);
+      });
+
+      test('drops an item whose mp3 is gone from disk from the MP3 list but keeps its video', async () => {
+        fs.promises.access.mockImplementation((p) =>
+          String(p).endsWith('both.mp3') ? Promise.reject(new Error('ENOENT')) : Promise.resolve()
+        );
+
+        await generate([both, aud]);
+
+        expect(written(MAIN_PATH)).toContain('both.mp4');
+        expect(written(MP3_PATH)).toContain('aud.mp3');
+        expect(written(MP3_PATH)).not.toContain('both.mp3');
+      });
+
+      test('Video + MP3 channel with only mp3s removes the video list and writes the MP3 list', async () => {
+        await generate([aud]);
+
+        expect(fs.unlinkSync).toHaveBeenCalledWith(MAIN_PATH);
+        expect(written(MAIN_PATH)).toBeNull();
+        expect(written(MP3_PATH)).toContain('aud.mp3');
+      });
+
+      test('Video + MP3 channel with no mp3s removes its stale MP3 list', async () => {
+        mp3ListOnDisk(OWN_MP3_LIST);
+
+        await generate([vid]);
+
+        expect(fs.unlinkSync).toHaveBeenCalledWith(MP3_PATH);
+        expect(written(MP3_PATH)).toBeNull();
+        expect(written(MAIN_PATH)).toContain('vid.mp4');
+      });
+
+      test.each([[null], ['mp3_only']])('audio_format %s removes its stale MP3 list', async (audioFormat) => {
+        mp3ListOnDisk(OWN_MP3_LIST);
+
+        await generate([both, vid, aud], audioFormat);
+
+        expect(fs.unlinkSync).toHaveBeenCalledWith(MP3_PATH);
+        expect(written(MP3_PATH)).toBeNull();
+      });
+    });
+
     test('never writes a .ignore file for channel m3u', async () => {
       Channel.findOne.mockResolvedValue({ ...baseChannel });
       Video.findAll.mockResolvedValue([
@@ -344,6 +699,18 @@ describe('m3uGenerator', () => {
 
       expect(result).toBe(true);
       expect(fs.unlinkSync).toHaveBeenCalledWith('/youtube/Chan A/Chan A.m3u');
+    });
+
+    test('unlinks the MP3 list it generated along with the channel m3u', async () => {
+      Channel.findOne.mockResolvedValue({
+        channel_id: 'UC1', folder_name: 'Chan A', uploader: 'Chan A', sub_folder: null,
+      });
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockReturnValue('#EXTM3U\n#PLAYLIST:Chan A (MP3)\n#YOUTARR-MP3-LIST:channel:UC1\n');
+
+      await m3uGenerator.deleteChannelM3U('UC1');
+
+      expect(fs.unlinkSync).toHaveBeenCalledWith('/youtube/Chan A/Chan A (MP3).m3u');
     });
 
     test('is a no-op success when the file does not exist', async () => {

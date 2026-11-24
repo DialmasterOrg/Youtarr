@@ -14,6 +14,10 @@ interface LibraryDownloadsGroupProps {
   setupError?: Playlist['auto_download_setup_error'];
   followingExistingCount?: number | null;
   followingRequestedCount?: number | null;
+  // Undownloaded videos the playlist's download filters skip.
+  filteredCount?: number | null;
+  // Why the filters could not be evaluated; set while automatic picks are held.
+  filterError?: string | null;
   onChooseExisting?: () => void;
   onRefresh: () => void;
   onDownloadAll: () => void;
@@ -31,6 +35,8 @@ const LibraryDownloadsGroup: React.FC<LibraryDownloadsGroupProps> = ({
   setupError,
   followingExistingCount,
   followingRequestedCount,
+  filteredCount,
+  filterError,
   onChooseExisting,
   onRefresh,
   onDownloadAll,
@@ -63,7 +69,8 @@ const LibraryDownloadsGroup: React.FC<LibraryDownloadsGroupProps> = ({
             </p>
             <p>
               <strong>Download all</strong> queues every eligible video not previously downloaded. You confirm settings
-              and see the count before it starts.
+              and see the count before it starts. Videos skipped by this playlist&apos;s download filters are left
+              out; select them in the list to download them anyway.
             </p>
           </div>
         </InfoHint>
@@ -127,6 +134,20 @@ const LibraryDownloadsGroup: React.FC<LibraryDownloadsGroupProps> = ({
           {autoDownload
             ? ' Check Download History for download progress and saved playlist retries.'
             : ' Automatic retries are paused.'}
+        </p>
+      )}
+
+      {filterError && (
+        <Alert severity="warning">
+          This playlist&apos;s title filter could not be checked, so no video counts as a match. Automatic downloads
+          and Download all are on hold until it is fixed in Playlist settings. Videos you select yourself still
+          download. ({filterError})
+        </Alert>
+      )}
+
+      {!filterError && filteredCount != null && filteredCount > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {`${filteredCount} undownloaded ${filteredCount === 1 ? 'video is' : 'videos are'} skipped by this playlist's download filters. Select them in the list to download them anyway.`}
         </p>
       )}
 

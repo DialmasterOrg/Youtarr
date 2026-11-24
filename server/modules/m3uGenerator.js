@@ -19,6 +19,51 @@ const { REMOVAL_STATES, removalState } = require('./videoRemovalState');
 const SCANNER_IGNORE_FILE = '.ignore';
 // Keeps large channels fast without flooding slow SMB/NAS mounts.
 const FILE_EXISTENCE_CHECK_CONCURRENCY = 25;
+const M3U_EXTENSION = '.m3u';
+// Video + MP3 writes a second list of the mp3s next to the video list (#925).
+const DUAL_AUDIO_FORMAT = 'video_mp3';
+const MP3_LIST_SUFFIX = ' (MP3)';
+// Comment line naming the playlist or channel an MP3 list was generated for.
+// The name alone proves nothing: a user's own file, another playlist's main
+// list or a same-named subscription's MP3 list can sit at that path, so only
+// a file carrying this exact line is ever written over or removed.
+const MP3_LIST_OWNER_TAG = '#YOUTARR-MP3-LIST:';
+const MP3_LIST_HEADER_LINES = 3;
+const OWNERSHIP = { ABSENT: 'absent', OWN: 'own', FOREIGN: 'foreign' };
+
+/**
+ * Which file an item contributes to the main list and to the MP3 list.
+ * Video + MP3 splits the two formats with no fallback; the single-list types
+ * prefer their own format and fall back so no downloaded item is dropped.
+ * @param {{ filePath?: string|null, audioFilePath?: string|null }} video
+ * @param {string|null} audioFormat - 'video_mp3', 'mp3_only', or null for video only
+ * @returns {{ main: string|null, mp3: string|null }}
+ */
+function resolveEntryPaths(video, audioFormat) {
+  if (audioFormat === DUAL_AUDIO_FORMAT) {
+    return { main: video.filePath || null, mp3: video.audioFilePath || null };
+  }
+  const main = audioFormat === 'mp3_only'
+    ? (video.audioFilePath || video.filePath)
+    : (video.filePath || video.audioFilePath);
+  return { main: main || null, mp3: null };
+}
+
+function mp3ListPath(m3uPath) {
+  return `${m3uPath.slice(0, -M3U_EXTENSION.length)}${MP3_LIST_SUFFIX}${M3U_EXTENSION}`;
+}
+
+function m3uHeader(title, ownerLine = null) {
+  return ['#EXTM3U', `#PLAYLIST:${title}`, ...(ownerLine ? [ownerLine] : [])];
+}
+
+/**
+ * @param {'playlist'|'channel'} kind
+ * @param {string} id - The YouTube playlist or channel id
+ */
+function mp3ListOwnerLine(kind, id) {
+  return `${MP3_LIST_OWNER_TAG}${kind}:${id}`;
+}
 
 async function fileExists(filePath) {
   try {
@@ -30,7 +75,33 @@ async function fileExists(filePath) {
 }
 
 class M3uGenerator {
-  async generatePlaylistM3U(playlistId) {
+  constructor() {
+    this._rebuildQueues = new Map();
+  }
+
+  /**
+   * Run the rebuilds of one playlist or channel one at a time. Each reads its
+   * settings when it starts, so a slow rebuild that began under an older
+   * Download Type cannot finish last and put back files a newer one removed.
+   * @param {string} key
+   * @param {() => Promise<*>} task
+   */
+  _serialized(key, task) {
+    const previous = this._rebuildQueues.get(key) || Promise.resolve();
+    const run = previous.then(task, task);
+    this._rebuildQueues.set(key, run);
+    const forget = () => {
+      if (this._rebuildQueues.get(key) === run) this._rebuildQueues.delete(key);
+    };
+    run.then(forget, forget);
+    return run;
+  }
+
+  generatePlaylistM3U(playlistId) {
+    return this._serialized(`playlist:${playlistId}`, () => this._generatePlaylistM3U(playlistId));
+  }
+
+  async _generatePlaylistM3U(playlistId) {
     try {
       const playlist = await Playlist.findByPk(playlistId);
       if (!playlist) {
@@ -51,40 +122,98 @@ class M3uGenerator {
       fs.writeFileSync(path.join(m3uDir, SCANNER_IGNORE_FILE), '', 'utf8');
 
       const title = playlist.title || playlist.playlist_id;
-      const fileName = sanitizeNameLikeYtDlp(title) + '.m3u';
+      const fileName = sanitizeNameLikeYtDlp(title) + M3U_EXTENSION;
       const m3uPath = path.join(m3uDir, fileName);
 
-      // One entry per item: MP3 Only playlists prefer the mp3, everything else
-      // the video, falling back to the other file so nothing is dropped.
-      const preferAudio = playlist.audio_format === 'mp3_only';
+      const mp3OwnerLine = mp3ListOwnerLine('playlist', playlist.playlist_id);
 
-      const lines = ['#EXTM3U', `#PLAYLIST:${title}`];
+      // A playlist really titled "<other title> (MP3)" shares its main path with
+      // that playlist's MP3 list. Whichever file is there first keeps the name,
+      // so a player already using it does not silently change playlists.
+      if (fs.existsSync(m3uPath)) {
+        const existingOwnerLine = this._readMp3ListOwnerLine(m3uPath);
+        if (existingOwnerLine && existingOwnerLine !== mp3OwnerLine) {
+          logger.warn({ m3uPath, playlistId }, 'M3U not written: that file is another playlist\'s MP3 list');
+          return false;
+        }
+      }
+
+      const lines = m3uHeader(title);
+      const mp3Lines = m3uHeader(`${title}${MP3_LIST_SUFFIX}`, mp3OwnerLine);
       let included = 0;
+      let mp3Included = 0;
       for (const pv of videos) {
         const video = await Video.findOne({ where: { youtubeId: pv.youtube_id } });
         // A deleted row keeps its stored paths, but its file is gone for good.
         // A missing one stays listed: its file may come back.
-        const mediaPath = video && removalState(video) !== REMOVAL_STATES.DELETED && (preferAudio
-          ? (video.audioFilePath || video.filePath)
-          : (video.filePath || video.audioFilePath));
-        if (!mediaPath) {
+        const paths = video && removalState(video) !== REMOVAL_STATES.DELETED
+          ? resolveEntryPaths(video, playlist.audio_format)
+          : { main: null, mp3: null };
+        if (!paths.main && !paths.mp3) {
           logger.debug({ youtube_id: pv.youtube_id }, 'M3U: skipping un-downloaded video');
           continue;
         }
-        const relPath = path.relative(m3uDir, mediaPath);
-        const label = `${video.youTubeChannelName || ''} - ${video.youTubeVideoName || pv.youtube_id}`;
-        lines.push(`#EXTINF:${video.duration || 0},${label}`);
-        lines.push(relPath);
-        included += 1;
+        const extinf = `#EXTINF:${video.duration || 0},${video.youTubeChannelName || ''} - ${video.youTubeVideoName || pv.youtube_id}`;
+        if (paths.main) {
+          lines.push(extinf, path.relative(m3uDir, paths.main));
+          included += 1;
+        }
+        if (paths.mp3) {
+          mp3Lines.push(extinf, path.relative(m3uDir, paths.mp3));
+          mp3Included += 1;
+        }
       }
 
       fs.writeFileSync(m3uPath, lines.join('\n') + '\n', 'utf8');
-      logger.info({ m3uPath, included, total: videos.length }, 'M3U generated');
+
+      const mp3Path = mp3ListPath(m3uPath);
+      const mp3Ownership = this._mp3ListOwnership(mp3Path, mp3OwnerLine);
+      if (mp3Ownership === OWNERSHIP.FOREIGN) {
+        if (mp3Included > 0) {
+          logger.warn({ mp3Path, playlistId }, 'M3U: MP3 list skipped, that file was not generated for this playlist');
+        }
+        mp3Included = 0;
+      } else if (mp3Included > 0) {
+        fs.writeFileSync(mp3Path, mp3Lines.join('\n') + '\n', 'utf8');
+      } else if (mp3Ownership === OWNERSHIP.OWN) {
+        fs.unlinkSync(mp3Path);
+        logger.info({ mp3Path }, 'M3U: MP3 list removed (no mp3 entries)');
+      }
+
+      logger.info({ m3uPath, included, mp3Included, total: videos.length }, 'M3U generated');
       return true;
     } catch (err) {
       logger.error({ err, playlistId }, 'generatePlaylistM3U failed');
       return false;
     }
+  }
+
+  /**
+   * Whose file sits at an MP3 list's path, judged by its owner line.
+   * @param {string} mp3Path
+   * @param {string} ownerLine - From mp3ListOwnerLine, for the playlist or channel asking
+   * @returns {string} One of OWNERSHIP
+   */
+  _mp3ListOwnership(mp3Path, ownerLine) {
+    if (!fs.existsSync(mp3Path)) return OWNERSHIP.ABSENT;
+    return this._readMp3ListOwnerLine(mp3Path) === ownerLine ? OWNERSHIP.OWN : OWNERSHIP.FOREIGN;
+  }
+
+  /**
+   * @param {string} filePath - An existing .m3u file
+   * @returns {string|null} Its MP3 list owner line, or null when it is not a generated MP3 list
+   */
+  _readMp3ListOwnerLine(filePath) {
+    const header = fs.readFileSync(filePath, 'utf8')
+      .split('\n', MP3_LIST_HEADER_LINES)
+      .map((line) => line.trim());
+    return header.find((line) => line.startsWith(MP3_LIST_OWNER_TAG)) || null;
+  }
+
+  _removeIfPresent(filePath, logMessage) {
+    if (!fs.existsSync(filePath)) return;
+    fs.unlinkSync(filePath);
+    logger.info({ filePath }, logMessage);
   }
 
   _channelM3uTargetPath(channel) {
@@ -99,7 +228,38 @@ class M3uGenerator {
     return { channelDir, m3uPath: path.join(channelDir, fileName) };
   }
 
-  async generateChannelM3U(channelId) {
+  /**
+   * Write one channel list, or remove its file when it has no entries so no
+   * empty playlist is left behind.
+   * @param {{ m3uPath: string, channelDir: string, title: string, ownerLine?: string, entries: Array<{ video: Object, mediaPath: string }> }} list
+   * @returns {number} Entries written
+   */
+  _writeChannelList({ m3uPath, channelDir, title, ownerLine = null, entries }) {
+    if (entries.length === 0) {
+      this._removeIfPresent(m3uPath, 'Channel M3U removed (no playable entries)');
+      return 0;
+    }
+
+    const lines = m3uHeader(title, ownerLine);
+    for (const { video, mediaPath } of entries) {
+      lines.push(`#EXTINF:${video.duration || 0},${video.youTubeVideoName || video.youtubeId}`);
+      lines.push(path.relative(channelDir, mediaPath));
+    }
+
+    fs.mkdirSync(channelDir, { recursive: true });
+    // Write-to-temp then rename so a media server scan never observes a
+    // half-written playlist.
+    const tmpPath = `${m3uPath}.tmp`;
+    fs.writeFileSync(tmpPath, lines.join('\n') + '\n', 'utf8');
+    fs.renameSync(tmpPath, m3uPath);
+    return entries.length;
+  }
+
+  generateChannelM3U(channelId) {
+    return this._serialized(`channel:${channelId}`, () => this._generateChannelM3U(channelId));
+  }
+
+  async _generateChannelM3U(channelId) {
     try {
       const channel = await Channel.findOne({ where: { channel_id: channelId } });
       if (!channel) {
@@ -123,15 +283,12 @@ class M3uGenerator {
 
       const { channelDir, m3uPath } = this._channelM3uTargetPath(channel);
 
-      // Mirror the playlist generator: mp3-only channels prefer the mp3,
-      // everything else the video, falling back so nothing downloaded is dropped.
-      const preferAudio = channel.audio_format === 'mp3_only';
+      // Mirror the playlist generator's choice of file per item.
       const candidates = [];
       for (const video of videos) {
-        const mediaPath = preferAudio
-          ? (video.audioFilePath || video.filePath)
-          : (video.filePath || video.audioFilePath);
-        if (mediaPath) candidates.push({ video, mediaPath });
+        const paths = resolveEntryPaths(video, channel.audio_format);
+        if (paths.main) candidates.push({ video, mediaPath: paths.main, isMp3List: false });
+        if (paths.mp3) candidates.push({ video, mediaPath: paths.mp3, isMp3List: true });
       }
 
       // Files deleted outside Youtarr drop out here without waiting on a rescan.
@@ -141,34 +298,40 @@ class M3uGenerator {
         existence.push(...await Promise.all(chunk.map((c) => fileExists(c.mediaPath))));
       }
 
-      const title = channel.title || channel.uploader || channelId;
-      const lines = ['#EXTM3U', `#PLAYLIST:${title}`];
-      let included = 0;
-      candidates.forEach(({ video, mediaPath }, i) => {
+      const onDisk = candidates.filter(({ video, mediaPath }, i) => {
         if (!existence[i]) {
           logger.debug({ youtubeId: video.youtubeId, mediaPath }, 'Channel M3U: skipping missing file');
-          return;
         }
-        lines.push(`#EXTINF:${video.duration || 0},${video.youTubeVideoName || video.youtubeId}`);
-        lines.push(path.relative(channelDir, mediaPath));
-        included += 1;
+        return existence[i];
       });
 
-      if (included === 0) {
-        if (fs.existsSync(m3uPath)) {
-          fs.unlinkSync(m3uPath);
-          logger.info({ m3uPath }, 'Channel M3U removed (no playable entries)');
-        }
-        return true;
-      }
+      const title = channel.title || channel.uploader || channelId;
+      const included = this._writeChannelList({
+        m3uPath,
+        channelDir,
+        title,
+        entries: onDisk.filter((c) => !c.isMp3List),
+      });
 
-      fs.mkdirSync(channelDir, { recursive: true });
-      // Write-to-temp then rename so a media server scan never observes a
-      // half-written playlist.
-      const tmpPath = `${m3uPath}.tmp`;
-      fs.writeFileSync(tmpPath, lines.join('\n') + '\n', 'utf8');
-      fs.renameSync(tmpPath, m3uPath);
-      logger.info({ m3uPath, included, total: videos.length }, 'Channel M3U generated');
+      const mp3Path = mp3ListPath(m3uPath);
+      const mp3OwnerLine = mp3ListOwnerLine('channel', channel.channel_id);
+      const mp3Entries = onDisk.filter((c) => c.isMp3List);
+      let mp3Included = 0;
+      if (this._mp3ListOwnership(mp3Path, mp3OwnerLine) === OWNERSHIP.FOREIGN) {
+        if (mp3Entries.length > 0) {
+          logger.warn({ mp3Path, channelId }, 'Channel M3U: MP3 list skipped, that file was not generated for this channel');
+        }
+      } else {
+        // Outside Video + MP3 this list is empty, which removes a leftover file.
+        mp3Included = this._writeChannelList({
+          m3uPath: mp3Path,
+          channelDir,
+          title: `${title}${MP3_LIST_SUFFIX}`,
+          ownerLine: mp3OwnerLine,
+          entries: mp3Entries,
+        });
+      }
+      logger.info({ m3uPath, included, mp3Included, total: videos.length }, 'Channel M3U generated');
       return true;
     } catch (err) {
       logger.error({ err, channelId }, 'generateChannelM3U failed');
@@ -176,7 +339,12 @@ class M3uGenerator {
     }
   }
 
-  async deleteChannelM3U(channelId) {
+  deleteChannelM3U(channelId) {
+    // Queued behind any rebuild in flight, which would otherwise put the files back.
+    return this._serialized(`channel:${channelId}`, () => this._deleteChannelM3U(channelId));
+  }
+
+  async _deleteChannelM3U(channelId) {
     try {
       const channel = await Channel.findOne({ where: { channel_id: channelId } });
       if (!channel || !resolveChannelFolderName(channel)) {
@@ -186,6 +354,12 @@ class M3uGenerator {
       if (fs.existsSync(m3uPath)) {
         fs.unlinkSync(m3uPath);
         logger.info({ m3uPath }, 'Channel M3U deleted');
+      }
+      const mp3Path = mp3ListPath(m3uPath);
+      const mp3OwnerLine = mp3ListOwnerLine('channel', channel.channel_id);
+      if (this._mp3ListOwnership(mp3Path, mp3OwnerLine) === OWNERSHIP.OWN) {
+        fs.unlinkSync(mp3Path);
+        logger.info({ mp3Path }, 'Channel MP3 M3U deleted');
       }
       return true;
     } catch (err) {

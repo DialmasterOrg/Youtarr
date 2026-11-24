@@ -37,6 +37,43 @@ describe('buildDownloadPauseContent', () => {
   test('tolerates a status without reasons', () => {
     expect(buildDownloadPauseContent({ paused: true }).reasons).toEqual([]);
   });
+
+  test('blames storage limits for a storage pause', () => {
+    const content = buildDownloadPauseContent(pausedStatus);
+    expect(content.summary).toBe('Youtarr has stopped downloading because storage is over your configured limits.');
+    expect(content.footer).toContain('Settings > Storage Limits');
+  });
+
+  test('points at the drive and the volume mapping for a downloads folder pause', () => {
+    const content = buildDownloadPauseContent({
+      paused: true,
+      reasons: [{ type: 'library', libraryReason: 'empty', text: 'the downloads folder is empty' }],
+    });
+    expect(content.summary).toBe('Youtarr has stopped downloading because the downloads folder looks unavailable.');
+    expect(content.reasons).toEqual(['The downloads folder is empty']);
+    expect(content.footer).toContain('volume mapping');
+    expect(content.footer).not.toContain('Storage Limits');
+  });
+
+  test('names both causes when both hold downloads', () => {
+    const content = buildDownloadPauseContent({
+      paused: true,
+      reasons: [{ type: 'library', text: 'the downloads folder is empty' }, ...pausedStatus.reasons],
+    });
+    expect(content.summary).toBe(
+      'Youtarr has stopped downloading because the downloads folder looks unavailable and storage is over your configured limits.'
+    );
+  });
+
+  test('says the downloads folder is back when that is what cleared', () => {
+    const content = buildDownloadPauseContent({ paused: false, reasons: [], resumedFrom: [{ type: 'library', text: 'x' }] });
+    expect(content.summary).toBe('The downloads folder is available again, so downloads have resumed.');
+  });
+
+  test('says storage is back when a storage limit cleared', () => {
+    const content = buildDownloadPauseContent({ paused: false, reasons: [], resumedFrom: pausedStatus.reasons });
+    expect(content.summary).toBe('Storage is back within your configured limits, so downloads have resumed.');
+  });
 });
 
 describe('formatDownloadPauseMessage', () => {

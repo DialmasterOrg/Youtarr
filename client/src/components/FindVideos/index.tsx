@@ -257,6 +257,7 @@ export default function FindVideos({ token }: FindVideosProps) {
         missingVideoCount={download.missingVideoCount}
         defaultResolution={defaultResolution}
         defaultResolutionSource="global"
+        defaultProtect={config.protectManualDownloads}
         mode="manual"
         token={token}
       />

@@ -18,6 +18,7 @@ const STARTUP_TAB_COUNT_REFRESH_DELAY_MS = 2 * 60 * 1000;
 const { createExternalApiAuth } = require('./middleware/externalApiAuth');
 const { sendExternalError } = require('./modules/externalApi/externalApiResponse');
 const { isExternalApiEnabled, isExternalApiPath } = require('./modules/externalApi/externalApiConfig');
+const { STATUS_READ_ROLE, STATUS_SUMMARY_PATH } = require('./modules/constants/apiKeyRoles');
 const app = express();
 app.set('trust proxy', parseTrustProxySetting(process.env.TRUST_PROXY));
 if (process.env.TRUST_PROXY === undefined || process.env.TRUST_PROXY === '') {
@@ -26,16 +27,20 @@ if (process.env.TRUST_PROXY === undefined || process.env.TRUST_PROXY === '') {
 
 // Strip auth tokens from URLs before logging. The video streaming endpoint
 // passes the auth token as ?token=... because <video src> cannot set headers,
-// and pino-http otherwise logs the full URL.
+// Sonarr and Radarr send the bridge key as ?apikey=... because their
+// protocols allow nothing else, and pino-http otherwise logs the full URL.
+const SECRET_QUERY_PARAMETERS = ['token', 'apikey'];
+
 function redactUrl(url) {
-  if (typeof url !== 'string' || !url.includes('token=')) return url;
-  return url.replace(/([?&])token=[^&]*/g, '$1token=[REDACTED]');
+  if (typeof url !== 'string' || !SECRET_QUERY_PARAMETERS.some((name) => url.includes(`${name}=`))) return url;
+  return url.replace(/([?&])(token|apikey)=[^&]*/g, '$1$2=[REDACTED]');
 }
 
 function redactQuery(query) {
   if (!query || typeof query !== 'object') return query;
-  if (!('token' in query)) return query;
-  return { ...query, token: '[REDACTED]' };
+  const present = SECRET_QUERY_PARAMETERS.filter((name) => name in query);
+  if (present.length === 0) return query;
+  return { ...query, ...Object.fromEntries(present.map((name) => [name, '[REDACTED]'])) };
 }
 
 // Setup HTTP request logging with pino-http
@@ -274,6 +279,8 @@ const initialize = async () => {
     const archiveModule = require('./modules/archiveModule');
     const subscriptionImportModule = require('./modules/subscriptionImport');
     const videoSearchModule = require('./modules/videoSearchModule');
+    const videoDeletionModule = require('./modules/videoDeletionModule');
+    const videoMetadataModule = require('./modules/videoMetadataModule');
     const channelSearchModule = require('./modules/channelSearchModule');
     const youtubeApi = require('./modules/youtubeApi');
     const ytdlpModule = require('./modules/ytdlpModule');
@@ -283,12 +290,20 @@ const initialize = async () => {
     const tabVideoCounts = require('./modules/channel/tabVideoCounts');
     const autoDownloadScheduler = require('./modules/channel/autoDownloadScheduler');
     const downloadRunTracker = require('./modules/download/downloadRunTracker');
-    const { Channel } = require('./models');
+    const { Channel, Video } = require('./models');
     const { registerRoutes } = require('./routes');
     const { createExternalRequestService } = require('./modules/externalApi/externalRequestService');
+    const { createArrBridgeService } = require('./modules/arrBridge');
     const scheduledTaskRuns = require('./modules/scheduledTaskRuns');
     const scheduledTaskManager = require('./modules/scheduledTaskManager');
     const storageGuard = require('./modules/storageGuard');
+    const { downloadsFolderBlock } = require('./modules/libraryRootCheck');
+    const membersAccess = require('./modules/membersAccess');
+
+    // Downloads wait while the downloads folder looks unmounted or is not the
+    // library: they would land where the library is not, and a file in an
+    // empty mount point would hide that from every other check.
+    storageGuard.setLibraryCheck(() => downloadsFolderBlock(configModule.directoryPath, Video));
 
     // Runs left "running" by the previous process never finished; close them
     // out before any timer fires, then start recording this process's runs.
@@ -308,6 +323,38 @@ const initialize = async () => {
     const externalRequestService = createExternalRequestService();
     jobModule.onJobEnded((event) => externalRequestService.handleJobEnded(event));
     if (isExternalApiEnabled()) externalRequestService.startExecutor();
+    // The Sonarr/Radarr bridge follows the same pattern: a grab only stores
+    // a row, and its executor (running only while the bridge is switched on
+    // in the config) queues the download and stages the file when it ends.
+    const arrBridge = createArrBridgeService({
+      configModule,
+      models: require('./models'),
+      searchVideos: (query, count, options) => videoSearchModule.searchVideos(query, count, options),
+      isYoutubeApiAvailable: () => youtubeApi.isAvailable(),
+      downloader: (jobData, options) => downloadModule.doSpecificDownloads(jobData, false, options),
+      jobLookup: (jobId) => jobModule.getJob(jobId),
+      storageGuard,
+      isArchived: (youtubeId) => archiveModule.filterArchivedVideoIds([youtubeId]).has(youtubeId),
+      getActivity: () => downloadModule.getCurrentActivitySnapshot(),
+      // Only used by the opt-in "remove after import" setting.
+      removeVideo: async (youtubeId, removal) => {
+        const result = await videoDeletionModule.deleteVideosByYoutubeIds([youtubeId], removal);
+        return result.deleted.includes(youtubeId);
+      },
+      // The highest resolution yt-dlp lists, for the release label; null when unknown.
+      probeResolution: async (youtubeId) => {
+        const resolutions = await videoMetadataModule.probeAvailableResolutions(youtubeId);
+        return Array.isArray(resolutions) && resolutions.length > 0 ? Math.max(...resolutions) : null;
+      },
+      // The downloads folder as the host knows it, as /getconfig reports it:
+      // where a Sonarr or Radarr outside Docker may see the staging folder.
+      getHostDownloadsFolder: () => process.env.YOUTUBE_OUTPUT_DIR || process.env.DATA_PATH || null,
+      // Changes with the cookie file, which ends the wait of grabs YouTube blocked.
+      getCookieKey: () => membersAccess.getContext().cookieKey,
+      logger,
+    });
+    jobModule.onJobEnded((event) => arrBridge.handleJobEnded(event));
+    arrBridge.start();
 
     // Cache yt-dlp version once during startup to keep the version endpoint fast
     refreshYtDlpVersionCache();
@@ -487,10 +534,13 @@ const initialize = async () => {
         const apiKeyModule = require('./modules/apiKeyModule');
         const validKey = await apiKeyModule.validateApiKey(apiKey);
         if (validKey) {
-          // API keys can ONLY access specific endpoints
-          const allowedApiKeyEndpoints = [
-            { method: 'POST', path: '/api/videos/download' },
-          ];
+          // API keys can ONLY access specific endpoints. A status key reads
+          // the status summary and nothing else, so the key a dashboard
+          // stores can never start a download.
+          const isStatusKey = validKey.role === STATUS_READ_ROLE;
+          const allowedApiKeyEndpoints = isStatusKey
+            ? [{ method: 'GET', path: STATUS_SUMMARY_PATH }]
+            : [{ method: 'POST', path: '/api/videos/download' }];
 
           const isAllowed = allowedApiKeyEndpoints.some(
             e => req.method === e.method && req.path === e.path
@@ -506,14 +556,16 @@ const initialize = async () => {
               path: req.path
             }, 'API key attempted to access unauthorized endpoint');
             return res.status(403).json({
-              error: 'API keys can only access the download endpoint'
+              error: isStatusKey
+                ? 'Status API keys can only access the status summary endpoint'
+                : 'API keys can only access the download endpoint'
             });
           }
 
           // External API roles are deliberately not accepted by the legacy
           // download endpoint. Missing role keeps pre-migration records and
           // older test doubles compatible.
-          if (validKey.role !== undefined && validKey.role !== 'legacy_download') {
+          if (!isStatusKey && validKey.role !== undefined && validKey.role !== 'legacy_download') {
             req.log.warn({
               event: 'api_key_legacy_access_denied', keyId: validKey.id,
               keyPrefix: validKey.key_prefix, role: validKey.role,
@@ -521,7 +573,9 @@ const initialize = async () => {
             return res.status(403).json({ error: 'External API keys cannot access the download endpoint' });
           }
 
-          req.log.info({
+          // Dashboards poll with status keys, so their successes stay out of
+          // the info log; a download key's use is still recorded there.
+          req.log[isStatusKey ? 'debug' : 'info']({
             event: 'api_key_auth_success',
             keyId: validKey.id,
             keyName: validKey.name,
@@ -640,6 +694,45 @@ const initialize = async () => {
       keyGenerator: (req) => getRateLimitAddress(req),
       handler: (_req, res) => {
         res.status(429).json({ error: 'Too many feed requests. Please wait a minute before trying again.' });
+      },
+    });
+
+    // Rate limiter for the Sonarr/Radarr bridge, which takes a key instead of
+    // a session. It only counts requests without the right key: a 429 makes
+    // Sonarr and Radarr disable the indexer or the download client for
+    // minutes, and behind a proxy every client can share one address, so
+    // junk requests must never use up the apps' own allowance. Their searches
+    // are paced inside the bridge, which holds them instead of refusing.
+    const arrBridgeLimiter = rateLimit({
+      windowMs: 1 * 60 * 1000,
+      max: 600,
+      skip: (req) => arrBridge.isAuthorized(req.query.apikey),
+      standardHeaders: true,
+      legacyHeaders: false,
+      validate: {
+        trustProxy: false,
+        ip: false,
+      },
+      keyGenerator: (req) => getRateLimitAddress(req),
+      handler: (_req, res) => {
+        res.status(429).json({ error: 'Too many requests. Please wait a minute before trying again.' });
+      },
+    });
+
+    // Rate limiter for saving and testing a Sonarr or Radarr connection from
+    // Settings: each attempt makes this server call an address the user typed.
+    const arrBridgeConnectionLimiter = rateLimit({
+      windowMs: 1 * 60 * 1000,
+      max: 10,
+      standardHeaders: true,
+      legacyHeaders: false,
+      validate: {
+        trustProxy: false,
+        ip: false,
+      },
+      keyGenerator: (req) => getRateLimitAddress(req),
+      handler: (_req, res) => {
+        res.status(429).json({ error: 'Too many connection tests. Please wait a minute before trying again.' });
       },
     });
 
@@ -854,6 +947,9 @@ const initialize = async () => {
       filenamePreviewRateLimiter,
       cookieTestRateLimiter,
       feedLimiter,
+      arrBridgeLimiter,
+      arrBridgeConnectionLimiter,
+      arrBridge,
       configModule,
       channelModule,
       plexModule,

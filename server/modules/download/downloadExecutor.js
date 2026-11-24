@@ -23,6 +23,7 @@ const {
   OUTPUT_DIR_HEALTHCHECK_TIMEOUT_VARIABLE,
   resolveOutputDirHealthCheckTimeout,
 } = require('./outputDirHealthCheckConfig');
+const { OUTPUT_DIR_UNAVAILABLE, DOWNLOAD_PROCESS_ERROR } = require('../constants/jobOutputPrefixes');
 
 // Tells the job's download run about a job that failed before yt-dlp ran, so
 // the run counts it instead of treating the job as quietly finished.
@@ -217,7 +218,7 @@ class DownloadExecutor {
     try {
       await this.checkOutputDirectoryHealth(configModule.directoryPath);
     } catch (error) {
-      const errorMsg = `Output directory is not accessible: ${error.message}`;
+      const errorMsg = `${OUTPUT_DIR_UNAVAILABLE}: ${error.message}`;
       logger.error({ err: error, outputDir: configModule.directoryPath }, errorMsg);
 
       const notes = error.timedOut
@@ -384,8 +385,10 @@ class DownloadExecutor {
             onTempChannelsFileCleaned: () => { this.tempChannelsFile = null; },
             enqueueAutoRetry: this.enqueueAutoRetry,
             cookiesEnabled,
+            cookiesPassed: proc.cookiesPassed === true,
             anonymousRetry,
             stdioClosed,
+            protectVideos: postProcessDirectives.protectVideos === true,
           });
           resolve();
         } catch (err) {
@@ -457,11 +460,11 @@ class DownloadExecutor {
       await jobModule.updateJob(jobId, {
         status: 'Error',
         endDate: Date.now(),
-        output: 'Download process error: ' + error.message,
+        output: `${DOWNLOAD_PROCESS_ERROR}: ${error.message}`,
       }).catch((err) => {
         logger.error({ err, jobId }, 'Failed to mark job as errored after process error');
       });
-      reportJobFailureToRun(runId, jobId, jobType, 'Download process error: ' + error.message, skipJobTransition);
+      reportJobFailureToRun(runId, jobId, jobType, `${DOWNLOAD_PROCESS_ERROR}: ${error.message}`, skipJobTransition);
 
       if (!skipJobTransition) {
         jobModule.startNextJob().catch(err => {

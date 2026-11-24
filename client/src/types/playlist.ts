@@ -1,4 +1,5 @@
 import type { RemovalReason } from '../utils/videoRemoval';
+import type { MembersAccessState } from './ChannelVideo';
 
 // Saved output order for the .m3u file and media server playlist sync.
 export type PlaylistSortOrderSetting = 'default' | 'reversed';
@@ -55,6 +56,9 @@ export interface PlaylistVideo {
   published_at: string | null;
   thumbnail: string | null;
   downloaded: boolean;
+  // Not downloaded and skipped by the playlist's download filters (title or
+  // duration). It can still be downloaded by selecting it.
+  filtered?: boolean;
   // Previously downloaded but the file is gone (deleted/missing). The backend
   // skips these during downloads unless allowRedownload is set.
   previously_downloaded: boolean;
@@ -73,6 +77,9 @@ export interface PlaylistVideo {
   video_resolution?: string | null;
   // Media server types with a played watch-status row for this video.
   watched_by?: string[];
+  // Set on the client from what the video modal learned; 'subscriber_only' marks members-only.
+  availability?: string | null;
+  members_access?: MembersAccessState | null;
 }
 
 export interface MediaServerStatus {
@@ -121,3 +128,16 @@ export interface PlaylistSubscribeSettings {
 }
 
 export type MediaServerType = 'plex' | 'jellyfin' | 'emby';
+
+/** The last recorded sync of a playlist to one media server. */
+export interface PlaylistServerSyncState {
+  last_synced_at: string | null;
+  // Why the last sync changed nothing on the server; null after a successful sync.
+  last_error: string | null;
+}
+
+/** Media server sync state of a playlist. A server that never synced has no entry. */
+export interface PlaylistSyncStatus {
+  syncing: boolean;
+  servers: Partial<Record<MediaServerType, PlaylistServerSyncState>>;
+}

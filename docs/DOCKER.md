@@ -8,7 +8,7 @@ Youtarr uses Docker Compose with two containers:
 
 ### Compose Files
 
-Youtarr ships four Compose files so each supported runtime can layer the right overrides:
+Youtarr ships five Compose files so each supported runtime can layer the right overrides:
 
 | File | Purpose |
 |------|---------|
@@ -16,6 +16,7 @@ Youtarr ships four Compose files so each supported runtime can layer the right o
 | `docker-compose.dev.yml` | Development mode: mounts `./server/` and migrations into the container so backend changes load on a container restart without a rebuild, and uses a separate `youtarr-db-dev` database with its own named volume. Used by `./scripts/start-dev.sh`. See [DEVELOPMENT.md](DEVELOPMENT.md). |
 | `docker-compose.arm.yml` | Named-volume database override. The filename is historical: it was originally added for ARM systems, but it is also useful on Docker Desktop and NAS/virtualized filesystems. Layered on top of `docker-compose.yml` via `-f`. |
 | `docker-compose.external-db.yml` | Runs Youtarr against an external MariaDB/MySQL instance instead of the bundled database. Used by `./start-with-external-db.sh`. |
+| `docker-compose.gluetun.yml` | Adds Gluetun integration to allow Youtarr's traffic to route through a VPN provider of your choosing. Layered on top of `docker-compose.yml` or `docker-compose.external-db.yml` via `COMPOSE_FILE=`. See [GLUETUN_INTEGRATION.md](GLUETUN_INTEGRATION.md) for more info. |
 
 ## Container Details
 
@@ -116,6 +117,12 @@ COMPOSE_FILE=docker-compose.yml:docker-compose.arm.yml
 
 If you also use `docker-compose.override.yml`, list it before `docker-compose.arm.yml` instead, as shown in [Keeping docker-compose.override.yml](#keeping-docker-composeoverrideyml). Otherwise Compose stops loading it once `COMPOSE_FILE` is set.
 
+The optional [Gluetun override](GLUETUN_INTEGRATION.md) goes on the same line, before `docker-compose.arm.yml`:
+```env
+COMPOSE_FILE=docker-compose.yml:docker-compose.override.yml:docker-compose.gluetun.yml:docker-compose.arm.yml
+```
+Never add a second `COMPOSE_FILE` line; Compose only reads the last one.
+
 Prefer this over editing `docker-compose.yml`: the compose file is tracked in git, so local edits conflict with `git pull` on updates. If you do edit it, change only the `youtarr-db` service's volume line to `- youtarr-db-data:/var/lib/mysql`. The file already declares `youtarr-db-data` in its top-level `volumes:` block; adding a second `volumes:` key makes Compose fail with `mapping key "volumes" already defined`.
 
 See [Troubleshooting](TROUBLESHOOTING.md#docker-desktop--arm-incorrect-information-in-file-errors) for more details on the underlying issue.
@@ -134,7 +141,7 @@ See [Troubleshooting](TROUBLESHOOTING.md#docker-desktop--arm-incorrect-informati
     ```
 - Start containers with `docker compose up -d`
 - Container auto-creates `config.json`
-- **UI Behavior**: YouTube Output Directory field is **read-only** - shows "Docker Volume" chip
+- **UI Behavior**: Settings -> Core -> **Folders** shows this path in the read-only **Downloads folder** field, with "Docker volume, set by YOUTUBE_OUTPUT_DIR. Edit .env and restart to change it."
 - **Host Path Reminder**: Create the `/your/host/path` directory ahead of time and ensure it is writable. Docker will otherwise create it as root-owned!
 
 ### Network Storage
@@ -689,7 +696,9 @@ docker exec youtarr ls /usr/src/app/data
 
 From Git Bash on Windows, prefix the command with `MSYS_NO_PATHCONV=1`, otherwise Git Bash rewrites `/usr/src/app/data` into a Windows path.
 
-If the share is unreachable when Youtarr starts, Youtarr's startup file rescan marks the videos on it as missing. Nothing is deleted: once the share is back, restart Youtarr or use **Run now** on "Rescan files on disk" under Settings > Scheduling.
+If the share is unreachable when Youtarr starts, the downloads folder looks empty (or most videos are not where they were saved), so Youtarr marks nothing missing and pauses downloads until the share is back. Nothing is deleted: once the share is back, downloads resume on their own; restart Youtarr or use **Run now** on "Rescan files on disk" under Settings > Scheduling to pick up any changes.
+
+**Note:** Youtarr only sees the host folder the volume line maps to `/usr/src/app/data`. `YOUTUBE_OUTPUT_DIR` under `environment:` is only the label Youtarr shows for it, so if you move your library, change the volume line too (our `docker-compose.yml` uses `YOUTUBE_OUTPUT_DIR` from `.env` for both).
 
 #### Troubleshooting NAS Issues
 
@@ -776,6 +785,8 @@ The application container includes health checks:
 - External access through mapped ports
 
 ### Plex Server Communication
+
+**Note:** If Youtarr runs through Gluetun, it can only reach Plex when Plex's address is in `FIREWALL_OUTBOUND_SUBNETS`. For `host.docker.internal` that means the Docker bridge subnet (`172.17.0.0/16` by default). Enter Plex by IP address rather than a LAN hostname, because Gluetun blocks DNS answers that point at private IPs. See [GLUETUN_INTEGRATION.md](GLUETUN_INTEGRATION.md).
 
 #### Same Machine Setup
 When Youtarr and Plex run on the same machine:
@@ -872,6 +883,8 @@ If ports are already in use:
 The start/stop scripts automatically detect your Docker Compose version:
 - `docker compose` (v2) - Recommended
 - `docker-compose` (v1) - Legacy support
+
+**Note:** [docker-compose.gluetun.yml](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose.gluetun.yml) needs Docker Compose v2.24 or newer. The old `docker-compose` v1 command can't read it.
 
 To check your version:
 ```bash

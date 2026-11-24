@@ -205,6 +205,7 @@ const createServerModule = ({
         const configModuleMock = {
           directoryPath: '/downloads',
           getConfig: jest.fn(() => configState),
+          onConfigChange: jest.fn(),
           updateConfig: jest.fn((patch) => Object.assign(configState, patch)),
           getImagePath: jest.fn(() => '/images'),
           getCookiesStatus: jest.fn(() => ({
@@ -328,6 +329,9 @@ const createServerModule = ({
           run: jest.fn(),
           isBusyError: jest.fn(() => false)
         }));
+        // Same reason: playlistModule loads ytdlpCommandBuilder.
+        jest.doMock('../modules/playlistModule', () => ({}));
+        jest.doMock('../modules/membersAccess');
         jest.doMock('../models/channelvideo', () => ({
           update: jest.fn().mockResolvedValue([1])
         }));
@@ -341,6 +345,7 @@ const createServerModule = ({
         jest.doMock('../modules/logLevelSync', () => ({ apply: jest.fn(), subscribe: jest.fn() }));
         jest.doMock('../modules/storageGuard', () => ({
           initialize: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
+          setLibraryCheck: jest.fn(),
           refresh: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
           isPausedError: jest.fn(() => false),
           describe: jest.fn(() => ''),
@@ -890,6 +895,40 @@ describe('API Key Authentication - Security Tests', () => {
       });
     });
 
+    test('answers 400 with the validation error and its code when YouTube refuses the lookup', async () => {
+      const apiKeyModuleMock = createApiKeyModuleMock();
+      const created = await apiKeyModuleMock.createApiKey('Download Key');
+
+      const { app, downloadModuleMock, videoValidationModuleMock } = await createServerModule({ apiKeyModuleMock });
+      videoValidationModuleMock.validateVideo.mockResolvedValueOnce({
+        isValidUrl: false,
+        error: 'Bot detection encountered. Try again later.',
+        errorCode: 'COOKIES_REQUIRED'
+      });
+
+      const handlers = findRouteHandlers(app, 'post', '/api/videos/download');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' },
+        headers: { 'x-api-key': created.key },
+        authType: 'api_key',
+        apiKeyId: created.id,
+        apiKeyName: 'Download Key'
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'Bot detection encountered. Try again later.',
+        errorCode: 'COOKIES_REQUIRED'
+      });
+      expect(downloadModuleMock.doGroupedManualDownloads).not.toHaveBeenCalled();
+    });
+
     test('rejects invalid API key via apiKeyModule', async () => {
       const apiKeyModuleMock = createApiKeyModuleMock();
       await apiKeyModuleMock.createApiKey('Valid Key');
@@ -915,6 +954,26 @@ describe('API Key Authentication - Security Tests', () => {
 
       expect(res.statusCode).toBe(403);
       expect(res.body).toEqual({ error: 'External API keys cannot access the download endpoint' });
+    });
+
+    test('rejects a status key on the download endpoint', async () => {
+      const apiKeyModuleMock = createApiKeyModuleMock();
+      apiKeyModuleMock.validateApiKey.mockResolvedValue({
+        id: 98, name: 'Dashboard', key_prefix: '12345678', role: 'status_read',
+      });
+      const { app } = await createServerModule({ apiKeyModuleMock });
+      const [verifyToken] = findRouteHandlers(app, 'post', '/api/videos/download');
+      const req = createMockRequest({
+        method: 'POST', path: '/api/videos/download', headers: { 'x-api-key': '12345678status' },
+      });
+      const res = createMockResponse();
+      const next = jest.fn();
+
+      await verifyToken(req, res, next);
+
+      expect(res.statusCode).toBe(403);
+      expect(res.body).toEqual({ error: 'Status API keys can only access the status summary endpoint' });
+      expect(next).not.toHaveBeenCalled();
     });
 
     test('rejects request without URL', async () => {
@@ -1129,6 +1188,54 @@ describe('API Key Authentication - Security Tests', () => {
       // Verify the download endpoint exists and is accessible
       const downloadHandlers = findRouteHandlers(app, 'post', '/api/videos/download');
       expect(downloadHandlers.length).toBeGreaterThan(0);
+    });
+
+    const verifyStatusSummaryRequest = async (validKey) => {
+      const apiKeyModuleMock = createApiKeyModuleMock();
+      apiKeyModuleMock.validateApiKey.mockResolvedValue(validKey);
+      const { app } = await createServerModule({ apiKeyModuleMock });
+      const [verifyToken] = findRouteHandlers(app, 'get', '/api/status/summary');
+      const req = createMockRequest({
+        method: 'GET', path: '/api/status/summary', headers: { 'x-api-key': '12345678anykey' },
+        log: { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() },
+      });
+      const res = createMockResponse();
+      const next = jest.fn();
+      await verifyToken(req, res, next);
+      return { req, res, next };
+    };
+
+    test('a status key reaches the status summary', async () => {
+      const { req, next } = await verifyStatusSummaryRequest({
+        id: 97, name: 'Dashboard', key_prefix: '12345678', role: 'status_read',
+      });
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(req.authType).toBe('api_key');
+      expect(req.apiKeyId).toBe(97);
+    });
+
+    test('a polling status key does not fill the info log with auth successes', async () => {
+      const { req } = await verifyStatusSummaryRequest({
+        id: 97, name: 'Dashboard', key_prefix: '12345678', role: 'status_read',
+      });
+
+      expect(req.log.debug).toHaveBeenCalledWith(
+        expect.objectContaining({ event: 'api_key_auth_success', keyId: 97 }),
+        'API key authentication successful'
+      );
+      expect(req.log.info).not.toHaveBeenCalled();
+    });
+
+    test.each([
+      ['a download key', { id: 96, name: 'Bookmarklet', key_prefix: '12345678', role: 'legacy_download' }],
+      ['an external key', { id: 95, name: 'External', key_prefix: '12345678', role: 'view' }],
+    ])('%s cannot read the status summary', async (_label, validKey) => {
+      const { res, next } = await verifyStatusSummaryRequest(validKey);
+
+      expect(res.statusCode).toBe(403);
+      expect(res.body).toEqual({ error: 'API keys can only access the download endpoint' });
+      expect(next).not.toHaveBeenCalled();
     });
   });
 

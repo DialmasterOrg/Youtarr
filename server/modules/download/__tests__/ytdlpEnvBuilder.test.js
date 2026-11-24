@@ -127,6 +127,18 @@ describe('structurePerVideo / skipVideoFolderOverride', () => {
   });
 });
 
+describe('protectVideos', () => {
+  test('sets YOUTARR_PROTECT_VIDEOS for a download started with protection', () => {
+    const env = buildYtdlpEnv({ ...BASE_ARGS, baseEnv: {}, postProcessDirectives: { protectVideos: true } });
+    expect(env.YOUTARR_PROTECT_VIDEOS).toBe('true');
+  });
+
+  test('omits YOUTARR_PROTECT_VIDEOS by default', () => {
+    const env = buildYtdlpEnv({ ...BASE_ARGS, baseEnv: {}, postProcessDirectives: {} });
+    expect(env).not.toHaveProperty('YOUTARR_PROTECT_VIDEOS');
+  });
+});
+
 describe('ratingOverride', () => {
   test('sets YOUTARR_OVERRIDE_RATING to "NR" when null (clear-rating sentinel)', () => {
     const env = buildYtdlpEnv({ ...BASE_ARGS, baseEnv: {}, postProcessDirectives: { ratingOverride: null } });

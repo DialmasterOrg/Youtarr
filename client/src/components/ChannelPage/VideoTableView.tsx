@@ -11,7 +11,8 @@ import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml, formatAddedDateParts } from '../../utils/formatters';
-import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle, isRemovedStatus } from '../../utils/videoStatus';
+import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle, isRemovedStatus, isMembersOnlyVideo } from '../../utils/videoStatus';
+import MembersAccessChip from '../shared/MembersAccessChip';
 import RemovalDescription, { REMOVAL_TOOLTIP_CLASS } from '../shared/RemovalDescription';
 import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
@@ -352,6 +353,10 @@ function VideoTableView({
                         variant="outlined"
                         style={{ ...SHARED_STATUS_CHIP_SMALL_STYLE }}
                       />
+                    )}
+                    {/* The status chip already reads Members Only when no cookies are set. */}
+                    {!video.added && isMembersOnlyVideo(video) && video.members_access && video.members_access !== 'no_cookies' && (
+                      <MembersAccessChip access={video.members_access} />
                     )}
                     <WatchedChip watchedBy={video.watchedBy || []} />
                     <Tooltip

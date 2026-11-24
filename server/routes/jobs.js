@@ -182,12 +182,14 @@ module.exports = function createJobRoutes({ verifyToken, jobModule, downloadModu
    * @swagger
    * /api/jobs/download-pause:
    *   get:
-   *     summary: Get the storage download pause state
+   *     summary: Get the download pause state
    *     description: >
    *       Whether downloads are paused because a storage limit was reached
-   *       (downloadPauseUsageLimit or downloadPauseMinFreeSpace), with the
-   *       reasons and current measurements. Measured fresh on each request.
-   *       Changes are also broadcast as downloadPauseChanged WebSocket messages.
+   *       (downloadPauseUsageLimit or downloadPauseMinFreeSpace) or the
+   *       downloads folder looks unavailable (missing, empty, unreadable, or
+   *       most videos not where they were saved, while videos are on record),
+   *       with the reasons and current measurements. Measured fresh on each
+   *       request. Changes are also broadcast as downloadPauseChanged WebSocket messages.
    *     tags: [Jobs]
    *     responses:
    *       200:
@@ -210,11 +212,17 @@ module.exports = function createJobRoutes({ verifyToken, jobModule, downloadModu
    *                     properties:
    *                       type:
    *                         type: string
-   *                         enum: [usage, freeSpace]
+   *                         enum: [usage, freeSpace, library]
    *                       currentBytes:
    *                         type: number
+   *                         description: Storage reasons only
    *                       limitBytes:
    *                         type: number
+   *                         description: Storage reasons only
+   *                       libraryReason:
+   *                         type: string
+   *                         enum: [missing, empty, unreadable, not-found]
+   *                         description: Library reasons only, the downloads folder check that failed
    *                       text:
    *                         type: string
    *                 usage:

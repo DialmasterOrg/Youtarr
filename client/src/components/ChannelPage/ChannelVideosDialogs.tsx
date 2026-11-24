@@ -51,6 +51,7 @@ export interface ChannelVideosDialogsProps {
   defaultResolutionSource: 'channel' | 'global';
   defaultAudioFormat?: string | null;
   defaultAudioFormatSource?: 'channel' | 'global';
+  defaultProtect?: boolean;
   selectedTab: string;
   tabLabel: string;
   // Channel page stats for the selected tab; without a YouTube total the
@@ -84,6 +85,7 @@ function ChannelVideosDialogs({
   defaultResolutionSource,
   defaultAudioFormat,
   defaultAudioFormatSource,
+  defaultProtect,
   selectedTab,
   tabLabel,
   tabStats,
@@ -111,6 +113,7 @@ function ChannelVideosDialogs({
         defaultResolutionSource={defaultResolutionSource}
         defaultAudioFormat={defaultAudioFormat}
         defaultAudioFormatSource={defaultAudioFormatSource}
+        defaultProtect={defaultProtect}
         mode="manual"
         token={token}
       />

@@ -7,6 +7,7 @@ paths:
   - "server/modules/nfoGenerator.js"
   - "server/modules/rescanRowUpdate.js"
   - "server/modules/rescanRunSummary.js"
+  - "server/modules/rescanMissingGate.js"
   - "server/modules/videoRowGuard.js"
   - "server/modules/videoRemovalState.js"
   - "server/modules/libraryRootCheck.js"
@@ -44,8 +45,11 @@ Listing, the filesystem rescan, library repair, deleted vs. missing videos, the 
 - An unknown format is never cleared, and with nothing present an unknown writes nothing. The write lands only if the row is unchanged since read (`videoRowGuard.unchangedSinceRead`: removed, both paths and sizes, `video_resolution`, `last_downloaded_at`).
 - Zero affected rows means a conflict only when the write includes a column that really differs: Sequelize's MySQL dialect connects with -FOUND_ROWS, so mysql2 counts changed rows, not matched rows.
 - Rows left as recorded count as `kept` (`videosKept` in the run details), unreadable folders and files as `unreadableOnDisk` (re-checked by path next run), rows another writer changed as `skippedChanged` (`videosSkipped`), failed writes as `failed` (`videosFailed`).
-- Failed writes make a finished scan `error`/`partial`; a timed-out scan stays `timed-out` so Maintenance can continue it.
+- Failed writes make a finished scan `error`/`partial`. The walk and reconciliation always finish; the time limit, started after the walk, bounds only ffprobe probes (`probesDeferred`), because a slow share's walk outlasted it and runs never converged.
+- `timed-out` exists only in older run history; nothing produces it now.
+- `rescanMissingGate` holds back missing marks per storage unit (root, each `__subfolder`) when the walk finds under half its present rows and 25+ are gone: a remap or bare mount point, not deliberate deletion. Rescan anyway skips it.
 - The completion `rescanStatus` broadcast is built through the same `rescanRunSummary` record as the run history, so the live Maintenance view matches it.
+- Progress (`getRescanProgress`, also on `GET rescan-status`) is broadcast at most once a second, each emit in try/catch so a missing WebSocket never stops the scan; `messageEmitter` never replays it.
 - Library repair (`jobModule.backfillFromCompleteList`) uses the same guard: it reads the row before searching the disk and writes file details and `removed: false` only for a file it actually found.
 - A lost row's files are looked up by YouTube id with one `videosModule.scanForVideoFiles` walk per run (only when a lost row exists; video and audio, any folder layout), recreating it as missing when the walk finds nothing.
 - The walk skips and counts (`unreadable`) folders and files it cannot read rather than stopping, logging unreadable files once per folder.
@@ -61,20 +65,24 @@ Listing, the filesystem rescan, library repair, deleted vs. missing videos, the 
 - Reasons: `missing | empty | unreadable | subfolder-empty | subfolder-unreadable`; unreadable beats empty, so an unreadable share is never looked past as emptied on purpose.
 - A root failure is reported alone, while every failing subfolder is reported in `paths`. `message` names no path, because the container path means nothing on the host: the root is "the downloads folder" and a subfolder by its name.
 - Entries Youtarr creates itself (`.youtarr_tmp`, `__playlists__`, `.youtarr_healthcheck_*`, named in `filesystem/constants.js`) never count, because a sweep or a restart creates them on the bare mount point while a share is down.
+- One download into a bare mount point makes it non-empty, so `checkLibraryAvailable` adds a probe: 20 random present rows' stored paths, `not-found` when under half exist (cached 30 s, fails open).
+- Every writer except the rescan uses `checkLibraryAvailable`; the rescan uses `checkLibraryRoot` plus its gate, because stale paths after files were moved by hand are what it repairs.
 - `libraryCheckCoversRows(check, Video, where)` (a `LIKE` on both path columns, wildcards escaped) decides whether a failing check covers any matching row, so an empty `__subfolder` no row is stored in blocks nothing; `isUnderLibraryCheckPath` and `isRowUnderLibraryCheck` cover one file or row.
 - The file check runs the check lazily, once per pass and only when a row would be marked missing, holds back the rows it covers, and returns them as `libraryWarning` (`{ reason, path, message, heldBack }`).
 - `/getVideos` passes `libraryWarning` through for the Videos page banner; the channel page gets the suppression only. File-check writes carry a `removed` predicate, so a delete landing inside the request is never undone and only a removed row is restored.
 - The rescan checks first and only counts a failure covering present rows: a failing root ends the run `error`, an empty or unreadable `__subfolder` holds back its rows (`notMarkedMissing`, outcome `partial`), and with no present rows it runs normally.
-- `POST /api/maintenance/rescan-files` with `ignoreLibraryCheck: true` skips the check ("Rescan anyway", offered only for the `empty` reasons); the scheduled task never passes it, and the run record says the check was skipped.
+- `POST /api/maintenance/rescan-files` with `ignoreLibraryCheck: true` skips the check and the gate ("Rescan anyway"); the scheduled task never passes it, and the run record says the check was skipped.
+- Rescan anyway is offered for `empty`, `subfolder-empty` and `not-found` (with present rows to mark), or when the last run held rows back; its dialog shows the count (`presentCovered`) and requires a checkbox, since a moved library looks the same.
 - Automatic cleanup and the orphan folder sweep record a `skipped` run while the check covers present rows (`_libraryBlock`; a dry run never checks; the sweep removes an empty `__subfolder` nothing is stored in, which clears the check).
 - Manual deletes (`deleteVideos`, `deleteVideosByYoutubeIds`) refuse each covered video with the message rather than stamping a row whose file may sit on an unmounted share: one check per batch, fail-open if the check itself throws.
 - Job recovery likewise leaves the removal columns alone when it cannot find the file.
+- Deletes remove a folder recursively only at the exact per-video position under the downloads root. Elsewhere they unlink the video's own files, then remove the folder only if it is named for that video and empty (#941).
 - `/getVideos` filters: `missingFilter` is strictly missing; `deletedFilter` (default `off`; the Videos page sends `exclude`, remembered in localStorage) hides or isolates deleted rows and returns `hiddenDeletedCount` while excluding. The channel listing takes the same `deletedFilter`.
 
 ## Trash (`videoTrashModule`)
 
 - `GET /api/videos/removed-summary` reports the library check as passing when it covers no present or missing row (so the card matches the Videos page banner), `missingActionsBlocked` (it covers missing rows, the only rows the trash touches), and `downloadsActive` from `archiveAccess.isDownloading()`.
-- `POST /api/videos/mark-deleted` changes only missing rows, to `marked_deleted`. `all` is refused 409 `library-unavailable` while the check covers missing rows unless `ignoreLibraryCheck: true` and the reason is `empty` or `subfolder-empty` (never `missing` or unreadable); a selection is never refused.
+- `POST /api/videos/mark-deleted` changes only missing rows, to `marked_deleted`. `all` is refused 409 `library-unavailable` while the check covers missing rows unless `ignoreLibraryCheck: true` and the reason is `empty`, `subfolder-empty` or `not-found` (never `missing` or unreadable); a selection is never refused.
 - `POST /api/videos/purge-removed` runs one purge at a time (409 `running`), refuses `missing` while the check covers missing rows (409 `library-unavailable`), and refuses archive removal while a download holds the archive (409 `archive-busy`).
 - It works in chunks of 500, each in a transaction: `video_watch_status` and `jobvideos` rows (restricting FK) before the `videos` row, `playlistvideos.downloaded_at` nulled.
 - Each purged video's `jobs/info/<id>.info.json` and cached `videothumb-<id>*.jpg` are unlinked, because library repair would otherwise recreate the row as missing from the archive entry plus the info.json. Nothing under the downloads folder is touched.
@@ -84,6 +92,8 @@ Listing, the filesystem rescan, library repair, deleted vs. missing videos, the 
 - Each chunk is re-read under lock with the state predicate inside its transaction, so a video re-downloaded or restored between the select and the delete is kept and its fresh info.json left alone.
 - Affected in-memory jobs are refreshed through the injected `jobModule.reloadJobVideos` (the route hands it in) before `videosUpdated` + `jobsUpdated` broadcast, so a Download History refetch never shows ghosts.
 - `RemovedVideosCard` keeps "Mark all missing as deleted" available for an empty folder once the user confirms (sending `ignoreLibraryCheck`), so "Rescan anyway" is never a dead end; it is disabled while a rescan runs.
+- Empty trash never preselects Missing: after a remap, "Missing (16,800)" preselected was one click from forgetting a library whose files were only out of sight.
+- Once missing videos are at least as many as present ones (25+), emptying Missing and marking all missing as deleted need a checkbox: a wrong folder that is not empty fails no check, and the probe only samples present rows.
 
 ## Automatic removal
 

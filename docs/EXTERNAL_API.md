@@ -257,6 +257,10 @@ POST /external-api/v1/requests/videos
 }
 ```
 
+A video request never uses the owner's channel memberships: even when Youtarr's
+cookies belong to a member, members-only videos are skipped, as in a run
+without cookies. See [Members-Only Videos](CONFIG.md#members-only-videos).
+
 Channel:
 
 ```http

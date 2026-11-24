@@ -11,6 +11,13 @@ function count(value) {
   return Number(value) || 0;
 }
 
+// A count that may be unknown (null), kept as null rather than shown as 0.
+function optionalCount(value) {
+  return value === null || value === undefined ? null : count(value);
+}
+
+const formatCount = (value) => count(value).toLocaleString('en-US');
+
 // Rows skipped because another writer changed them, rows whose write failed,
 // and rows left unmarked because the downloads folder looked unmounted;
 // empty when there were none.
@@ -26,18 +33,32 @@ function describeRowProblems(result) {
   return parts;
 }
 
+// Sentences after the counts: how many videos are missing now, and how many
+// still wait for their resolution to be probed.
+function describeAftermath(result) {
+  const parts = [];
+  const missing = optionalCount(result.missing);
+  if (missing) parts.push(`${formatCount(missing)} ${missing === 1 ? 'video is' : 'videos are'} missing.`);
+  if (count(result.probesDeferred) > 0) {
+    parts.push(`The resolution of ${formatCount(result.probesDeferred)} videos is still to be checked; that continues at the next run.`);
+  }
+  return parts.length > 0 ? ` ${parts.join(' ')}` : '';
+}
+
 function describe(outcome, result) {
-  const scanned = count(result.processed).toLocaleString('en-US');
+  const scanned = formatCount(result.processed);
   const problems = describeRowProblems(result);
   // A manual "Rescan anyway" marked videos missing without the unmounted-drive check.
   const skipped = result.libraryCheckSkipped ? ' The downloads folder check was skipped.' : '';
   if (outcome === 'error') return result.errorMessage || 'Unknown error';
   if (outcome === 'timed-out') {
+    // Only releases before the walk was exempt from the limit stopped this way.
     const suffix = problems.length > 0 ? ` (${problems.join(', ')})` : '';
-    return `Reached the time limit after ${scanned} videos${suffix}; continues at the next run.${skipped}`;
+    return `Stopped at the time limit after ${scanned} videos${suffix}; the next run starts over.${skipped}`;
   }
   const counts = [`${count(result.updated)} updated`, `${count(result.removed)} marked missing`, ...problems];
-  return `Scanned ${scanned} videos: ${counts.join(', ')}.${skipped}`;
+  const files = formatCount(result.filesOnDisk);
+  return `Scanned ${scanned} videos and found ${files} video files on disk: ${counts.join(', ')}.${describeAftermath(result)}${skipped}`;
 }
 
 function toRunRecord(result = {}) {
@@ -67,8 +88,13 @@ function toRunRecord(result = {}) {
       // Rows another writer changed after the rescan read them; left for a later run.
       videosSkipped: count(result.skippedChanged),
       videosFailed: count(result.failed),
-      // Rows left unmarked because the downloads folder looked unmounted.
+      // Rows left unmarked because the downloads folder looked unmounted, or
+      // most of a folder's videos were not found.
       videosNotMarkedMissing: count(result.notMarkedMissing),
+      // Missing rows after the run (null when they could not be counted).
+      videosMissing: optionalCount(result.missing),
+      // Rows whose resolution probe waits for the next run (the probe budget ran out).
+      probesDeferred: count(result.probesDeferred),
       ...(result.libraryCheckSkipped ? { libraryCheckSkipped: true } : {}),
     },
   };
@@ -89,6 +115,9 @@ function fromRunRecord(run) {
     videosMarkedMissing: count(details.videosMarkedMissing),
     videosScanned: count(details.videosScanned),
     filesFoundOnDisk: count(details.filesFoundOnDisk),
+    videosNotMarkedMissing: count(details.videosNotMarkedMissing),
+    // Unknown for runs recorded before it was counted.
+    videosMissing: optionalCount(details.videosMissing),
     errorMessage: status === 'error' ? (run.message || null) : null,
     ...(details.libraryCheckSkipped ? { libraryCheckSkipped: true } : {}),
   };

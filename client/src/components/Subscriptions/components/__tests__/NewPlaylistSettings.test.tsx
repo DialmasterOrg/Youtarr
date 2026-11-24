@@ -75,6 +75,14 @@ describe('NewPlaylistSettings', () => {
     expect(screen.getByText(/sync to media servers as music playlists/)).toBeInTheDocument();
   });
 
+  test('mentions video playlists for Video + MP3 downloads', () => {
+    renderSettings({ values: { ...values, audio_format: 'video_mp3' } });
+
+    expect(
+      screen.getByText(/Video \+ MP3 playlists sync to media servers as video playlists/)
+    ).toBeInTheDocument();
+  });
+
   test('shows saved settings without letting them change when read-only', () => {
     renderSettings({ readOnly: true });
 

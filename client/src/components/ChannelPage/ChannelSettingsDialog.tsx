@@ -691,7 +691,9 @@ function ChannelSettingsDialog({
               <Typography variant="caption" color="text.secondary" className="mt-1 block">
                 Writes a playlist of this channel&apos;s downloaded videos to the top of the
                 channel folder. Jellyfin and Emby import it automatically; it updates after
-                downloads and deletions, and refreshes nightly.
+                downloads and deletions, and refreshes nightly. Video + MP3 channels also get a
+                second file, ending in (MP3).m3u, that lists the MP3s once one has been
+                downloaded.
               </Typography>
               {settings.m3u_enabled && (
                 <FormControl fullWidth className="mt-2">

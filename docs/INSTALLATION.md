@@ -78,6 +78,7 @@ If you prefer to use standard `docker compose up` commands:
    - `AUTH_ENABLED=false` - Only if behind external authentication (VPN, reverse proxy)
    - `TRUST_PROXY=false` - Recommended when exposing Youtarr directly without a reverse proxy. Leave unset for the current backwards-compatible default.
    - `LOG_LEVEL` - Set to `debug` for troubleshooting, `info` for normal/production use (default), `warn` for minimal logging
+   - Want Youtarr's traffic to go through a VPN? See the [Gluetun guide](GLUETUN_INTEGRATION.md) before your first start.
 
    See: [ENVIRONMENT VARIABLES](ENVIRONMENT_VARIABLES.md) for more details
 
@@ -90,6 +91,8 @@ If you prefer to use standard `docker compose up` commands:
    > ```bash
    > docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
    > ```
+   > If you use Gluetun, skip this `-f` command: it would start Youtarr without the VPN. Set the named-volume `COMPOSE_FILE` line from `.env.example` in `.env` instead and run plain `docker compose up -d` (see the [Gluetun guide](GLUETUN_INTEGRATION.md)).
+   >
    > If you already have data in `./database/`, use `./scripts/migrate-to-named-volume.sh` instead. See [Database Management](DATABASE.md#migrating-from-bind-mount-to-named-volume) and [Troubleshooting](TROUBLESHOOTING.md#docker-desktop--arm-incorrect-information-in-file-errors) for details.
 
 5. **Access the web interface**:

@@ -23,6 +23,9 @@ jest.mock('../../../models', () => ({
 const MessageEmitter = require('../../messageEmitter');
 const { JobVideoDownload } = require('../../../models');
 const YtdlpOutputRouter = require('../YtdlpOutputRouter');
+// The wording itself is tested with youtubeBlockAdvice; these tests check
+// which of its texts the router broadcasts.
+const { botCheckText, http403Hint } = require('../../youtubeBlockAdvice');
 const videoActivity = require('../videoActivity');
 const { VIDEO_PERSISTED_MARKER } = require('../../constants/outputMarkers');
 
@@ -464,7 +467,8 @@ describe('YtdlpOutputRouter', () => {
         (c) => c[4] && c[4].errorCode === 'COOKIES_MAY_BE_STALE'
       );
       expect(call).toBeDefined();
-      expect(call[4].text).toMatch(/re-exporting fresh cookies/i);
+      expect(call[4].text).toMatch(/re-export fresh cookies/i);
+      expect(call[4].text).toBe(http403Hint({ cookiesEnabled: true }));
       expect(call[4].text).toMatch(/disable cookies/i);
       expect(
         MessageEmitter.emitMessage.mock.calls.some(
@@ -482,6 +486,19 @@ describe('YtdlpOutputRouter', () => {
       expect(call).toBeDefined();
       expect(call[4].text).toMatch(/likely expired or rotated/i);
       expect(call[4].text).not.toMatch(/set cookies/i);
+      expect(call[4].text).toBe(botCheckText({ cookiesEnabled: true }));
+    });
+  });
+
+  describe('context-aware hints without cookies', () => {
+    it('gives a 403 the hint for a run without cookies', () => {
+      router.handleStderrChunk('HTTP Error 403: Forbidden\n');
+
+      const call = MessageEmitter.emitMessage.mock.calls.find(
+        (c) => c[4] && c[4].errorCode === 'COOKIES_RECOMMENDED'
+      );
+      expect(call).toBeDefined();
+      expect(call[4].text).toBe(http403Hint({ cookiesEnabled: false }));
     });
   });
 

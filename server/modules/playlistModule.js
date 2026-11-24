@@ -1,4 +1,3 @@
-const { spawn } = require('child_process');
 const { Op } = require('sequelize');
 const logger = require('../logger');
 const { sequelize } = require('../db');
@@ -6,6 +5,8 @@ const { Playlist, PlaylistVideo, Channel, Video, Job, JobVideo } = require('../m
 const youtubeApi = require('./youtubeApi');
 const { MAX_PLAYLIST_VIDEOS } = require('./playlistConstants');
 const storageGuard = require('./storageGuard');
+const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
+const { spawnYtDlp } = require('./ytdlpProcess');
 
 // yt-dlp's flat-playlist listing still returns private/deleted/members-only
 // videos but strips their metadata: the title comes back null (current yt-dlp)
@@ -21,6 +22,21 @@ const REPORTED_COUNT_SLACK = 5;
 // downloaded_at round-trips through a DATETIME column (second precision), so an
 // exact millisecond comparison would flag every already-correct row as stale.
 const DOWNLOAD_TIME_TOLERANCE_MS = 1000;
+
+// Routes word the failure by whether cookies really reached yt-dlp: a private
+// playlist reads as nonexistent both signed out and with expired cookies.
+function fetchError(code, child) {
+  const err = new Error(code);
+  err.usedCookies = child.cookiesPassed === true;
+  return err;
+}
+
+// An authenticated cookie jar makes yt-dlp reject skip=webpage unless
+// skip=authcheck is also passed.
+function innertubeExtractorArgs() {
+  const cookiesConfigured = YtdlpCommandBuilder.buildCookiesArgs().length > 0;
+  return cookiesConfigured ? 'youtubetab:skip=webpage,authcheck' : 'youtubetab:skip=webpage';
+}
 
 function reportedCount(value) {
   if (!['number', 'string'].includes(typeof value) || String(value).trim() === '') return null;
@@ -55,15 +71,13 @@ class PlaylistModule {
 
   async _getPlaylistMetadata(url, { skipWebpage = false } = {}) {
     return new Promise((resolve, reject) => {
-      const args = [
-        '--skip-download',
-        '--dump-single-json',
-        '--flat-playlist',
-        '--playlist-items', '0',
-      ];
-      if (skipWebpage) args.push('--extractor-args', 'youtubetab:skip=webpage');
-      args.push(url);
-      const child = spawn('yt-dlp', args);
+      const args = YtdlpCommandBuilder.buildMetadataFetchArgs(url, {
+        flatPlaylist: true,
+        playlistItems: 0,
+        skipSleepRequests: true,
+        extractorArgs: skipWebpage ? innertubeExtractorArgs() : null,
+      });
+      const child = spawnYtDlp(args);
       let stdout = '';
       let stderr = '';
 
@@ -73,10 +87,10 @@ class PlaylistModule {
       child.on('close', (code) => {
         if (code !== 0) {
           if (/does not exist|Unable to find/i.test(stderr)) {
-            return reject(new Error('PLAYLIST_NOT_FOUND'));
+            return reject(fetchError('PLAYLIST_NOT_FOUND', child));
           }
           if (/confirm you.re not a bot|sign in|cookies/i.test(stderr)) {
-            return reject(new Error('COOKIES_REQUIRED'));
+            return reject(fetchError('COOKIES_REQUIRED', child));
           }
           logger.error({ stderr, code }, 'getPlaylistInfo failed');
           return reject(new Error('NETWORK_ERROR'));
@@ -172,17 +186,6 @@ class PlaylistModule {
     }
   }
 
-  /**
-   * The RegExp a playlist title filter is evaluated with on refresh. The
-   * settings route uses it to reject a pattern that would break every refresh.
-   * @param {string} pattern
-   * @returns {RegExp}
-   * @throws {SyntaxError} when the pattern is not a valid JavaScript regex
-   */
-  buildTitleFilterRegExp(pattern) {
-    return new RegExp(pattern, 'i');
-  }
-
   async fetchAllPlaylistVideos(playlistId, options = {}) {
     if (this.activeFetches.has(playlistId)) {
       throw new Error('FETCH_IN_PROGRESS');
@@ -204,15 +207,10 @@ class PlaylistModule {
     const { entries, complete } = await this._fetchSnapshot(playlist, startFollowing);
 
     const discoveredAt = new Date();
+    // Every available entry is tracked. The playlist's download filters are
+    // applied when videos are picked for download (playlistDownloadModule), so
+    // a video they skip stays listed and can still be downloaded by hand.
     const available = entries.filter((e) => !this.isUnavailableTitle(e.title));
-
-    const regex = playlist.title_filter_regex ? this.buildTitleFilterRegExp(playlist.title_filter_regex) : null;
-    const passes = (e) => {
-      if (playlist.min_duration != null && (e.duration || 0) < playlist.min_duration) return false;
-      if (playlist.max_duration != null && (e.duration || 0) > playlist.max_duration) return false;
-      if (regex && e.title && !regex.test(e.title)) return false;
-      return true;
-    };
 
     const pickThumbnail = (e) => {
       if (typeof e.thumbnail === 'string' && e.thumbnail) return e.thumbnail;
@@ -223,28 +221,25 @@ class PlaylistModule {
       return e.id ? `https://i.ytimg.com/vi/${e.id}/hqdefault.jpg` : null;
     };
 
-    const rows = available
-      .map((e, idx) => ({ entry: e, row: {
-        playlist_id: playlist.playlist_id,
-        youtube_id: e.id,
-        position: idx + 1,
-        // yt-dlp sometimes omits per-video channel fields from flat playlist
-        // listings (the same playlist can flip between fetches). Never substitute
-        // the playlist owner's channel: this field drives per-video command
-        // settings and owner-channel routing at finalize, and the owner's id
-        // mis-routes other artists' videos. Leave null and carry forward any
-        // previously-captured attribution (_preserveExistingChannelInfo).
-        channel_id: e.channel_id || null,
-        channel_name: e.uploader || e.channel || null,
-        title: e.title || null,
-        thumbnail: pickThumbnail(e),
-        duration: typeof e.duration === 'number' ? e.duration : null,
-        published_at: e.upload_date || e.release_date || null,
-        added_at: discoveredAt,
-        first_seen_at: discoveredAt,
-      }}))
-      .filter(({ entry }) => passes(entry))
-      .map(({ row }) => row);
+    const rows = available.map((e, idx) => ({
+      playlist_id: playlist.playlist_id,
+      youtube_id: e.id,
+      position: idx + 1,
+      // yt-dlp sometimes omits per-video channel fields from flat playlist
+      // listings (the same playlist can flip between fetches). Never substitute
+      // the playlist owner's channel: this field drives per-video command
+      // settings and owner-channel routing at finalize, and the owner's id
+      // mis-routes other artists' videos. Leave null and carry forward any
+      // previously-captured attribution (_preserveExistingChannelInfo).
+      channel_id: e.channel_id || null,
+      channel_name: e.uploader || e.channel || null,
+      title: e.title || null,
+      thumbnail: pickThumbnail(e),
+      duration: typeof e.duration === 'number' ? e.duration : null,
+      published_at: e.upload_date || e.release_date || null,
+      added_at: discoveredAt,
+      first_seen_at: discoveredAt,
+    }));
 
     await this._preserveExistingPublishedDates(playlist.playlist_id, rows);
     await this._preserveExistingChannelInfo(playlist.playlist_id, rows);
@@ -359,6 +354,9 @@ class PlaylistModule {
     try {
       entries = await this._spawnFlatPlaylist(playlist.url, { playlistEnd: MAX_PLAYLIST_VIDEOS });
     } catch (err) {
+      // YouTube answered. The InnerTube path is weaker at auth, and its error
+      // would replace this one.
+      if (err.message === 'PLAYLIST_NOT_FOUND') throw err;
       logger.warn({ err, playlist_id: playlist.playlist_id }, 'Default playlist fetch failed; retrying via InnerTube');
       entries = await this._spawnFlatPlaylist(playlist.url, innertubeOpts);
       usedInnertube = true;
@@ -472,20 +470,16 @@ class PlaylistModule {
   // Default (webpage) extraction paginates fully on yt-dlp >= 2026.07.04.
   // skipWebpage (InnerTube-only) is the fallback used by _fetchPlaylistVideos
   // when the default path fails or under-delivers; it stops at ~200 entries
-  // for playlist views as of 2026-07. If cookies are ever added here, an
-  // authenticated jar makes yt-dlp reject skip=webpage unless skip=authcheck
-  // is also passed.
+  // for playlist views as of 2026-07.
   _spawnFlatPlaylist(url, { playlistEnd, skipWebpage = false } = {}) {
     return new Promise((resolve, reject) => {
-      const args = ['--flat-playlist', '--dump-json'];
-      if (playlistEnd != null) {
-        args.push('--playlist-end', String(playlistEnd));
-      }
-      if (skipWebpage) {
-        args.push('--extractor-args', 'youtubetab:skip=webpage');
-      }
-      args.push(url);
-      const child = spawn('yt-dlp', args);
+      const args = YtdlpCommandBuilder.buildMetadataFetchArgs(url, {
+        flatPlaylist: true,
+        entryPerLine: true,
+        playlistEnd,
+        extractorArgs: skipWebpage ? innertubeExtractorArgs() : null,
+      });
+      const child = spawnYtDlp(args);
       let stdout = '';
       let stderr = '';
       child.stdout.on('data', (d) => { stdout += d.toString(); });
@@ -493,6 +487,9 @@ class PlaylistModule {
       child.on('close', (code) => {
         if (code !== 0) {
           logger.error({ stderr, code }, '_spawnFlatPlaylist failed');
+          if (/does not exist/i.test(stderr)) {
+            return reject(fetchError('PLAYLIST_NOT_FOUND', child));
+          }
           return reject(new Error('NETWORK_ERROR'));
         }
         try {
@@ -510,13 +507,12 @@ class PlaylistModule {
     // Seed the auto-created channel with the playlist's subfolder choice as-is:
     // the sentinel (the default for new playlists) -> global default subfolder,
     // null -> explicit root, a name -> that folder. This keeps the seeded
-    // channel consistent with the playlist's settings dialog.
+    // channel consistent with the playlist's settings dialog. The playlist's
+    // download filters are not copied: a pattern written for one playlist would
+    // silently block downloads if the channel is later subscribed to.
     const seed = {
       sub_folder: playlist.default_sub_folder,
       video_quality: playlist.video_quality,
-      min_duration: playlist.min_duration,
-      max_duration: playlist.max_duration,
-      title_filter_regex: playlist.title_filter_regex,
       audio_format: playlist.audio_format,
       default_rating: playlist.default_rating,
     };
@@ -734,6 +730,9 @@ class PlaylistModule {
           logger.info({ playlist_id: p.playlist_id }, 'Downloads paused for storage; skipping the rest of the playlist sweep');
           break;
         }
+        // A playlist can fail after queueing (held download filters still let
+        // the videos the user selected through); those jobs are real.
+        totalEnqueued += err.queued || 0;
         errors.push({ playlistId: p.playlist_id, message: err.message || 'Unknown error' });
         logger.error({ err, playlist_id: p.playlist_id }, 'playlistAutoDownload failed for playlist');
       }

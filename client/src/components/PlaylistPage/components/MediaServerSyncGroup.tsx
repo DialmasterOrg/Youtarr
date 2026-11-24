@@ -10,9 +10,10 @@ import {
   Typography,
 } from '../../ui';
 import { Refresh as RefreshIcon, MoreHorizontal } from '../../../lib/icons';
-import { MediaServerStatus, MediaServerType, Playlist } from '../../../types/playlist';
+import { MediaServerStatus, MediaServerType, Playlist, PlaylistSyncStatus as SyncStatus } from '../../../types/playlist';
 import InfoHint from '../../shared/InfoHint';
 import PlaylistSyncChips from './PlaylistSyncChips';
+import PlaylistSyncStatus from './PlaylistSyncStatus';
 
 interface MediaServerSyncGroupProps {
   playlist: Playlist;
@@ -28,6 +29,7 @@ interface MediaServerSyncGroupProps {
   // Downloaded items with no file of the playlist's sync type (mp3 for MP3
   // Only playlists, video otherwise); sync leaves them out.
   unsyncableCount?: number | null;
+  syncStatus?: SyncStatus | null;
 }
 
 const MediaServerSyncGroup: React.FC<MediaServerSyncGroupProps> = ({
@@ -42,6 +44,7 @@ const MediaServerSyncGroup: React.FC<MediaServerSyncGroupProps> = ({
   anyConfigured,
   actionRunning,
   unsyncableCount,
+  syncStatus,
 }) => {
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const isAudioPlaylist = playlist.audio_format === 'mp3_only';
@@ -89,6 +92,8 @@ const MediaServerSyncGroup: React.FC<MediaServerSyncGroupProps> = ({
           disabled={togglePending}
         />
       </div>
+
+      <PlaylistSyncStatus playlist={playlist} serverStatus={serverStatus} syncStatus={syncStatus} />
 
       {typeof unsyncableCount === 'number' && unsyncableCount > 0 && syncsSomewhere && (
         <Alert severity="warning">

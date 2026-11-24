@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { isDeletable, isDownloadable, isSelectable, statusLabel, PublishedDate, toDownloadFileProps, toModalData } from '../playlistVideoHelpers';
+import { isDeletable, isDownloadable, isSelectable, showsMembersAccess, statusLabel, PublishedDate, toDownloadFileProps, toModalData } from '../playlistVideoHelpers';
 import { PlaylistVideo } from '../../../../types/playlist';
 
 function makeVideo(overrides: Partial<PlaylistVideo> = {}): PlaylistVideo {
@@ -41,6 +41,20 @@ describe('isDownloadable', () => {
   });
   test('true even when ignored (explicit selection overrides ignore)', () => {
     expect(isDownloadable(makeVideo({ ignored: true }))).toBe(true);
+  });
+
+  test('blocks a members-only video the cookies were denied, as the channel page does', () => {
+    expect(isDownloadable(makeVideo({ members_access: 'denied' }))).toBe(false);
+  });
+
+  test('allows a members-only video the cookies can open', () => {
+    expect(isDownloadable(makeVideo({ members_access: 'confirmed' }))).toBe(true);
+  });
+});
+
+describe('isDownloadable for previously downloaded members-only videos', () => {
+  test('keeps a deleted or missing members-only video selectable, as the channel page does', () => {
+    expect(isDownloadable(makeVideo({ previously_downloaded: true, members_access: 'denied' }))).toBe(true);
   });
 });
 
@@ -116,6 +130,19 @@ describe('statusLabel', () => {
   test('returns Tracked for a plain tracked video', () => {
     expect(statusLabel(makeVideo())).toEqual({ label: 'Tracked', color: 'default' });
   });
+  test('Filtered, with an explanation, for a video the download filters skip', () => {
+    expect(statusLabel(makeVideo({ filtered: true }))).toEqual({
+      label: 'Filtered',
+      color: 'default',
+      tooltip: "Skipped by this playlist's download filters. Select it to download it anyway.",
+    });
+  });
+  test('Excluded wins over Filtered, since excluding is the user\'s own choice', () => {
+    expect(statusLabel(makeVideo({ filtered: true, ignored: true })).label).toBe('Excluded');
+  });
+  test('Deleted wins over Filtered for a video downloaded before', () => {
+    expect(statusLabel(makeVideo({ filtered: true, previously_downloaded: true })).label).toBe('Deleted');
+  });
 });
 
 describe('toDownloadFileProps', () => {
@@ -187,5 +214,27 @@ describe('PublishedDate', () => {
   test('renders the formatted date when present', () => {
     render(<PublishedDate value="20240115" />);
     expect(screen.getByText('2024-01-15')).toBeInTheDocument();
+  });
+});
+
+describe('showsMembersAccess', () => {
+  test('shows the chip for a members-only video without a file', () => {
+    expect(showsMembersAccess(makeVideo({ members_access: 'unchecked' }))).toBe(true);
+  });
+
+  test('hides the chip once the video is downloaded', () => {
+    expect(showsMembersAccess(makeVideo({ members_access: 'confirmed', downloaded: true }))).toBe(false);
+  });
+});
+
+describe('showsMembersAccess for previously downloaded videos', () => {
+  test('shows the removal state instead of a members chip', () => {
+    expect(showsMembersAccess(makeVideo({ previously_downloaded: true, members_access: 'denied' }))).toBe(false);
+  });
+});
+
+describe('toModalData members-only', () => {
+  test('opens a denied members-only video as members only', () => {
+    expect(toModalData(makeVideo({ members_access: 'denied' })).status).toBe('members_only');
   });
 });

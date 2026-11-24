@@ -1,5 +1,5 @@
 /* eslint-env jest */
-jest.mock('../../logger', () => ({ error: jest.fn() }));
+jest.mock('../../logger', () => ({ error: jest.fn(), warn: jest.fn() }));
 jest.mock('../../modules/download/videoActivity', () => ({ isActive: jest.fn(() => false) }));
 const express = require('express');
 const { Op } = require('sequelize');
@@ -17,6 +17,12 @@ const createResponse = () => {
   res.json = jest.fn(() => res);
   return res;
 };
+
+const NOT_FOUND_WITHOUT_COOKIES = 'YouTube says this playlist does not exist. If it is private (Watch Later, Liked videos or a private playlist), enable cookies from the account that owns it in Settings, then try again.';
+const NOT_FOUND_WITH_COOKIES = 'YouTube says this playlist does not exist. If it is private, your cookies may have expired or belong to a different account. Use "Test cookies" in Settings to check them.';
+const SIGN_IN_DEMANDED_WITH_COOKIES = 'YouTube asked for a sign-in even though cookies were sent. They may have expired. Use "Test cookies" in Settings to check them.';
+
+const playlistFetchError = (code, usedCookies) => Object.assign(new Error(code), { usedCookies });
 
 const makePlaylist = (overrides = {}) => ({
   id: 1,
@@ -41,7 +47,6 @@ const buildDeps = (overrides = {}) => ({
     refreshForFollowing: jest.fn().mockResolvedValue(0),
     isFollowingSetupError: (err) => ['PLAYLIST_TOO_LARGE', 'PLAYLIST_REFRESH_INCOMPLETE'].includes(err.message),
     recoverFollowingSetup: jest.fn().mockResolvedValue('Playlist saved. Auto-download setup needs attention.'),
-    buildTitleFilterRegExp: jest.fn(),
     ...overrides.playlistModule,
   },
   m3uGenerator: {
@@ -55,6 +60,7 @@ const buildDeps = (overrides = {}) => ({
   mediaServers: {
     mediaServerSync: {
       syncPlaylist: jest.fn().mockResolvedValue(undefined),
+      getSyncStatus: jest.fn().mockResolvedValue({ syncing: false, servers: {} }),
     },
     watchStatusQueries: {
       getWatchedByMap: jest.fn().mockResolvedValue(new Map()),
@@ -220,6 +226,26 @@ describe('GET /api/playlists/:playlistId', () => {
       where: { playlist_id: 'PLtest123', enabled: true },
     });
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ playlist }));
+  });
+
+  test('returns the media server sync status for the playlist', async () => {
+    const syncStatus = {
+      syncing: false,
+      servers: { jellyfin: { last_synced_at: null, last_error: 'No downloaded items to sync yet.' } },
+    };
+    const deps = buildDeps();
+    deps.mediaServers.mediaServerSync.getSyncStatus.mockResolvedValue(syncStatus);
+    const playlist = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(playlist);
+
+    const handler = getHandler('get', '/api/playlists/:playlistId', deps);
+    const req = { params: { playlistId: 'PLtest123' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.mediaServers.mediaServerSync.getSyncStatus).toHaveBeenCalledWith(playlist);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ sync_status: syncStatus }));
   });
 
   test('is not found when the playlist is soft-deleted', async () => {
@@ -437,7 +463,35 @@ describe('POST /api/playlists/addplaylistinfo', () => {
     await handler(req, res);
 
     expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Playlist not found' });
+    expect(res.json).toHaveBeenCalledWith({ error: NOT_FOUND_WITHOUT_COOKIES });
+  });
+
+  test('returns 404 pointing at the cookies when they were sent and the playlist was not found', async () => {
+    const deps = buildDeps();
+    deps.playlistModule.getPlaylistInfo.mockRejectedValue(playlistFetchError('PLAYLIST_NOT_FOUND', true));
+
+    const handler = getHandler('post', '/api/playlists/addplaylistinfo', deps);
+    const req = { body: { url: 'https://youtube.com/playlist?list=WL' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: NOT_FOUND_WITH_COOKIES });
+  });
+
+  test('returns 403 pointing at the cookies when they were sent and a sign-in was still demanded', async () => {
+    const deps = buildDeps();
+    deps.playlistModule.getPlaylistInfo.mockRejectedValue(playlistFetchError('COOKIES_REQUIRED', true));
+
+    const handler = getHandler('post', '/api/playlists/addplaylistinfo', deps);
+    const req = { body: { url: 'https://youtube.com/playlist?list=private' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({ error: SIGN_IN_DEMANDED_WITH_COOKIES });
   });
 
   test('returns 403 when cookies required', async () => {
@@ -652,6 +706,36 @@ describe('POST /api/playlists', () => {
 
     await expect(handler(req, res)).resolves.not.toThrow();
     expect(res.status).toHaveBeenCalledWith(500);
+  });
+
+  test('returns 404 without saving when YouTube says the playlist does not exist', async () => {
+    const deps = buildDeps();
+    deps.playlistModule.getPlaylistInfo.mockRejectedValue(playlistFetchError('PLAYLIST_NOT_FOUND', false));
+
+    const handler = getHandler('post', '/api/playlists', deps);
+    const req = { body: { url: 'https://youtube.com/playlist?list=WL' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: NOT_FOUND_WITHOUT_COOKIES });
+    expect(deps.playlistModule.upsertPlaylist).not.toHaveBeenCalled();
+  });
+
+  test('returns 503 without saving when YouTube cannot be reached', async () => {
+    const deps = buildDeps();
+    deps.playlistModule.getPlaylistInfo.mockRejectedValue(new Error('NETWORK_ERROR'));
+
+    const handler = getHandler('post', '/api/playlists', deps);
+    const req = { body: { url: 'https://youtube.com/playlist?list=net' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Unable to reach YouTube' });
+    expect(deps.playlistModule.upsertPlaylist).not.toHaveBeenCalled();
   });
 
   test('returns 500 on subscribe failure', async () => {
@@ -877,6 +961,76 @@ describe('PUT /api/playlists/:playlistId/settings', () => {
     expect(res.json).toHaveBeenCalledWith({ settings: { sort_order: 'reversed' } });
   });
 
+  describe('m3u rebuild on Download Type change', () => {
+    const saveSettings = async (deps, body) => {
+      const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+      const res = createResponse();
+      await handler({ params: { playlistId: 'PLtest123' }, body, log: loggerMock }, res);
+      return res;
+    };
+
+    test('rebuilds the m3u files when audio_format changes', async () => {
+      const deps = buildDeps();
+      const p = makePlaylist({ audio_format: 'video_mp3' });
+      deps.models.Playlist.findOne.mockResolvedValue(p);
+
+      await saveSettings(deps, { audio_format: null });
+
+      expect(deps.m3uGenerator.generatePlaylistM3U).toHaveBeenCalledWith(p.id);
+    });
+
+    test('waits for the save to finish before rebuilding, since the generator re-reads the row', async () => {
+      const deps = buildDeps();
+      let finishSave;
+      const p = makePlaylist({
+        audio_format: 'video_mp3',
+        update: jest.fn(() => new Promise((resolve) => { finishSave = resolve; })),
+      });
+      deps.models.Playlist.findOne.mockResolvedValue(p);
+
+      const saving = saveSettings(deps, { audio_format: null });
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(p.update).toHaveBeenCalled();
+      expect(deps.m3uGenerator.generatePlaylistM3U).not.toHaveBeenCalled();
+
+      finishSave();
+      await saving;
+
+      expect(deps.m3uGenerator.generatePlaylistM3U).toHaveBeenCalledWith(p.id);
+    });
+
+    test('does not rebuild the m3u files when audio_format is sent unchanged', async () => {
+      const deps = buildDeps();
+      deps.models.Playlist.findOne.mockResolvedValue(makePlaylist({ audio_format: 'video_mp3' }));
+
+      await saveSettings(deps, { audio_format: 'video_mp3', sort_order: 'reversed' });
+
+      expect(deps.m3uGenerator.generatePlaylistM3U).not.toHaveBeenCalled();
+    });
+
+    test('does not rebuild the m3u files when audio_format is not sent', async () => {
+      const deps = buildDeps();
+      deps.models.Playlist.findOne.mockResolvedValue(makePlaylist({ audio_format: 'video_mp3' }));
+
+      await saveSettings(deps, { video_quality: '720p' });
+
+      expect(deps.m3uGenerator.generatePlaylistM3U).not.toHaveBeenCalled();
+    });
+
+    test('still saves the settings when the background m3u rebuild fails', async () => {
+      const deps = buildDeps();
+      const p = makePlaylist({ audio_format: null });
+      deps.models.Playlist.findOne.mockResolvedValue(p);
+      deps.m3uGenerator.generatePlaylistM3U.mockRejectedValue(new Error('disk'));
+
+      const res = await saveSettings(deps, { audio_format: 'video_mp3' });
+
+      expect(p.update).toHaveBeenCalledWith({ audio_format: 'video_mp3' });
+      expect(res.json).toHaveBeenCalledWith({ settings: { audio_format: 'video_mp3' } });
+      expect(res.status).not.toHaveBeenCalledWith(500);
+    });
+  });
+
   test('rejects an invalid sort_order with 400 before touching the playlist', async () => {
     const deps = buildDeps();
 
@@ -912,10 +1066,10 @@ describe('PUT /api/playlists/:playlistId/settings', () => {
     expect(deps.subfolderModule.register).toHaveBeenCalledWith('Music');
   });
 
-  test('rejects a title_filter_regex the refresh cannot compile, without persisting', async () => {
+  test('rejects a title_filter_regex that is not a valid pattern, without persisting', async () => {
     const deps = buildDeps();
-    deps.playlistModule.buildTitleFilterRegExp.mockImplementation(() => {
-      throw new SyntaxError('Unterminated character class');
+    deps.channelSettingsModule.validateTitleRegex.mockReturnValue({
+      valid: false, error: 'Invalid regex pattern: unterminated character set at position 0',
     });
 
     const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
@@ -929,8 +1083,60 @@ describe('PUT /api/playlists/:playlistId/settings', () => {
     await handler(req, res);
 
     expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid title_filter_regex: Unterminated character class' });
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid regex pattern: unterminated character set at position 0' });
     expect(deps.models.Playlist.findOne).not.toHaveBeenCalled();
+  });
+
+  test('checks a title_filter_regex with the validator channel title filters use', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist());
+
+    const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+    await handler({ params: { playlistId: 'PLtest123' }, body: { title_filter_regex: '(?i)episode' }, log: loggerMock }, createResponse());
+
+    expect(deps.channelSettingsModule.validateTitleRegex).toHaveBeenCalledWith('(?i)episode');
+  });
+
+  describe('duration limits', () => {
+    const saveDurations = async (deps, body) => {
+      const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+      const res = createResponse();
+      await handler({ params: { playlistId: 'PLtest123' }, body, log: loggerMock }, res);
+      return res;
+    };
+
+    test('rejects durations the channel duration rules reject, without persisting', async () => {
+      const deps = buildDeps();
+      const p = makePlaylist();
+      deps.models.Playlist.findOne.mockResolvedValue(p);
+      deps.channelSettingsModule.validateDurationSettings.mockReturnValue({
+        valid: false, error: 'Minimum duration must be less than maximum duration',
+      });
+
+      const res = await saveDurations(deps, { min_duration: 600, max_duration: 60 });
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ error: 'Minimum duration must be less than maximum duration' });
+      expect(p.update).not.toHaveBeenCalled();
+    });
+
+    test('checks a new minimum against the saved maximum', async () => {
+      const deps = buildDeps();
+      deps.models.Playlist.findOne.mockResolvedValue(makePlaylist({ min_duration: null, max_duration: 300 }));
+
+      await saveDurations(deps, { min_duration: 600 });
+
+      expect(deps.channelSettingsModule.validateDurationSettings).toHaveBeenCalledWith(600, 300);
+    });
+
+    test('does not check durations when neither limit is sent', async () => {
+      const deps = buildDeps();
+      deps.models.Playlist.findOne.mockResolvedValue(makePlaylist({ min_duration: 60, max_duration: 300 }));
+
+      await saveDurations(deps, { video_quality: '720p' });
+
+      expect(deps.channelSettingsModule.validateDurationSettings).not.toHaveBeenCalled();
+    });
   });
 
   test('rejects a non-string title_filter_regex', async () => {
@@ -967,7 +1173,7 @@ describe('PUT /api/playlists/:playlistId/settings', () => {
     expect(p.update).toHaveBeenCalledWith({ title_filter_regex: 'Episode \\d+ ' });
   });
 
-  test('clears title_filter_regex without compiling it', async () => {
+  test('clears title_filter_regex without checking it', async () => {
     const deps = buildDeps();
     const p = makePlaylist();
     deps.models.Playlist.findOne.mockResolvedValue(p);
@@ -982,7 +1188,8 @@ describe('PUT /api/playlists/:playlistId/settings', () => {
 
     await handler(req, res);
 
-    expect(deps.playlistModule.buildTitleFilterRegExp).not.toHaveBeenCalled();
+    expect(p.update).toHaveBeenCalledWith({ title_filter_regex: null });
+    expect(deps.channelSettingsModule.validateTitleRegex).not.toHaveBeenCalled();
   });
 
   test('returns 404 when playlist not found', async () => {
@@ -1373,6 +1580,33 @@ describe('GET /api/playlists/:playlistId/videos watched_by', () => {
     expect(payload.videos[1].watched_by).toEqual([]);
   });
 
+  test('sets members_access from the recorded members-only state', async () => {
+    const deps = buildDeps();
+    deps.membersAccess = { getStates: jest.fn().mockResolvedValue(new Map([['members1', 'denied']])) };
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue(playlistRows(['members1', 'public2']));
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const res = createResponse();
+
+    await handler({ params: { playlistId: 'PLtest123' }, query: {}, log: loggerMock }, res);
+
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.videos.map((v) => v.members_access)).toEqual(['denied', null]);
+  });
+
+  test('keeps listing videos when members-only state cannot be read', async () => {
+    const deps = buildDeps();
+    deps.membersAccess = { getStates: jest.fn().mockRejectedValue(new Error('db down')) };
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue(playlistRows(['members1']));
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const res = createResponse();
+
+    await handler({ params: { playlistId: 'PLtest123' }, query: {}, log: { ...loggerMock, warn: jest.fn() } }, res);
+
+    expect(res.json.mock.calls[0][0].videos[0].members_access).toBeNull();
+  });
+
   test('keeps watched_by for a previously-downloaded video whose file is gone', async () => {
     const deps = buildDeps();
     deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue(playlistRows(['gone1']));
@@ -1696,6 +1930,20 @@ describe('POST /api/playlists/:playlistId/refresh', () => {
 
     expect(res.status).toHaveBeenCalledWith(409);
     expect(res.json).toHaveBeenCalledWith({ error: 'A refresh is already in progress for this playlist. Wait for it to finish, then try again.' });
+  });
+
+  test('returns 404 pointing at the cookies when YouTube says the playlist does not exist', async () => {
+    const deps = buildDeps();
+    deps.playlistModule.fetchAllPlaylistVideos.mockRejectedValue(playlistFetchError('PLAYLIST_NOT_FOUND', true));
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/refresh', deps);
+    const req = { params: { playlistId: 'PLtest123' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: NOT_FOUND_WITH_COOKIES });
   });
 
   test('returns 500 on fetch error', async () => {
@@ -2102,6 +2350,22 @@ describe('POST /api/playlists/:playlistId/regenerate-m3u', () => {
     expect(res.json).toHaveBeenCalledWith({ success: true });
   });
 
+  // The page shows a success message for any 2xx answer, whatever its body.
+  test('answers with an error when the generator reports the file was not written', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist());
+    deps.m3uGenerator.generatePlaylistM3U.mockResolvedValue(false);
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/regenerate-m3u', deps);
+    const req = { params: { playlistId: 'PLtest123' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ error: 'The .m3u file was not rebuilt. The server log has the reason.' });
+  });
+
   test('returns 404 when playlist not found', async () => {
     const deps = buildDeps();
     deps.models.Playlist.findOne.mockResolvedValue(null);
@@ -2242,8 +2506,23 @@ describe('playlist following and existing batches', () => {
     deps.models.PlaylistVideo.findAll.mockResolvedValue(candidates);
     const res = createResponse();
     await getHandler('get', '/api/playlists/:playlistId/download-preview', deps)(request({}, { order: 'published', count: '1' }), res);
-    expect(res.json).toHaveBeenCalledWith({ candidates, selectedIds: ['newest'], missingDates: 0 });
+    expect(res.json).toHaveBeenCalledWith({
+      candidates: candidates.map((candidate) => ({ ...candidate, filtered: false })),
+      selectedIds: ['newest'],
+      missingDates: 0,
+    });
     expect(deps.downloadModule.doPlaylistDownloads).not.toHaveBeenCalled();
+  });
+
+  test('the preview does not suggest videos the playlist download filters skip', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist({ min_duration: 600, max_duration: null, title_filter_regex: null }));
+    deps.models.PlaylistVideo.findAll.mockResolvedValue([
+      { ...candidates[0], duration: 30 }, { ...candidates[1], duration: 900 },
+    ]);
+    const res = createResponse();
+    await getHandler('get', '/api/playlists/:playlistId/download-preview', deps)(request({}, { order: 'asc', count: '5' }), res);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ selectedIds: ['oldest'] }));
   });
 
   test('date gaps are visible rather than silently selecting from an end', async () => {
@@ -2533,5 +2812,134 @@ describe('playlist setup recovery and validation', () => {
       expect(deps.playlistModule.recoverFollowingSetup).not.toHaveBeenCalled();
       expect(p.update).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('GET /api/playlists/:playlistId/videos download filters', () => {
+  const row = (youtube_id, duration, overrides = {}) => ({
+    id: 1, playlist_id: 'PLtest123', youtube_id, position: 1, title: youtube_id, duration,
+    ignored: false, ignored_at: null, channel_id: null, ...overrides,
+  });
+  const listVideos = async (deps, rows) => {
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({ count: rows.length, rows });
+    const res = createResponse();
+    await getHandler('get', '/api/playlists/:playlistId/videos', deps)(
+      { params: { playlistId: 'PLtest123' }, query: {}, log: loggerMock }, res
+    );
+    return Object.fromEntries(res.json.mock.calls[0][0].videos.map((video) => [video.youtube_id, video.filtered]));
+  };
+  const depsWithFilters = (filters) => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist({
+      min_duration: null, max_duration: null, title_filter_regex: null, ...filters,
+    }));
+    return deps;
+  };
+
+  test('marks the undownloaded videos the filters skip', async () => {
+    const deps = depsWithFilters({ min_duration: 600 });
+    expect(await listVideos(deps, [row('short', 30), row('long', 900)])).toEqual({ short: true, long: false });
+  });
+
+  test('marks nothing on a playlist without filters', async () => {
+    expect(await listVideos(depsWithFilters({}), [row('short', 30)])).toEqual({ short: false });
+  });
+
+  test('does not mark a video that is already downloaded', async () => {
+    const deps = depsWithFilters({ min_duration: 600 });
+    deps.models.Video.findAll.mockResolvedValue([{ id: 7, youtubeId: 'short', removed: false, filePath: '/v/short.mp4' }]);
+    expect(await listVideos(deps, [row('short', 30)])).toEqual({ short: false });
+  });
+
+  test('does not mark a video the user selected for download', async () => {
+    const deps = depsWithFilters({ min_duration: 600 });
+    expect(await listVideos(deps, [row('short', 30, { auto_download_requested: true })])).toEqual({ short: false });
+  });
+
+  // The page shows the playlist's filter_error instead of flagging every row.
+  test('marks nothing when the title filter cannot be evaluated', async () => {
+    const deps = depsWithFilters({ title_filter_regex: '[unclosed' });
+    expect(await listVideos(deps, [row('short', 30)])).toEqual({ short: false });
+  });
+});
+
+describe('POST /api/playlists/:playlistId/filter-preview', () => {
+  const tracked = [
+    { id: 2, youtube_id: 'ep', title: 'Episode 2', duration: 900 },
+    { id: 1, youtube_id: 'trailer', title: 'Trailer', duration: 60 },
+  ];
+  const preview = async (deps, body) => {
+    const res = createResponse();
+    await getHandler('post', '/api/playlists/:playlistId/filter-preview', deps)(
+      { params: { playlistId: 'PLtest123' }, body, log: loggerMock }, res
+    );
+    return res;
+  };
+
+  test('previews the proposed filters against the tracked videos', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAll.mockResolvedValue(tracked);
+    const res = await preview(deps, { title_filter_regex: 'Episode', min_duration: null, max_duration: null });
+    expect(res.json).toHaveBeenCalledWith({
+      totalCount: 2, matchCount: 1, waitingCount: null, truncated: false,
+      videos: [
+        { youtube_id: 'ep', title: 'Episode 2', duration: 900, matches: true },
+        { youtube_id: 'trailer', title: 'Trailer', duration: 60, matches: false },
+      ],
+    });
+  });
+
+  test('treats missing fields as no filter', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAll.mockResolvedValue(tracked);
+    const res = await preview(deps, {});
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ totalCount: 2, matchCount: 2 }));
+  });
+
+  test('rejects a pattern the title filter validator rejects, before reading the playlist', async () => {
+    const deps = buildDeps();
+    deps.channelSettingsModule.validateTitleRegex.mockReturnValue({ valid: false, error: 'Invalid regex pattern: nope' });
+    const res = await preview(deps, { title_filter_regex: '[unclosed' });
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid regex pattern: nope' });
+    expect(deps.models.Playlist.findOne).not.toHaveBeenCalled();
+  });
+
+  test.each([{ title_filter_regex: 42 }, { title_filter_regex: ['a'] }])('rejects a non-string pattern %j', async (body) => {
+    const deps = buildDeps();
+    const res = await preview(deps, body);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(deps.channelSettingsModule.validateTitleRegex).not.toHaveBeenCalled();
+  });
+
+  test('rejects durations the channel duration rules reject', async () => {
+    const deps = buildDeps();
+    deps.channelSettingsModule.validateDurationSettings.mockReturnValue({ valid: false, error: 'Minimum duration must be less than maximum duration' });
+    const res = await preview(deps, { min_duration: 600, max_duration: 60 });
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Minimum duration must be less than maximum duration' });
+  });
+
+  test('returns 404 for a missing or disabled playlist', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(null);
+    const res = await preview(deps, { title_filter_regex: 'Episode' });
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  test('returns 400 with the reason when the pattern cannot be evaluated', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAll.mockResolvedValue(tracked);
+    const res = await preview(deps, { title_filter_regex: '[unclosed' });
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: expect.stringMatching(/Invalid regex pattern/) });
+  });
+
+  test('returns 500 when the preview fails', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAll.mockRejectedValue(new Error('db down'));
+    const res = await preview(deps, { title_filter_regex: 'Episode' });
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Failed to preview the filters' });
   });
 });

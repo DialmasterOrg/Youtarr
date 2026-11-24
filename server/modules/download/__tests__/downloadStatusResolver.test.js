@@ -5,6 +5,9 @@ const {
   resolveFinalPresentation,
   buildJobDataPayload
 } = require('../downloadStatusResolver');
+// The wording itself is tested with youtubeBlockAdvice; these tests check
+// that the resolver picks the text for the right kind and cookie state.
+const { KIND, adviceFor, botCheckText } = require('../../youtubeBlockAdvice');
 
 describe('downloadStatusResolver', () => {
   describe('computeOutcomeFlags', () => {
@@ -160,7 +163,18 @@ describe('downloadStatusResolver', () => {
       const result = describeNonZeroExit({ ...baseInput, videoCount: 2, httpForbiddenDetected: true });
       expect(result.errorCode).toBe('COOKIES_RECOMMENDED');
       expect(result.output).toBe('2 videos. Error: YouTube returned HTTP 403 (Forbidden)');
-      expect(result.notes).toBe('YouTube denied access (HTTP 403). Configure cookies in Settings -> Cookies to resolve this issue.');
+      expect(result.notes).toBe(adviceFor(KIND.HTTP_403, { cookiesEnabled: false }).message);
+    });
+
+    it('notes the stale-cookie diagnosis when HTTP 403 hit a run that used cookies', () => {
+      const result = describeNonZeroExit({
+        ...baseInput,
+        videoCount: 2,
+        httpForbiddenDetected: true,
+        cookiesEnabled: true
+      });
+      expect(result.errorCode).toBe('COOKIES_RECOMMENDED');
+      expect(result.notes).toBe(adviceFor(KIND.HTTP_403, { cookiesEnabled: true }).message);
     });
 
     it('uses no-cookies fallback advice for HTTP 403 during an anonymous retry', () => {
@@ -551,7 +565,18 @@ describe('downloadStatusResolver', () => {
       });
       expect(result.finalState).toBe('failed');
       expect(result.finalErrorCode).toBe('COOKIES_REQUIRED');
-      expect(result.finalText).toBe('Download failed: Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.');
+      expect(result.finalText).toBe(`Download failed: ${botCheckText({ cookiesEnabled: false })}`);
+    });
+
+    it('uses the stale-cookie wording when bot detection hit a run that used cookies', () => {
+      const result = resolveFinalPresentation({
+        ...baseInput,
+        code: 1,
+        botDetected: true,
+        cookiesEnabled: true
+      });
+      expect(result.finalErrorCode).toBe('COOKIES_REQUIRED');
+      expect(result.finalText).toBe(`Download failed: ${botCheckText({ cookiesEnabled: true })}`);
     });
 
     it('uses no-cookies fallback messaging for bot detection during an anonymous retry', () => {

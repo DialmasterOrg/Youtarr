@@ -21,6 +21,7 @@ const storageGuard = require('./storageGuard');
 const { unchangedSinceRead } = require('./videoRowGuard');
 const { REMOVAL_REASONS, removedColumns, presentColumns } = require('./videoRemovalState');
 const videosModule = require('./videosModule');
+const { JOB_NOT_STARTED } = require('./constants/jobOutputPrefixes');
 const logger = require('../logger');
 
 const MAX_SAVE_RETRIES = 3;
@@ -504,7 +505,7 @@ class JobModule {
 
         await this.updateJob(id, {
           status: 'Terminated',
-          output: 'Job could not be started after server restart',
+          output: `${JOB_NOT_STARTED} after server restart`,
         });
         // Try the next pending job
         continue;
@@ -533,7 +534,7 @@ class JobModule {
   async failUnstartedJob(jobId, err) {
     const job = this.jobs[jobId];
     if (!job || job.status !== 'Pending') return;
-    const reason = `Job could not be started: ${err && err.message ? err.message : 'Unknown error'}`;
+    const reason = `${JOB_NOT_STARTED}: ${err && err.message ? err.message : 'Unknown error'}`;
     const runId = job.data && job.data.runId ? job.data.runId : null;
     await this.updateJob(jobId, { status: 'Error', output: reason });
     this.notifyJobAbandoned({ jobId, runId, reason });

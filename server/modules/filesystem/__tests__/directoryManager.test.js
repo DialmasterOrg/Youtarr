@@ -34,6 +34,7 @@ const {
   isChannelDirectory,
   isSubfolderDir,
   cleanupEmptyChannelDirectory,
+  removeEmptyVideoDirectory,
   removeDirectoryResilient,
   isIgnorableEntry,
   listDirectory,
@@ -577,6 +578,137 @@ describe('filesystem/directoryManager', () => {
         expect(fsPromises.rmdir).toHaveBeenCalledWith('/videos/ChannelName');
         expect(result).toBe(true);
       });
+    });
+
+    it('does not remove a folder deeper than a channel folder by default', async () => {
+      const result = await cleanupEmptyChannelDirectory('/videos/youtube/ChannelName', baseDir);
+
+      expect(fsPromises.rmdir).not.toHaveBeenCalled();
+      expect(result).toBe(false);
+    });
+
+    describe('with anyDepth: true', () => {
+      it('removes an empty folder deeper than a channel folder', async () => {
+        fsPromises.access.mockResolvedValueOnce();
+        fsPromises.readdir.mockResolvedValueOnce([]);
+        fsPromises.rmdir.mockResolvedValueOnce();
+
+        const result = await cleanupEmptyChannelDirectory('/videos/__Sub/extra/ChannelName', baseDir, {
+          anyDepth: true
+        });
+
+        expect(fsPromises.rmdir).toHaveBeenCalledWith('/videos/__Sub/extra/ChannelName');
+        expect(result).toBe(true);
+      });
+
+      it('still keeps a folder that holds something', async () => {
+        fsPromises.access.mockResolvedValueOnce();
+        fsPromises.readdir.mockResolvedValueOnce(['Channel - Other - xyz98765432']);
+
+        const result = await cleanupEmptyChannelDirectory('/videos/youtube/ChannelName', baseDir, {
+          anyDepth: true
+        });
+
+        expect(fsPromises.rmdir).not.toHaveBeenCalled();
+        expect(result).toBe(false);
+      });
+
+      it.each([
+        ['the base directory itself', '/videos'],
+        ['a folder outside the base directory', '/other/ChannelName'],
+        ['a folder that only shares the base directory\'s prefix', '/videos-old/ChannelName']
+      ])('never removes %s', async (_label, dirPath) => {
+        const result = await cleanupEmptyChannelDirectory(dirPath, baseDir, { anyDepth: true });
+
+        expect(fsPromises.readdir).not.toHaveBeenCalled();
+        expect(fsPromises.rmdir).not.toHaveBeenCalled();
+        expect(result).toBe(false);
+      });
+    });
+  });
+
+  describe('removeEmptyVideoDirectory', () => {
+    const videoId = 'dQw4w9WgXcQ';
+    const videoDir = `/old/Channel/Channel - Title - ${videoId}`;
+
+    it('removes an empty folder named "<prefix> - <id>"', async () => {
+      fsPromises.readdir.mockResolvedValueOnce([]);
+      fsPromises.rmdir.mockResolvedValueOnce();
+
+      const result = await removeEmptyVideoDirectory(videoDir, videoId);
+
+      expect(fsPromises.rmdir).toHaveBeenCalledWith(videoDir);
+      expect(result).toBe(true);
+    });
+
+    it('removes an empty folder named by the bare ID', async () => {
+      fsPromises.readdir.mockResolvedValueOnce([]);
+      fsPromises.rmdir.mockResolvedValueOnce();
+
+      const result = await removeEmptyVideoDirectory(`/old/Channel/${videoId}`, videoId);
+
+      expect(fsPromises.rmdir).toHaveBeenCalledWith(`/old/Channel/${videoId}`);
+      expect(result).toBe(true);
+    });
+
+    it.each([
+      ['a channel folder', '/old/Channel'],
+      ['another video\'s folder', '/old/Channel/Channel - Title - aaaaaaaaaaa'],
+      ['a folder that only mentions the ID', `/old/Channel/Channel - ${videoId} - Title`]
+    ])('never touches %s', async (_label, dirPath) => {
+      const result = await removeEmptyVideoDirectory(dirPath, videoId);
+
+      expect(fsPromises.readdir).not.toHaveBeenCalled();
+      expect(fsPromises.rmdir).not.toHaveBeenCalled();
+      expect(result).toBe(false);
+    });
+
+    it('keeps a folder that still holds another file, and deletes nothing in it', async () => {
+      fsPromises.readdir.mockResolvedValueOnce(['.DS_Store', 'Channel - Other [aaaaaaaaaaa].mp4']);
+
+      const result = await removeEmptyVideoDirectory(videoDir, videoId);
+
+      expect(fsPromises.unlink).not.toHaveBeenCalled();
+      expect(fsPromises.rmdir).not.toHaveBeenCalled();
+      expect(result).toBe(false);
+    });
+
+    it('sweeps leftover system files before removing the folder', async () => {
+      fsPromises.readdir.mockResolvedValueOnce(['.DS_Store', 'Thumbs.db', '._Title.mp4']);
+      fsPromises.unlink.mockResolvedValue();
+      fsPromises.rmdir.mockResolvedValueOnce();
+
+      const result = await removeEmptyVideoDirectory(videoDir, videoId);
+
+      expect(fsPromises.unlink.mock.calls.map(([filePath]) => filePath)).toEqual([
+        `${videoDir}/.DS_Store`,
+        `${videoDir}/Thumbs.db`,
+        `${videoDir}/._Title.mp4`
+      ]);
+      expect(fsPromises.rmdir).toHaveBeenCalledWith(videoDir);
+      expect(result).toBe(true);
+    });
+
+    it('returns false when the folder cannot be removed', async () => {
+      fsPromises.readdir.mockResolvedValueOnce([]);
+      const busy = new Error('EBUSY');
+      busy.code = 'EBUSY';
+      fsPromises.rmdir.mockRejectedValueOnce(busy);
+
+      const result = await removeEmptyVideoDirectory(videoDir, videoId);
+
+      expect(result).toBe(false);
+    });
+
+    it('returns false when the folder is already gone', async () => {
+      const gone = new Error('ENOENT');
+      gone.code = 'ENOENT';
+      fsPromises.readdir.mockRejectedValueOnce(gone);
+
+      const result = await removeEmptyVideoDirectory(videoDir, videoId);
+
+      expect(fsPromises.rmdir).not.toHaveBeenCalled();
+      expect(result).toBe(false);
     });
   });
 

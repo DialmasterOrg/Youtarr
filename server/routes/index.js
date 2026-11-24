@@ -7,6 +7,7 @@ const createVideoRoutes = require('./videos');
 const createJobRoutes = require('./jobs');
 const createPlexRoutes = require('./plex');
 const createApiKeyRoutes = require('./apikeys');
+const createStatusRoutes = require('./status');
 const createSubscriptionRoutes = require('./subscriptions');
 const createVideoDetailRoutes = require('./videoDetail');
 const createVideoSearchRoutes = require('./videoSearch');
@@ -17,10 +18,13 @@ const createYoutubeApiKeyRoutes = require('./youtubeApiKey');
 const createYtdlpOptionsRoutes = require('./ytdlpOptions');
 const createMaintenanceRoutes = require('./maintenance');
 const createSubfolderRoutes = require('./subfolders');
+const createSupportPromptRoutes = require('./supportPrompt');
 const createSchedulesRoutes = require('./schedules');
 const createLogRoutes = require('./logs');
 const createVideoTrashRoutes = require('./videoTrash');
 const createFeedRoutes = require('./feeds');
+const createArrBridgeRoutes = require('./arrBridge');
+const createArrBridgeSettingsRoutes = require('./arrBridgeSettings');
 const createExternalRequestReviewRoutes = require('./externalRequests');
 const { createExternalApiRoutes } = require('./externalApi');
 const { sendExternalError } = require('../modules/externalApi/externalApiResponse');
@@ -35,8 +39,10 @@ const channelSettingsModule = require('../modules/channelSettingsModule');
 const channelDownloadAllModule = require('../modules/channelDownloadAllModule');
 const ratingMapper = require('../modules/ratingMapper');
 const subfolderModule = require('../modules/subfolderModule');
+const supportPromptModule = require('../modules/supportPromptModule');
 const playlistVideoFilters = require('../modules/playlistVideoFilters');
 const playlistDownloadModule = require('../modules/playlistDownloadModule');
+const membersAccess = require('../modules/membersAccess');
 const models = require('../models');
 const videoLocalStatus = require('../modules/videoLocalStatus');
 const youtubeUrlParser = require('../modules/youtubeUrlParser');
@@ -47,6 +53,7 @@ const scheduleConfig = require('../modules/scheduleConfig');
 const rescanRunSummary = require('../modules/rescanRunSummary');
 const ytdlpUpdateRunSummary = require('../modules/ytdlpUpdateRunSummary');
 const storageGuard = require('../modules/storageGuard');
+const statusSummaryModule = require('../modules/statusSummaryModule');
 const cookieDetails = require('../modules/cookieDetails');
 const cookieTest = require('../modules/cookieTest');
 const logger = require('../logger');
@@ -77,6 +84,9 @@ function registerRoutes(app, deps) {
     filenamePreviewRateLimiter,
     cookieTestRateLimiter,
     feedLimiter,
+    arrBridgeLimiter,
+    arrBridgeConnectionLimiter,
+    arrBridge,
     configModule,
     channelModule,
     plexModule,
@@ -152,6 +162,9 @@ function registerRoutes(app, deps) {
   // API Key routes
   app.use(createApiKeyRoutes({ verifyToken }));
 
+  // Read-only status summary for dashboards (session or status API key)
+  app.use(createStatusRoutes({ verifyToken, statusSummaryModule, getCachedYtDlpVersion, serverVersion }));
+
   // Session-authenticated administrator review of external requests
   app.use(createExternalRequestReviewRoutes({
     verifyToken,
@@ -166,7 +179,7 @@ function registerRoutes(app, deps) {
   app.use(createVideoDetailRoutes({ verifyToken, videosModule, videoMetadataModule, mediaServers }));
 
   // Playlist routes
-  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard }));
+  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard, membersAccess }));
 
   // Media server routes
   app.use(createMediaServerRoutes({ verifyToken, configModule, mediaServers, scheduledTaskManager }));
@@ -179,6 +192,9 @@ function registerRoutes(app, deps) {
   // Subfolder registry routes
   app.use(createSubfolderRoutes({ verifyToken, subfolderModule }));
 
+  // One-time support prompt routes
+  app.use(createSupportPromptRoutes({ verifyToken, supportPromptModule }));
+
   // Scheduled task status routes
   app.use(createSchedulesRoutes({ verifyToken, scheduledTaskManager, scheduledTaskRuns, scheduleConfig }));
 
@@ -187,6 +203,13 @@ function registerRoutes(app, deps) {
 
   // RSS feeds. The feed itself takes a token in its URL, not a session.
   app.use(createFeedRoutes({ verifyToken, feedLimiter, downloadsFeed }));
+
+  // Sonarr/Radarr bridge. Takes its own key in the query string, not a
+  // session, and answers 404 while it is switched off. Callers that register
+  // routes without the bridge service (tests) get no /arr namespace.
+  if (arrBridge) app.use(createArrBridgeRoutes({ arrBridgeLimiter, arrBridge }));
+  // Its Settings endpoints, which do need a session.
+  if (arrBridge) app.use(createArrBridgeSettingsRoutes({ verifyToken, arrBridgeConnectionLimiter, arrBridge }));
 
   // The versioned external API stays unreachable until a deployment opts in
   // explicitly. This fail-closed default is independent of AUTH_ENABLED.

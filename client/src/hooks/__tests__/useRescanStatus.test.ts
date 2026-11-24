@@ -1,7 +1,7 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 import React from 'react';
 import axios from 'axios';
-import { useRescanStatus, RescanLastRun, RescanTrigger } from '../useRescanStatus';
+import { useRescanStatus, RescanLastRun, RescanProgress, RescanTrigger } from '../useRescanStatus';
 import WebSocketContext from '../../contexts/WebSocketContext';
 
 jest.mock('axios', () => ({
@@ -122,6 +122,33 @@ describe('useRescanStatus', () => {
     });
     expect(result.current.running).toBe(false);
     expect(result.current.lastRun).toEqual(lastRun);
+  });
+
+  test('tracks the progress a running rescan reports, and drops it when the rescan ends', async () => {
+    const progress: RescanProgress = {
+      phase: 'walk', foldersScanned: 4210, filesFound: 3980, videosProcessed: 0, videosTotal: 0, startedAt: '2026-11-21T14:34:00.000Z',
+    };
+    mockedAxios.get.mockResolvedValueOnce({ data: { running: true, progress, lastRun: null } });
+
+    const subscribers: Subscriber[] = [];
+    const { result } = renderHook(() => useRescanStatus('tok'), {
+      wrapper: makeWrapper(subscribers)
+    });
+
+    await waitFor(() => expect(result.current.progress).toEqual(progress));
+
+    const later: RescanProgress = { ...progress, phase: 'rows', videosProcessed: 5000, videosTotal: 16801 };
+    act(() => {
+      const msg = { type: 'rescanStatus', payload: { running: true, trigger: 'startup', progress: later } };
+      subscribers.forEach((s) => s.filter(msg) && s.callback(msg.payload));
+    });
+    expect(result.current.progress).toEqual(later);
+
+    act(() => {
+      const msg = { type: 'rescanStatus', payload: { running: false, lastRun: null } };
+      subscribers.forEach((s) => s.filter(msg) && s.callback(msg.payload));
+    });
+    expect(result.current.progress).toBeNull();
   });
 
   test('triggerRescan POSTs and clears prior error', async () => {

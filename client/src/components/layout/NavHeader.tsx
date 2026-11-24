@@ -15,6 +15,8 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 import { NavHeaderActions } from './NavHeaderActions';
 import { NavHeaderTopItems } from './NavHeaderTopItems';
+import { HeaderTrim } from './HeaderTrim';
+import { useHeaderTrim } from './HeaderTrim/useHeaderTrim';
 import { HEADER_HEIGHT_DESKTOP, NAV_DRAWER_SECTION_BUTTON_GUTTER } from './navLayoutConstants';
 import { NavItem } from './navigation';
 import youtarrWordmark from '../../Youtarr_text.png';
@@ -56,6 +58,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   const layoutCssVars = getThemeLayoutCssVars(layoutPolicy);
   const { themeMode, showHeaderLogo, showHeaderWordmark } = useThemeEngine();
   const currentTheme = getThemeById(themeMode);
+  const headerTrim = useHeaderTrim();
 
   const isMobile = layoutPolicy.breakpoint === 'mobile';
   const isLandscape = useMediaQuery('(orientation: landscape)');
@@ -263,6 +266,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
           />
         )}
       </div>
+      {headerTrim && <HeaderTrim trim={headerTrim} />}
     </header>
   );
 };

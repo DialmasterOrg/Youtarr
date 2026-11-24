@@ -34,7 +34,7 @@ Apply these when creating or substantially rewriting server code. Scope Discipli
 
 - The codebase has drift (`config.js`, `health.js`, `ytdlpOptions.js` and `videos.js` import stateful modules directly). Constants, error classes and pure helpers may be imported; new code takes stateful modules through the factory.
 - Routes stay thin: call module methods and format responses. Business logic belongs in modules.
-- Legacy API keys (`x-api-key` through `verifyToken`) reach only `POST /api/videos/download`; every other `/api` route answers them 403. The External API (`/external-api/v1`) authenticates its own keys in `middleware/externalApiAuth.js`.
+- API keys (`x-api-key` through `verifyToken`) reach one endpoint by role: download keys `POST /api/videos/download`, `status_read` keys `GET /api/status/summary`; every other `/api` route answers them 403. The External API (`/external-api/v1`) authenticates its own keys in `middleware/externalApiAuth.js`.
 - Rate limiting follows `server/routes/videos.js` and `server/routes/auth.js`.
 
 ## Modules
