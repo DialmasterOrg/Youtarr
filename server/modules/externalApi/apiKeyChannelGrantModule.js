@@ -28,23 +28,30 @@ async function requireExternalKey(keyId, transaction) {
   return key;
 }
 
-async function getChannelGrants(keyId) {
-  const key = await requireExternalKey(keyId);
-  if (!key) return null;
+const eligibleChannelInclude = () => [{
+  model: Channel,
+  as: 'channel',
+  attributes: [],
+  required: true,
+  where: { enabled: true, terminated_at: { [Op.is]: null } },
+}];
+
+async function findEligibleGrantChannelIds(keyId, transaction) {
   const grants = await ApiKeyChannelGrant.findAll({
     where: { api_key_id: keyId },
     attributes: ['channel_id'],
-    include: [{
-      model: Channel,
-      as: 'channel',
-      attributes: [],
-      required: true,
-      where: { enabled: true, terminated_at: { [Op.is]: null } },
-    }],
+    include: eligibleChannelInclude(),
     order: [['channel_id', 'ASC']],
     raw: true,
+    ...(transaction ? { transaction } : {}),
   });
-  return { keyId, channelIds: grants.map((grant) => grant.channel_id) };
+  return grants.map((grant) => grant.channel_id);
+}
+
+async function getChannelGrants(keyId) {
+  const key = await requireExternalKey(keyId);
+  if (!key) return null;
+  return { keyId, channelIds: await findEligibleGrantChannelIds(keyId) };
 }
 
 async function getEffectiveChannelGrantCounts(keyIds) {
@@ -52,13 +59,7 @@ async function getEffectiveChannelGrantCounts(keyIds) {
   const grants = await ApiKeyChannelGrant.findAll({
     where: { api_key_id: keyIds },
     attributes: ['api_key_id'],
-    include: [{
-      model: Channel,
-      as: 'channel',
-      attributes: [],
-      required: true,
-      where: { enabled: true, terminated_at: { [Op.is]: null } },
-    }],
+    include: eligibleChannelInclude(),
     raw: true,
   });
   return grants.reduce((counts, grant) => {
@@ -83,7 +84,16 @@ async function replaceChannelGrants(keyId, channelIds, { transaction: existingTr
       }
     }
 
-    await ApiKeyChannelGrant.destroy({ where: { api_key_id: keyId }, transaction });
+    // Only grants the editor can see are replaced. A grant on a disabled or
+    // terminated channel grants nothing while it stays that way, and is kept
+    // so the channel is approved again when it is turned back on.
+    const replaceableIds = await findEligibleGrantChannelIds(keyId, transaction);
+    if (replaceableIds.length > 0) {
+      await ApiKeyChannelGrant.destroy({
+        where: { api_key_id: keyId, channel_id: replaceableIds },
+        transaction,
+      });
+    }
     if (normalized.length > 0) {
       await ApiKeyChannelGrant.bulkCreate(
         normalized.map((channelId) => ({ api_key_id: keyId, channel_id: channelId })),
