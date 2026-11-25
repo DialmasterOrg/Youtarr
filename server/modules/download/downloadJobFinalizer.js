@@ -18,8 +18,11 @@ const transient403RetryPlanner = require('./transient403RetryPlanner');
 const failureAdvisor = require('./failureAdvisor');
 const failedVideoEnricher = require('./failedVideoEnricher');
 const membersAccess = require('../membersAccess');
+const cookieHealth = require('../cookieHealth');
 const tempSpaceProbe = require('./tempSpaceProbe');
-const { containsHttp403 } = require('./ytdlpStderrSignals');
+const { containsHttp403, containsRejectedCookiesWarning } = require('./ytdlpStderrSignals');
+const { isBotCheck } = require('../ytdlpBotCheck');
+const { KIND, adviceFor, botCheckSummary } = require('../youtubeBlockAdvice');
 const { isSpecificUrlDownloadJob } = require('./jobTypes');
 const { runCompletionSideEffects } = require('./downloadCompletionEffects');
 const {
@@ -172,6 +175,9 @@ async function finalizeDownloadJob({
   cookiesEnabled = Boolean(configModule.getCookiesPath()),
   // Whether yt-dlp actually got --cookies; preparation drops it for an unusable file.
   cookiesPassed = cookiesEnabled,
+  // membersAccess's key of the cookie file the run started with. A run can
+  // outlive that file, so what it saw must not be pinned on a replacement.
+  cookieKey,
   anonymousRetry = false,
   stdioClosed = true,
   // The user chose to protect this download from automatic removal.
@@ -190,9 +196,7 @@ async function finalizeDownloadJob({
     let httpForbiddenDetected = router.httpForbiddenDetected;
 
     // Also check the complete stderr buffer for bot detection
-    if (!botDetected && stderrBuffer &&
-        stderrBuffer.includes('Sign in to confirm') &&
-        stderrBuffer.includes('not a bot')) {
+    if (!botDetected && isBotCheck(stderrBuffer)) {
       botDetected = true;
       logger.info('Bot detection found in stderr buffer');
     }
@@ -236,16 +240,28 @@ async function finalizeDownloadJob({
 
     await downloadResultProcessor.reconcileArchive({ allowRedownload, failedVideosList, videoData, errorTracker });
 
+    const usedCookies = cookiesEnabled && cookiesPassed && !anonymousRetry;
+
     // Best-effort: a failure here only means the next run checks again.
     try {
       await membersAccess.recordDownloadOutcome({
         membersOnlyIds: errorTracker.membersOnlyVideoIds,
         downloadedIds: videoData.map((video) => video.youtubeId),
-        usedCookies: cookiesEnabled && cookiesPassed && !anonymousRetry,
+        usedCookies,
+        cookieKey,
         stderr: stderrBuffer,
       });
     } catch (err) {
       logger.warn({ err, jobId }, 'Could not record members-only access from the download');
+    }
+
+    // Tells the user their cookies stopped working, without holding up the
+    // job. A run that also hit a bot check is left to the scheduled cookie
+    // check: bot checks come and go by IP even with valid cookies.
+    if (usedCookies && !botDetected && containsRejectedCookiesWarning(stderrBuffer)) {
+      cookieHealth.reportDownloadRejection(cookieKey).catch((err) => {
+        logger.warn({ err, jobId }, 'Could not report rejected cookies from the download');
+      });
     }
 
     const wasTerminated = Boolean(timeoutController.shutdownInProgress || timeoutController.shutdownReason || wasManuallyTerminated);
@@ -371,11 +387,7 @@ async function finalizeDownloadJob({
 
     if (botDetected) {
       status = 'Error';
-      output = anonymousRetry
-        ? 'Bot detection encountered during the no-cookies fallback. The fallback also failed, so this video may be genuinely unavailable.'
-        : cookiesEnabled
-          ? 'Bot detection encountered even though cookies are configured - they are likely expired or rotated.'
-          : 'Bot detection encountered. YouTube is temporarily refusing requests from this server; this usually clears on its own, so try again later.';
+      output = botCheckSummary({ cookiesEnabled, anonymousRetry });
 
       // Same leftovers, and the same guard, as the non-zero exit branch below.
       if (stdioClosed) {
@@ -388,11 +400,7 @@ async function finalizeDownloadJob({
         endDate: Date.now(),
         output: output,
         data: dataPayload,
-        notes: anonymousRetry
-          ? 'The no-cookies fallback was also rejected by YouTube. This video may be genuinely unavailable.'
-          : cookiesEnabled
-            ? 'YouTube requires authentication and your uploaded cookies appear stale. Re-export fresh cookies from your browser and upload them in Settings -> Cookies.'
-            : 'YouTube asked this server to sign in (bot check). Without cookies this is usually temporary and the next scheduled download retries the failed videos. If it keeps happening, upload YouTube cookies in Settings -> Cookies.',
+        notes: adviceFor(KIND.BOT_CHECK, { cookiesEnabled, anonymousRetry }).message,
         error: anonymousRetry ? 'NO_COOKIES_FALLBACK_FAILED' : 'COOKIES_REQUIRED'
       });
       jobErrorCode = anonymousRetry ? 'NO_COOKIES_FALLBACK_FAILED' : 'COOKIES_REQUIRED';

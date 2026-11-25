@@ -72,13 +72,15 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 - The list of all series serves only the similar-series check below. No search waits on it: 60 s limit, old list used while a new one loads, first load awaited 3 s, retry after 1 hour.
 - The connection Test also parses the placeholder name: an app can answer system/status yet fail lookups. Not knowing the placeholder passes; a failed call is `lookup-failed`.
 - Aliases with a scene season are dropped and scene-numbered series get no episode title: Sonarr sends scene numbers for them, which would look up another episode.
-- The title stage searches `<main series title> <episode title>` for every alias, so one Sonarr search costs one YouTube search. Releases are still named from the alias that was asked.
+- The title stage searches `<main series title> "<episode title>"` for every alias, so one Sonarr search costs one YouTube search. Releases are still named from the alias that was asked.
+- The episode title is quoted in that query: unquoted, YouTube matches a plain title like "The Deal" loosely (deals, bargains) and the episode is not in the first 100 results.
 - A title match needs the episode title as a whole phrase, the series name within the video title or within the channel name, no other episode's number or title, and a length inside the runtime window.
 - Strict matching runs the title stage only with a known runtime: without the window, an hour of episodes listing this title would pass.
 - Sonarr grabs the newer of equal releases whatever the feed order, and a re-upload is always newer. So the strict title stage offers only the closest channel (`seriesChannelRank`); others return once its grab failed.
 - A channel whose name carries an excluded word, singular or plural ("Mission Impossible Reviews"), never counts as the series' channel: it won closest-channel and hid the real episode behind a review.
 - A video naming a library series whose name contains this one's ("Beyblade Burst"), or a year before the series began, is another series. Loose matching drops this, the series-name and the one-word-title rules, and lets an unknown length pass.
 - A generic, shared or series-named episode title skips the title stage, and a one-word title also needs the episode number: such titles appear in unrelated videos.
+- The number is not needed when the video's title is only a series name and the episode title ("All Souls the deal"): the yt-dlp search sometimes returns only such a re-upload.
 - With a known runtime, `runtimeWindow` replaces the fixed minimum lengths in every filter, loose matching included: it is what rejects a double episode, and it never goes below Sonarr's sample threshold.
 - Movies keep the year requirement under strict matching: The Matrix and The Matrix Reloaded share every title word and nearly a runtime.
 - `searchService` decodes HTML entities in titles and channel names first: the YouTube Data API encodes them (`It&#39;s`), which broke every match on an apostrophe or `&`.
@@ -86,6 +88,10 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 ## Grabs and staging
 
 - The apps only ever get a hardlink under `.arr-staging` (a copy across filesystems): they move the file and delete the folder themselves.
+- A grab's `.srt` files are staged as copies, never links (an in-place edit would reach the library file). A subtitle that cannot be staged never fails the grab.
+- A library subtitle is read through a handle opened without following links or waiting on a pipe, and staged with exclusive create: both folders can be shares, where an entry's name proves nothing about what it is.
+- Subtitles are staged under the bare language code: the apps read only a final 2 or 3 letter code, so `en-GB` imports with no language and `fr-CA` as Catalan.
+- Tracks sharing a language are all staged, numbered before the code (`.1.en.srt`) as the apps number them; byte-identical ones once, because YouTube lists one track under `en`, `en-CA` and `en-GB`.
 - With `arrBridgeRemoveAfterImport` on, `libraryCopyRemover` deletes Youtarr's copy of a grab only after a confirmed import, through `videoDeletionModule` (`auto_removal`; the archive line stays). Off, a grab never removes a library file, a Videos row or an archive line.
 - One history delete serves an import and a removal, so only the connected app's history (`downloadId` is the grab id) proves an import; unconfirmed keeps the copy. A hardlink count is no proof: any other link reads as one.
 - `library_copy` is `owned` only for a video with no library row that the grab's own job downloads; a requeue clears it, because another job may then be the one that downloads the video.

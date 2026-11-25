@@ -92,7 +92,7 @@ When Youtarr syncs an audio playlist it asks the server to scan its music librar
 Two more things to know:
 
 - Media servers cannot mix video and audio in one playlist, so items downloaded without a file of the playlist's type are left out of the synced playlist: a video-only download never appears in an MP3 Only playlist, and an mp3-only download never appears in a video playlist. The playlist page shows a notice with the count of affected items.
-- The `.m3u` fallback file always lists every downloaded item regardless of type or media server setup; when an item has both files, the `.m3u` uses the one matching the playlist's type.
+- The `.m3u` fallback always lists every downloaded item regardless of type or media server setup. For Video Only and MP3 Only playlists that is one file; when an item has both files, it uses the one matching the playlist's type. A Video + MP3 playlist gets two files, one for the videos and one for the MP3s (see [M3U fallback](#m3u-fallback)).
 
 **Where to find them**: media servers list audio playlists separately from video playlists. In Plex Web, look in your music library's **Playlists** tab, or open **Playlists** in the sidebar and switch the type filter to **Music**; synced audio playlists do not appear alongside your video playlists.
 
@@ -103,7 +103,7 @@ Changing a playlist's **Download Type** across the video/audio boundary (to or f
 - **To MP3 Only**: on the next sync with at least one mp3 available, servers replace the synced video playlist with a music playlist. Items downloaded as **Video + MP3** carry over (their mp3 is used); items downloaded as video-only drop out. Until an mp3 exists, the old video playlist is left untouched.
 - **From MP3 Only**: the mirror image - the music playlist is replaced by a video playlist once a video file exists, and mp3-only items drop out.
 
-Existing downloads are never converted or re-downloaded when the setting changes; new downloads simply follow the new setting. Switching back later restores the other type's items, since the files stay on disk. Items that dropped out of the synced playlist always remain in the `.m3u` file, and switching between **Video Only** and **Video + MP3** has no effect on the synced playlist's type.
+Existing downloads are never converted or re-downloaded when the setting changes; new downloads simply follow the new setting. Switching back later restores the other type's items, since the files stay on disk. Items that dropped out of the synced playlist always remain in the `.m3u` files (for a Video + MP3 playlist, an mp3-only item is in its `(MP3)` file), and switching between **Video Only** and **Video + MP3** has no effect on the synced playlist's type.
 
 ## Replace semantics
 
@@ -125,6 +125,14 @@ For every tracked playlist, Youtarr writes a `.m3u` file under:
 ```
 <youtubeOutputDirectory>/__playlists__/<sanitized playlist title>.m3u
 ```
+
+A playlist whose Download Type is **Video + MP3** gets a second file next to it:
+
+```
+<youtubeOutputDirectory>/__playlists__/<sanitized playlist title> (MP3).m3u
+```
+
+The first file then lists only the items that have a video file and the `(MP3)` file only the items that have an mp3; neither falls back to the other format. The `(MP3)` file exists only while at least one mp3 is downloaded, and changing the Download Type to Video Only or MP3 Only removes it and returns the playlist to one file. Youtarr marks the `(MP3)` file with a comment line (`#YOUTARR-MP3-LIST:`) naming the playlist it was generated for, and only ever rewrites or removes a file carrying that playlist's mark. If the name is already taken by a file it did not generate (one you made yourself, or the list of a playlist really titled `Workout Mix (MP3)`), it leaves that file alone and writes no `(MP3)` file. The same holds the other way round: a playlist titled `Workout Mix (MP3)` that you subscribe to later does not replace the existing `(MP3)` file of `Workout Mix`, and gets no `.m3u` of its own until that file is gone. This is only about the files: a Video + MP3 playlist still syncs to media servers as a video playlist.
 
 The M3U uses **relative paths** so the file remains valid when the storage volume is mounted at a different host path than where Youtarr writes it. Open it in any media player that understands M3U:
 

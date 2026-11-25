@@ -431,11 +431,44 @@ function buildDownloadPauseContent(status = {}) {
   };
 }
 
+const COOKIES_REJECTED_SUMMARY =
+  'YouTube no longer accepts the cookies Youtarr is using. ' +
+  'They have expired or were rotated by the browser they were exported from.';
+const COOKIES_UNUSABLE_SUMMARY = 'Youtarr can no longer use your cookie file.';
+const COOKIES_INVALID_EFFECT =
+  'Public videos keep downloading, but members-only videos, Watch Later and private playlists ' +
+  'will not download until the cookies are replaced.';
+const FRESH_COOKIES_ADVICE = 'Export fresh cookies from a browser signed in to YouTube and';
+
+/**
+ * Build the shared content of the "cookies stopped working" notification.
+ * The action holds no underscores, which would end Slack's italics early.
+ * @param {Object} info
+ * @param {'rejected'|'unusable'} info.reason - YouTube rejected the cookies, or yt-dlp cannot load the file
+ * @param {boolean} info.external - the cookies come from YOUTARR_COOKIES_FILE, where uploads are refused
+ * @param {string|null} [info.detail] - the file problem, for an unusable file
+ * @returns {{title: string, summary: string, effect: string, action: string}}
+ */
+function buildCookiesInvalidContent({ reason, external = false, detail = null } = {}) {
+  const summary = reason === 'unusable'
+    ? [COOKIES_UNUSABLE_SUMMARY, detail].filter(Boolean).join(' ')
+    : COOKIES_REJECTED_SUMMARY;
+  return {
+    title: '🍪 YouTube Cookies Stopped Working',
+    summary,
+    effect: COOKIES_INVALID_EFFECT,
+    action: external
+      ? `${FRESH_COOKIES_ADVICE} replace your external cookie file.`
+      : `${FRESH_COOKIES_ADVICE} upload them in Settings > Cookies.`
+  };
+}
+
 module.exports = {
   escapeHtml,
   getLinkTemplateError,
   buildVideoLink,
   buildDownloadPauseContent,
+  buildCookiesInvalidContent,
   formatDuration,
   buildTitle,
   getFailedCount,

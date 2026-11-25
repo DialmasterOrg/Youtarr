@@ -24,6 +24,7 @@ is also used for manually downloaded files from channels that are not set up in 
 │   ├── poster.jpg                               # Channel poster
 │   ├── backdrop.jpg                             # Optional; written from the channel banner when "Backdrop images" is on
 │   ├── Channel Name.m3u                         # Optional; written when the channel's "Generate channel playlist file" setting is on
+│   ├── Channel Name (MP3).m3u                   # Video + MP3 channels only: the same setting's list of the MP3s
 │   └── Channel - Title - id/
 │       ├── Channel - Title [id].mp4             # Video file
 │       ├── Channel - Title [id].nfo             # Video metadata
@@ -95,19 +96,20 @@ YouTube Downloads/
 
 ## The `__playlists__` Folder
 
-If you subscribe to any YouTube playlists, Youtarr creates a `__playlists__` folder at the top of your download directory and writes one `.m3u` file per playlist into it. The videos themselves still live in their channel folders; the `.m3u` is just a list that points at them.
+If you subscribe to any YouTube playlists, Youtarr creates a `__playlists__` folder at the top of your download directory and writes one `.m3u` file per playlist into it (two for a Video + MP3 playlist). The videos themselves still live in their channel folders; the `.m3u` is just a list that points at them.
 
 ```
 <YOUTUBE_OUTPUT_DIR>/
 ├── __playlists__/
 │   ├── .ignore                                # Marker so Jellyfin/Emby skip this folder during library scans
 │   ├── My Favorite Talks.m3u
-│   └── Workout Mix.m3u
+│   ├── Workout Mix.m3u                        # A Video + MP3 playlist: the videos
+│   └── Workout Mix (MP3).m3u                  # ...and its MP3s
 ├── Channel Name/
 │   └── [videos]
 ```
 
-The `.m3u` files use relative paths, so they keep working if you move your library to a different location. Each one lists only the items you've actually downloaded, in playlist order (for MP3 Only playlists the entries are the MP3 files). The empty `.ignore` file is deliberate: it keeps Jellyfin and Emby from auto-importing every playlist during library scans.
+The `.m3u` files use relative paths, so they keep working if you move your library to a different location. Each one lists only the items you've actually downloaded, in playlist order (for MP3 Only playlists the entries are the MP3 files). A Video + MP3 playlist gets a second file, `<playlist title> (MP3).m3u`, with the MP3s, while its regular `.m3u` lists the videos; see [Playlist files](USAGE_GUIDE.md#playlist-files-m3u). The empty `.ignore` file is deliberate: it keeps Jellyfin and Emby from auto-importing every playlist during library scans.
 
 `playlists` is a reserved subfolder name, so Youtarr won't let you assign a channel to a subfolder called `playlists`. Channel subfolders also can't start with `__`, so they never collide with the `__playlists__` folder itself. See [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md) for how playlists download and sync.
 

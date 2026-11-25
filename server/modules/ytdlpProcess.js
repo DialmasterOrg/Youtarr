@@ -12,6 +12,7 @@ function prepareCookies(args) {
   return {
     args: uploaded.args,
     cleanup: cleanups.length > 0 ? () => cleanups.forEach((cleanup) => cleanup()) : null,
+    cookieKey: external.cookieKey || uploaded.cookieKey || null,
   };
 }
 
@@ -23,6 +24,10 @@ function spawnYtDlp(args, options) {
     // Cookie preparation drops --cookies when the file cannot be used, so
     // callers read this rather than assume the configured cookies reached yt-dlp.
     child.cookiesPassed = prepared.args.includes('--cookies');
+    // membersAccess's key for the cookies this run was given, taken from the
+    // bytes that were copied; null without cookies. A run can outlive its
+    // cookie file, so callers match on this rather than on the file later.
+    child.cookieKey = prepared.cookieKey;
     if (prepared.cleanup) {
       // 'close' also follows a failed spawn. An 'error' alone can mean a failed
       // kill while yt-dlp is still running, so do not remove its file then.

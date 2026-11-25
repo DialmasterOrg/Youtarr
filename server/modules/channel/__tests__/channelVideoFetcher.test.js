@@ -58,6 +58,18 @@ describe('channelVideoFetcher', () => {
       });
       expect(channelYtdlpExecutor.executeYtDlpCommand).toHaveBeenCalled();
     });
+
+    test('reports no channel URL when yt-dlp returns one that is not YouTube', async () => {
+      const channelYtdlpExecutor = require('../channelYtdlpExecutor');
+      jest.spyOn(channelYtdlpExecutor, 'executeYtDlpCommand').mockResolvedValue(JSON.stringify({
+        entries: [],
+        uploader_url: 'http://127.0.0.1:9911/probe',
+      }));
+
+      const result = await channelVideoFetcher.fetchChannelVideos('UCxxx', null, 'videos');
+
+      expect(result.currentChannelUrl).toBeNull();
+    });
   });
 
   describe('fetchAndSaveVideosViaYtDlp - terminated_at clearing', () => {

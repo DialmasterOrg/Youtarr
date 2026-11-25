@@ -28,6 +28,7 @@ const SHORT_BLOCK_REASONS: Partial<Record<RunBlockReason, string>> = {
   cooldown: 'ran recently',
   'downloads-paused': 'downloads are paused',
   'no-media-server': 'no media server',
+  'no-cookie-file': 'no cookie file',
   'youtube-throttled': 'YouTube is throttling',
   'downloads-active': 'downloads are running',
   'not-registered': 'not available',

@@ -217,6 +217,7 @@ export const ArrBridgeSharedFolder: React.FC<ArrBridgeSharedFolderProps> = ({
         <Box>
           <Button
             variant="text"
+            className="h-auto min-h-10 justify-start whitespace-normal text-left leading-snug"
             aria-expanded={showPath}
             aria-controls={pathPanelId}
             onClick={() => setPathOpened((open) => !open)}

@@ -7,6 +7,7 @@ const videoEntryParser = require('./videoEntryParser');
 const channelVideoWriter = require('./channelVideoWriter');
 const tabState = require('./tabState');
 const fetchRegistry = require('./fetchRegistry');
+const { toYoutubeUrl } = require('../youtubeUrlParser');
 
 class ChannelVideoFetcher {
   /**
@@ -57,7 +58,8 @@ class ChannelVideoFetcher {
       const videos = videoEntryParser.extractVideosFromYtDlpResponse(jsonOutput, channel.default_rating);
 
       // Extract the current channel URL (with handle) from the response
-      const currentChannelUrl = jsonOutput.uploader_url || jsonOutput.channel_url || jsonOutput.url;
+      // Saved as the channel's URL and fetched again later, so only YouTube is kept.
+      const currentChannelUrl = toYoutubeUrl(jsonOutput.uploader_url || jsonOutput.channel_url || jsonOutput.url);
 
       return { videos, currentChannelUrl };
     });

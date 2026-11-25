@@ -96,7 +96,10 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
 Enable "Generate channel playlist file (.m3u)" in a channel's settings to have
 Youtarr write a `<Channel Name>.m3u` playlist at the top of that channel's
 folder, listing every downloaded video (oldest first by default, or newest
-first). Jellyfin and Emby import the file automatically as a playlist, but
+first). A channel whose Download Type is **Video + MP3** gets two files:
+`<Channel Name>.m3u` lists the videos and `<Channel Name> (MP3).m3u` lists the
+MP3s, each with only the items that have that file. Jellyfin and Emby import
+the file automatically as a playlist, but
 only from certain library types (Jellyfin: "Mixed Movies and Shows" or Music,
 Emby: "Mixed Content"); in a Movies-type library (the current
 recommendation) the server ignores the file, though it still opens in any
@@ -106,7 +109,9 @@ recommendation) the server ignores the file, though it still opens in any
 library-type tradeoff. The file updates after downloads and deletions and
 refreshes after the scheduled file rescan; files deleted outside
 Youtarr drop out of the playlist at the next refresh.
-Turning the setting off (or unsubscribing from the channel) deletes the file.
+Turning the setting off (or unsubscribing from the channel) deletes the file,
+and the `(MP3)` file with it. Changing the Download Type away from Video + MP3
+removes the `(MP3)` file.
 
 ## Import YouTube Subscriptions
 
@@ -232,11 +237,12 @@ Open a playlist to manage it:
 
 - **Open in YouTube**: opens the playlist on YouTube in a new tab.
 - **Refresh from YouTube**: re-fetches the live playlist, updates the video list, then re-syncs and rewrites the `.m3u`. It doesn't download anything.
-- **Download all N videos**: shows the eligible count and downloads every tracked video you have not previously downloaded. A settings dialog lets you confirm resolution and other options first.
+- **Download all N videos**: shows the eligible count and downloads every tracked video you have not previously downloaded. Videos the playlist's download filters skip are left out of the count and the download. A settings dialog lets you confirm resolution and other options first.
 - **Auto-download new videos**: first enable refreshes the playlist and defaults to following future additions only. You can also preview and select an existing batch during setup. Later runs download newly discovered entries wherever they appear, even when the video itself is old. Your global per-run download count applies to new discoveries. Each scheduled run can also retry up to the same number of older saved selections, starting with those attempted least recently. Extra entries wait for later runs; neither allowance borrows unused slots from the other. Already queued or downloading videos do not take another slot. Pause/resume preserves tracking (see [Configure Automation](#configure-automation)).
-- **Choose existing videos**: select up to a chosen count by newest publication date, beginning of playlist, or end of playlist. Review the titles and adjust checkboxes before queuing. Missing publication dates require a positional or manual choice. This works for existing playlists too and preserves automatic tracking. Selected older videos remain eligible for retry while auto-download is enabled and a starting point exists.
+- **Choose existing videos**: select up to a chosen count by newest publication date, beginning of playlist, or end of playlist. Review the titles and adjust checkboxes before queuing. Videos the download filters skip are not preselected, but you can check them. Missing publication dates require a positional or manual choice. This works for existing playlists too and preserves automatic tracking. Selected older videos remain eligible for retry while auto-download is enabled and a starting point exists.
 - **Follow from now** (in Playlist settings): refreshes the playlist and skips its current undownloaded backlog, including saved batch requests, after confirmation. This preserves whether automatic downloads are running or paused. Files and already queued downloads are kept.
 - **Playlist settings**: set a subfolder, resolution, download type, and default rating for this playlist. A video's own channel settings take precedence; these apply when the channel has no override. The download type also decides whether the playlist syncs to media servers as a video or music playlist (see [Switching a playlist's download type](MEDIA_SERVER_PLAYLISTS.md#switching-a-playlists-download-type)).
+- **Download filters** (in Playlist settings): a minimum and maximum duration and a title filter that decide which videos Youtarr picks by itself. See [Playlist download filters](#playlist-download-filters).
 - **Sync chips**: one per media server. Click to enable or disable sync for that server, or click an unconfigured server to jump to its settings.
 - **Public on media servers**: makes the playlist visible to other users on Jellyfin and Emby. Plex playlists are always created under one account and shared manually, so this setting doesn't affect Plex.
 - **Sync now** and **Rebuild .m3u file**: push the current state to your servers or regenerate the `.m3u` on demand. Sync runs in the background and can take a minute or two while your media server's library scan finishes.
@@ -257,11 +263,31 @@ The full explicit selection queues immediately, outside the scheduled allowances
 
 For example, with a limit of **3**, a scheduled playlist run can queue up to **3 new discoveries plus 3 older saved retries**. A requested video discovered after the starting point uses only the discovery allowance. Discovery jobs queue first, followed by separately labelled **Saved playlist retries** jobs (download settings can split either group into several jobs). Unsuccessful older requests rotate so they cannot occupy every retry slot forever. Requests with no recorded attempt time join the same bounded pool; accumulated selections do not all requeue at once.
 
+### Playlist download filters
+
+Playlist settings has a **Download Filters** section with a minimum duration, a maximum duration, and a title filter. They apply whenever Youtarr picks the videos: automatic downloads, **Download all**, and the suggested selection in **Choose existing videos**.
+
+Filters never hide anything. A video that does not pass stays in the playlist's video list with a **Filtered** status, and it downloads normally when you select it yourself. A video already on disk stays in the `.m3u` file and in synced media server playlists whether or not it passes.
+
+- **Durations** are in minutes. A maximum entered here includes its whole final minute (a 10 minute maximum keeps a 10:59 video); a maximum set through the API is an exact number of seconds. A video whose length YouTube did not report is skipped while a duration limit is set.
+- **Title filter** is a Python regular expression searched anywhere in the title, the same syntax as a channel's title filter. It is case sensitive unless the pattern starts with `(?i)`. For example, `(?i)full episode` keeps only titles containing "full episode", and `(?i)^(?!.*trailer).*` keeps everything except titles containing "trailer".
+- **Preview filters** checks the values you have entered against the playlist before you save. It shows how many videos match and lists the most recently discovered ones.
+
+A playlist's filters are separate from channel filters: a channel's filters do not affect what a playlist downloads, and a playlist's filters are not copied to the channels its videos come from.
+
+Changing a filter takes effect on the next run and never deletes or re-downloads anything. Loosening or removing a filter makes videos discovered since the starting point eligible again, so they download over the next automatic runs; the preview tells you how many. To skip them instead, save the filters and then use **Follow from now**.
+
+If a saved title filter cannot be evaluated, the playlist page shows a warning and Youtarr holds automatic downloads and **Download all** for that playlist until the filter is fixed. Videos you select yourself still download.
+
+**Upgrade note:** before this version a playlist's title filter could only be set through the API, where it was a JavaScript regular expression matched without regard to case, and it removed non-matching videos from the list. Existing patterns get `(?i)` added so they keep ignoring case. A pattern that used JavaScript-only syntax, such as a named group written `(?<name>...)`, is not valid in Python: the playlist page shows the warning described above until you rewrite it (`(?P<name>...)` in that case). Python also reads `\d`, `\w` and `\b` as covering every script, where JavaScript covered only unaccented Latin letters and the digits 0-9, so a pattern using them can match a title it used to skip, such as one with full-width digits or accented letters; **Preview filters** shows what an existing pattern matches now. On the next refresh the videos they used to hide appear in the list as **Filtered**.
+
 The header shows how many eligible selected videos are still undownloaded, including ones queued or downloading. This count is not a failure count. Attempt times record scheduling, not successful downloads or failure diagnoses. A skipped, terminated, or unsuccessful attempt keeps its request. Successful downloads and starting-point resets clear request flags; ignored or unavailable videos are excluded from retry selection. Repeated failure outcomes and automatic retry suspension are not tracked per playlist entry yet.
 
 ### Playlist files (.m3u)
 
 For every playlist you subscribe to, Youtarr writes a `.m3u` file into a `__playlists__` folder next to your videos. It uses relative paths, so it keeps working if you move your library, and it's written whether or not you've connected a media server. The file lists every item you've actually downloaded, in playlist order: one entry each, using the file that matches the playlist's Download Type (the MP3 for MP3 Only playlists, the video file otherwise) and falling back to the other format so nothing is dropped. Any player that reads `.m3u` (VLC, mpv, Kodi, and most media servers) can open it.
+
+A **Video + MP3** playlist gets two files instead, so a music player is not handed video files: `<playlist title>.m3u` lists the videos and `<playlist title> (MP3).m3u` lists the MP3s. Neither falls back to the other format, so an item downloaded as only one of the two appears in just that file. The `(MP3)` file is written once at least one MP3 exists, and it is removed when you change the playlist's Download Type to Video Only or MP3 Only. Both files are rewritten after each download or deletion, and on demand with **Rebuild .m3u file** on the playlist page.
 
 ### Syncing to Plex, Jellyfin, and Emby
 
@@ -327,7 +353,7 @@ The page shows the server timezone. Times and interval presets follow that clock
 
 Each task is a row you can expand. The collapsed row shows the task's status, its schedule in words, when it runs next, when it last ran and whether that failed, and how long that run took, so you can check every task at a glance. If the latest run was skipped, the row shows how long the run before it took instead; a run cut short by a server restart shows **Interrupted ... by a server restart**, since there is no end time to measure. For automatic downloads the run covers the whole update, from checking for new videos until the last download (retries included) finishes, and its result counts the videos downloaded, failed, and skipped; any failed video marks the run **Partly failed**. If a storage limit pauses downloads partway, the run ends there and says how many queued jobs will run when downloads resume. A summary line at the top counts running tasks and failures and names the next run. A pulsing dot and a **Running** label mark a task that is running now; **Off** marks one whose feature is switched off, and **Unsaved** a schedule you changed but have not saved yet. Expand a row for its description, the full result of its last run (for example "completed: Deleted 12 videos and freed 8.10 GB" or "failed: Permission denied"), a link to where its feature is turned on, and the schedule editor. **Edit schedule** links from other settings pages open the matching row. If a run is still going when its next time comes around, that occurrence is skipped and recorded as such. Times on this page are in the server timezone, and the page keeps itself up to date while it is open.
 
-Each task has a **Run now** button that starts it immediately with your saved settings (on phones it is a play icon). If Run now is greyed out, the row says why in a few words and the expanded row explains in full: the task is already running, its feature is turned off (use the link on the card to turn it on, then save), downloads are paused (by a storage limit, or because the downloads folder looks unavailable), or, for channel video counts and the check for new videos, it ran less than 15 minutes ago, in which case the card shows when you can run it again. Automatic downloads can be run now even while they are turned off; the switch only stops the schedule. Running automatic video cleanup asks you to confirm, because it permanently deletes the videos your removal rules match.
+Each task has a **Run now** button that starts it immediately with your saved settings (on phones it is a play icon). If Run now is greyed out, the row says why in a few words and the expanded row explains in full: the task is already running, its feature is turned off (use the link on the card to turn it on, then save), downloads are paused (by a storage limit, or because the downloads folder looks unavailable), or, for channel video counts, the check for new videos and the cookie check, it ran less than 15 minutes ago, in which case the card shows when you can run it again. Automatic downloads can be run now even while they are turned off; the switch only stops the schedule. Running automatic video cleanup asks you to confirm, because it permanently deletes the videos your removal rules match.
 
 While a scheduled task other than automatic downloads is running, a clock icon with a pulsing dot appears in the top bar next to the download indicator. Hover it to see which task is running, or click it to open **Settings -> Scheduling**.
 
@@ -380,7 +406,7 @@ Get notified when new videos finish downloading. Notifications are delivered thr
    - Click the test button (paper-plane icon, "Send test notification") next to the service
    - Check the service for the test message
 
-**Note**: Download notifications are sent when a run downloads at least one new video, or when a run fails with a diagnosed cause or stops early. They are batched: a scheduled download run sends one summary covering all of its channels and playlists, not one message per video. Youtarr also sends notifications when automatic cleanup deletes videos and when downloads pause or resume because of a storage limit or because the downloads folder looks unavailable.
+**Note**: Download notifications are sent when a run downloads at least one new video, or when a run fails with a diagnosed cause or stops early. They are batched: a scheduled download run sends one summary covering all of its channels and playlists, not one message per video. Youtarr also sends notifications when automatic cleanup deletes videos, when downloads pause or resume because of a storage limit or because the downloads folder looks unavailable, and once when your YouTube cookies stop working (see [Cookie Check and Notification](CONFIG.md#cookie-check-and-notification)).
 
 ## RSS Feeds
 
@@ -726,6 +752,33 @@ Send videos to Youtarr from anywhere using API keys. This enables one-click down
 3. **Save the key immediately**
    - The full key is shown only once
    - Copy it to a secure location before closing the dialog
+
+### Versioned external API keys and the Requests page
+
+When the server runs with `EXTERNAL_API_ENABLED=true` (see [External API](EXTERNAL_API.md)), the same settings page gains an **External access keys** section below the bookmarklet keys. These keys use `/external-api/v1` for approved catalog access and approval-backed video, channel, and deletion requests. Bookmarklet keys cannot use `/external-api/v1`, and external keys cannot use the bookmarklet endpoint. With the variable unset, the Requests page is hidden and the section appears only while an external key is still active, so you can revoke it (it still counts toward the 20-key limit); you cannot create, edit or regenerate external keys until the API is turned back on.
+
+1. Click **Create external key**, name it, choose its permissions and content policy, and select the channels it may see.
+2. To change grants later, use the edit action on the key's card. Youtarr asks for confirmation before saving a change that widens what the key can see or request.
+
+Open **Requests** in the main navigation to review what external clients submitted. The page filters by status, requester, and type, and every approval or rejection is confirmed first. The **Show Requests in navigation** switch on the API keys page hides the link without turning the API off; the page stays reachable at `/requests`.
+
+- **Approve** rechecks the requester's current role and policy, its current
+  channel grant, the enabled cached catalog entry, media type, rating, and
+  downloaded/duplicate state, then hands the work to a background runner. The
+  request shows **Approved** until the work starts, then **Processing**, then
+  **Completed** or **Failed**; the page refreshes itself while any request on
+  it is approved or processing. A request held while downloads are paused
+  stays Approved with a note saying what it is waiting for.
+- **Reject** requires a short reason. Rejection is final for that request, but
+  clears the active dedupe record so the client can submit a new request later.
+- Requests that are no longer safe fail without exposing internal errors.
+  Temporary work-capacity or storage limits hold the request as Approved for
+  automatic retry.
+- Channel approval provisions the canonical channel and grants it to the
+  requester by default. Video deletion approval removes only the downloaded
+  asset; it never removes the channel subscription.
+
+The Requests page uses your Youtarr login (or no login when `AUTH_ENABLED=false`). External API keys cannot reach the review queue or its actions.
 
 ### Install a Browser Bookmarklet
 

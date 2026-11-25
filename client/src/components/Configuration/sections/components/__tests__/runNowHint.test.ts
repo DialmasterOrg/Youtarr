@@ -41,6 +41,12 @@ test('no media server links to watch status settings', () => {
     .toEqual({ to: '/settings/watch-status', label: 'Watch status settings' });
 });
 
+test('no cookie file links to the cookies settings', () => {
+  expect(describeRunNowBlock({ ...base, availability: blocked('no-cookie-file') })).toEqual({
+    text: 'server says no-cookie-file', link: { to: '/settings/cookies', label: 'Cookies settings' },
+  });
+});
+
 test('YouTube throttle shows the server reason and when it ends', () => {
   const hint = describeRunNowBlock({ ...base, availability: blocked('youtube-throttled', { availableAt: '2026-09-27T18:00:00.000Z' }) });
   expect(hint?.text).toMatch(/^server says youtube-throttled Available again at /);

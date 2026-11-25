@@ -140,6 +140,40 @@ describe('playlistModule', () => {
       });
     });
 
+    test('rejects a non-YouTube URL without starting yt-dlp', async () => {
+      for (const url of ['http://127.0.0.1:9911/probe', '127.0.0.1:9911/probe', '--exec=id', '']) {
+        await expect(playlistModule.getPlaylistInfo(url)).rejects.toThrow('INVALID_PLAYLIST_URL');
+      }
+      expect(ytdlpProcess.spawnYtDlp).not.toHaveBeenCalled();
+    });
+
+    test('turns a bare playlist id into a YouTube playlist URL', async () => {
+      const mockChild = new EventEmitter();
+      mockChild.stdout = new EventEmitter();
+      mockChild.stderr = new EventEmitter();
+      ytdlpProcess.spawnYtDlp.mockReturnValue(mockChild);
+
+      const promise = playlistModule.getPlaylistInfo('PLabc123');
+      mockChild.stdout.emit('data', JSON.stringify({ id: 'PLabc123', title: 'T' }));
+      mockChild.emit('close', 0);
+      await promise;
+
+      expect(ytdlpProcess.spawnYtDlp.mock.calls[0][0]).toContain('https://www.youtube.com/playlist?list=PLabc123');
+    });
+
+    test('keeps the requested URL when yt-dlp reports a non-YouTube page URL', async () => {
+      const mockChild = new EventEmitter();
+      mockChild.stdout = new EventEmitter();
+      mockChild.stderr = new EventEmitter();
+      ytdlpProcess.spawnYtDlp.mockReturnValue(mockChild);
+
+      const promise = playlistModule.getPlaylistInfo('https://www.youtube.com/playlist?list=PLabc123');
+      mockChild.stdout.emit('data', JSON.stringify({ id: 'PLabc123', title: 'T', webpage_url: 'http://127.0.0.1:9911/probe' }));
+      mockChild.emit('close', 0);
+
+      expect((await promise).url).toBe('https://www.youtube.com/playlist?list=PLabc123');
+    });
+
     test('throws PLAYLIST_NOT_FOUND on unavailable playlist', async () => {
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();
@@ -189,16 +223,6 @@ describe('playlistModule', () => {
 
       await expect(playlistModule.getPlaylistInfo('https://www.youtube.com/playlist?list=PLabc123'))
         .rejects.toMatchObject({ message: 'COOKIES_REQUIRED', usedCookies: false });
-    });
-  });
-
-  describe('buildTitleFilterRegExp', () => {
-    test('matches case-insensitively', () => {
-      expect(playlistModule.buildTitleFilterRegExp('review').test('GAME REVIEW')).toBe(true);
-    });
-
-    test('throws for a pattern JavaScript cannot compile', () => {
-      expect(() => playlistModule.buildTitleFilterRegExp('[unclosed')).toThrow(SyntaxError);
     });
   });
 
@@ -621,7 +645,9 @@ describe('playlistModule', () => {
       );
     });
 
-    test('keeps entries whose titles match the title filter, ignoring case', async () => {
+    // Download filters decide what downloads (playlistDownloadModule); a refresh
+    // tracks every available entry so skipped videos stay visible and selectable.
+    test('tracks entries the title filter does not match', async () => {
       Playlist.findOne.mockResolvedValue({
         id: 1, playlist_id: 'PLabc', url: 'https://u',
         min_duration: null, max_duration: null, title_filter_regex: 'review',
@@ -637,10 +663,10 @@ describe('playlistModule', () => {
       await playlistModule.fetchAllPlaylistVideos('PLabc');
 
       const call = PlaylistVideo.bulkCreate.mock.calls[0][0];
-      expect(call.map((v) => v.youtube_id)).toEqual(['v1']);
+      expect(call.map((v) => v.youtube_id)).toEqual(['v1', 'v2']);
     });
 
-    test('applies min_duration filter', async () => {
+    test('tracks entries shorter than the minimum duration', async () => {
       Playlist.findOne.mockResolvedValue({
         id: 1, playlist_id: 'PLabc', url: 'https://u',
         min_duration: 250, max_duration: null, title_filter_regex: null,
@@ -668,7 +694,7 @@ describe('playlistModule', () => {
       await promise;
 
       const call = PlaylistVideo.bulkCreate.mock.calls[0][0];
-      expect(call.map((v) => v.youtube_id)).toEqual(['v2']);
+      expect(call.map((v) => v.youtube_id)).toEqual(['v1', 'v2']);
     });
 
     test('backfills playlist thumbnail from first video when null', async () => {
@@ -1593,10 +1619,21 @@ describe('playlistModule', () => {
         expect.objectContaining({
           sub_folder: '__Learning',
           video_quality: '720',
-          min_duration: 60,
           default_rating: 'PG-13',
         })
       );
+    });
+
+    test('does not copy the playlist download filters into the channel', async () => {
+      channelModule.upsertChannel.mockResolvedValue({ id: 9, channel_id: 'UC9' });
+
+      await playlistModule.ensureSourceChannel(
+        { channel_id: 'UC9', uploader: 'Creator X' },
+        { min_duration: 60, max_duration: 600, title_filter_regex: 'Episode', video_quality: '720' }
+      );
+
+      const seed = channelModule.upsertChannel.mock.calls[0][3];
+      expect(Object.keys(seed).sort()).toEqual(['audio_format', 'default_rating', 'sub_folder', 'video_quality']);
     });
 
     test('seeds title and uploader from the channel name so the row is not left nameless', async () => {
@@ -2054,6 +2091,33 @@ describe('playlistModule', () => {
         pausedReason: null,
       });
       expect(downloadModule.doPlaylistDownloads).toHaveBeenCalledTimes(2);
+    });
+
+    // A playlist whose download filters cannot be evaluated still queues the
+    // videos the user selected, then fails so the sweep is not a clean one.
+    describe('when a playlist fails after queueing some videos', () => {
+      const filterError = () => Object.assign(new Error('Download filters could not be evaluated'), { queued: 2 });
+
+      beforeEach(() => {
+        Playlist.findAll.mockResolvedValue([{ playlist_id: 'PL1', title: 'One' }]);
+        downloadModule.doPlaylistDownloads.mockRejectedValueOnce(filterError());
+      });
+
+      test('counts what it queued and reports the playlist as failed', async () => {
+        await expect(playlistModule.playlistAutoDownload()).resolves.toEqual({
+          playlists: 1,
+          enqueued: 2,
+          failed: 1,
+          errors: [{ playlistId: 'PL1', message: 'Download filters could not be evaluated' }],
+          pausedReason: null,
+        });
+      });
+
+      test('does not record an idle sweep job', async () => {
+        await playlistModule.playlistAutoDownload();
+
+        expect(jobModule.addJob).not.toHaveBeenCalled();
+      });
     });
 
     describe('when downloads are paused for storage', () => {

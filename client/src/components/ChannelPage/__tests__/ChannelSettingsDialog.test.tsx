@@ -79,7 +79,8 @@ describe('ChannelSettingsDialog', () => {
       plexUrl: false,
       authEnabled: true,
       useTmpForDownloads: false,
-      ytdlpUpdates: false
+      ytdlpUpdates: false,
+      externalApiEnabled: false
     },
     deploymentEnvironment: {
       platform: null,
@@ -362,7 +363,8 @@ describe('ChannelSettingsDialog', () => {
           plexUrl: false,
           authEnabled: true,
           useTmpForDownloads: false,
-          ytdlpUpdates: false
+          ytdlpUpdates: false,
+          externalApiEnabled: false
         },
         deploymentEnvironment: {
           platform: null,
@@ -1911,6 +1913,19 @@ describe('ChannelSettingsDialog', () => {
       const toggle = screen.getByLabelText(/Generate channel playlist file/i);
       expect(toggle).not.toBeChecked();
       expect(screen.queryByLabelText(/Playlist Order/i)).not.toBeInTheDocument();
+    });
+
+    test('explains the separate MP3 file for Video + MP3 channels', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
+      });
+
+      render(<ChannelSettingsDialog {...defaultProps} />);
+
+      expect(
+        await screen.findByText(/Video \+ MP3 channels also get a\s+second file.*lists the MP3s once one has been\s+downloaded/i)
+      ).toBeInTheDocument();
     });
 
     test('enabling the toggle reveals the order select and saves both fields', async () => {

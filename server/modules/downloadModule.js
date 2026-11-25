@@ -1135,25 +1135,25 @@ class DownloadModule {
       overrideSettings.videoCount || configModule.config.channelFilesToDownload || DEFAULT_FILES_TO_DOWNLOAD;
     const allowRedownload = !!overrideSettings.allowRedownload;
 
-    const { candidates } = await playlistDownloadModule.getTrackedVideos(playlist.playlist_id,
-      { PlaylistVideo, Video, playlistModule }, { allowRedownload, excludeActive: true });
+    const { candidates, filteredIds, filterError } = await playlistDownloadModule.getTrackedVideos(playlist.playlist_id,
+      { PlaylistVideo, Video, playlistModule }, { allowRedownload, excludeActive: true, filterBy: playlist });
 
     const baselineAt = playlist.auto_download_baseline_at || null;
     // Initializing requires a successful refresh, handled by doPlaylistDownloads.
     // Never guess an initial batch from playlist position.
-    if (!baselineAt) return { discoveries: [], retries: [] };
+    if (!baselineAt) return { discoveries: [], retries: [], filterError };
     const selected = playlistAutoSelection.selectNewSinceBaseline({
-      candidates, baselineAt, baselineId: playlist.auto_download_baseline_id, limit,
+      candidates, baselineAt, baselineId: playlist.auto_download_baseline_id, limit, filteredIds,
     });
     // Rotate at selection time even if queueing fails or the admitted job is
     // terminated. Discovery/request overlap stays in the discovery allowance.
     await playlistDownloadModule.markRequestedAttempt(playlist.playlist_id,
       selected.retries.map((row) => row.youtube_id), { PlaylistVideo });
     logger.info(
-      { playlist_id: playlist.playlist_id, candidateCount: candidates.length, discoveryCount: selected.discoveries.length, retryCount: selected.retries.length },
+      { playlist_id: playlist.playlist_id, candidateCount: candidates.length, filteredCount: filteredIds.size, discoveryCount: selected.discoveries.length, retryCount: selected.retries.length },
       'Playlist auto-download selection'
     );
-    return selected;
+    return { ...selected, filterError };
   }
 
   async doPlaylistDownloads(playlist, options = {}) {
@@ -1192,23 +1192,37 @@ class DownloadModule {
     if (options.limitToRecent && (!playlist.enabled || !playlist.auto_download)) return 0;
 
     if (isBulk && options.limitToRecent) {
-      const { discoveries, retries } = await this.selectAutoDownloadEntries(playlist, overrideSettings);
+      const { discoveries, retries, filterError } = await this.selectAutoDownloadEntries(playlist, overrideSettings);
       // Finish admitting every discovery settings group before any retry group.
       // Separate jobs make saved retries visible in Download History.
-      const queued = await this.queuePlaylistEntries(playlist, discoveries, {
+      const discoveriesQueued = await this.queuePlaylistEntries(playlist, discoveries, {
         overrideSettings, runId: options.runId, jobLabel: playlistJobLabel(playlist),
       });
-      return queued + await this.queuePlaylistEntries(playlist, retries, {
+      const queued = discoveriesQueued + await this.queuePlaylistEntries(playlist, retries, {
         overrideSettings, runId: options.runId, jobLabel: playlistRetryJobLabel(playlist),
       });
+      if (filterError) {
+        // The videos the user selected are queued above; everything else is
+        // held. Failing here keeps the sweep from recording "no new videos"
+        // for a playlist whose automatic downloads have stopped. The caller
+        // reads `queued` so those jobs still count.
+        throw Object.assign(
+          new Error(`Download filters could not be evaluated, so automatic downloads for this playlist are on hold: ${filterError}`),
+          { code: 'PLAYLIST_FILTER_ERROR', queued }
+        );
+      }
+      return queued;
     }
 
-    // Explicit IDs override ignored; all other eligibility rules are shared.
-    const { candidates: entries } = await playlistDownloadModule.getTrackedVideos(playlist.playlist_id,
+    // Explicit IDs override ignored and the playlist's download filters, which
+    // apply to "download all"; all other eligibility rules are shared.
+    const { candidates, filteredIds } = await playlistDownloadModule.getTrackedVideos(playlist.playlist_id,
       { PlaylistVideo, Video, playlistModule }, {
         youtubeIds: isBulk ? undefined : youtubeIds,
         includeIgnored: !isBulk, allowRedownload, excludeActive: true,
+        filterBy: isBulk ? playlist : null,
       });
+    const entries = candidates.filter((row) => !filteredIds.has(row.youtube_id));
     return this.queuePlaylistEntries(playlist, entries, {
       overrideSettings, runId: options.runId, jobLabel: playlistJobLabel(playlist),
     });

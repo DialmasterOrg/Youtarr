@@ -79,6 +79,19 @@ export const SCHEDULE_FIELDS = [
     runNowConfirm: null,
   },
   {
+    key: 'cookieCheckFrequency',
+    group: 'maintenance',
+    label: 'Check YouTube cookies',
+    description: 'Ask YouTube whether your cookies still belong to a signed-in session, the same test as Test cookies. '
+      + 'When they stop working you get one notification per cookie file through your notification services.',
+    settingsPath: 'cookies',
+    settingsLabel: 'Cookies settings',
+    enabledKey: 'cookiesEnabled',
+    disabledText: 'Cookies are off, so this schedule is idle until you turn them on.',
+    frequentRunWarning: 'Every check is a request to YouTube with your cookies. Running it more than once an hour adds requests on your account for little benefit, because downloads already report rejected cookies as they happen.',
+    runNowConfirm: null,
+  },
+  {
     key: 'channelFeedCheckFrequency',
     group: 'maintenance',
     label: 'Check channels for new videos',

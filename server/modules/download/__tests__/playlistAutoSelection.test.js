@@ -39,6 +39,18 @@ describe('explicit existing batches', () => {
     const candidates = [entry({ downloaded: true }), entry({ unavailable: true }), entry({ ignored: true }), entry({ youtube_id: 'eligible' })];
     expect(ids(selectBatchEntries({ candidates, order: 'asc', limit: 1 }).selected)).toEqual(['eligible']);
   });
+
+  test('leaves filtered entries out of the suggested batch', () => {
+    const candidates = [entry({ youtube_id: 'filtered' }), entry({ youtube_id: 'kept', position: 2 })];
+    const result = selectBatchEntries({ candidates, order: 'asc', limit: 2, filteredIds: new Set(['filtered']) });
+    expect(ids(result.selected)).toEqual(['kept']);
+  });
+
+  test('a filtered entry with no date does not block choosing by publication date', () => {
+    const candidates = [entry({ youtube_id: 'filtered', published_at: null }), entry({ youtube_id: 'kept', position: 2 })];
+    expect(selectBatchEntries({ candidates, order: 'published', limit: 1, filteredIds: new Set(['filtered']) }))
+      .toEqual({ selected: [candidates[1]], missingDates: 0 });
+  });
 });
 
 describe('following discoveries and saved retries', () => {
@@ -89,6 +101,21 @@ describe('following discoveries and saved retries', () => {
   test.each(cases)('$name', ({ candidates, baselineId = 10, baselineAt, limit = 2, discoveries, retries }) => {
     const result = selectNewSinceBaseline({ candidates, baselineId, baselineAt, limit });
     expect({ discoveries: ids(result.discoveries), retries: ids(result.retries) }).toEqual({ discoveries, retries });
+  });
+
+  test('filtered discoveries are not selected', () => {
+    const result = selectNewSinceBaseline({
+      candidates: [discovery(11), discovery(12)], baselineId: 10, limit: 2, filteredIds: new Set(['d11']),
+    });
+    expect(ids(result.discoveries)).toEqual(['d12']);
+  });
+
+  test('a filtered discovery does not use up the discovery allowance', () => {
+    const result = selectNewSinceBaseline({
+      candidates: [discovery(13, { first_seen_at: new Date('2026-09-03') }), discovery(12)],
+      baselineId: 10, limit: 1, filteredIds: new Set(['d13']),
+    });
+    expect(ids(result.discoveries)).toEqual(['d12']);
   });
 
   test('selection never stamps attempts or changes the supplied rows or ordering', () => {

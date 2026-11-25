@@ -2,6 +2,8 @@ const scheduledTasks = require('./scheduledTaskManager');
 const { getSchedule, MANUAL_RUN_COOLDOWN_MS } = require('./scheduleConfig');
 const rescanRunSummary = require('./rescanRunSummary');
 const ytdlpUpdateRunSummary = require('./ytdlpUpdateRunSummary');
+const cookieHealth = require('./cookieHealth');
+const cookieTest = require('./cookieTest');
 const logger = require('../logger');
 
 const BYTES_PER_GB = 1024 ** 3;
@@ -253,6 +255,24 @@ function initialize(deps = {}) {
     }
   };
 
+  // ============================================================================
+  // COOKIE CHECK (the Test cookies probe; notifies when the cookies stop working)
+  // ============================================================================
+  jobs.cookieCheckFrequency = async () => {
+    try {
+      return await cookieHealth.runScheduledCheck();
+    } catch (error) {
+      logger.error({ err: error }, 'Cookie check failed');
+      return failedRun(error);
+    }
+  };
+
+  // Tasks that only run while their feature is switched on; the rest always run.
+  const TASK_ENABLED = {
+    ytdlpUpdateFrequency: (config) => Boolean(config.autoUpdateYtdlp) && !configModule.isElfhostedPlatform(),
+    cookieCheckFrequency: (config) => Boolean(config.cookiesEnabled),
+  };
+
   // Hooks the scheduler uses to report runs started elsewhere and to decide
   // whether a manual run may start now.
   const TASK_OPTIONS = {
@@ -272,6 +292,15 @@ function initialize(deps = {}) {
       getRunBlocker: () => tabVideoCounts.getBulkRunBlocker(),
       manualCooldownMs: MANUAL_RUN_COOLDOWN_MS,
     },
+    cookieCheckFrequency: {
+      isRunning: () => cookieTest.isRunning(),
+      // Cookies switched off reads as "turned off"; this is for cookies
+      // switched on with no file uploaded or configured yet.
+      getRunBlocker: async () => (configModule.getConfig().cookiesEnabled && !configModule.getCookiesPath()
+        ? { reason: 'no-cookie-file', message: 'No cookie file is active.' }
+        : null),
+      manualCooldownMs: MANUAL_RUN_COOLDOWN_MS,
+    },
   };
 
   const reschedule = () => {
@@ -280,8 +309,7 @@ function initialize(deps = {}) {
       scheduledTasks.updateTask({
         id,
         expression: getSchedule(config, id),
-        enabled: id !== 'ytdlpUpdateFrequency' ||
-          (Boolean(config.autoUpdateYtdlp) && !configModule.isElfhostedPlatform()),
+        enabled: TASK_ENABLED[id] ? TASK_ENABLED[id](config) : true,
         run,
         ...TASK_OPTIONS[id],
       });

@@ -216,6 +216,15 @@ describe('cookieTest', () => {
     await first;
   });
 
+  test('reports itself as running only while a test is in progress', async () => {
+    const pending = cookieTest.run();
+    const during = cookieTest.isRunning();
+    child.finish({ stdout: '{}' });
+    await pending;
+
+    expect([during, cookieTest.isRunning()]).toEqual([true, false]);
+  });
+
   test('allows a new test after the previous one finishes', async () => {
     const first = cookieTest.run();
     child.finish({ stdout: '{}' });
@@ -239,5 +248,14 @@ describe('cookieTest', () => {
       error: 'External cookies: the file was not found.',
     });
     expect(spawnYtDlp).not.toHaveBeenCalled();
+  });
+
+  test('exposes the code it reports for an unusable external file', async () => {
+    externalCookies.getExternalCookiesPath.mockReturnValue('/external/cookies.txt');
+    externalCookies.getExternalCookiesStatus.mockReturnValue({ ready: false, error: 'External cookies: unreadable.' });
+
+    const result = await cookieTest.run();
+
+    expect(cookieTest.INVALID_COOKIE_FILE).toBe(result.code);
   });
 });

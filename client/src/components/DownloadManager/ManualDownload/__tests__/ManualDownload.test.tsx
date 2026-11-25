@@ -248,6 +248,76 @@ describe('ManualDownload', () => {
     expect(await screen.findByText('This video is members-only, and YouTube did not accept the configured cookies.')).toBeInTheDocument();
   });
 
+  describe('when YouTube answers with a bot check', () => {
+    const botCheckMessage = 'Bot detection encountered. YouTube is temporarily refusing requests from this server; this usually clears on its own, so try again later.';
+    const botCheckResponse = {
+      data: { isValidUrl: false, errorCode: 'COOKIES_REQUIRED', error: botCheckMessage },
+    };
+
+    test('explains it in a warning under the URL input instead of calling the URL invalid', async () => {
+      mockedAxios.post.mockResolvedValueOnce(botCheckResponse);
+
+      render(<ManualDownload onStartDownload={mockOnStartDownload} token={mockToken} />);
+      fireEvent.click(screen.getByTestId('validate-button'));
+
+      const warning = await screen.findByTestId('validation-warning');
+      expect(within(warning).getByText('Could not add this video')).toBeInTheDocument();
+      expect(within(warning).getByText(botCheckMessage)).toBeInTheDocument();
+      expect(screen.queryByText('Invalid YouTube URL. Please check the URL and try again.')).not.toBeInTheDocument();
+      expect(screen.queryByText('Download Queue')).not.toBeInTheDocument();
+    });
+
+    test('clears the warning on the next attempt', async () => {
+      mockedAxios.post
+        .mockResolvedValueOnce(botCheckResponse)
+        .mockResolvedValueOnce({ data: mockValidationResponse });
+
+      render(<ManualDownload onStartDownload={mockOnStartDownload} token={mockToken} />);
+      fireEvent.click(screen.getByTestId('validate-button'));
+      await screen.findByTestId('validation-warning');
+
+      fireEvent.click(screen.getByTestId('validate-button'));
+
+      expect(await screen.findByTestId('video-chip-test123')).toBeInTheDocument();
+      expect(screen.queryByTestId('validation-warning')).not.toBeInTheDocument();
+    });
+
+    test('lets the user dismiss the warning', async () => {
+      mockedAxios.post.mockResolvedValueOnce(botCheckResponse);
+
+      render(<ManualDownload onStartDownload={mockOnStartDownload} token={mockToken} />);
+      fireEvent.click(screen.getByTestId('validate-button'));
+      const warning = await screen.findByTestId('validation-warning');
+
+      fireEvent.click(within(warning).getByRole('button', { name: 'Close' }));
+
+      expect(screen.queryByTestId('validation-warning')).not.toBeInTheDocument();
+    });
+  });
+
+  test('shows the server reason when YouTube could not be read', async () => {
+    mockedAxios.post.mockResolvedValueOnce({
+      data: { isValidUrl: false, errorCode: 'TIMEOUT', error: 'Request timed out. Please try again.' },
+    });
+
+    render(<ManualDownload onStartDownload={mockOnStartDownload} token={mockToken} />);
+    fireEvent.click(screen.getByTestId('validate-button'));
+
+    expect(await screen.findByText('Request timed out. Please try again.')).toBeInTheDocument();
+    expect(screen.queryByTestId('validation-warning')).not.toBeInTheDocument();
+  });
+
+  test('keeps its own wording for a URL the server calls malformed', async () => {
+    mockedAxios.post.mockResolvedValueOnce({
+      data: { isValidUrl: false, errorCode: 'INVALID_URL', error: 'Invalid YouTube URL format' },
+    });
+
+    render(<ManualDownload onStartDownload={mockOnStartDownload} token={mockToken} />);
+    fireEvent.click(screen.getByTestId('validate-button'));
+
+    expect(await screen.findByText('Invalid YouTube URL. Please check the URL and try again.')).toBeInTheDocument();
+  });
+
   test('prevents duplicate videos in the queue', async () => {
     mockedAxios.post.mockResolvedValue({ data: mockValidationResponse });
 

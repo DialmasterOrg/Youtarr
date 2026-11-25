@@ -7,6 +7,10 @@ const { MAX_PLAYLIST_VIDEOS } = require('./playlistConstants');
 const storageGuard = require('./storageGuard');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const { spawnYtDlp } = require('./ytdlpProcess');
+const { toYoutubeUrl } = require('./youtubeUrlParser');
+
+// A bare playlist id, which yt-dlp accepts in place of a URL.
+const PLAYLIST_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 // yt-dlp's flat-playlist listing still returns private/deleted/members-only
 // videos but strips their metadata: the title comes back null (current yt-dlp)
@@ -56,7 +60,13 @@ class PlaylistModule {
     if (!trimmed) return true;
     return UNAVAILABLE_TITLE_RE.test(trimmed);
   }
-  async getPlaylistInfo(url) {
+  async getPlaylistInfo(input) {
+    // yt-dlp fetches whatever URL it is given, so only YouTube reaches it.
+    const trimmed = typeof input === 'string' ? input.trim() : '';
+    const url = PLAYLIST_ID_PATTERN.test(trimmed)
+      ? `https://www.youtube.com/playlist?list=${trimmed}`
+      : toYoutubeUrl(trimmed);
+    if (!url) throw new Error('INVALID_PLAYLIST_URL');
     const data = await this._getPlaylistMetadata(url);
     return {
       playlist_id: data.id,
@@ -65,7 +75,8 @@ class PlaylistModule {
       description: data.description || null,
       thumbnail: data.thumbnail || null,
       video_count: reportedCount(data.playlist_count) ?? 0,
-      url: data.webpage_url || url,
+      // Stored and fetched again on every refresh, so it gets the same check.
+      url: toYoutubeUrl(data.webpage_url) || url,
     };
   }
 
@@ -186,17 +197,6 @@ class PlaylistModule {
     }
   }
 
-  /**
-   * The RegExp a playlist title filter is evaluated with on refresh. The
-   * settings route uses it to reject a pattern that would break every refresh.
-   * @param {string} pattern
-   * @returns {RegExp}
-   * @throws {SyntaxError} when the pattern is not a valid JavaScript regex
-   */
-  buildTitleFilterRegExp(pattern) {
-    return new RegExp(pattern, 'i');
-  }
-
   async fetchAllPlaylistVideos(playlistId, options = {}) {
     if (this.activeFetches.has(playlistId)) {
       throw new Error('FETCH_IN_PROGRESS');
@@ -218,15 +218,10 @@ class PlaylistModule {
     const { entries, complete } = await this._fetchSnapshot(playlist, startFollowing);
 
     const discoveredAt = new Date();
+    // Every available entry is tracked. The playlist's download filters are
+    // applied when videos are picked for download (playlistDownloadModule), so
+    // a video they skip stays listed and can still be downloaded by hand.
     const available = entries.filter((e) => !this.isUnavailableTitle(e.title));
-
-    const regex = playlist.title_filter_regex ? this.buildTitleFilterRegExp(playlist.title_filter_regex) : null;
-    const passes = (e) => {
-      if (playlist.min_duration != null && (e.duration || 0) < playlist.min_duration) return false;
-      if (playlist.max_duration != null && (e.duration || 0) > playlist.max_duration) return false;
-      if (regex && e.title && !regex.test(e.title)) return false;
-      return true;
-    };
 
     const pickThumbnail = (e) => {
       if (typeof e.thumbnail === 'string' && e.thumbnail) return e.thumbnail;
@@ -237,28 +232,25 @@ class PlaylistModule {
       return e.id ? `https://i.ytimg.com/vi/${e.id}/hqdefault.jpg` : null;
     };
 
-    const rows = available
-      .map((e, idx) => ({ entry: e, row: {
-        playlist_id: playlist.playlist_id,
-        youtube_id: e.id,
-        position: idx + 1,
-        // yt-dlp sometimes omits per-video channel fields from flat playlist
-        // listings (the same playlist can flip between fetches). Never substitute
-        // the playlist owner's channel: this field drives per-video command
-        // settings and owner-channel routing at finalize, and the owner's id
-        // mis-routes other artists' videos. Leave null and carry forward any
-        // previously-captured attribution (_preserveExistingChannelInfo).
-        channel_id: e.channel_id || null,
-        channel_name: e.uploader || e.channel || null,
-        title: e.title || null,
-        thumbnail: pickThumbnail(e),
-        duration: typeof e.duration === 'number' ? e.duration : null,
-        published_at: e.upload_date || e.release_date || null,
-        added_at: discoveredAt,
-        first_seen_at: discoveredAt,
-      }}))
-      .filter(({ entry }) => passes(entry))
-      .map(({ row }) => row);
+    const rows = available.map((e, idx) => ({
+      playlist_id: playlist.playlist_id,
+      youtube_id: e.id,
+      position: idx + 1,
+      // yt-dlp sometimes omits per-video channel fields from flat playlist
+      // listings (the same playlist can flip between fetches). Never substitute
+      // the playlist owner's channel: this field drives per-video command
+      // settings and owner-channel routing at finalize, and the owner's id
+      // mis-routes other artists' videos. Leave null and carry forward any
+      // previously-captured attribution (_preserveExistingChannelInfo).
+      channel_id: e.channel_id || null,
+      channel_name: e.uploader || e.channel || null,
+      title: e.title || null,
+      thumbnail: pickThumbnail(e),
+      duration: typeof e.duration === 'number' ? e.duration : null,
+      published_at: e.upload_date || e.release_date || null,
+      added_at: discoveredAt,
+      first_seen_at: discoveredAt,
+    }));
 
     await this._preserveExistingPublishedDates(playlist.playlist_id, rows);
     await this._preserveExistingChannelInfo(playlist.playlist_id, rows);
@@ -526,13 +518,12 @@ class PlaylistModule {
     // Seed the auto-created channel with the playlist's subfolder choice as-is:
     // the sentinel (the default for new playlists) -> global default subfolder,
     // null -> explicit root, a name -> that folder. This keeps the seeded
-    // channel consistent with the playlist's settings dialog.
+    // channel consistent with the playlist's settings dialog. The playlist's
+    // download filters are not copied: a pattern written for one playlist would
+    // silently block downloads if the channel is later subscribed to.
     const seed = {
       sub_folder: playlist.default_sub_folder,
       video_quality: playlist.video_quality,
-      min_duration: playlist.min_duration,
-      max_duration: playlist.max_duration,
-      title_filter_regex: playlist.title_filter_regex,
       audio_format: playlist.audio_format,
       default_rating: playlist.default_rating,
     };
@@ -750,6 +741,9 @@ class PlaylistModule {
           logger.info({ playlist_id: p.playlist_id }, 'Downloads paused for storage; skipping the rest of the playlist sweep');
           break;
         }
+        // A playlist can fail after queueing (held download filters still let
+        // the videos the user selected through); those jobs are real.
+        totalEnqueued += err.queued || 0;
         errors.push({ playlistId: p.playlist_id, message: err.message || 'Unknown error' });
         logger.error({ err, playlist_id: p.playlist_id }, 'playlistAutoDownload failed for playlist');
       }

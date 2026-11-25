@@ -255,7 +255,7 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *                       type: boolean
    *                       description: true when the channel row already existed in the database
    *       400:
-   *         description: URL is missing
+   *         description: URL is missing or is not a YouTube URL
    *       403:
    *         description: Cookies required
    *       404:
@@ -285,7 +285,13 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     } catch (error) {
       req.log.error({ err: error, url }, 'Failed to get channel info');
 
-      if (error.code === 'CHANNEL_NOT_FOUND') {
+      if (error.code === 'INVALID_CHANNEL_URL') {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Enter a YouTube channel URL.',
+          error: error.message
+        });
+      } else if (error.code === 'CHANNEL_NOT_FOUND') {
         return res.status(404).json({
           status: 'error',
           message: 'Channel not found. Please check the URL and try again.',

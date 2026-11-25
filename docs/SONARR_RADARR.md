@@ -9,6 +9,7 @@ Youtarr can act as an indexer and a download client for Sonarr and Radarr. Sonar
 - [Step 3: Connect your Sonarr and Radarr (recommended)](#step-3-connect-your-sonarr-and-radarr-recommended)
 - [Step 4: The shared folder](#step-4-the-shared-folder)
 - [Settings to check in Sonarr and Radarr](#settings-to-check-in-sonarr-and-radarr)
+- [Subtitles](#subtitles)
 - [How matching works](#how-matching-works)
 - [Resolution](#resolution)
 - [Using Youtarr beside other indexers](#using-youtarr-beside-other-indexers)
@@ -163,6 +164,21 @@ Youtarr puts `.ignore` and `.plexignore` files in the staging folder, so Plex, J
 - **Quality profile.** Youtarr labels each release `WEB-DL` at the resolution the video really has, up to the lower of **Resolution** and **Offer releases as** on the Sonarr / Radarr page (see [Resolution](#resolution)). The profile of the series or movie must allow WEBDL at the resolution a video really has, up to that one: a video that only exists in 480p is offered as 480p, and a profile that does not allow 480p will not take it. Sonarr's default "Any" profile does not include 2160p.
 - **Delay profile.** Usenet must be enabled: Youtarr presents itself as a Usenet indexer.
 - **Automatic search.** With the default strict matching you can leave "Enable Automatic Search" on; [How matching works](#how-matching-works) names the cases it can still get wrong. If you turn on loose matching in Youtarr, turn it off for the Youtarr indexer and search interactively.
+- **Import Extra Files.** Off by default. Turn it on if you want a video's subtitles imported with it; see [Subtitles](#subtitles).
+
+## Subtitles
+
+Youtarr hands a video's subtitle files to Sonarr and Radarr together with the video. Sonarr and Radarr only take them when two settings are on:
+
+1. **In Youtarr:** [Subtitles](CONFIG.md#enable-subtitles) on the Core settings page, with the languages you want. The setting and its languages decide what Youtarr downloads from then on. A grab hands over the subtitle files a video has: a video downloaded while subtitles were off has none, and a video downloaded earlier with subtitles is handed over with them even when the setting is off now.
+2. **In Sonarr and Radarr:** **Settings -> Media Management -> Importing -> Import Extra Files**. The list of extensions beside it (an advanced setting) holds `srt` by default, which is the format Youtarr hands over.
+
+The subtitles are imported next to the episode or movie and named after it, like `Show - S01E02.en.srt`. With Import Extra Files off they are ignored, and the staging folder is cleaned up as usual.
+
+- **Regional tracks lose their region.** Sonarr and Radarr read a plain two or three letter language code only, so Youtarr hands over `en-GB` as `en` and `zh-Hans` as `zh`. Youtarr's own library keeps the full code.
+- **Several tracks of one language are all imported, numbered.** A video with different `en-CA` and `en-GB` subtitles arrives as `.1.en.srt` and `.2.en.srt`, and one with Simplified and Traditional Chinese as `.1.zh.srt` and `.2.zh.srt`. Sonarr and Radarr cannot tell such tracks apart, so the number is all that distinguishes them. Tracks that hold exactly the same text (YouTube lists one English track under `en`, `en-CA` and `en-GB` on some videos) are handed over once. To get one track only, set that exact code (`zh-Hans`, for example) as the subtitle language in Youtarr's `config.json`; see [Subtitle Languages](CONFIG.md#subtitle-languages).
+- **A language Sonarr or Radarr does not know** (their lists are shorter than YouTube's) is imported without a language code in its name.
+- Sonarr and Radarr get copies of the subtitle files. Editing or replacing them there, with Bazarr for example, never changes Youtarr's files.
 
 ## How matching works
 
@@ -192,6 +208,7 @@ Good to know:
 
 - When several videos match, an automatic search lets Sonarr or Radarr choose, and a newer upload usually wins. Search interactively to choose yourself: each release links to its YouTube page and is named after the channel that uploaded it.
 - A search for a whole season finds nothing when the season is numbered by year (`Season 2024`), which is how TheTVDB lists most shows made for YouTube. Sonarr searches by season whenever a season has more than one wanted episode, so for such a show search the episodes one at a time.
+- A YouTube API key (**Settings -> YouTube API**) is recommended. With one, searches are faster and resolution labels are more reliable: without it, Youtarr checks each video with yt-dlp, and a check that YouTube blocks leaves the label at the highest resolution allowed.
 - Daily shows (searched by date) need a YouTube API key in **Settings -> YouTube API**, because only the API gives exact upload dates. For the same reason they are not held to the daily share described below.
 - With a YouTube API key, one YouTube search costs about 100 to 200 units of your daily quota: 100 for each page of results, plus 1 to read the videos' lengths. A second page is needed when the first has too few usable results. Results are remembered for 10 minutes, so repeating a search in that time costs nothing.
 - One search in Sonarr or Radarr can be several YouTube searches. Sonarr asks once per name of a series (its title and each alias), and a search for whole seasons asks once per season. With a [Sonarr connection](#step-3-connect-your-sonarr-and-radarr-recommended), an episode found by its title costs one YouTube search for all names together. A Radarr search of many movies is at least one YouTube search per movie.
@@ -368,7 +385,7 @@ Under each search is every video YouTube returned, with its channel and length. 
 | The title names another series | Other words sit between the name and the episode ("Beyblade Metal Fusion S01E29"), it names a similarly named series in your library, or it carries a year from before the series began. |
 | The episode's title is not in the title | For a search by episode title. |
 | The title also has another episode's title | Two episodes in one video. |
-| A one-word episode title also needs the episode number | A title like "Pilot" appears in unrelated videos. |
+| A one-word episode title also needs the episode number | A title like "Pilot" appears in unrelated videos. A video whose title is only the series name and the episode title is offered without the number. |
 | Not uploaded on the air date | For a daily show: the upload is more than a day from the air date. |
 | The movie's year is not in the title | Strict matching needs it. |
 | Its grab failed in the last 7 days | It is offered again after that, or once the video is in your Youtarr library. |

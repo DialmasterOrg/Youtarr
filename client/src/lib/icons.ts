@@ -152,4 +152,7 @@ export {
   RefreshCw,
   Plus,
   FolderX,
+  Pencil,
+  Radio,
+  ClipboardList,
 } from 'lucide-react';

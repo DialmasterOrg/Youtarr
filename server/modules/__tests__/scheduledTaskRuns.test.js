@@ -238,6 +238,16 @@ describe('scheduledTaskRuns', () => {
       }));
     });
 
+    test('leaves out runs that recorded no details when asked', async () => {
+      const { Op } = require('sequelize');
+
+      await runs.getLatestRun(taskKey, { withDetails: true });
+
+      expect(ScheduledTaskRun.findOne).toHaveBeenCalledWith(expect.objectContaining({
+        where: { task_key: taskKey, details: { [Op.ne]: null } },
+      }));
+    });
+
     test('returns null when nothing has run', async () => {
       await expect(runs.getLatestRun(taskKey)).resolves.toBeNull();
     });

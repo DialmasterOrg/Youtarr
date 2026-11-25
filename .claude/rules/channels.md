@@ -8,6 +8,7 @@ paths:
   - "server/modules/channelSearchModule.js"
   - "server/modules/channelVideoReanchor.js"
   - "server/modules/channelFolderNameMigration.js"
+  - "server/modules/constants/channelThumbnail.js"
   - "server/modules/titleFilterRegex.js"
   - "server/modules/videoMetadataModule.js"
   - "server/modules/tabsUtils.js"
@@ -32,7 +33,7 @@ Channel subscriptions, listings, title filters, per-tab download counts, channel
 
 - `channelModule.js` is the public facade; the domain lives in `modules/channel/` (`fetchRegistry` in-flight guard, `channelYtdlpExecutor`, `channelIdentity`, `tabState`, `channelMappers`, `videoEntryParser`, `channelVideoWriter`/`channelVideoQuery`, `channelThumbnails`, `channelBackdropBackfill`, `channelMetadataFetcher`, `tabManager`, `channelProvisioning`, `channelCatalog`, `autoDownloadScheduler`, `channelVideoFetcher`, `channelVideosService`).
 - Channel title filters are evaluated with Python's `re` through `titleFilterRegex` (`utils/title-filter-regex.py`, one process per batch, JSON on stdin) so the preview and validation match yt-dlp's `--match-filter` exactly.
-- `ytdlpCommandBuilder.buildMatchFilters` escapes only `'` and `&`, because yt-dlp's `match_str` unescapes nothing else. Playlist title filters are separate: case-insensitive JavaScript regexes (`playlistModule.buildTitleFilterRegExp`).
+- `ytdlpCommandBuilder.buildMatchFilters` escapes only `'` and `&`, because yt-dlp's `match_str` unescapes nothing else. Playlist title filters use the same Python engine but are applied in Node before queueing (`playlistFilters`), never through `--match-filter`.
 - Per-channel `auto_removal_protected` and `auto_removal_keep_recent_count` are mutually exclusive: a request setting both is rejected, and enabling protection clears the count. Both guards go dormant while the channel is unsubscribed.
 - `channelDownloadAllModule` selects every known never-downloaded channel video, excluding ignored, YouTube-removed, members-only videos the cookies cannot open (`membersAccess`), live, anything ever downloaded even if since deleted, and `archiveOnlyIds` entries: download-all is not a re-download mechanism. It queues one `doSpecificDownloads` job, `Channel Download All: <title>`.
 - `channelSearchModule`: YouTube Data API `search.list` type=channel plus `channels.list` enrichment when a key is configured, else a yt-dlp channel-filtered results page; `subscribed` comes from enabled Channel rows; `videoCount` is API-path only.
@@ -49,9 +50,11 @@ Channel subscriptions, listings, title filters, per-tab download counts, channel
 - `feed_checked_at` is separate from `last_fetched_by_tab` so a quiet channel still gets a real listing every 24 hours; feeds cannot show title changes or ended live streams.
 - Feed-check tab listings pass no `mostRecentVideoDate` (50 entries), because the recency window lists 5 and the feed holds 15; ids the listing never returns are remembered in memory so they do not retrigger hourly.
 - `youtubeExistenceCheck` answers `exists`/`removed`/`unknown`; on `unknown` leave `youtube_removed_checked_at` alone, because it is an outage, not a verdict, and the check must run again later (`.claude/rules/server-runtime.md`).
+- `channelProvisioning.getChannelInfo` is the one place a new channel's URL reaches yt-dlp, so it refuses non-YouTube URLs (`youtubeUrlParser.toYoutubeUrl`) and unexpected channel ids there: yt-dlp fetches any URL, and the id is built into file paths.
 - `subscriptionImport/` (`importJobRunner`, `takeoutParser`, `cookiesFetcher`, `thumbnailEnricher`, `concurrencyLimiter`, `errorClassifier`) treats the uploaded Takeout CSV and cookies as untrusted: validated, size-limited, parsed defensively.
 - `videoMetadataModule.getCachedVideoMetadata` reads the cached `.info.json` only; `getVideoMetadata` fetches with yt-dlp and caches the result (slimmed; see `.claude/rules/videos.md`).
 - `channelThumbnails.backfillChannelImages` uses async disk checks only: synchronous ones on a slow mount blocked the event loop, and every other request, about 5 ms per channel on each channel list load.
+- Both cached channel thumbnail writers (`channelThumbnails.resizeChannelThumbnail` and the post-processor's fallback) cap the longest side at 512 px without upscaling, via `constants/channelThumbnail.js`: avatar sources run from under 200 px to over 4000, so a percentage fits neither.
 - The channel list calls `backfillChannelImagesInBackground`, never awaited, which skips channels checked in the last 15 minutes; a poster or backdrop setting change forgets every check, so newly enabled images appear on the next load.
 - The Channels page's add input is also the list search (`/getchannels?search=`, debounced). Enter adds only `isExplicitChannelReference` input, because a bare word may be a search; the search is held while a lookup runs so the list does not empty behind it.
 - `useChannelList` applies only its newest request's response, because search-as-you-type overlaps requests. An unmatched name goes to Find Channels as `?q=`, run once on open: a YouTube search costs 100 quota units or seconds of yt-dlp, so never as-you-type.

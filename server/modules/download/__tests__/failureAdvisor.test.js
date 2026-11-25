@@ -1,6 +1,9 @@
 /* eslint-env jest */
 
 const { adviseFailures, mergeDiagnoses, isYoutubeBlock } = require('../failureAdvisor');
+// The wording itself is tested with youtubeBlockAdvice; these tests check
+// that each failure gets the advice for its kind and cookie state.
+const { KIND, adviceFor } = require('../../youtubeBlockAdvice');
 
 const failedVideo = (overrides = {}) => ({
   youtubeId: 'abc123def45',
@@ -31,6 +34,7 @@ describe('failureAdvisor', () => {
       expect(diagnoses[0].count).toBe(1);
       expect(diagnoses[0].message).toMatch(/re-export fresh cookies/i);
       expect(diagnoses[0].message).toMatch(/disable cookies/i);
+      expect(diagnoses[0].message).toBe(adviceFor(KIND.HTTP_403, { cookiesEnabled: true }).message);
     });
 
     it('diagnoses a 403 failure without cookies as possibly fixable by cookies', () => {
@@ -38,7 +42,7 @@ describe('failureAdvisor', () => {
       const diagnoses = adviseFailures(videos, context({ cookiesEnabled: false }));
 
       expect(videos[0].diagnosisKey).toBe('http-403-cookies-disabled');
-      expect(diagnoses[0].message).toMatch(/uploading YouTube cookies/i);
+      expect(diagnoses[0].message).toBe(adviceFor(KIND.HTTP_403, { cookiesEnabled: false }).message);
     });
 
     it('diagnoses a 403 during the no-cookies fallback without recommending cookies', () => {
@@ -76,6 +80,7 @@ describe('failureAdvisor', () => {
 
       expect(videos[0].diagnosisKey).toBe('bot-check-cookies-enabled');
       expect(diagnoses[0].message).toMatch(/expired or rotated/i);
+      expect(diagnoses[0].message).toBe(adviceFor(KIND.BOT_CHECK, { cookiesEnabled: true }).message);
     });
 
     it('diagnoses the bot-check error without cookies as needing cookies', () => {
@@ -83,7 +88,7 @@ describe('failureAdvisor', () => {
       const diagnoses = adviseFailures(videos, context({ cookiesEnabled: false }));
 
       expect(videos[0].diagnosisKey).toBe('bot-check-cookies-disabled');
-      expect(diagnoses[0].message).toMatch(/upload youtube cookies/i);
+      expect(diagnoses[0].message).toBe(adviceFor(KIND.BOT_CHECK, { cookiesEnabled: false }).message);
     });
 
     it('diagnoses a bot check during the no-cookies fallback without recommending cookies', () => {

@@ -2,6 +2,7 @@
 
 const {
   containsHttp403,
+  containsRejectedCookiesWarning,
   isPoTokenAdvisory,
   isSabrRestriction,
 } = require('../ytdlpStderrSignals');
@@ -57,6 +58,46 @@ describe('ytdlpStderrSignals', () => {
     it('is false for empty or unrelated text', () => {
       expect(containsHttp403('')).toBe(false);
       expect(containsHttp403('WARNING: --paths is ignored since an absolute path is given')).toBe(false);
+    });
+  });
+
+  describe('containsRejectedCookiesWarning', () => {
+    const REJECTED_WARNING =
+      'WARNING: [youtube] The provided YouTube account cookies are no longer valid. ' +
+      'They have likely been rotated in the browser as a security measure. ' +
+      'For tips on how to effectively export YouTube cookies, refer to  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies .';
+
+    it('matches yt-dlp\'s warning about rejected account cookies', () => {
+      expect(containsRejectedCookiesWarning(REJECTED_WARNING)).toBe(true);
+    });
+
+    it('finds the warning among other output', () => {
+      expect(containsRejectedCookiesWarning(
+        `[youtube] Extracting URL: https://www.youtube.com/watch?v=abc123def45\n${REJECTED_WARNING}\nERROR: Join this channel\n`
+      )).toBe(true);
+    });
+
+    it('matches the warning when yt-dlp names the video before it', () => {
+      expect(containsRejectedCookiesWarning(
+        'WARNING: [youtube] abc123def45: The provided YouTube account cookies are no longer valid.'
+      )).toBe(true);
+    });
+
+    it('ignores a file error whose video title mentions rotated cookies', () => {
+      expect(containsRejectedCookiesWarning(
+        'ERROR: Unable to rename file: [Errno 2] No such file or directory: ' +
+        '\'/tmp/Baker - My cookies got rotated [abc123def45].f137.mp4.part\''
+      )).toBe(false);
+    });
+
+    it('ignores a video title that quotes the warning itself', () => {
+      expect(containsRejectedCookiesWarning(
+        'WARNING: [youtube] abc123def45: Unable to write \'/tmp/Why the provided YouTube account cookies are no longer valid [abc123def45].mp4\''
+      )).toBe(false);
+    });
+
+    it('is false for empty text', () => {
+      expect(containsRejectedCookiesWarning('')).toBe(false);
     });
   });
 

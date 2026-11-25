@@ -148,7 +148,10 @@ function prepareCookieFile(sourcePath) {
             : null,
         };
       }
-      result = { snapshotPath, cleanup, lastModified, error: null, warning: validationCache.warning };
+      // The digest names exactly the bytes this snapshot was made from. The
+      // source may be replaced by another process at any moment, so callers
+      // must not read it again to find out which cookies a run was given.
+      result = { snapshotPath, cleanup, lastModified, error: null, warning: validationCache.warning, cookieKey: digest };
     } catch (error) {
       if (error.code === 'EXTERNAL_COOKIES_INVALID') throw error;
       throw cookieError(VALIDATION_ERRORS.snapshot);
@@ -169,23 +172,24 @@ function prepareCookieFile(sourcePath) {
 function getExternalCookiesStatus() {
   const sourcePath = getExternalCookiesPath();
   if (!sourcePath) return null;
-  const { snapshotPath, cleanup, ...status } = prepareCookieFile(sourcePath);
+  const { snapshotPath, cleanup, lastModified, warning, error } = prepareCookieFile(sourcePath);
   cleanup?.();
-  return { path: sourcePath, ready: Boolean(snapshotPath), ...status };
+  // Named fields only: the status is served to the client.
+  return { path: sourcePath, ready: Boolean(snapshotPath), lastModified, warning, error };
 }
 
 function prepareExternalCookies(args) {
   const sourcePath = getExternalCookiesPath();
   const cookieIndex = args.indexOf('--cookies');
   if (!sourcePath || cookieIndex < 0 || args[cookieIndex + 1] !== sourcePath) {
-    return { args, cleanup: null };
+    return { args, cleanup: null, cookieKey: null };
   }
 
-  const { snapshotPath, cleanup } = prepareCookieFile(sourcePath);
+  const { snapshotPath, cleanup, cookieKey } = prepareCookieFile(sourcePath);
   const preparedArgs = [...args];
   if (snapshotPath) preparedArgs[cookieIndex + 1] = snapshotPath;
   else preparedArgs.splice(cookieIndex, 2);
-  return { args: preparedArgs, cleanup };
+  return { args: preparedArgs, cleanup, cookieKey: snapshotPath ? cookieKey : null };
 }
 
 module.exports = { getExternalCookiesPath, getExternalCookiesStatus, prepareExternalCookies, readExternalCookies };

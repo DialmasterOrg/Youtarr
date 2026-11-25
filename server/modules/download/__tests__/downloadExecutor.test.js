@@ -92,6 +92,10 @@ jest.mock('../../downloadModule', () => ({
   afterDownloadHook: jest.fn().mockResolvedValue(),
 }));
 
+jest.mock('../../cookieHealth', () => ({
+  reportDownloadRejection: jest.fn().mockResolvedValue()
+}));
+
 jest.mock('../failedVideoEnricher', () => ({
   enrichFailedVideos: jest.fn().mockResolvedValue()
 }));
@@ -119,6 +123,7 @@ jest.mock('../../filesystem', () => {
 });
 
 const DownloadExecutor = require('../downloadExecutor');
+const { KIND, adviceFor } = require('../../youtubeBlockAdvice');
 const filesystem = require('../../filesystem');
 const configModule = require('../../configModule');
 const plexModule = require('../../plexModule');
@@ -128,6 +133,7 @@ const archiveModule = require('../../archiveModule');
 const archiveAccess = require('../archiveAccess');
 const notificationModule = require('../../notificationModule');
 const channelModule = require('../../channelModule');
+const cookieHealth = require('../../cookieHealth');
 const DownloadProgressMonitor = require('../DownloadProgressMonitor');
 const VideoMetadataProcessor = require('../videoMetadataProcessor');
 const tempPathManager = require('../tempPathManager');
@@ -930,6 +936,47 @@ describe('DownloadExecutor', () => {
       });
     });
 
+    it('reports rejected cookies against the cookie file yt-dlp was given, not one uploaded since', async () => {
+      const actualFs = jest.requireActual('fs');
+      const os = require('os');
+      const path = require('path');
+      const crypto = require('crypto');
+      const uploadedCookies = require('../../uploadedCookies');
+      const originalConfigDir = uploadedCookies.configDir;
+      const configDir = actualFs.mkdtempSync(path.join(os.tmpdir(), 'executor-cookies-'));
+      uploadedCookies.configDir = configDir;
+      const given = '.youtube.com\tTRUE\t/\tTRUE\t0\tSID\tgiven\n';
+      actualFs.writeFileSync(uploadedCookies.getPath(), given);
+
+      setTimeout(() => {
+        actualFs.writeFileSync(uploadedCookies.getPath(), '.youtube.com\tTRUE\t/\tTRUE\t0\tSID\tuploaded-since\n');
+        mockProcess.stderr.emit(
+          'data',
+          Buffer.from('WARNING: [youtube] The provided YouTube account cookies are no longer valid.\n')
+        );
+        endProcess(0, null);
+      }, 10);
+
+      try {
+        await executor.doDownload(
+          ['--cookies', uploadedCookies.getPath(), ...mockArgs],
+          mockJobId,
+          mockJobType,
+          0,
+          null,
+          false,
+          false,
+          { cookiesEnabled: true }
+        );
+      } finally {
+        uploadedCookies.configDir = originalConfigDir;
+        actualFs.rmSync(configDir, { recursive: true, force: true });
+      }
+
+      expect(cookieHealth.reportDownloadRejection.mock.calls)
+        .toEqual([[crypto.createHash('sha256').update(given).digest('hex')]]);
+    });
+
     it('does not requeue cookie-specific Video unavailable when execution explicitly disabled cookies', async () => {
       const enqueueAutoRetry = jest.fn().mockResolvedValue();
       const retryExecutor = new DownloadExecutor({ enqueueAutoRetry });
@@ -1676,7 +1723,7 @@ describe('DownloadExecutor', () => {
       expect(jobModule.updateJob).toHaveBeenCalledWith(
         mockJobId,
         expect.objectContaining({
-          notes: 'YouTube denied access (HTTP 403). Configure cookies in Settings -> Cookies to resolve this issue.',
+          notes: adviceFor(KIND.HTTP_403, { cookiesEnabled: false }).message,
           error: 'COOKIES_RECOMMENDED'
         })
       );

@@ -1,10 +1,13 @@
 /* eslint-env jest */
+const { execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { createStaging } = require('../staging');
 
 const TITLE = 'The.Office.US.S01E02.1080p.WEB-DL-NBC';
+const YOUTUBE_ID = 'abcdefghijk';
+const PIPE_RELEASE_MS = 500;
 const exists = (target) => fs.existsSync(target);
 
 describe('staging', () => {
@@ -48,10 +51,226 @@ describe('staging', () => {
       const result = await staging().stage({ category: 'tv', releaseTitle: TITLE, sourcePath });
 
       const expected = path.join(outputRoot, '.arr-staging', 'tv', TITLE, `${TITLE}.mkv`);
-      expect(result).toEqual({ stagedPath: expected, bytes: 11, method: 'hardlink' });
+      expect(result).toEqual({ stagedPath: expected, bytes: 11, method: 'hardlink', subtitles: 0 });
       expect(fs.readdirSync(path.dirname(expected))).toEqual([`${TITLE}.mkv`]);
       expect(fs.statSync(sourcePath).nlink).toBe(2);
       expect(fs.statSync(expected).ino).toBe(fs.statSync(sourcePath).ino);
+    });
+
+    describe('subtitles', () => {
+      const target = () => ({ category: 'tv', releaseTitle: TITLE, sourcePath, youtubeId: YOUTUBE_ID });
+      const stagedFolder = () => path.join(outputRoot, '.arr-staging', 'tv', TITLE);
+      const librarySubtitle = (code) => path.join(
+        path.dirname(sourcePath), `The Office - Diversity Day [${YOUTUBE_ID}].${code}.srt`
+      );
+
+      test('puts a subtitle beside the video, named like the release with a short language code', async () => {
+        fs.writeFileSync(librarySubtitle('en-GB'), 'subtitle-text');
+
+        const result = await staging().stage(target());
+
+        expect(fs.readdirSync(stagedFolder()).sort()).toEqual([`${TITLE}.en.srt`, `${TITLE}.mkv`]);
+        expect(fs.readFileSync(path.join(stagedFolder(), `${TITLE}.en.srt`), 'utf8')).toBe('subtitle-text');
+        expect(result.subtitles).toBe(1);
+      });
+
+      // A tool that edits a subtitle in place must not reach the library file.
+      test('copies a subtitle, never links it', async () => {
+        fs.writeFileSync(librarySubtitle('en'), 'subtitle-text');
+
+        await staging().stage(target());
+
+        const staged = path.join(stagedFolder(), `${TITLE}.en.srt`);
+        expect(fs.statSync(staged).ino).not.toBe(fs.statSync(librarySubtitle('en')).ino);
+        expect(fs.statSync(librarySubtitle('en')).nlink).toBe(1);
+      });
+
+      test('stages every track of a language, numbered', async () => {
+        fs.writeFileSync(librarySubtitle('en-CA'), 'canadian');
+        fs.writeFileSync(librarySubtitle('en-GB'), 'british');
+
+        const result = await staging().stage(target());
+
+        expect(fs.readFileSync(path.join(stagedFolder(), `${TITLE}.1.en.srt`), 'utf8')).toBe('canadian');
+        expect(fs.readFileSync(path.join(stagedFolder(), `${TITLE}.2.en.srt`), 'utf8')).toBe('british');
+        expect(result.subtitles).toBe(2);
+      });
+
+      // YouTube lists one English track under en, en-CA and en-GB on some videos.
+      test('stages tracks of one language that hold the same text only once', async () => {
+        fs.writeFileSync(librarySubtitle('en'), 'same-text');
+        fs.writeFileSync(librarySubtitle('en-CA'), 'same-text');
+        fs.writeFileSync(librarySubtitle('en-GB'), 'british');
+
+        const result = await staging().stage(target());
+
+        expect(fs.readdirSync(stagedFolder()).sort()).toEqual([
+          `${TITLE}.1.en.srt`, `${TITLE}.2.en.srt`, `${TITLE}.mkv`,
+        ]);
+        expect(fs.readFileSync(path.join(stagedFolder(), `${TITLE}.1.en.srt`), 'utf8')).toBe('same-text');
+        expect(fs.readFileSync(path.join(stagedFolder(), `${TITLE}.2.en.srt`), 'utf8')).toBe('british');
+        expect(result.subtitles).toBe(2);
+      });
+
+      test('drops the number when the tracks of a language are all the same', async () => {
+        fs.writeFileSync(librarySubtitle('en-CA'), 'same-text');
+        fs.writeFileSync(librarySubtitle('en-GB'), 'same-text');
+
+        await staging().stage(target());
+
+        expect(fs.readdirSync(stagedFolder()).sort()).toEqual([`${TITLE}.en.srt`, `${TITLE}.mkv`]);
+      });
+
+      test('keeps tracks of different languages that hold the same text', async () => {
+        fs.writeFileSync(librarySubtitle('en'), 'same-text');
+        fs.writeFileSync(librarySubtitle('es'), 'same-text');
+
+        await staging().stage(target());
+
+        expect(fs.readdirSync(stagedFolder()).sort()).toEqual([
+          `${TITLE}.en.srt`, `${TITLE}.es.srt`, `${TITLE}.mkv`,
+        ]);
+      });
+
+      // A video can have a subtitle per language YouTube translates to; only
+      // one language's files are held in memory at a time.
+      test('stages the tracks of one language before it reads the next', async () => {
+        fs.writeFileSync(librarySubtitle('en'), 'english');
+        fs.writeFileSync(librarySubtitle('es'), 'spanish');
+        const opened = [];
+        const open = jest.fn((file, ...rest) => {
+          opened.push(path.basename(file));
+          return fs.promises.open(file, ...rest);
+        });
+
+        await staging({ fsp: { ...fs.promises, open } }).stage(target());
+
+        expect(opened).toEqual([
+          `The Office - Diversity Day [${YOUTUBE_ID}].en.srt`,
+          `${TITLE}.en.srt`,
+          `The Office - Diversity Day [${YOUTUBE_ID}].es.srt`,
+          `${TITLE}.es.srt`,
+        ]);
+      });
+
+      test('stages the video with the other subtitles when one cannot be read', async () => {
+        fs.writeFileSync(librarySubtitle('en'), 'english');
+        fs.writeFileSync(librarySubtitle('es'), 'spanish');
+        const denied = Object.assign(new Error('permission denied'), { code: 'EACCES' });
+        const open = jest.fn((target, ...rest) => (
+          target === librarySubtitle('en') ? Promise.reject(denied) : fs.promises.open(target, ...rest)
+        ));
+
+        const result = await staging({ fsp: { ...fs.promises, open } }).stage(target());
+
+        expect(fs.readdirSync(stagedFolder()).sort()).toEqual([`${TITLE}.es.srt`, `${TITLE}.mkv`]);
+        expect(result).toMatchObject({ method: 'hardlink', subtitles: 1 });
+        expect(logger.warn).toHaveBeenCalledTimes(1);
+      });
+
+      test('leaves no half-written subtitle behind when a write fails', async () => {
+        fs.writeFileSync(librarySubtitle('en'), 'english');
+        fs.writeFileSync(librarySubtitle('es'), 'spanish');
+        const stagedEnglish = path.join(stagedFolder(), `${TITLE}.en.srt`);
+        const full = Object.assign(new Error('no space left on device'), { code: 'ENOSPC' });
+        const open = jest.fn(async (target, ...rest) => {
+          const handle = await fs.promises.open(target, ...rest);
+          if (target !== stagedEnglish) return handle;
+          return {
+            writeFile: async () => {
+              await handle.writeFile('eng');
+              throw full;
+            },
+            close: () => handle.close(),
+          };
+        });
+
+        const result = await staging({ fsp: { ...fs.promises, open } }).stage(target());
+
+        expect(fs.readdirSync(stagedFolder()).sort()).toEqual([`${TITLE}.es.srt`, `${TITLE}.mkv`]);
+        expect(result).toMatchObject({ method: 'hardlink', subtitles: 1 });
+        expect(logger.warn).toHaveBeenCalledTimes(1);
+      });
+
+      // The library folder may be a share others write to: a link named like
+      // a subtitle could point at any file the server can read.
+      test('does not hand over the target of a link named like a subtitle', async () => {
+        const elsewhere = path.join(outputRoot, 'elsewhere.txt');
+        fs.writeFileSync(elsewhere, 'not a subtitle');
+        fs.symlinkSync(elsewhere, librarySubtitle('en'));
+
+        const result = await staging().stage(target());
+
+        expect(fs.readdirSync(stagedFolder())).toEqual([`${TITLE}.mkv`]);
+        expect(result).toMatchObject({ method: 'hardlink', subtitles: 0 });
+        expect(logger.warn).toHaveBeenCalledTimes(1);
+      });
+
+      test('is not held up by a pipe named like a subtitle', async () => {
+        execFileSync('mkfifo', [librarySubtitle('en')]);
+        // Releases any reader that waits on the pipe after all, so a regression
+        // ends as a failed test and not as a run that never exits.
+        const release = setInterval(() => {
+          try {
+            fs.closeSync(fs.openSync(librarySubtitle('en'), fs.constants.O_WRONLY | fs.constants.O_NONBLOCK));
+          } catch (error) {
+            // No reader was waiting.
+          }
+        }, PIPE_RELEASE_MS);
+
+        try {
+          const result = await staging().stage(target());
+
+          expect(fs.readdirSync(stagedFolder())).toEqual([`${TITLE}.mkv`]);
+          expect(result).toMatchObject({ method: 'hardlink', subtitles: 0 });
+          expect(logger.warn).toHaveBeenCalledTimes(1);
+        } finally {
+          clearInterval(release);
+        }
+      });
+
+      test('leaves a file larger than any subtitle out', async () => {
+        fs.writeFileSync(librarySubtitle('en'), '');
+        fs.truncateSync(librarySubtitle('en'), 10 * 1024 * 1024 + 1);
+
+        const result = await staging().stage(target());
+
+        expect(fs.readdirSync(stagedFolder())).toEqual([`${TITLE}.mkv`]);
+        expect(result).toMatchObject({ method: 'hardlink', subtitles: 0 });
+        expect(logger.warn).toHaveBeenCalledTimes(1);
+      });
+
+      // The staging folder is shared with the apps: an entry that appears at
+      // the subtitle's name is neither written through nor removed.
+      test('neither follows nor removes an entry someone else put at the subtitle name', async () => {
+        fs.writeFileSync(librarySubtitle('en'), 'english');
+        const theirs = path.join(outputRoot, 'theirs.txt');
+        fs.writeFileSync(theirs, 'their file');
+        const stagedEnglish = path.join(stagedFolder(), `${TITLE}.en.srt`);
+        const mkdir = jest.fn(async (folder, options) => {
+          await fs.promises.mkdir(folder, options);
+          if (folder === stagedFolder()) fs.symlinkSync(theirs, stagedEnglish);
+        });
+
+        const result = await staging({ fsp: { ...fs.promises, mkdir } }).stage(target());
+
+        expect(fs.readFileSync(theirs, 'utf8')).toBe('their file');
+        expect(fs.readlinkSync(stagedEnglish)).toBe(theirs);
+        expect(result).toMatchObject({ method: 'hardlink', subtitles: 0 });
+        expect(logger.warn).toHaveBeenCalledTimes(1);
+      });
+
+      test('stages the video alone when the library folder cannot be listed', async () => {
+        fs.writeFileSync(librarySubtitle('en'), 'english');
+        const unreadable = Object.assign(new Error('input/output error'), { code: 'EIO' });
+        const fsp = { ...fs.promises, readdir: jest.fn().mockRejectedValue(unreadable) };
+
+        const result = await staging({ fsp }).stage(target());
+
+        expect(fs.readdirSync(stagedFolder())).toEqual([`${TITLE}.mkv`]);
+        expect(result).toMatchObject({ method: 'hardlink', subtitles: 0 });
+        expect(logger.warn).toHaveBeenCalledTimes(1);
+      });
     });
 
     test('copies with a warning when the file is on another filesystem', async () => {

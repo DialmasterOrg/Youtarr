@@ -23,14 +23,15 @@ describe('API key channel grants', () => {
   test('normalizes and transactionally replaces the exact enabled set', async () => {
     ApiKey.findByPk.mockResolvedValue({ id: 7, role: 'view', is_active: true, revoked_at: null });
     Channel.count.mockResolvedValue(2);
+    ApiKeyChannelGrant.findAll.mockResolvedValue([{ channel_id: 3 }, { channel_id: 4 }]);
     const result = await grants.replaceChannelGrants(7, [9, 3, 9]);
     expect(result).toEqual({ keyId: 7, channelIds: [3, 9] });
     expect(ApiKeyChannelGrant.destroy).toHaveBeenCalledWith({
-      where: { api_key_id: 7 }, transaction: { id: 'transaction', LOCK: { UPDATE: 'UPDATE' } },
+      where: { api_key_id: 7, channel_id: [3, 4] }, transaction: { id: 'transaction', LOCK: { UPDATE: 'UPDATE' } },
     });
     expect(ApiKeyChannelGrant.bulkCreate).toHaveBeenCalledWith(
       [{ api_key_id: 7, channel_id: 3 }, { api_key_id: 7, channel_id: 9 }],
-      { transaction: { id: 'transaction', LOCK: { UPDATE: 'UPDATE' } } }
+      { transaction: { id: 'transaction', LOCK: { UPDATE: 'UPDATE' } }, ignoreDuplicates: true }
     );
   });
 
@@ -74,6 +75,33 @@ describe('API key channel grants', () => {
         where: { enabled: true, terminated_at: { [Op.is]: null } },
       })],
     }));
+  });
+
+  test('keeps grants on disabled or terminated channels when replacing the visible set', async () => {
+    ApiKey.findByPk.mockResolvedValue({ id: 7, role: 'view', is_active: true, revoked_at: null });
+    Channel.count.mockResolvedValue(1);
+    // The eligible-channel join hides the grant on disabled channel 5.
+    ApiKeyChannelGrant.findAll.mockResolvedValue([{ channel_id: 3 }]);
+
+    await grants.replaceChannelGrants(7, [9]);
+
+    expect(ApiKeyChannelGrant.findAll).toHaveBeenCalledWith(expect.objectContaining({
+      where: { api_key_id: 7 },
+      include: [expect.objectContaining({
+        where: { enabled: true, terminated_at: { [Op.is]: null } },
+      })],
+    }));
+    expect(ApiKeyChannelGrant.destroy).toHaveBeenCalledWith(expect.objectContaining({
+      where: { api_key_id: 7, channel_id: [3] },
+    }));
+  });
+
+  test('skips the delete when no visible grants exist', async () => {
+    ApiKey.findByPk.mockResolvedValue({ id: 7, role: 'view', is_active: true, revoked_at: null });
+    ApiKeyChannelGrant.findAll.mockResolvedValue([]);
+
+    await expect(grants.replaceChannelGrants(7, [])).resolves.toEqual({ keyId: 7, channelIds: [] });
+    expect(ApiKeyChannelGrant.destroy).not.toHaveBeenCalled();
   });
 
   test('rejects legacy keys before changing grants', async () => {

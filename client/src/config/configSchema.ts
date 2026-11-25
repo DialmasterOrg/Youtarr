@@ -32,6 +32,7 @@ export const CONFIG_FIELDS = {
   ytdlpUpdateFrequency: { default: '0 4 * * *', trackChanges: true },
   channelFeedCheckFrequency: { default: '30 * * * *', trackChanges: true },
   channelVideoCountsFrequency: { default: '45 4 * * *', trackChanges: true },
+  cookieCheckFrequency: { default: '10 */8 * * *', trackChanges: true },
   channelFilesToDownload: { default: 5, trackChanges: true },
 
   // Video settings
@@ -192,6 +193,7 @@ export const CONFIG_FIELDS = {
 
   // API Keys
   apiKeyRateLimit: { default: 10, trackChanges: true },
+  showRequestsNavLink: { default: true, trackChanges: true },
 
   // yt-dlp auto-update
   autoUpdateYtdlp: { default: false, trackChanges: true },
@@ -255,6 +257,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   ytdlpUpdateFrequency: CONFIG_FIELDS.ytdlpUpdateFrequency.default,
   channelFeedCheckFrequency: CONFIG_FIELDS.channelFeedCheckFrequency.default,
   channelVideoCountsFrequency: CONFIG_FIELDS.channelVideoCountsFrequency.default,
+  cookieCheckFrequency: CONFIG_FIELDS.cookieCheckFrequency.default,
   channelFilesToDownload: CONFIG_FIELDS.channelFilesToDownload.default,
   preferredResolution: CONFIG_FIELDS.preferredResolution.default,
   videoCodec: CONFIG_FIELDS.videoCodec.default,
@@ -341,6 +344,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   darkModeEnabled: CONFIG_FIELDS.darkModeEnabled.default,
   channelVideosHotLoad: CONFIG_FIELDS.channelVideosHotLoad.default,
   apiKeyRateLimit: CONFIG_FIELDS.apiKeyRateLimit.default,
+  showRequestsNavLink: CONFIG_FIELDS.showRequestsNavLink.default,
   autoUpdateYtdlp: CONFIG_FIELDS.autoUpdateYtdlp.default,
   ytdlpUpdateChannel: CONFIG_FIELDS.ytdlpUpdateChannel.default,
   ytdlpLastChecked: CONFIG_FIELDS.ytdlpLastChecked.default,

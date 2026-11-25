@@ -15,7 +15,7 @@ import { HEADER_HEIGHT_DESKTOP, HEADER_HEIGHT_MOBILE, NAV_SIDEBAR_COLLAPSED_WIDT
 import './layoutFallback.css';
 
 import { Tv as SubscriptionsIcon, Library as VideoLibraryIcon } from 'lucide-react';
-import { Download as DownloadIcon, Settings as SettingsIcon } from '../../lib/icons';
+import { ClipboardList as RequestsIcon, Download as DownloadIcon, Settings as SettingsIcon } from '../../lib/icons';
 
 interface AppShellProps {
   token: string | null;
@@ -28,6 +28,7 @@ interface AppShellProps {
   serverVersion?: string;
   ytDlpUpdateAvailable?: boolean;
   ytDlpUpdateTooltip?: string;
+  showRequestsNavLink?: boolean;
   children: React.ReactNode;
 }
 
@@ -44,6 +45,7 @@ export function AppShell({
   serverVersion,
   ytDlpUpdateAvailable = false,
   ytDlpUpdateTooltip,
+  showRequestsNavLink = true,
   children,
 }: AppShellProps) {
   const isMobile = useMediaQuery('(max-width: 767px)');
@@ -150,6 +152,12 @@ export function AppShell({
           subItems: downloadsSubItems,
         },
         {
+          key: 'requests' as const,
+          label: 'Requests',
+          icon: <RequestsIcon />,
+          to: '/requests',
+        },
+        {
           key: 'settings' as const,
           label: 'Settings',
           oldLabel: 'Configuration',
@@ -158,8 +166,8 @@ export function AppShell({
           subItems: settingsSubItems,
           hideSubItemsOnMobile: true,
         },
-      ],
-    [channelsSubItems, videosSubItems, downloadsSubItems, settingsSubItems]
+      ].filter((item) => item.key !== 'requests' || showRequestsNavLink),
+    [channelsSubItems, videosSubItems, downloadsSubItems, settingsSubItems, showRequestsNavLink]
   );
 
   const toggleDrawer = () => {

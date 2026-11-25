@@ -36,6 +36,12 @@ describe('YouTubeApiSection', () => {
     expect(screen.getByText(/falls back to yt-dlp automatically/i)).toBeInTheDocument();
   });
 
+  test('says what searches from Sonarr and Radarr cost of the daily quota', () => {
+    render(<YouTubeApiSection {...defaultProps} />);
+    expect(screen.getByText(/Searches from Sonarr and Radarr cost 100 to 200 units each/i)).toBeInTheDocument();
+    expect(screen.getByText(/at most\s+5,000 units a day/i)).toBeInTheDocument();
+  });
+
   test('shows Not Tested chip when status is not_tested', () => {
     render(<YouTubeApiSection {...defaultProps} />);
     expect(screen.getByText('Not Tested')).toBeInTheDocument();

@@ -442,6 +442,20 @@ describe('ArrBridgeSection', () => {
       expect(props.onConfigChange).toHaveBeenCalledWith({ arrBridgeRemoveAfterImport: true });
     });
 
+    test('say that subtitles are handed over when Youtarr downloads them', () => {
+      setupSection({ config: createConfig({ subtitlesEnabled: true, subtitleLanguage: 'en,de' }) });
+
+      const note = within(screen.getByRole('group', { name: 'Subtitles' }));
+      expect(note.getByText(/Youtarr downloads subtitles \(en, de\) with each video/)).toBeInTheDocument();
+    });
+
+    test('say that grabs have no subtitles while Youtarr downloads none', () => {
+      setupSection({ config: createConfig({ subtitlesEnabled: false }) });
+
+      const note = within(screen.getByRole('group', { name: 'Subtitles' }));
+      expect(note.getByText(/Subtitles are off in Youtarr/)).toBeInTheDocument();
+    });
+
     test('say that removing after the import needs the connection in step 3', () => {
       setupSection();
 
@@ -497,6 +511,21 @@ describe('ArrBridgeSection', () => {
 
       expect(expectations().getByText(/Youtarr removes its own copy/)).toBeInTheDocument();
       expect(expectations().queryByText(/stays in your Youtarr library/)).not.toBeInTheDocument();
+    });
+
+    test('recommends a YouTube API key, with a link to its page, while none is set', () => {
+      setupSection({ config: createConfig({ youtubeApiKey: '' }) });
+
+      expect(expectations().getByText(/A YouTube API key is recommended/)).toBeInTheDocument();
+      expect(expectations().getByRole('link', { name: 'Add a YouTube API key' }))
+        .toHaveAttribute('href', '/settings/youtube-api');
+    });
+
+    test('does not recommend a YouTube API key once one is set', () => {
+      setupSection({ config: createConfig({ youtubeApiKey: 'AIza-key' }) });
+
+      expect(expectations().queryByText(/A YouTube API key is recommended/)).not.toBeInTheDocument();
+      expect(expectations().queryByRole('link', { name: 'Add a YouTube API key' })).not.toBeInTheDocument();
     });
   });
 

@@ -560,7 +560,7 @@ describe('searchService', () => {
   });
 
   describe('with a Sonarr or Radarr connection', () => {
-    const TITLE_QUERY = 'Beyblade Play It Again Dizzi';
+    const TITLE_QUERY = 'Beyblade "Play It Again Dizzi"';
     const CODE_QUERY = 'Beyblade S01E29';
     const beybladeQuery = (overrides = {}) => ({
       t: 'tvsearch', cat: SONARR_CATS, title: 'Beyblade', season: '1', ep: '29', ...overrides,
@@ -649,7 +649,7 @@ describe('searchService', () => {
       const second = await service.search(aliasQuery('Money Heist'), ORIGIN);
 
       expect(searchVideos).toHaveBeenCalledTimes(1);
-      expect(searchVideos).toHaveBeenCalledWith('Money Heist Do as Planned', 25, NO_API);
+      expect(searchVideos).toHaveBeenCalledWith('Money Heist "Do as Planned"', 25, NO_API);
       expect(first[0].title).toBe('Haus.des.Geldes.S01E01.1080p.YT.WEB-DL-Netflix');
       expect(second[0].title).toBe('Money.Heist.S01E01.1080p.YT.WEB-DL-Netflix');
       expect(second[0].guid).toBe(first[0].guid);
@@ -663,7 +663,36 @@ describe('searchService', () => {
 
       await service.search(request(beybladeQuery({ title: 'Bluey (2018)', season: '1', ep: '1' })), ORIGIN);
 
-      expect(searchVideos).toHaveBeenNthCalledWith(1, 'Bluey Magic Xylophone', 25, NO_API);
+      expect(searchVideos).toHaveBeenNthCalledWith(1, 'Bluey "Magic Xylophone"', 25, NO_API);
+    });
+
+    // On 2026-11-23 YouTube answered "All Souls The Deal" with soul deals and
+    // bargains and never the episode, 100 results deep; quoted, it came first.
+    test('quotes the episode title in the title query', async () => {
+      const episode = beybladeEpisode({
+        seriesTitle: 'All Souls', seriesTitles: ['All Souls'], episodeTitle: 'The Deal', runtimeSeconds: 2700,
+        season: 1, episode: 3, absoluteNumber: null, otherEpisodeTitles: ['Spineless', 'Bad Blood'],
+      });
+      const upload = video('All Souls  E03 The Deal', {
+        youtubeId: 'jEkrhuqjxR4', channelName: 'Jay Badenhoop', duration: 2743,
+      });
+      const { service, searchVideos } = setup({
+        results: { 'All Souls "The Deal"': [upload] }, catalog: makeCatalog({ episode }),
+      });
+
+      const items = await service.search(request(beybladeQuery({ title: 'All Souls', season: '1', ep: '3' })), ORIGIN);
+
+      expect(searchVideos.mock.calls).toEqual([['All Souls "The Deal"', 25, NO_API]]);
+      expect(items.map((item) => item.youtubeId)).toEqual(['jEkrhuqjxR4']);
+    });
+
+    test('searches the series alone when the episode title has no letters or digits', async () => {
+      const episode = beybladeEpisode({ episodeTitle: '???' });
+      const { service, searchVideos } = setup({ catalog: makeCatalog({ episode }) });
+
+      await service.search(request(beybladeQuery()), ORIGIN);
+
+      expect(searchVideos).toHaveBeenNthCalledWith(1, 'Beyblade', 25, NO_API);
     });
 
     test('falls back to the episode code when the title stage offers nothing', async () => {
@@ -1012,7 +1041,7 @@ describe('searchService', () => {
 
     test('lists both stages when the search by episode title offers nothing', async () => {
       const results = {
-        'Beyblade Play It Again Dizzi': [video('Episode 29: Play It Again Dizzi!', { duration: 6 })],
+        'Beyblade "Play It Again Dizzi"': [video('Episode 29: Play It Again Dizzi!', { duration: 6 })],
         'Beyblade S01E29': [video('Beyblade S01E29', { channelName: 'Uploads', duration: 1320 })],
       };
       const { service, saved } = recorded({ results, catalog: resolving(beybladeEpisode()) });
@@ -1022,7 +1051,7 @@ describe('searchService', () => {
       const [entry] = saved;
       expect(entry).toMatchObject({ outcome: 'offered', offered: 1, titleStageSkipped: null });
       expect(entry.stages.map(({ matcher, query, results: count }) => ({ matcher, query, count }))).toEqual([
-        { matcher: 'episode-title', query: 'Beyblade Play It Again Dizzi', count: 1 },
+        { matcher: 'episode-title', query: 'Beyblade "Play It Again Dizzi"', count: 1 },
         { matcher: 'episode-code', query: 'Beyblade S01E29', count: 1 },
       ]);
       expect(outcomes(entry.stages[0])).toEqual([

@@ -605,3 +605,39 @@ describe('usePlaylistDetail.followingRequestedCount', () => {
     expect(result.current.followingRequestedCount).toBeNull();
   });
 });
+
+describe('usePlaylistDetail download filter state', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('loads how many undownloaded videos the filters skip, and updates it with the meta', async () => {
+    axios.get.mockResolvedValue({ data: { playlist: {}, videos: [], total: 0, filtered_count: 4, filter_error: null } });
+    const { result } = renderHook(() => usePlaylistDetail({ token: 't', playlistId: 'PL1' }));
+    await waitFor(() => expect(result.current.filteredCount).toBe(4));
+    axios.get.mockResolvedValue({ data: { playlist: {}, filtered_count: 1, filter_error: null } });
+    await act(async () => { await result.current.refetchMeta(); });
+    expect(result.current.filteredCount).toBe(1);
+  });
+
+  test('reports a filter the server could not evaluate', async () => {
+    axios.get.mockResolvedValue({ data: { playlist: {}, videos: [], total: 0, filtered_count: 2, filter_error: 'Invalid regex pattern' } });
+    const { result } = renderHook(() => usePlaylistDetail({ token: 't', playlistId: 'PL1' }));
+    await waitFor(() => expect(result.current.filterError).toBe('Invalid regex pattern'));
+  });
+
+  test('clears the filter state when leaving the playlist', async () => {
+    axios.get.mockResolvedValue({ data: { playlist: {}, videos: [], total: 0, filtered_count: 4, filter_error: 'Invalid regex pattern' } });
+    const { result, rerender } = renderHook(({ playlistId }: { playlistId: string | null }) =>
+      usePlaylistDetail({ token: 't', playlistId }), { initialProps: { playlistId: 'PL1' as string | null } });
+    await waitFor(() => expect(result.current.filteredCount).toBe(4));
+    rerender({ playlistId: null });
+    await waitFor(() => expect(result.current.filteredCount).toBeNull());
+    expect(result.current.filterError).toBeNull();
+  });
+
+  test('a response without filter fields leaves them unknown', async () => {
+    axios.get.mockResolvedValue({ data: { playlist: {}, videos: [], total: 0 } });
+    const { result } = renderHook(() => usePlaylistDetail({ token: 't', playlistId: 'PL1' }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect({ count: result.current.filteredCount, error: result.current.filterError }).toEqual({ count: null, error: null });
+  });
+});

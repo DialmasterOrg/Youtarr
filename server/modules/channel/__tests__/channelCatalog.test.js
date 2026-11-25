@@ -174,7 +174,7 @@ describe('channelCatalog', () => {
       expect(Channel.findAndCountAll).toHaveBeenCalledWith(expect.objectContaining({
         limit: 10,
         offset: 10,
-        order: [['uploader', 'DESC']]
+        order: [['uploader', 'DESC'], ['id', 'DESC']]
       }));
 
       expect(result).toEqual({

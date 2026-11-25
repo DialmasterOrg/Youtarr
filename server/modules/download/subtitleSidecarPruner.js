@@ -109,4 +109,4 @@ function selectSubtitleFilesToPrune({ fileNames, youtubeId, uploadedCodes, subti
   return toPrune;
 }
 
-module.exports = { selectSubtitleFilesToPrune };
+module.exports = { selectSubtitleFilesToPrune, SUBTITLE_SIDECAR_CODE };

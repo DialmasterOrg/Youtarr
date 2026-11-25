@@ -1,6 +1,6 @@
 const fs = require('fs-extra');
 const path = require('path');
-const { execSync, spawnSync } = require('child_process');
+const { execFileSync, spawnSync } = require('child_process');
 const { spawnYtDlpSync } = require('./ytdlpProcess');
 const configModule = require('./configModule');
 const nfoGenerator = require('./nfoGenerator');
@@ -14,6 +14,7 @@ const { slimInfoJson } = require('./infoJsonSlimmer');
 const { JobVideoDownload } = require('../models');
 const videoPersistence = require('./videoPersistence');
 const { VIDEO_PERSISTED_MARKER } = require('./constants/outputMarkers');
+const { CHANNEL_THUMBNAIL_SCALE_FILTER } = require('./constants/channelThumbnail');
 const logger = require('../logger');
 const logLevelSync = require('./logLevelSync');
 const { buildChannelPath, isFileForVideo, cleanupEmptyParents, moveWithRetries, ensureDirWithRetries, copySyncWithFallback } = require('./filesystem');
@@ -222,11 +223,16 @@ async function downloadChannelThumbnailIfMissing(channelId) {
         throw new Error(result.stderr || `yt-dlp exited with code ${result.status}`);
       }
 
-      // Resize the thumbnail to make it smaller
+      // Cap the thumbnail's size
       if (fs.existsSync(channelThumbPath)) {
-        const tempPath = channelThumbPath + '.temp';
-        execSync(
-          `${configModule.ffmpegPath} -loglevel error -y -i "${channelThumbPath}" -vf "scale=iw*0.4:ih*0.4" -q:v 2 "${tempPath}"`,
+        // Must end in .jpg: ffmpeg picks the output format from the extension.
+        const tempPath = path.join(
+          configModule.getImagePath(),
+          `channelthumb-${channelId}-small.jpg`
+        );
+        execFileSync(
+          configModule.ffmpegPath,
+          ['-loglevel', 'error', '-y', '-i', channelThumbPath, '-vf', CHANNEL_THUMBNAIL_SCALE_FILTER, '-q:v', '2', tempPath],
           { stdio: 'pipe' }
         );
         fs.renameSync(tempPath, channelThumbPath);
@@ -666,8 +672,11 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
       // Resize the image using ffmpeg with proper settings to avoid deprecated format warnings
       // Using -loglevel error to suppress the deprecated pixel format warnings but still show actual errors
       try {
-        execSync(
-          `${configModule.ffmpegPath} -loglevel error -y -i "${newImageFullPath}" -vf "scale=iw*0.5:ih*0.5" -q:v 2 "${newImageFullPathSmall}"`,
+        // Argument list, never a shell string: the ID in these paths is read
+        // from the downloaded file's name.
+        execFileSync(
+          configModule.ffmpegPath,
+          ['-loglevel', 'error', '-y', '-i', newImageFullPath, '-vf', 'scale=iw*0.5:ih*0.5', '-q:v', '2', newImageFullPathSmall],
           { stdio: 'inherit' }
         );
         fs.rename(newImageFullPathSmall, newImageFullPath);

@@ -159,6 +159,8 @@ export const YouTubeApiSection: React.FC<YouTubeApiSectionProps> = ({
           <Typography variant="caption" color="secondary" className="mt-3 block">
             Quota: 10,000 units per day, resets at midnight Pacific time. Search
             operations cost 100 units; metadata lookups are typically 1 unit per call.
+            Searches from Sonarr and Radarr cost 100 to 200 units each and use at most
+            5,000 units a day, then switch to yt-dlp until the reset.
           </Typography>
         </Typography>
       </Box>

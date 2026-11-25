@@ -141,9 +141,13 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
           aria-labelledby={labelId}
           // Tests use fireEvent.mouseDown to open the Select.
           // Radix only responds to pointerdown, so we open directly here.
-          // We only open (not toggle) — Radix's own handler handles closing.
+          // Real input never needs this: Radix opens on pointerdown for a
+          // mouse and on click for touch. A tap's compatibility mousedown
+          // comes before that click, so opening here put the menu under the
+          // finger and the click then landed on an option and closed it.
+          // Only synthetic (untrusted) events open from here.
           onMouseDown={(e) => {
-            if (!e.defaultPrevented && !disabled && !isOpen) {
+            if (!e.nativeEvent.isTrusted && !e.defaultPrevented && !disabled && !isOpen) {
               handleOpenChange(true);
             }
           }}

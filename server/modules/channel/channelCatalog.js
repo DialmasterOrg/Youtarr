@@ -186,7 +186,8 @@ class ChannelCatalog {
         where: whereClause,
         limit: safePageSize,
         offset,
-        order: [[sortColumn, direction]],
+        // id breaks ties so equal or empty names keep a stable order across pages.
+        order: [[sortColumn, direction], ['id', direction]],
       });
 
       const distinctSubFolders = await Channel.findAll({

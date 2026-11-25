@@ -3,6 +3,7 @@ paths:
   - "server/modules/playlistModule.js"
   - "server/modules/playlistDownloadModule.js"
   - "server/modules/playlistDownloadGrouper.js"
+  - "server/modules/playlistFilters.js"
   - "server/modules/playlistVideoFilters.js"
   - "server/modules/playlistConstants.js"
   - "server/modules/playlistOutputRefresh.js"
@@ -20,6 +21,7 @@ YouTube playlist following, playlist downloads, and the `.m3u` files.
 
 ## Following and refresh
 
+- `playlistModule.getPlaylistInfo` accepts only a YouTube URL (`youtubeUrlParser.toYoutubeUrl`) or a bare playlist id, which it turns into one: yt-dlp would fetch any other address, including internal ones.
 - Every playlist fetch uses yt-dlp's default webpage path, capped at 5000 entries, with an InnerTube fallback on failure or a short result; a separate metadata-only request verifies the total.
 - Both playlist yt-dlp calls go through `buildMetadataFetchArgs` and `spawnYtDlp` (cookies, proxy, custom args). With cookies configured the InnerTube fallback adds `skip=authcheck`, which yt-dlp requires for an authenticated jar.
 - YouTube reports a private playlist as nonexistent when signed out or when cookies expired, so `PLAYLIST_NOT_FOUND` carries `usedCookies` for the route's wording and skips the InnerTube retry.
@@ -44,11 +46,30 @@ YouTube playlist following, playlist downloads, and the `.m3u` files.
 - Explicit-id downloads can override ignored. `following_requested_count` reports eligible outstanding selections in the header without claiming they failed.
 - `playlistDownloadGrouper` resolves per-video settings override -> channel -> playlist -> global and groups videos by the result.
 - `playlistVideoFilters` orders before pagination and resolves `downloadState`/`watchedState` into a youtube_id constraint; models and `watchStatusQueries` are passed at call time so the route keeps its dependency injection.
-- Playlist title filters are case-insensitive JavaScript regexes (`playlistModule.buildTitleFilterRegExp`); the settings route rejects patterns it cannot compile. Client feature defaults live in `components/PlaylistPage/playlistConstants.ts`.
+- Client feature defaults live in `components/PlaylistPage/playlistConstants.ts`.
+
+## Download filters
+
+- A playlist's `title_filter_regex`, `min_duration` and `max_duration` decide what Youtarr picks, never what is tracked: a refresh stores every available entry, because hiding non-matching ones made a filter change unpredictable and a typo invisible.
+- `getTrackedVideos` reports `filteredIds` when given `filterBy`; scheduled discoveries, download-all and the suggested batch leave them out. Explicit ids ignore the filters, and a saved request (`auto_download_requested`) is never filtered.
+- The videos listing flags every undownloaded row that fails the filters, so `filtered` rows can outnumber `filtered_count`, which counts only download candidates. Narrowing the flag to candidates made non-matching rows read as tracked.
+- Playlist durations are exact seconds (no final-minute grace like channels); the dialog saves a whole-minute maximum as its last second, because API-set values predate the dialog and must keep their meaning.
+- `playlistFilters` evaluates titles with Python `re` through `titleFilterRegex`, so a pattern means the same on a playlist and a channel; both playlist routes validate with `channelSettingsModule.validateTitleRegex`.
+- A title pattern that cannot be evaluated holds every unrequested video and surfaces as `filter_error`, because downloading everything the filter was meant to keep out is the worse failure.
+- A scheduled run that cannot evaluate the filters queues the saved requests, then throws with `queued` set: `playlistAutoDownload` counts those jobs and the playlist as failed, so the sweep never records an idle "found nothing" run.
+- Filtered discoveries stay above the baseline, so loosening a filter releases them to later runs; the settings preview reports that count, and "Follow from now" skips them.
+- The settings dialog sends only the filter fields that were edited: API-set values predate validation (equal limits, long patterns), and resending one the server now rejects would block saving an unrelated setting.
+- A refresh under the open settings form updates only fields the user has not changed: a reset discarded drafts, and stale untouched fields let a save overwrite another session's values. Preview results clear when the shown filters change.
+- `ensureSourceChannel` does not copy the filters to auto-created channels: a playlist-specific pattern would silently block the channel if it is later subscribed.
 
 ## m3u files and output refresh
 
-- `m3uGenerator` writes `__playlists__/*.m3u`: entries prefer the file matching the playlist's Download Type (mp3 for MP3 Only, video otherwise) and fall back to the other; deleted rows (`videoRemovalState.removalState`) are left out, missing rows stay listed since their file may return.
+- `m3uGenerator`: MP3 Only lists the mp3 and Video Only the video, each falling back to the other file; Video + MP3 writes `<name>.m3u` (videos) and `<name> (MP3).m3u` (mp3s) with no fallback. Channel files follow the same rule.
+- Deleted rows (`videoRemovalState.removalState`) are left out of playlist files; missing rows stay listed since their file may return.
+- The `(MP3)` file exists only while it has entries. It carries a `#YOUTARR-MP3-LIST:<kind>:<id>` line and is overwritten or removed only when that line names the asker: the path can hold a user's or another subscription's file.
+- A playlist's main list is not written over another playlist's marked `(MP3)` file (a playlist really titled `X (MP3)`), and the rebuild returns false: whichever file exists first keeps the name, in both directions.
+- `m3uGenerator` queues rebuilds (and channel deletes) per playlist or channel, each reading settings when it starts, because a slow rebuild begun under an older Download Type would otherwise finish last and restore removed files.
+- A changed `audio_format` on the playlist settings route rebuilds the files at once, because Download Type decides which files exist; a `sort_order` change still waits for the next rebuild.
 - Entries follow the saved `sort_order` ('default' = YouTube playlist order, 'reversed' = flipped). Per-channel `<channel folder>.m3u` files (`m3u_enabled`/`m3u_sort_order`) list only files on disk and carry no `.ignore` marker, so Jellyfin and Emby import them.
 - Channel m3u files are regenerated on download completion, in-app deletion, settings changes, channel enable/disable and rescan completion (the scheduled rescan doubles as the periodic refresh); zero entries deletes the file instead of writing an empty playlist.
 - `playlistOutputRefresh` rebuilds the m3u and re-syncs media servers for every enabled playlist that includes any of the given videos, one playlist at a time. `videoDeletionModule` calls it in the background after every delete path; downloads use `downloadModule.afterDownloadHook` instead.

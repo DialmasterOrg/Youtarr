@@ -958,6 +958,33 @@ describe('channelVideosService', () => {
         'Channel URL updated'
       );
     });
+
+    test('saves a handle in another script in the encoded form the tab refresh uses', async () => {
+      const Video = require('../../../models/video');
+      const mockChannel = {
+        channel_id: 'UC123',
+        title: 'Test Channel',
+        url: 'https://www.youtube.com/@old',
+        save: jest.fn(),
+        reload: jest.fn()
+      };
+      Channel.findOne.mockResolvedValue(mockChannel);
+
+      const channelYtdlpExecutor = require('../channelYtdlpExecutor');
+      jest.spyOn(channelYtdlpExecutor, 'executeYtDlpCommand').mockResolvedValue(toEntryLines([
+        { id: 'video1', title: 'Video 1', timestamp: 1704067200, playlist_uploader_id: '@\u0939\u093f\u0902\u0926\u0940' }
+      ]));
+      ChannelVideo.findOrCreate.mockResolvedValue([{}, true]);
+      ChannelVideo.findAll.mockResolvedValue([
+        { youtube_id: 'video1', toJSON() { return this; } }
+      ]);
+      ChannelVideo.count.mockResolvedValue(1);
+      Video.findAll = jest.fn().mockResolvedValue([]);
+
+      await channelVideosService.fetchAllChannelVideos('UC123');
+
+      expect(mockChannel.url).toBe('https://www.youtube.com/@%E0%A4%B9%E0%A4%BF%E0%A4%82%E0%A4%A6%E0%A5%80');
+    });
   });
 
   describe('fetchAllChannelVideos progress', () => {
