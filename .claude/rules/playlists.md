@@ -21,6 +21,7 @@ YouTube playlist following, playlist downloads, and the `.m3u` files.
 
 ## Following and refresh
 
+- `playlistModule.getPlaylistInfo` accepts only a YouTube URL (`youtubeUrlParser.toYoutubeUrl`) or a bare playlist id, which it turns into one: yt-dlp would fetch any other address, including internal ones.
 - Every playlist fetch uses yt-dlp's default webpage path, capped at 5000 entries, with an InnerTube fallback on failure or a short result; a separate metadata-only request verifies the total.
 - Both playlist yt-dlp calls go through `buildMetadataFetchArgs` and `spawnYtDlp` (cookies, proxy, custom args). With cookies configured the InnerTube fallback adds `skip=authcheck`, which yt-dlp requires for an authenticated jar.
 - YouTube reports a private playlist as nonexistent when signed out or when cookies expired, so `PLAYLIST_NOT_FOUND` carries `usedCookies` for the route's wording and skips the InnerTube retry.

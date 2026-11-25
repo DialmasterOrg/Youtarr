@@ -140,6 +140,27 @@ describe('playlistModule', () => {
       });
     });
 
+    test('rejects a non-YouTube URL without starting yt-dlp', async () => {
+      for (const url of ['http://127.0.0.1:9911/probe', '127.0.0.1:9911/probe', '--exec=id', '']) {
+        await expect(playlistModule.getPlaylistInfo(url)).rejects.toThrow('INVALID_PLAYLIST_URL');
+      }
+      expect(ytdlpProcess.spawnYtDlp).not.toHaveBeenCalled();
+    });
+
+    test('turns a bare playlist id into a YouTube playlist URL', async () => {
+      const mockChild = new EventEmitter();
+      mockChild.stdout = new EventEmitter();
+      mockChild.stderr = new EventEmitter();
+      ytdlpProcess.spawnYtDlp.mockReturnValue(mockChild);
+
+      const promise = playlistModule.getPlaylistInfo('PLabc123');
+      mockChild.stdout.emit('data', JSON.stringify({ id: 'PLabc123', title: 'T' }));
+      mockChild.emit('close', 0);
+      await promise;
+
+      expect(ytdlpProcess.spawnYtDlp.mock.calls[0][0]).toContain('https://www.youtube.com/playlist?list=PLabc123');
+    });
+
     test('throws PLAYLIST_NOT_FOUND on unavailable playlist', async () => {
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();

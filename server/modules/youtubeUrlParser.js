@@ -67,4 +67,25 @@ function normalizeUrlToVideoId(url) {
   };
 }
 
-module.exports = { normalizeUrlToVideoId };
+/**
+ * Parse user input as a YouTube URL (youtube.com, any subdomain of it, or
+ * youtu.be). Input without a scheme gets https://, as yt-dlp would assume.
+ * @param {unknown} input
+ * @returns {string|null} - The normalized URL, or null when it is not YouTube
+ */
+function toYoutubeUrl(input) {
+  if (typeof input !== 'string' || !input.trim()) return null;
+  const trimmed = input.trim();
+  let parsed;
+  try {
+    parsed = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`);
+  } catch (error) {
+    return null;
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  const isYoutubeHost = hostname === 'youtube.com' || hostname.endsWith('.youtube.com') || hostname === 'youtu.be';
+  if (!['http:', 'https:'].includes(parsed.protocol) || !isYoutubeHost) return null;
+  return parsed.href;
+}
+
+module.exports = { normalizeUrlToVideoId, toYoutubeUrl };

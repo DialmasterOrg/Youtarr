@@ -8,6 +8,11 @@ const channelMetadataFetcher = require('./channelMetadataFetcher');
 const channelThumbnails = require('./channelThumbnails');
 const tabManager = require('./tabManager');
 const tabVideoCounts = require('./tabVideoCounts');
+const { toYoutubeUrl } = require('../youtubeUrlParser');
+
+// What YouTube uses in channel ids and handles. The id is later built into
+// file paths and URLs, so nothing else is stored.
+const CHANNEL_ID_PATTERN = /^[\p{L}\p{N}_@.-]+$/u;
 
 class ChannelProvisioning {
   /**
@@ -124,6 +129,13 @@ class ChannelProvisioning {
       return { ...channelMappers.mapChannelToResponse(foundChannel), existing: true };
     }
 
+    // yt-dlp fetches whatever URL it is given, so only YouTube reaches it.
+    if (!toYoutubeUrl(channelUrl)) {
+      const error = new Error('Not a YouTube channel URL');
+      error.code = 'INVALID_CHANNEL_URL';
+      throw error;
+    }
+
     logger.info('Fetching channel metadata from YouTube');
     const channelData = await channelMetadataFetcher.fetchChannelMetadata(channelUrl);
     logger.info('Channel metadata fetched successfully');
@@ -153,6 +165,11 @@ class ChannelProvisioning {
     // Get the proper channel ID - prefer channel_id, then uploader_id, fallback to id
     // yt-dlp sometimes returns the handle as 'id', but channel_id or uploader_id should have the UCxxx format
     const properChannelId = channelData.channel_id || channelData.uploader_id || channelData.id;
+    if (typeof properChannelId !== 'string' || !CHANNEL_ID_PATTERN.test(properChannelId)) {
+      const error = new Error('YouTube returned an unexpected channel id');
+      error.code = 'CHANNEL_NOT_FOUND';
+      throw error;
+    }
 
     logger.info({ channelId: properChannelId, channelUrl: actualChannelUrl }, 'Storing handle URL for channel');
 
