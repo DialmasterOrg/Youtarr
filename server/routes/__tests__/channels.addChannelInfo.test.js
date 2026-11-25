@@ -60,6 +60,24 @@ beforeEach(() => {
 });
 
 describe('POST /addchannelinfo error mapping', () => {
+  test('returns 400 for a URL that is not YouTube', async () => {
+    const deps = buildDeps();
+    deps.channelModule.getChannelInfo.mockImplementation(() =>
+      rejectWithCode('INVALID_CHANNEL_URL')
+    );
+
+    const handler = getHandler(deps);
+    const req = { body: { url: 'http://127.0.0.1:9911/probe' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'error', message: 'Enter a YouTube channel URL.' })
+    );
+  });
+
   test('returns 422 pointing at playlist subscriptions for a releases-only channel', async () => {
     const deps = buildDeps();
     deps.channelModule.getChannelInfo.mockImplementation(() =>

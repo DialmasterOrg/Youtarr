@@ -14,6 +14,7 @@ const ratingMapper = require('../ratingMapper');
 const archiveModule = require('../archiveModule');
 const youtubeExistenceCheck = require('../youtubeExistenceCheck');
 const membersAccess = require('../membersAccess');
+const { toYoutubeUrl } = require('../youtubeUrlParser');
 
 const { EXISTENCE } = youtubeExistenceCheck;
 const { REFRESH_NEED } = tabState;
@@ -443,7 +444,8 @@ class ChannelVideosService {
 
           const entries = parseEntryLines(content);
           const videos = videoEntryParser.extractVideosFromYtDlpResponse({ entries }, channel.default_rating);
-          return { videos, currentChannelUrl: channelUrlFromEntries(entries) };
+          // The same form channelVideoFetcher saves, so the two refreshes agree.
+          return { videos, currentChannelUrl: toYoutubeUrl(channelUrlFromEntries(entries)) };
         });
         fetchRegistry.update(fetchKey, { progress: { itemsFetched: result.videos.length, stage: 'saving' } });
 

@@ -7,6 +7,10 @@ const { MAX_PLAYLIST_VIDEOS } = require('./playlistConstants');
 const storageGuard = require('./storageGuard');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const { spawnYtDlp } = require('./ytdlpProcess');
+const { toYoutubeUrl } = require('./youtubeUrlParser');
+
+// A bare playlist id, which yt-dlp accepts in place of a URL.
+const PLAYLIST_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 // yt-dlp's flat-playlist listing still returns private/deleted/members-only
 // videos but strips their metadata: the title comes back null (current yt-dlp)
@@ -56,7 +60,13 @@ class PlaylistModule {
     if (!trimmed) return true;
     return UNAVAILABLE_TITLE_RE.test(trimmed);
   }
-  async getPlaylistInfo(url) {
+  async getPlaylistInfo(input) {
+    // yt-dlp fetches whatever URL it is given, so only YouTube reaches it.
+    const trimmed = typeof input === 'string' ? input.trim() : '';
+    const url = PLAYLIST_ID_PATTERN.test(trimmed)
+      ? `https://www.youtube.com/playlist?list=${trimmed}`
+      : toYoutubeUrl(trimmed);
+    if (!url) throw new Error('INVALID_PLAYLIST_URL');
     const data = await this._getPlaylistMetadata(url);
     return {
       playlist_id: data.id,
@@ -65,7 +75,8 @@ class PlaylistModule {
       description: data.description || null,
       thumbnail: data.thumbnail || null,
       video_count: reportedCount(data.playlist_count) ?? 0,
-      url: data.webpage_url || url,
+      // Stored and fetched again on every refresh, so it gets the same check.
+      url: toYoutubeUrl(data.webpage_url) || url,
     };
   }
 

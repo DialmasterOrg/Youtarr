@@ -452,6 +452,20 @@ describe('POST /api/playlists/addplaylistinfo', () => {
     expect(deps.playlistModule.getPlaylistInfo).not.toHaveBeenCalled();
   });
 
+  test('returns 400 for a URL that is not YouTube', async () => {
+    const deps = buildDeps();
+    deps.playlistModule.getPlaylistInfo.mockRejectedValue(new Error('INVALID_PLAYLIST_URL'));
+
+    const handler = getHandler('post', '/api/playlists/addplaylistinfo', deps);
+    const req = { body: { url: 'http://127.0.0.1:9911/probe' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Enter a YouTube playlist URL.' });
+  });
+
   test('returns 404 when playlist not found', async () => {
     const deps = buildDeps();
     deps.playlistModule.getPlaylistInfo.mockRejectedValue(new Error('PLAYLIST_NOT_FOUND'));

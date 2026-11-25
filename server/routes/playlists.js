@@ -35,6 +35,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
 
   const respondToPlaylistInfoError = (res, err) => {
     const errors = {
+      INVALID_PLAYLIST_URL: [400, 'Enter a YouTube playlist URL.'],
       PLAYLIST_NOT_FOUND: [404, playlistNotFoundMessage(err)],
       COOKIES_REQUIRED: [403, err.usedCookies ? SIGN_IN_DEMANDED_WITH_COOKIES : SIGN_IN_DEMANDED_WITHOUT_COOKIES],
       NETWORK_ERROR: [503, 'Unable to reach YouTube'],
@@ -198,7 +199,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *       200:
    *         description: Playlist info. existing_subscription is null for a playlist Youtarr has never saved; otherwise it reports whether the playlist is subscribed (enabled) and its saved auto_download, default_sub_folder, video_quality, and audio_format, which a restore keeps.
    *       400:
-   *         description: url is required
+   *         description: url is missing or is not a YouTube URL or playlist id
    *       403:
    *         description: YouTube demanded a sign-in. The message says whether cookies were sent.
    *       404:
@@ -253,7 +254,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *       201:
    *         description: Saved playlist, restored flag, and optional following setup warning
    *       400:
-   *         description: Missing url or an invalid settings value
+   *         description: Missing or non-YouTube url, or an invalid settings value
    *       403:
    *         description: YouTube demanded a sign-in. Nothing is saved.
    *       404:

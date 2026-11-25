@@ -604,6 +604,75 @@ describe('channelProvisioning', () => {
       return require('../tabVideoCounts');
     };
 
+    test('rejects a non-YouTube URL without fetching it', async () => {
+      const channelIdentity = require('../channelIdentity');
+      const channelMetadataFetcher = require('../channelMetadataFetcher');
+      const url = 'http://127.0.0.1:9911/probe';
+      jest.spyOn(channelIdentity, 'findChannelByUrlOrId').mockResolvedValue({ foundChannel: null, channelUrl: url });
+      const fetchSpy = jest.spyOn(channelMetadataFetcher, 'fetchChannelMetadata');
+
+      await expect(channelProvisioning.getChannelInfo(url, false))
+        .rejects.toMatchObject({ code: 'INVALID_CHANNEL_URL' });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    test('fetches the parsed URL, not the text it was given', async () => {
+      arrangeNewChannel();
+      const channelIdentity = require('../channelIdentity');
+      const channelMetadataFetcher = require('../channelMetadataFetcher');
+      const raw = 'https://www.youtube.com\\@127.0.0.1:9911/';
+      channelIdentity.findChannelByUrlOrId.mockResolvedValue({ foundChannel: null, channelUrl: raw });
+
+      await channelProvisioning.getChannelInfo(raw, false, true);
+
+      expect(channelMetadataFetcher.fetchChannelMetadata)
+        .toHaveBeenCalledWith('https://www.youtube.com/@127.0.0.1:9911/');
+    });
+
+    test('stores the requested URL when yt-dlp reports a non-YouTube channel URL', async () => {
+      arrangeNewChannel();
+      const channelMetadataFetcher = require('../channelMetadataFetcher');
+      channelMetadataFetcher.fetchChannelMetadata.mockResolvedValue({
+        channel_id: 'UC999',
+        channel_url: 'http://127.0.0.1:9911/probe',
+        title: 'New Channel',
+        uploader: 'New Channel',
+        entries: [{ id: 'vid1' }],
+      });
+
+      await channelProvisioning.getChannelInfo(NEW_CHANNEL_URL, false, true);
+
+      expect(Channel.create).toHaveBeenCalledWith(expect.objectContaining({ url: NEW_CHANNEL_URL }));
+    });
+
+    test('accepts a handle with combining marks as the channel id', async () => {
+      arrangeNewChannel();
+      const channelMetadataFetcher = require('../channelMetadataFetcher');
+      channelMetadataFetcher.fetchChannelMetadata.mockResolvedValue({
+        uploader_id: '@हिंदी',
+        title: 'Hindi',
+        uploader: 'Hindi',
+        entries: [{ id: 'vid1' }],
+      });
+
+      await expect(channelProvisioning.getChannelInfo(NEW_CHANNEL_URL, false, true)).resolves.toBeDefined();
+    });
+
+    test('rejects a channel id that is not a YouTube id or handle', async () => {
+      arrangeNewChannel();
+      const channelMetadataFetcher = require('../channelMetadataFetcher');
+      channelMetadataFetcher.fetchChannelMetadata.mockResolvedValue({
+        channel_id: '../../x$(id)',
+        title: 'Bad',
+        uploader: 'Bad',
+        entries: [{ id: 'vid1' }],
+      });
+
+      await expect(channelProvisioning.getChannelInfo(NEW_CHANNEL_URL, false, true))
+        .rejects.toMatchObject({ code: 'CHANNEL_NOT_FOUND' });
+      expect(Channel.create).not.toHaveBeenCalled();
+    });
+
     test('counts tab videos for a newly subscribed channel', async () => {
       const tabVideoCounts = arrangeNewChannel();
 
