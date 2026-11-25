@@ -1,5 +1,131 @@
 # Changelog
 
+## [v1.96.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.96.0) - 2026-11-25
+
+### Features
+
+* add external API administrator UI ([8cc2b8e](https://github.com/DialmasterOrg/Youtarr/commit/8cc2b8e2345b573c297aabb6db0c743bc6dd3f79))
+* add external API control plane ([52f5ab4](https://github.com/DialmasterOrg/Youtarr/commit/52f5ab4d6d080c6ee8dd9253bb3cceeb845f76f9))
+* add external API control plane ([699a621](https://github.com/DialmasterOrg/Youtarr/commit/699a6212722e00a9e8e05dabeedb65a259becd11))
+* add external API persistence foundation ([bf14e3f](https://github.com/DialmasterOrg/Youtarr/commit/bf14e3f96c151f10c1c7cbc9bacb1011177fa5b3))
+* add playlist download filters ([bcf819c](https://github.com/DialmasterOrg/Youtarr/commit/bcf819c9852d9b38be30c6aa5b7a9d33f004adc0)), closes [#1060](https://github.com/DialmasterOrg/Youtarr/issues/1060)
+* default external API capability off ([c11f1b8](https://github.com/DialmasterOrg/Youtarr/commit/c11f1b8213ee5fc6f94f5540c35daa5286950434))
+* expose external API runtime capability ([927396a](https://github.com/DialmasterOrg/Youtarr/commit/927396a92f78128f81f65a21aa0ad3edb0db39da))
+* follow background request execution in the Requests queue ([0f9d9ec](https://github.com/DialmasterOrg/Youtarr/commit/0f9d9ec9311772c1a0d909895d047189c85ae592))
+* gate external requests by runtime capability ([fb4c93f](https://github.com/DialmasterOrg/Youtarr/commit/fb4c93f73268f77487bada57d463fbd94a4c1951))
+* hand subtitles to Sonarr and Radarr ([45132a5](https://github.com/DialmasterOrg/Youtarr/commit/45132a51ba7b096ae2cc56d6d6437559b31dade5)), closes [#1065](https://github.com/DialmasterOrg/Youtarr/issues/1065)
+* hide external key controls when API is disabled ([c0b3fbe](https://github.com/DialmasterOrg/Youtarr/commit/c0b3fbe878c3166a3da8736cba7a7e1914825f3c))
+* notify when YouTube cookies stop working ([b9579c8](https://github.com/DialmasterOrg/Youtarr/commit/b9579c8796d48c42b9c70be737b3ee97d33b8cdc)), closes [#1066](https://github.com/DialmasterOrg/Youtarr/issues/1066)
+* pass external API capability to key settings ([e3652d2](https://github.com/DialmasterOrg/Youtarr/commit/e3652d238b8dfce1eb48c378bdd0034eba92b9ba))
+* prepare external API persistence foundation ([5889df2](https://github.com/DialmasterOrg/Youtarr/commit/5889df2e301604e8f68b0219274657b38a820b4a))
+* type external API runtime capability ([1d5cab5](https://github.com/DialmasterOrg/Youtarr/commit/1d5cab5e6886a60240f05398b2b5a10b56d78ac9))
+* write separate mp3 .m3u for video + mp3 ([4abc4da](https://github.com/DialmasterOrg/Youtarr/commit/4abc4da7dba8a39732362c6d32222e27abc1680f)), closes [#925](https://github.com/DialmasterOrg/Youtarr/issues/925)
+
+
+### Bug Fixes
+
+* accept only named YouTube hosts in lookups ([4602f0a](https://github.com/DialmasterOrg/Youtarr/commit/4602f0a4fa6053b90692bed00bb2a7e522004f5c)), closes [#1076](https://github.com/DialmasterOrg/Youtarr/issues/1076)
+* align external API capability gate ([52b0844](https://github.com/DialmasterOrg/Youtarr/commit/52b0844e311eec65ade98d05c899d7c15fd3723e))
+* break channel list sort ties by id ([bfcef58](https://github.com/DialmasterOrg/Youtarr/commit/bfcef580e5b15fcd1baab71b13198fe7fb0c697b))
+* cap channel thumbnails at 512 px ([66489f9](https://github.com/DialmasterOrg/Youtarr/commit/66489f9ec238e9306c08ad069ec29938081b2d32))
+* check the channel URL yt-dlp reports before saving it ([e85e6ed](https://github.com/DialmasterOrg/Youtarr/commit/e85e6ed0e3022bcad32be4033b46691e0886f8c1))
+* clear dependency audit findings ([3da0a68](https://github.com/DialmasterOrg/Youtarr/commit/3da0a682d6d45c47bd49e59764dc0b95569e8680))
+* close config watcher after fixture validation ([0b43baa](https://github.com/DialmasterOrg/Youtarr/commit/0b43baab96897946a2e6c2398a6371a97a40881b))
+* close config watcher after fixture validation ([11e6149](https://github.com/DialmasterOrg/Youtarr/commit/11e614933a93a89916c2372a96da30958135e7e8))
+* close dialogs on a backdrop click again ([b4bc43b](https://github.com/DialmasterOrg/Youtarr/commit/b4bc43ba22992816d46b7ef5ffd97981d056eb69))
+* close external API compatibility migration markers ([67c4c9a](https://github.com/DialmasterOrg/Youtarr/commit/67c4c9a3b63647af98b5bdc57259115f6be98325))
+* cover external cookie files in block advice ([cc3446a](https://github.com/DialmasterOrg/Youtarr/commit/cc3446ab7e12fa23bffed20be9109cf2f53b47fa)), closes [#1070](https://github.com/DialmasterOrg/Youtarr/issues/1070)
+* explain YouTube bot checks to the user ([6623417](https://github.com/DialmasterOrg/Youtarr/commit/66234172664a0b04967735595d8a285ce6920cfb))
+* find Sonarr episodes with plain titles ([d7c8238](https://github.com/DialmasterOrg/Youtarr/commit/d7c8238c18f874a4b8652b67bfa332cdde8d9bee))
+* include channel database ids in list responses ([5840ec6](https://github.com/DialmasterOrg/Youtarr/commit/5840ec677c1414b50c4b552029405530f7ac9d7e))
+* isolate external API key dialogs and preserve grants ([4d811e3](https://github.com/DialmasterOrg/Youtarr/commit/4d811e3c95086bf800b139a32a0b99fe71ffe715))
+* keep API key policy edits retryable ([2dff745](https://github.com/DialmasterOrg/Youtarr/commit/2dff7453ba1ca85cbc8937b248e3ea69eea427a8))
+* keep contract pagination tests watcher-free ([074f14c](https://github.com/DialmasterOrg/Youtarr/commit/074f14c9bb1b35cea0dfefd0c6d319c618bf7495))
+* keep contract pagination tests watcher-free ([45b7dd4](https://github.com/DialmasterOrg/Youtarr/commit/45b7dd4604f41aa40bc10711bfde4555dac33fdb))
+* keep external request actions visible on mobile ([ac89554](https://github.com/DialmasterOrg/Youtarr/commit/ac89554b0fae482c2fd3ea64cafc189cb5df2ce6))
+* keep external request tests watcher-free ([f186253](https://github.com/DialmasterOrg/Youtarr/commit/f186253ab8ec164a1d806a935927139c43ad2c23))
+* keep external request tests watcher-free ([ebc698b](https://github.com/DialmasterOrg/Youtarr/commit/ebc698b05feef393212c0a6ad0d708e1f74010d6))
+* keep grants on disabled channels when saving a key ([55edba8](https://github.com/DialmasterOrg/Youtarr/commit/55edba8204f3b25e399d67989782c1ca738243cd))
+* keep select content in its portal ([78a9a81](https://github.com/DialmasterOrg/Youtarr/commit/78a9a81ed7327f623f667d42b93c08c80138a6c0))
+* limit the select change to the trusted-event guard ([9ee25db](https://github.com/DialmasterOrg/Youtarr/commit/9ee25db7a1b8f5e760cb7ec3ea1fc6d85629aeef))
+* make external API opt-in and verify MariaDB migrations ([23a3680](https://github.com/DialmasterOrg/Youtarr/commit/23a36804df7db8ac8e137504596bd59ce969d201))
+* make external API opt-in and verify MariaDB migrations ([bddf26a](https://github.com/DialmasterOrg/Youtarr/commit/bddf26a4f5b036b6d20a2ba1aa862cbfdd78d2de))
+* make external request review retries reliable ([f49effb](https://github.com/DialmasterOrg/Youtarr/commit/f49effb90bc7ff02fcfc0c957c4a46c5bcaae62b))
+* make Select all act on the channels shown ([207635b](https://github.com/DialmasterOrg/Youtarr/commit/207635b199b2e90f7a90f7bdb1d694a6b1b894ab))
+* normalize gated key section formatting ([8157650](https://github.com/DialmasterOrg/Youtarr/commit/8157650206b055a62dacb2d4a6d7e01ff07d64a7))
+* only fetch YouTube URLs when adding channels and playlists ([4354252](https://github.com/DialmasterOrg/Youtarr/commit/4354252c4df7f201c63c2f7b970f36114cefc5a5))
+* only treat the polled query as a silent reload ([806ea2c](https://github.com/DialmasterOrg/Youtarr/commit/806ea2c891749d5e7110e25ad7a5f7cb9d8841b8))
+* pass ffmpeg resize arguments as a list ([8a98729](https://github.com/DialmasterOrg/Youtarr/commit/8a98729058c17d6dab55f7f36f81a8102cd894c9))
+* pass the parsed YouTube URL on to yt-dlp ([13d0cab](https://github.com/DialmasterOrg/Youtarr/commit/13d0cab71bcb77b62dd469805f5534f558840746))
+* polish the channel picker and key editor ([551ac51](https://github.com/DialmasterOrg/Youtarr/commit/551ac51cf74e156f3970fbd46eafe1f81a6f606e))
+* preserve API key section test defaults ([74e8837](https://github.com/DialmasterOrg/Youtarr/commit/74e883752371d9bd62fd3e8e88e1f91fcbb84e54))
+* reconcile runtime dependency lockfile ([9d9cec4](https://github.com/DialmasterOrg/Youtarr/commit/9d9cec4f7193bf012b793e1f1ced5c35c01ff871))
+* reissue external API migrations after schema normalization ([8731466](https://github.com/DialmasterOrg/Youtarr/commit/873146657b0843d183f9fc0d983bc0c05c4d9e5d))
+* restore external API foundation CI ([fb1cf01](https://github.com/DialmasterOrg/Youtarr/commit/fb1cf01ddb83ef8c5afb7e2b6ff661ba84159e72))
+* return to the list after deciding a request from it ([1416e92](https://github.com/DialmasterOrg/Youtarr/commit/1416e921861b7fd1c10afd701b0831bed847c8ab))
+* save the same channel URL form from both refresh paths ([a26a140](https://github.com/DialmasterOrg/Youtarr/commit/a26a1405fd44685719bce05468233955f261d357))
+* tidy the API key lists and add read-only status keys ([30583cd](https://github.com/DialmasterOrg/Youtarr/commit/30583cd79a5f9d4842205892d927b4cc5a38a7e0))
+* tolerate a dormant grant when saving channel grants ([161bdcc](https://github.com/DialmasterOrg/Youtarr/commit/161bdccfba91d725fdabc0569716d19e29220687))
+* use portable JSON literal in API key migration ([d10af4a](https://github.com/DialmasterOrg/Youtarr/commit/d10af4aa67208c38b0344ff55f0322983f2d93c1))
+* wait for the config before redirecting away from Requests ([834964a](https://github.com/DialmasterOrg/Youtarr/commit/834964af15610054b42928e73e3aec5e88381457))
+
+
+### Continuous Integration
+
+* bump anthropics/claude-code-action ([8e98dbb](https://github.com/DialmasterOrg/Youtarr/commit/8e98dbb61d55ac22f80fd8ba14483bb20727ace0))
+
+
+### Styles
+
+* clean extracted API key helpers ([97bcf3b](https://github.com/DialmasterOrg/Youtarr/commit/97bcf3b00c859a6b893a21d0158a6ed7eb8700ba))
+
+
+### Code Refactoring
+
+* add API key helper component ([8961bd6](https://github.com/DialmasterOrg/Youtarr/commit/8961bd6aa15042f2eaae7b55d3db5abdf49db94e))
+* add API key helper component ([6be3136](https://github.com/DialmasterOrg/Youtarr/commit/6be31367e2b887915bac9e9a25059faa389abbeb))
+* add API key helper component ([f60b574](https://github.com/DialmasterOrg/Youtarr/commit/f60b57402ef32d61b663adc6b8618c007013db20))
+* export channel list response type ([2b3a2ed](https://github.com/DialmasterOrg/Youtarr/commit/2b3a2ed93a9713231ba8204d982faabc7fe842f8))
+* extract api key channel grant helpers ([b5f7b3e](https://github.com/DialmasterOrg/Youtarr/commit/b5f7b3eb814f191d56dd8af7274fb813434c2538))
+* import new icons from lib/icons ([e6609e2](https://github.com/DialmasterOrg/Youtarr/commit/e6609e26c8f7045d87ac7534f828d88bf73295a7))
+* import the Requests nav icon from lib/icons ([b50ed54](https://github.com/DialmasterOrg/Youtarr/commit/b50ed545661132ba8fbc48963cffc9631dd9ac6a))
+* name the external key workload limits once ([927640a](https://github.com/DialmasterOrg/Youtarr/commit/927640a58c5887be67306cd6089c489435f2961d))
+* read subtitle open flags when used ([753b8f0](https://github.com/DialmasterOrg/Youtarr/commit/753b8f00a48d5b8589622b064d95b96f0be6d85d)), closes [#1065](https://github.com/DialmasterOrg/Youtarr/issues/1065)
+* tidy the external request queue components ([144251b](https://github.com/DialmasterOrg/Youtarr/commit/144251b456d24fb612e7749cb017d405cf93efe7))
+* trim the API keys section's dialog state ([879ba0e](https://github.com/DialmasterOrg/Youtarr/commit/879ba0eb4124e3b677f8e11ec0bb073855834f1e))
+
+
+### Documentation
+
+* describe external API config capability ([74f5c04](https://github.com/DialmasterOrg/Youtarr/commit/74f5c04c30bdfb81826611e31acd381b541b5366))
+* describe ExternalRequests architecture ([6693dfe](https://github.com/DialmasterOrg/Youtarr/commit/6693dfe472cec8aa6cd120b0706743e9ec6c0c48))
+* describe the API keys page and Requests queue as built ([1231cca](https://github.com/DialmasterOrg/Youtarr/commit/1231cca2c6770623386d6bc66af10295092832b8))
+* describe the API keys page as it works with the External API ([74e84cf](https://github.com/DialmasterOrg/Youtarr/commit/74e84cf875f1514d18ea00cc4d208c94d4990da9))
+* document external API request navigation ([8e953c6](https://github.com/DialmasterOrg/Youtarr/commit/8e953c6f9d310b2486a09d9d73e230e409dab2d4))
+* refresh README and comparison doc ([6ab0a31](https://github.com/DialmasterOrg/Youtarr/commit/6ab0a3146d3c5fb0abf2fb8eace6d40ec9b841dc))
+* update CHANGELOG for v1.95.0 [skip ci] ([d973881](https://github.com/DialmasterOrg/Youtarr/commit/d973881d53f29a708fd367bdce96c3044af0d2d9))
+
+
+### Tests
+
+* align logger expectations with current dev ([b27a25e](https://github.com/DialmasterOrg/Youtarr/commit/b27a25e33cbf3b6128361f24f08ccca8adcd4259))
+* align PR validation with current dev ([fa22465](https://github.com/DialmasterOrg/Youtarr/commit/fa2246546a829b0b1a3dff0a5ab219955fcc663f))
+* close external API review gaps ([df8ba11](https://github.com/DialmasterOrg/Youtarr/commit/df8ba1165196937faf8e1c0d5e9274b10f27e9f3))
+* cover disabled direct Requests route ([c425e7e](https://github.com/DialmasterOrg/Youtarr/commit/c425e7e2ae50b52dee28d5347e6c3a83f1c480ba))
+* cover enabled Requests navigation ([f15e49a](https://github.com/DialmasterOrg/Youtarr/commit/f15e49a010ffc9d579bc57785690b64f1f827fd6))
+* cover external API runtime capability ([87971a7](https://github.com/DialmasterOrg/Youtarr/commit/87971a7daafe95f5b65e9c5d1d5cd4d98ec0aaf3))
+* cover external request review states ([3d689ca](https://github.com/DialmasterOrg/Youtarr/commit/3d689ca97f714ccc1f5cb9080dca277c84d7dd69))
+* cover the API key hook calls, policy checks and access editor ([4c221e8](https://github.com/DialmasterOrg/Youtarr/commit/4c221e8f92d4a57e56e24c7fdb3188065734a409))
+* drop the select-in-dialog test that cannot reach the touch guard ([c836856](https://github.com/DialmasterOrg/Youtarr/commit/c83685664f102dbac6a70cd8631ddb5c279a9d3b))
+* keep auto-removal route mocks isolated ([c36ce89](https://github.com/DialmasterOrg/Youtarr/commit/c36ce89e3d014a45670a913827718917c37da4f6))
+* keep auto-removal route mocks isolated ([90c578c](https://github.com/DialmasterOrg/Youtarr/commit/90c578cbdd6b446df48c59f509f333bac556f2db))
+* keep channel model mocks association-compatible ([122fd47](https://github.com/DialmasterOrg/Youtarr/commit/122fd47e716e7d40b70d69bcc76cec96e813d79d))
+* point capability check at the moved external API config module ([ab709a9](https://github.com/DialmasterOrg/Youtarr/commit/ab709a9c0246401bbbddfffe83438c28841979f8))
+* preserve trusted select pointer guard ([feac0a0](https://github.com/DialmasterOrg/Youtarr/commit/feac0a06c6a1666eb15fe172cf34cb37e28530cb))
+* preserve trusted select pointer guard ([26fe94c](https://github.com/DialmasterOrg/Youtarr/commit/26fe94cd6293a754ee2d4cd952b3ad191314eb1d))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.95.0...v1.96.0
+
 ## [v1.95.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.95.0) - 2026-11-22
 
 ### Features
