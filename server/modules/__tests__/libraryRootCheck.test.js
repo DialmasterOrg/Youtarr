@@ -356,6 +356,45 @@ describe('checkLibraryAvailable', () => {
     expect(result).toEqual(expect.objectContaining({ ok: false, reason: LIBRARY_CHECK_REASONS.NOT_FOUND, path: ROOT }));
   });
 
+  test('passes when the missing videos were deleted from channel folders that are still there', async () => {
+    const rows = storedAt(20);
+    const stat = jest.fn(async (target) => {
+      if (target === `${ROOT}/Channel A`) return { isFile: () => false, isDirectory: () => true };
+      if (rows.findIndex((row) => row.filePath === target) < 5) return fileStat;
+      throw fsError('ENOENT');
+    });
+
+    await expect(checkLibraryAvailable(ROOT, videoModel(rows), { readdir: mountedRoot, stat })).resolves.toEqual({ ok: true });
+    expect(stat.mock.calls.filter(([target]) => target === `${ROOT}/Channel A`)).toHaveLength(1);
+  });
+
+  test('fails as not-found when the channel folders of the missing videos cannot be checked', async () => {
+    const rows = storedAt(20);
+    const stat = jest.fn(async (target) => {
+      if (target === `${ROOT}/Channel A`) throw fsError('EACCES');
+      throw fsError('ENOENT');
+    });
+
+    const result = await checkLibraryAvailable(ROOT, videoModel(rows), { readdir: mountedRoot, stat });
+    expect(result).toEqual(expect.objectContaining({ ok: false, reason: 'not-found' }));
+  });
+
+  test('fails as not-found when only the channel folder a new download created is there', async () => {
+    const gone = Array.from({ length: 18 }, (_, i) => ({ filePath: `${ROOT}/Channel ${i}/v [id${i}].mp4`, audioFilePath: null }));
+    const fresh = [
+      { filePath: `${ROOT}/New Channel/new [new00000001].mp4`, audioFilePath: null },
+      { filePath: `${ROOT}/New Channel/old [old00000001].mp4`, audioFilePath: null },
+    ];
+    const stat = jest.fn(async (target) => {
+      if (target === `${ROOT}/New Channel`) return { isFile: () => false, isDirectory: () => true };
+      if (target === fresh[0].filePath) return fileStat;
+      throw fsError('ENOENT');
+    });
+
+    const result = await checkLibraryAvailable(ROOT, videoModel([...gone, ...fresh]), { readdir: mountedRoot, stat });
+    expect(result).toEqual(expect.objectContaining({ ok: false, reason: 'not-found' }));
+  });
+
   test('looks again once a rescan has made its cached answer stale', async () => {
     const rows = storedAt(20);
     const Video = videoModel(rows);
@@ -416,6 +455,267 @@ describe('checkLibraryAvailable', () => {
     await expect(checkLibraryAvailable(ROOT, Video, { readdir: mountedRoot })).resolves.toEqual({ ok: true });
     await checkLibraryAvailable(ROOT, Video, { readdir: mountedRoot });
     expect(Video.findAll).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('channelFolderCreationBlock', () => {
+  const { notStateWhere } = require('../videoRemovalState');
+  const MUSIC = path.join(ROOT, '__Music');
+  const fileStat = { isFile: () => true, isDirectory: () => false };
+  const folderStat = { isFile: () => false, isDirectory: () => true };
+  // A stat that finds only the given files and folders.
+  const statFinding = ({ files = [], folders = [] } = {}) => jest.fn(async (target) => {
+    if (files.includes(target)) return fileStat;
+    if (folders.includes(target)) return folderStat;
+    throw fsError('ENOENT');
+  });
+  const artistRows = (n) => Array.from({ length: n }, (_, i) => ({ filePath: `${MUSIC}/Artist/Song ${i} [m${i}].mp3`, audioFilePath: null }));
+  const videoModel = ({ onRecord = 0, sample = [] } = {}) => ({
+    count: jest.fn().mockResolvedValue(onRecord),
+    findAll: jest.fn().mockResolvedValue(sample),
+    sequelize: { random: () => 'RAND()' },
+  });
+  let channelFolderCreationBlock;
+
+  beforeEach(() => {
+    jest.isolateModules(() => {
+      ({ channelFolderCreationBlock } = require('../libraryRootCheck'));
+    });
+  });
+
+  test('checks nothing when the channel folder is already there', async () => {
+    const readdir = jest.fn();
+    const Video = videoModel({ onRecord: 100 });
+    const stat = statFinding({ folders: [`${ROOT}/Channel`] });
+
+    await expect(channelFolderCreationBlock(ROOT, `${ROOT}/Channel`, Video, { readdir, stat })).resolves.toBeNull();
+    expect(readdir).not.toHaveBeenCalled();
+    expect(Video.count).not.toHaveBeenCalled();
+    expect(Video.findAll).not.toHaveBeenCalled();
+  });
+
+  test('blocks an artist folder in a subfolder that is empty while videos are on record there', async () => {
+    const readdir = jest.fn(diskWith({ [ROOT]: [dir('Channel'), dir('__Music')], [MUSIC]: [] }));
+    const Video = videoModel({ onRecord: 40 });
+
+    const result = await channelFolderCreationBlock(ROOT, `${MUSIC}/Artist`, Video, { readdir, stat: statFinding() });
+
+    expect(result).toEqual(expect.objectContaining({ ok: false, reason: 'subfolder-empty', path: MUSIC }));
+    const underMusic = `${ROOT}/\\_\\_Music/%`;
+    expect(Video.count).toHaveBeenCalledWith({
+      where: {
+        [Op.and]: [
+          notStateWhere('deleted'),
+          { [Op.or]: [{ filePath: { [Op.like]: underMusic } }, { audioFilePath: { [Op.like]: underMusic } }] },
+        ],
+      },
+    });
+  });
+
+  test('blocks a subfolder that cannot be read while videos are on record there', async () => {
+    const readdir = diskWith({ [MUSIC]: 'EACCES' });
+    const result = await channelFolderCreationBlock(ROOT, `${MUSIC}/Artist`, videoModel({ onRecord: 40 }), { readdir, stat: statFinding() });
+    expect(result).toEqual(expect.objectContaining({ ok: false, reason: 'subfolder-unreadable', path: MUSIC }));
+  });
+
+  test('lets the first download into an empty subfolder nothing is stored in through', async () => {
+    const readdir = diskWith({ [MUSIC]: [] });
+    await expect(
+      channelFolderCreationBlock(ROOT, `${MUSIC}/Artist`, videoModel({ onRecord: 0 }), { readdir, stat: statFinding() })
+    ).resolves.toBeNull();
+  });
+
+  test('never reads a sibling subfolder for a channel folder in the downloads folder', async () => {
+    // __Music hangs: reading it would never answer.
+    const readdir = jest.fn((target) => (target === MUSIC
+      ? new Promise(() => {})
+      : diskWith({ [ROOT]: [dir('Channel'), dir('__Music')] })(target)));
+    const Video = videoModel({ onRecord: 100 });
+
+    await expect(channelFolderCreationBlock(ROOT, `${ROOT}/New Channel`, Video, { readdir, stat: statFinding() })).resolves.toBeNull();
+    expect(readdir).toHaveBeenCalledTimes(1);
+    expect(readdir).toHaveBeenCalledWith(ROOT, { withFileTypes: true });
+  });
+
+  test('samples only videos stored outside every subfolder for the downloads folder', async () => {
+    const readdir = diskWith({ [ROOT]: [dir('Channel'), dir('__Music')] });
+    const Video = videoModel({ onRecord: 100 });
+
+    await channelFolderCreationBlock(ROOT, `${ROOT}/New Channel`, Video, { readdir, stat: statFinding() });
+
+    // "__name/...": a subfolder. A file in the downloads folder named "__Title [id].mp4" has no "/" after it and stays.
+    const outsideSubfolders = { [Op.like]: `${ROOT}/%`, [Op.notLike]: `${ROOT}/\\_\\_%/%` };
+    expect(Video.findAll).toHaveBeenCalledWith(expect.objectContaining({
+      where: { removed: false, [Op.or]: [{ filePath: outsideSubfolders }, { audioFilePath: outsideSubfolders }] },
+    }));
+  });
+
+  test('counts a file in the downloads folder whose name starts with "__" as stored there, not in a subfolder', async () => {
+    const readdir = diskWith({ [ROOT]: [file('stray.txt')] });
+    const rootFile = `${ROOT}/__Title [idrootfile1].mp4`;
+    const subfolderFile = `${MUSIC}/Artist/track [idsubfile01].mp3`;
+    const stat = statFinding();
+    const Video = videoModel({ onRecord: 100, sample: [{ filePath: rootFile, audioFilePath: subfolderFile }] });
+
+    await channelFolderCreationBlock(ROOT, `${ROOT}/New Channel`, Video, { readdir, stat });
+
+    expect(stat).toHaveBeenCalledWith(rootFile);
+    expect(stat).not.toHaveBeenCalledWith(subfolderFile);
+  });
+
+  test('judges a video by its file in the destination subfolder, never reading its other file on another share', async () => {
+    const readdir = diskWith({ [MUSIC]: [file('stray.txt')] });
+    // Each video's MP3 is gone from __Music while its MP4 is still in the downloads folder.
+    const rows = Array.from({ length: 20 }, (_, i) => ({
+      filePath: `${ROOT}/Channel/Video ${i} [v${i}].mp4`,
+      audioFilePath: `${MUSIC}/Artist/Song ${i} [v${i}].mp3`,
+    }));
+    const stat = statFinding({ files: rows.map((row) => row.filePath), folders: [`${ROOT}/Channel`] });
+
+    const result = await channelFolderCreationBlock(
+      ROOT, `${MUSIC}/New Artist`, videoModel({ onRecord: 40, sample: rows }), { readdir, stat }
+    );
+
+    expect(result).toEqual(expect.objectContaining({ ok: false, reason: 'not-found', path: MUSIC }));
+    const readOutsideMusic = stat.mock.calls.map(([target]) => target).filter((target) => !target.startsWith(`${MUSIC}/`));
+    expect(readOutsideMusic).toEqual([]);
+  });
+
+  test('blocks a subfolder that is not empty when the videos stored in it went with their channel folders', async () => {
+    const readdir = diskWith({ [MUSIC]: [file('stray.txt')] });
+    const Video = videoModel({ onRecord: 40, sample: artistRows(20) });
+
+    const result = await channelFolderCreationBlock(ROOT, `${MUSIC}/New Artist`, Video, { readdir, stat: statFinding() });
+
+    expect(result).toEqual(expect.objectContaining({ ok: false, reason: 'not-found', path: MUSIC }));
+    const underMusic = { [Op.like]: `${ROOT}/\\_\\_Music/%` };
+    expect(Video.findAll).toHaveBeenCalledWith(expect.objectContaining({
+      where: { removed: false, [Op.or]: [{ filePath: underMusic }, { audioFilePath: underMusic }] },
+    }));
+  });
+
+  test('lets a new artist folder through when the subfolder holds the videos stored in it', async () => {
+    const rows = artistRows(20);
+    const readdir = diskWith({ [MUSIC]: [dir('Artist')] });
+    const stat = statFinding({ files: rows.map((row) => row.filePath) });
+
+    await expect(
+      channelFolderCreationBlock(ROOT, `${MUSIC}/New Artist`, videoModel({ onRecord: 40, sample: rows }), { readdir, stat })
+    ).resolves.toBeNull();
+  });
+
+  test('blocks a channel folder in an empty downloads folder while videos are on record', async () => {
+    const readdir = diskWith({ [ROOT]: [dir('.youtarr_tmp')] });
+    const Video = videoModel({ onRecord: 100 });
+
+    const result = await channelFolderCreationBlock(ROOT, `${ROOT}/Channel`, Video, { readdir, stat: statFinding() });
+
+    expect(result).toEqual(expect.objectContaining({ ok: false, reason: 'empty', path: ROOT }));
+    expect(Video.count).toHaveBeenCalledWith({ where: notStateWhere('deleted') });
+  });
+
+  test('lets the first download of a fresh install through', async () => {
+    const readdir = diskWith({ [ROOT]: [dir('.youtarr_tmp')] });
+    await expect(
+      channelFolderCreationBlock(ROOT, `${ROOT}/Channel`, videoModel({ onRecord: 0 }), { readdir, stat: statFinding() })
+    ).resolves.toBeNull();
+  });
+
+  test('judges a new subfolder, with no videos on record in it, by the downloads folder', async () => {
+    const readdir = jest.fn(diskWith({ [ROOT]: [dir('Channel')] }));
+
+    await expect(
+      channelFolderCreationBlock(ROOT, `${MUSIC}/Artist`, videoModel({ onRecord: 0 }), { readdir, stat: statFinding() })
+    ).resolves.toBeNull();
+    expect(readdir).toHaveBeenCalledWith(ROOT, { withFileTypes: true });
+  });
+
+  test('blocks a subfolder that is gone while videos are on record in it', async () => {
+    // The root dropped: what is there now holds something, but not __Music.
+    const readdir = jest.fn(diskWith({ [ROOT]: [dir('lost+found')] }));
+    const Video = videoModel({ onRecord: 40 });
+
+    const result = await channelFolderCreationBlock(ROOT, `${MUSIC}/Artist`, Video, { readdir, stat: statFinding() });
+
+    expect(result).toEqual(expect.objectContaining({
+      ok: false, reason: 'subfolder-missing', path: MUSIC, message: 'The subfolder __Music does not exist.',
+    }));
+    const underMusic = `${ROOT}/\\_\\_Music/%`;
+    expect(Video.count).toHaveBeenCalledWith({
+      where: {
+        [Op.and]: [
+          notStateWhere('deleted'),
+          { [Op.or]: [{ filePath: { [Op.like]: underMusic } }, { audioFilePath: { [Op.like]: underMusic } }] },
+        ],
+      },
+    });
+    expect(Video.findAll).not.toHaveBeenCalled();
+  });
+
+  test('checks the downloads folder even though it exists when a video has no channel folder', async () => {
+    const readdir = diskWith({ [ROOT]: [] });
+    const stat = statFinding({ folders: [ROOT] });
+
+    const result = await channelFolderCreationBlock(ROOT, ROOT, videoModel({ onRecord: 100 }), { readdir, stat });
+
+    expect(result).toEqual(expect.objectContaining({ ok: false, reason: 'empty' }));
+  });
+
+  test('leaves a folder outside the downloads folder alone', async () => {
+    const readdir = jest.fn();
+    await expect(
+      channelFolderCreationBlock(ROOT, '/elsewhere/Channel', videoModel({ onRecord: 100 }), { readdir, stat: statFinding() })
+    ).resolves.toBeNull();
+    expect(readdir).not.toHaveBeenCalled();
+  });
+
+  test('passes when the destination does not answer within the time limit', async () => {
+    const readdir = jest.fn(() => new Promise(() => {}));
+
+    await expect(
+      channelFolderCreationBlock(ROOT, `${MUSIC}/Artist`, videoModel({ onRecord: 40 }), { readdir, stat: statFinding(), timeoutMs: 5 })
+    ).resolves.toBeNull();
+  });
+});
+
+describe('rowChannelFolder', () => {
+  const { rowChannelFolder } = require('../libraryRootCheck');
+
+  test('is the first folder under the downloads folder', () => {
+    expect(rowChannelFolder({ filePath: `${ROOT}/Channel/Video [id]/Video [id].mp4` }, ROOT)).toBe(`${ROOT}/Channel`);
+    expect(rowChannelFolder({ filePath: `${ROOT}/Channel/Video [id].mp4` }, ROOT)).toBe(`${ROOT}/Channel`);
+  });
+
+  test('is the first folder under the subfolder a video is stored in', () => {
+    expect(rowChannelFolder({ filePath: `${ROOT}/__Music/Artist/Song [id].mp4` }, ROOT)).toBe(`${ROOT}/__Music/Artist`);
+  });
+
+  test('falls back to the audio file', () => {
+    expect(rowChannelFolder({ filePath: null, audioFilePath: `${ROOT}/Channel/Song [id].mp3` }, ROOT)).toBe(`${ROOT}/Channel`);
+  });
+
+  test('is null for a file with no channel folder or outside the downloads folder', () => {
+    expect(rowChannelFolder({ filePath: `${ROOT}/Video [id].mp4` }, ROOT)).toBeNull();
+    expect(rowChannelFolder({ filePath: `${ROOT}/__Music/Song [id].mp4` }, ROOT)).toBeNull();
+    expect(rowChannelFolder({ filePath: '/elsewhere/Channel/Video [id].mp4' }, ROOT)).toBeNull();
+    expect(rowChannelFolder({ filePath: null, audioFilePath: null }, ROOT)).toBeNull();
+  });
+});
+
+describe('folderExists', () => {
+  const { folderExists } = require('../libraryRootCheck');
+
+  test('is true for a folder', async () => {
+    await expect(folderExists('/d/Channel', async () => ({ isDirectory: () => true }))).resolves.toBe(true);
+  });
+
+  test('is false for a file standing where the folder was', async () => {
+    await expect(folderExists('/d/Channel', async () => ({ isDirectory: () => false }))).resolves.toBe(false);
+  });
+
+  test('is false when the folder is gone or cannot be checked', async () => {
+    await expect(folderExists('/d/Channel', jest.fn().mockRejectedValue(fsError('ENOENT')))).resolves.toBe(false);
+    await expect(folderExists('/d/Channel', jest.fn().mockRejectedValue(fsError('EIO')))).resolves.toBe(false);
   });
 });
 

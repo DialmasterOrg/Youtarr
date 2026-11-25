@@ -48,6 +48,7 @@ Listing, the filesystem rescan, library repair, deleted vs. missing videos, the 
 - Failed writes make a finished scan `error`/`partial`. The walk and reconciliation always finish; the time limit, started after the walk, bounds only ffprobe probes (`probesDeferred`), because a slow share's walk outlasted it and runs never converged.
 - `timed-out` exists only in older run history; nothing produces it now.
 - `rescanMissingGate` holds back missing marks per storage unit (root, each `__subfolder`) when the walk finds under half its present rows and 25+ are gone: a remap or bare mount point, not deliberate deletion. Rescan anyway skips it.
+- The gate and the probe below count a gone video only when its channel folder (`rowChannelFolder`) is gone too: a media server or the user deletes files and leaves that folder, a wrong mount has none (#1079).
 - The completion `rescanStatus` broadcast is built through the same `rescanRunSummary` record as the run history, so the live Maintenance view matches it.
 - Progress (`getRescanProgress`, also on `GET rescan-status`) is broadcast at most once a second, each emit in try/catch so a missing WebSocket never stops the scan; `messageEmitter` never replays it.
 - Library repair (`jobModule.backfillFromCompleteList`) uses the same guard: it reads the row before searching the disk and writes file details and `removed: false` only for a file it actually found.
@@ -66,6 +67,9 @@ Listing, the filesystem rescan, library repair, deleted vs. missing videos, the 
 - A root failure is reported alone, while every failing subfolder is reported in `paths`. `message` names no path, because the container path means nothing on the host: the root is "the downloads folder" and a subfolder by its name.
 - Entries Youtarr creates itself (`.youtarr_tmp`, `__playlists__`, `.youtarr_healthcheck_*`, named in `filesystem/constants.js`) never count, because a sweep or a restart creates them on the bare mount point while a share is down.
 - One download into a bare mount point makes it non-empty, so `checkLibraryAvailable` adds a probe: 20 random present rows' stored paths, `not-found` when under half exist (cached 30 s, fails open).
+- The post-processor asks `channelFolderCreationBlock` before creating a channel folder (the pause runs at job start, never for a `__subfolder`): one created on a bare mount point would vouch for every gone video.
+- That check skips an existing channel folder, reads only the destination's storage unit (a sibling share may hang), samples only that unit's rows and paths, and passes after 10 s or on error.
+- Only it reports `subfolder-missing`: an absent `__subfolder` with videos on record blocks the move (the root dropped or was remapped); with none it is new, and the root decides.
 - Every writer except the rescan uses `checkLibraryAvailable`; the rescan uses `checkLibraryRoot` plus its gate, because stale paths after files were moved by hand are what it repairs.
 - `libraryCheckCoversRows(check, Video, where)` (a `LIKE` on both path columns, wildcards escaped) decides whether a failing check covers any matching row, so an empty `__subfolder` no row is stored in blocks nothing; `isUnderLibraryCheckPath` and `isRowUnderLibraryCheck` cover one file or row.
 - The file check runs the check lazily, once per pass and only when a row would be marked missing, holds back the rows it covers, and returns them as `libraryWarning` (`{ reason, path, message, heldBack }`).

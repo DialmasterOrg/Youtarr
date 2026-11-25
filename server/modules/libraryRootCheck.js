@@ -9,7 +9,7 @@ const logger = require('../logger');
 // binds child_process at require time, and this check needs neither.
 const { isSubfolderDirectory } = require('./filesystem/pathBuilder');
 const {
-  LOCAL_TEMP_DIR_NAME, M3U_FOLDER_NAME, HEALTHCHECK_FILE_PREFIX, ARR_STAGING_DIR_NAME,
+  LOCAL_TEMP_DIR_NAME, M3U_FOLDER_NAME, HEALTHCHECK_FILE_PREFIX, ARR_STAGING_DIR_NAME, SUBFOLDER_PREFIX,
 } = require('./filesystem/constants');
 const { REMOVAL_STATES, notStateWhere } = require('./videoRemovalState');
 
@@ -20,8 +20,13 @@ const LIBRARY_CHECK_REASONS = {
   NOT_FOUND: 'not-found',
   SUBFOLDER_EMPTY: 'subfolder-empty',
   SUBFOLDER_UNREADABLE: 'subfolder-unreadable',
+  // Only from channelFolderCreationBlock: checkLibraryRoot never reports a
+  // subfolder that is not there.
+  SUBFOLDER_MISSING: 'subfolder-missing',
 };
-const SUBFOLDER_REASONS = [LIBRARY_CHECK_REASONS.SUBFOLDER_EMPTY, LIBRARY_CHECK_REASONS.SUBFOLDER_UNREADABLE];
+const SUBFOLDER_REASONS = [
+  LIBRARY_CHECK_REASONS.SUBFOLDER_EMPTY, LIBRARY_CHECK_REASONS.SUBFOLDER_UNREADABLE, LIBRARY_CHECK_REASONS.SUBFOLDER_MISSING,
+];
 
 // ENOTDIR: the folder's path now leads to a regular file, so the folder is gone.
 const ABSENT_CODES = ['ENOENT', 'ENOTDIR'];
@@ -34,6 +39,10 @@ const PRESENCE_PROBE_MIN_CHECKED = 10;
 const PRESENCE_PROBE_MIN_FOUND_SHARE = 0.5;
 // Pages, the trash card and the download pause all ask; one probe serves them for this long.
 const PRESENCE_PROBE_CACHE_MS = 30 * 1000;
+// How long a finished download waits on the check of its destination before
+// it is moved regardless: a share that hangs must not hold the video in temp.
+const CHANNEL_FOLDER_CHECK_TIMEOUT_MS = 10 * 1000;
+const TIMED_OUT = Symbol('timed out');
 
 // Shown to users, so no paths: the container path means nothing on the host,
 // and a subfolder goes by its own name.
@@ -53,6 +62,8 @@ function describeLibraryCheck({ reason, path: checkedPath }) {
     return `The subfolder ${subfolder} is empty.`;
   case LIBRARY_CHECK_REASONS.SUBFOLDER_UNREADABLE:
     return `The subfolder ${subfolder} could not be read.`;
+  case LIBRARY_CHECK_REASONS.SUBFOLDER_MISSING:
+    return `The subfolder ${subfolder} does not exist.`;
   default:
     return 'The downloads folder could not be checked.';
   }
@@ -174,10 +185,45 @@ function isRowUnderLibraryCheck(check, row) {
   return isUnderLibraryCheckPath(check, row.filePath) || isUnderLibraryCheckPath(check, row.audioFilePath);
 }
 
+const escapeLike = (text) => text.replace(/[\\%_]/g, '\\$&');
+
 // A LIKE pattern matching every path under `dir`, with LIKE's own wildcards
 // escaped: every subfolder name starts with two `_`.
 function pathPrefixPattern(dir) {
-  return `${withTrailingSep(dir).replace(/[\\%_]/g, '\\$&')}%`;
+  return `${escapeLike(withTrailingSep(dir))}%`;
+}
+
+// The column filter for paths the probe samples: everything under the root, or
+// one storage unit (a `__subfolder`, or the root outside every `__subfolder`).
+function storedUnderFilter(baseDir, unitDir) {
+  if (unitDir !== baseDir) return { [Op.like]: pathPrefixPattern(unitDir ?? baseDir) };
+  // "__name/..." only: a file in the root whose own name starts with "__"
+  // is a root file, as it is for the rescan (rescanMissingGate).
+  return {
+    [Op.like]: pathPrefixPattern(baseDir),
+    [Op.notLike]: `${escapeLike(`${withTrailingSep(baseDir)}${SUBFOLDER_PREFIX}`)}%${escapeLike(path.sep)}%`,
+  };
+}
+
+// Whether a stored path belongs to the storage unit, by the same rule as
+// storedUnderFilter.
+function isStoredInUnit(filePath, baseDir, unitDir) {
+  if (!filePath) return false;
+  if (unitDir !== baseDir) return filePath.startsWith(withTrailingSep(unitDir));
+  const root = withTrailingSep(baseDir);
+  if (!filePath.startsWith(root)) return false;
+  const segments = filePath.slice(root.length).split(path.sep);
+  return !(segments.length > 1 && isSubfolderDirectory(segments[0]));
+}
+
+// A sampled row with only the paths stored in the unit: a video's other file
+// may sit on another share, which says nothing about this one and must not be
+// read (it may hang).
+function scopeRowToUnit(row, baseDir, unitDir) {
+  return {
+    filePath: isStoredInUnit(row.filePath, baseDir, unitDir) ? row.filePath : null,
+    audioFilePath: isStoredInUnit(row.audioFilePath, baseDir, unitDir) ? row.audioFilePath : null,
+  };
 }
 
 /**
@@ -230,6 +276,61 @@ async function storedFileState(paths, stat) {
   return unknown ? 'unknown' : 'absent';
 }
 
+/**
+ * The channel folder a stored file sits in: the first folder under the
+ * downloads root, or under the `__subfolder` the file is stored in. Null for a
+ * file with no folder of its own there, or stored outside the root.
+ * @param {string|null|undefined} filePath
+ * @param {string} baseDir - The downloads root
+ * @returns {string|null}
+ */
+function channelFolderOf(filePath, baseDir) {
+  if (!filePath) return null;
+  const root = withTrailingSep(baseDir);
+  if (!filePath.startsWith(root)) return null;
+  const segments = filePath.slice(root.length).split(path.sep);
+  const depth = segments.length > 1 && isSubfolderDirectory(segments[0]) ? 2 : 1;
+  return segments.length > depth ? path.join(baseDir, ...segments.slice(0, depth)) : null;
+}
+
+/**
+ * The channel folder of a videos row: its video file's, else its audio file's.
+ * @param {{filePath?: (string|null), audioFilePath?: (string|null)}} row
+ * @param {string} baseDir - The downloads root
+ * @returns {string|null}
+ */
+function rowChannelFolder(row, baseDir) {
+  return channelFolderOf(row.filePath, baseDir) ?? channelFolderOf(row.audioFilePath, baseDir);
+}
+
+/**
+ * Is the folder there? A video gone from a channel folder that still exists
+ * was deleted on purpose (in a media server, or by hand): an unmounted drive
+ * or a volume mapping that points elsewhere takes the channel folders with
+ * it. Any doubt (a failed check included) answers no, the cautious side.
+ * @param {string} dir
+ * @param {Function} [stat] - fs.promises.stat, injectable for tests
+ * @returns {Promise<boolean>}
+ */
+async function folderExists(dir, stat = fs.promises.stat) {
+  try {
+    return (await stat(dir)).isDirectory();
+  } catch (err) {
+    return false;
+  }
+}
+
+// Whether a sampled video speaks for the library being there: 'found' with a
+// file on disk, or with its file deleted from a channel folder that is still
+// there; 'gone' when the channel folder went with it; 'unknown' as above.
+async function sampledVideoState(row, baseDir, stat, channelFolderThere) {
+  const fileState = await storedFileState([row.filePath, row.audioFilePath], stat);
+  if (fileState === 'present') return 'found';
+  if (fileState === 'unknown') return 'unknown';
+  const channelFolder = rowChannelFolder(row, baseDir);
+  return channelFolder && await channelFolderThere(channelFolder) ? 'found' : 'gone';
+}
+
 const presenceProbeCache = new Map();
 
 // Drop the probe's cached answers: a rescan just repaired the stored paths it
@@ -243,23 +344,28 @@ function forgetStoredFilesProbe() {
  * random sample of present videos stored under the root. Catches a downloads
  * folder that is not empty but is not the library either: a volume mapping
  * that points elsewhere, or a bare mount point a download has written into.
+ * A file gone from a channel folder that is still there counts as found (see
+ * folderExists), so deleting most of a library outside Youtarr passes.
  * Fails open (passes) when the sample cannot be read.
  * @param {string} baseDir - The downloads root
  * @param {{findAll: Function, sequelize: {random: Function}}} Video - the Video model
  * @param {{ stat?: Function, now?: Function }} [deps] - injectable for tests
+ * @param {string|null} [unitDir] - sample one storage unit only: a `__subfolder`, or the root for the
+ *   videos stored outside every `__subfolder`; null samples everything under the root
  * @returns {Promise<{ok: true}|{ok: false, reason: string, path: string, message: string}>}
  */
-async function probeStoredFiles(baseDir, Video, { stat = fs.promises.stat, now = Date.now } = {}) {
-  const cached = presenceProbeCache.get(baseDir);
+async function probeStoredFiles(baseDir, Video, { stat = fs.promises.stat, now = Date.now } = {}, unitDir = null) {
+  const cacheKey = unitDir === null ? baseDir : `unit:${unitDir}`;
+  const cached = presenceProbeCache.get(cacheKey);
   // A copy: callers decorate the result they get.
   if (cached && now() - cached.at < PRESENCE_PROBE_CACHE_MS) return { ...cached.result };
 
   let rows;
   try {
-    const pattern = pathPrefixPattern(baseDir);
+    const storedThere = storedUnderFilter(baseDir, unitDir);
     rows = await Video.findAll({
       attributes: ['filePath', 'audioFilePath'],
-      where: { removed: false, [Op.or]: [{ filePath: { [Op.like]: pattern } }, { audioFilePath: { [Op.like]: pattern } }] },
+      where: { removed: false, [Op.or]: [{ filePath: storedThere }, { audioFilePath: storedThere }] },
       order: Video.sequelize.random(),
       limit: PRESENCE_PROBE_SAMPLE_SIZE,
       raw: true,
@@ -269,13 +375,20 @@ async function probeStoredFiles(baseDir, Video, { stat = fs.promises.stat, now =
     return { ok: true };
   }
 
-  const states = await Promise.all(rows.map((row) => storedFileState([row.filePath, row.audioFilePath], stat)));
+  // One stat per channel folder, however many sampled videos share it.
+  const channelFolderChecks = new Map();
+  const channelFolderThere = (dir) => {
+    if (!channelFolderChecks.has(dir)) channelFolderChecks.set(dir, folderExists(dir, stat));
+    return channelFolderChecks.get(dir);
+  };
+  const sampled = unitDir === null ? rows : rows.map((row) => scopeRowToUnit(row, baseDir, unitDir));
+  const states = await Promise.all(sampled.map((row) => sampledVideoState(row, baseDir, stat, channelFolderThere)));
   const checked = states.filter((state) => state !== 'unknown').length;
-  const found = states.filter((state) => state === 'present').length;
+  const found = states.filter((state) => state === 'found').length;
   const result = checked >= PRESENCE_PROBE_MIN_CHECKED && found / checked < PRESENCE_PROBE_MIN_FOUND_SHARE
-    ? failure(LIBRARY_CHECK_REASONS.NOT_FOUND, baseDir)
+    ? failure(LIBRARY_CHECK_REASONS.NOT_FOUND, unitDir ?? baseDir)
     : { ok: true };
-  presenceProbeCache.set(baseDir, { at: now(), result });
+  presenceProbeCache.set(cacheKey, { at: now(), result });
   return { ...result };
 }
 
@@ -310,12 +423,99 @@ async function downloadsFolderBlock(baseDir, Video) {
   return (await libraryCheckCoversRows(check, Video, notStateWhere(REMOVAL_STATES.DELETED))) ? check : null;
 }
 
+// The storage unit a channel folder sits in: its `__subfolder`, else the root.
+// Null for a folder outside the root.
+function destinationUnitOf(channelFolder, baseDir) {
+  if (channelFolder === baseDir) return baseDir;
+  const root = withTrailingSep(baseDir);
+  if (!channelFolder.startsWith(root)) return null;
+  const [first] = channelFolder.slice(root.length).split(path.sep);
+  return isSubfolderDirectory(first) ? path.join(baseDir, first) : baseDir;
+}
+
+// The failure of one storage unit that covers videos on record, or null: the
+// unit must hold something, and a sample of the videos stored in it must be
+// there. Only this unit is read, never a sibling `__subfolder`.
+async function storageUnitBlock(baseDir, unitDir, Video, deps) {
+  const { readdir = fs.promises.readdir } = deps;
+  const isRoot = unitDir === baseDir;
+  let listingFailure = null;
+  try {
+    const entries = await readdir(unitDir, { withFileTypes: true });
+    const holds = isRoot ? entries.filter((entry) => !isYoutarrManagedEntry(entry.name)) : entries;
+    if (holds.length === 0) {
+      listingFailure = failure(isRoot ? LIBRARY_CHECK_REASONS.EMPTY : LIBRARY_CHECK_REASONS.SUBFOLDER_EMPTY, unitDir);
+    }
+  } catch (err) {
+    const absent = ABSENT_CODES.includes(err.code);
+    if (absent && !isRoot) {
+      // A subfolder that is not there and has nothing on record is simply
+      // new, and the root decides. One with videos on record went away with
+      // them: the root dropped or was remapped, and its sample (which leaves
+      // subfolder videos out) would see nothing wrong.
+      const missing = failure(LIBRARY_CHECK_REASONS.SUBFOLDER_MISSING, unitDir);
+      if (await libraryCheckCoversRows(missing, Video, notStateWhere(REMOVAL_STATES.DELETED))) return missing;
+      return storageUnitBlock(baseDir, baseDir, Video, deps);
+    }
+    const rootReason = absent ? LIBRARY_CHECK_REASONS.MISSING : LIBRARY_CHECK_REASONS.UNREADABLE;
+    listingFailure = failure(isRoot ? rootReason : LIBRARY_CHECK_REASONS.SUBFOLDER_UNREADABLE, unitDir);
+  }
+  if (listingFailure) {
+    const coversVideos = await libraryCheckCoversRows(listingFailure, Video, notStateWhere(REMOVAL_STATES.DELETED));
+    return coversVideos ? listingFailure : null;
+  }
+
+  const probe = await probeStoredFiles(baseDir, Video, deps, unitDir);
+  return probe.ok ? null : probe;
+}
+
+/**
+ * The failure that should stop a finished download from creating its channel
+ * folder, or null. The download pause is only checked when a job starts and
+ * never for a `__subfolder`, so a share that is down would get the folder
+ * created on its bare mount point, and a channel folder that exists makes its
+ * gone videos count as deleted on purpose (see folderExists).
+ * A channel folder already there needs no check: nothing new is created. Only
+ * the destination's own storage unit is read, within a time limit, so a share
+ * that hangs elsewhere never holds a download. Passes when the limit runs out.
+ * @param {string} baseDir - The downloads root
+ * @param {string} channelFolder - the channel folder the download is about to be moved into
+ * @param {Object} Video - the Video model
+ * @param {{ readdir?: Function, stat?: Function, now?: Function, timeoutMs?: number }} [deps] - injectable for tests
+ * @returns {Promise<{ok: false, reason: string, path: string, message: string}|null>}
+ */
+async function channelFolderCreationBlock(baseDir, channelFolder, Video, deps = {}) {
+  const { timeoutMs = CHANNEL_FOLDER_CHECK_TIMEOUT_MS } = deps;
+  const check = async () => {
+    const unitDir = destinationUnitOf(channelFolder, baseDir);
+    if (!unitDir) return null;
+    if (channelFolder !== unitDir && await folderExists(channelFolder, deps.stat)) return null;
+    return storageUnitBlock(baseDir, unitDir, Video, deps);
+  };
+
+  let timer;
+  const timeLimit = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(TIMED_OUT), timeoutMs);
+  });
+  try {
+    const outcome = await Promise.race([check(), timeLimit]);
+    if (outcome !== TIMED_OUT) return outcome;
+    logger.warn({ timeoutMs, channelFolder }, 'The check of a download\'s destination folder did not answer in time; moving the video anyway');
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 module.exports = {
   LIBRARY_CHECK_REASONS,
   checkLibraryRoot,
   checkLibraryAvailable,
   downloadsFolderBlock,
+  channelFolderCreationBlock,
   forgetStoredFilesProbe,
+  rowChannelFolder,
+  folderExists,
   describeLibraryCheck,
   isYoutarrManagedEntry,
   isUnderLibraryCheckPath,

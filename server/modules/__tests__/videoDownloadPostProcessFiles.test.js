@@ -78,10 +78,19 @@ const mockChannelVideo = {
 jest.mock('../../models/channel', () => mockChannel);
 jest.mock('../../models/channelvideo', () => mockChannelVideo);
 
+const mockVideo = {};
+
 jest.mock('../../models', () => ({
   JobVideoDownload: mockJobVideoDownload,
-  Channel: mockChannel
+  Channel: mockChannel,
+  Video: mockVideo
 }));
+
+const mockLibraryRootCheck = {
+  channelFolderCreationBlock: jest.fn(() => Promise.resolve(null))
+};
+
+jest.mock('../libraryRootCheck', () => mockLibraryRootCheck);
 
 const mockVideoPersistence = {
   persistDownloadedVideoForJob: jest.fn(() => Promise.resolve(null))
@@ -119,7 +128,7 @@ const ChannelVideo = require('../../models/channelvideo');
 
 const flushPromises = () => new Promise((resolve) => queueMicrotask(resolve));
 
-async function settleAsync(iterations = 5) {
+async function settleAsync(iterations = 10) {
   for (let i = 0; i < iterations; i += 1) {
     await flushPromises();
   }
@@ -144,6 +153,7 @@ describe('videoDownloadPostProcessFiles', () => {
     logger.error.mockClear();
     JobVideoDownload.update.mockResolvedValue([0]);
     mockVideoPersistence.persistDownloadedVideoForJob.mockResolvedValue(null);
+    mockLibraryRootCheck.channelFolderCreationBlock.mockResolvedValue(null);
     Channel.findOne.mockResolvedValue(null);
     Channel.findAll.mockResolvedValue([]);
     ChannelVideo.findAll.mockResolvedValue([]);
@@ -1000,6 +1010,73 @@ describe('videoDownloadPostProcessFiles', () => {
 
       // Verify process.exit was called with error code
       expect(process.exit).toHaveBeenCalledWith(1);
+    });
+
+    describe('downloads folder check before the move', () => {
+      const tempJsonPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123].info.json';
+
+      beforeEach(() => {
+        process.argv = ['node', 'script', tempVideoPath];
+        tempPathManager.isEnabled.mockReturnValue(true);
+        tempPathManager.isTempPath.mockReturnValue(true);
+        tempPathManager.convertTempToFinal.mockImplementation((path) => path.replace('/tmp/youtarr-downloads', '/library'));
+        fs.existsSync.mockImplementation((path) => path === tempJsonPath || path === finalVideoPath);
+      });
+
+      it('asks about the channel folder it is about to create, before creating it', async () => {
+        await loadModule();
+        await settleAsync();
+
+        expect(mockLibraryRootCheck.channelFolderCreationBlock).toHaveBeenCalledWith('/library', '/library', mockVideo);
+        expect(fs.ensureDir).toHaveBeenCalledWith('/library');
+        expect(process.exit).not.toHaveBeenCalled();
+      });
+
+      it('asks about the channel folder inside the subfolder a video is routed to', async () => {
+        const nestedTempPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123]/Video Title [abc123].mp4';
+        const nestedTempJsonPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123]/Video Title [abc123].info.json';
+        process.argv = ['node', 'script', nestedTempPath];
+        Channel.findOne.mockResolvedValue({ sub_folder: 'Entertainment', uploader: 'Channel', enabled: true });
+        fs.existsSync.mockImplementation((path) => path === nestedTempJsonPath || path.includes('/library/__Entertainment/Channel'));
+
+        await loadModule();
+        await settleAsync();
+
+        expect(mockLibraryRootCheck.channelFolderCreationBlock).toHaveBeenCalledWith(
+          '/library', '/library/__Entertainment/Channel', mockVideo
+        );
+      });
+
+      it('leaves the video in temp and exits when the downloads folder looks unmounted', async () => {
+        mockLibraryRootCheck.channelFolderCreationBlock.mockResolvedValue({
+          ok: false, reason: 'empty', path: '/library', message: 'The downloads folder is empty.'
+        });
+
+        await loadModule();
+        await settleAsync();
+
+        expect(fs.ensureDir).not.toHaveBeenCalled();
+        expect(fs.move).not.toHaveBeenCalled();
+        expect(mockVideoPersistence.persistDownloadedVideoForJob).not.toHaveBeenCalled();
+        expect(logger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            reason: 'empty', storageFolder: '/library', detail: 'The downloads folder is empty.', src: tempVideoDir,
+          }),
+          '[Post-Process] The destination folder looks unmounted; not moving this video into it'
+        );
+        expect(process.exit).toHaveBeenCalledWith(1);
+      });
+
+      it('moves the video anyway when the check itself fails', async () => {
+        mockLibraryRootCheck.channelFolderCreationBlock.mockRejectedValue(new Error('db down'));
+
+        await loadModule();
+        await settleAsync();
+
+        expect(fs.ensureDir).toHaveBeenCalledWith('/library');
+        expect(fs.move).toHaveBeenCalled();
+        expect(process.exit).not.toHaveBeenCalled();
+      });
     });
 
     it('exits with error when final file does not exist after move', async () => {
