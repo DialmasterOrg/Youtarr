@@ -67,9 +67,19 @@ function normalizeUrlToVideoId(url) {
   };
 }
 
+// Named one by one: yt-dlp follows the `continue` parameter of a
+// consent.youtube.com URL to any address, so "any subdomain" is not safe.
+const YOUTUBE_HOSTS = new Set([
+  'youtube.com',
+  'www.youtube.com',
+  'm.youtube.com',
+  'music.youtube.com',
+  'youtu.be',
+]);
+
 /**
- * Parse user input as a YouTube URL (youtube.com, any subdomain of it, or
- * youtu.be). Input without a scheme gets https://, as yt-dlp would assume.
+ * Parse user input as a YouTube URL (a host in YOUTUBE_HOSTS). Input without
+ * a scheme gets https://, as yt-dlp would assume.
  * @param {unknown} input
  * @returns {string|null} - The normalized URL, or null when it is not YouTube
  */
@@ -84,8 +94,7 @@ function toYoutubeUrl(input) {
   }
   // A trailing dot is the same host; yt-dlp only knows the name without it.
   if (parsed.hostname.endsWith('.')) parsed.hostname = parsed.hostname.slice(0, -1);
-  const hostname = parsed.hostname.toLowerCase();
-  const isYoutubeHost = hostname === 'youtube.com' || hostname.endsWith('.youtube.com') || hostname === 'youtu.be';
+  const isYoutubeHost = YOUTUBE_HOSTS.has(parsed.hostname.toLowerCase());
   if (!['http:', 'https:'].includes(parsed.protocol) || !isYoutubeHost) return null;
   return parsed.href;
 }
