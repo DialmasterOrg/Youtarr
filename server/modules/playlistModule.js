@@ -75,7 +75,8 @@ class PlaylistModule {
       description: data.description || null,
       thumbnail: data.thumbnail || null,
       video_count: reportedCount(data.playlist_count) ?? 0,
-      url: data.webpage_url || url,
+      // Stored and fetched again on every refresh, so it gets the same check.
+      url: toYoutubeUrl(data.webpage_url) || url,
     };
   }
 

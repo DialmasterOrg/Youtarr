@@ -12,7 +12,7 @@ const { toYoutubeUrl } = require('../youtubeUrlParser');
 
 // What YouTube uses in channel ids and handles. The id is later built into
 // file paths and URLs, so nothing else is stored.
-const CHANNEL_ID_PATTERN = /^[\p{L}\p{N}_@.-]+$/u;
+const CHANNEL_ID_PATTERN = /^[\p{L}\p{M}\p{N}_@.·-]+$/u;
 
 class ChannelProvisioning {
   /**
@@ -108,7 +108,7 @@ class ChannelProvisioning {
    * @returns {Promise<Object>} - Channel information object
    */
   async getChannelInfo(channelUrlOrId, emitMessage = true, enableChannel = false, initialSettings = {}, { skipTabDetection = false } = {}) {
-    const { foundChannel, channelUrl } = await channelIdentity.findChannelByUrlOrId(channelUrlOrId);
+    const { foundChannel, channelUrl: requestedUrl } = await channelIdentity.findChannelByUrlOrId(channelUrlOrId);
 
     if (foundChannel) {
       // A disabled row is a soft-deleted channel; callers that subscribe
@@ -129,8 +129,10 @@ class ChannelProvisioning {
       return { ...channelMappers.mapChannelToResponse(foundChannel), existing: true };
     }
 
-    // yt-dlp fetches whatever URL it is given, so only YouTube reaches it.
-    if (!toYoutubeUrl(channelUrl)) {
+    // yt-dlp fetches whatever URL it is given, so only YouTube reaches it, and
+    // in the parsed form: yt-dlp reads some raw URLs as another host.
+    const channelUrl = toYoutubeUrl(requestedUrl);
+    if (!channelUrl) {
       const error = new Error('Not a YouTube channel URL');
       error.code = 'INVALID_CHANNEL_URL';
       throw error;

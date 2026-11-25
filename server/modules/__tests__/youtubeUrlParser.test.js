@@ -45,6 +45,14 @@ describe('youtubeUrlParser.toYoutubeUrl', () => {
     expect(toYoutubeUrl(' youtube.com/@handle ')).toBe('https://youtube.com/@handle');
   });
 
+  it('drops a trailing dot from the host', () => {
+    expect(toYoutubeUrl('https://www.youtube.com./@handle')).toBe('https://www.youtube.com/@handle');
+  });
+
+  it('returns the parsed form of a URL other parsers read as another host', () => {
+    expect(toYoutubeUrl('https://www.youtube.com\\@127.0.0.1:9911/')).toBe('https://www.youtube.com/@127.0.0.1:9911/');
+  });
+
   it('returns null for other hosts, lookalikes and internal addresses', () => {
     const rejected = [
       'http://127.0.0.1:9911/probe',

@@ -616,6 +616,32 @@ describe('channelProvisioning', () => {
       expect(fetchSpy).not.toHaveBeenCalled();
     });
 
+    test('fetches the parsed URL, not the text it was given', async () => {
+      arrangeNewChannel();
+      const channelIdentity = require('../channelIdentity');
+      const channelMetadataFetcher = require('../channelMetadataFetcher');
+      const raw = 'https://www.youtube.com\\@127.0.0.1:9911/';
+      channelIdentity.findChannelByUrlOrId.mockResolvedValue({ foundChannel: null, channelUrl: raw });
+
+      await channelProvisioning.getChannelInfo(raw, false, true);
+
+      expect(channelMetadataFetcher.fetchChannelMetadata)
+        .toHaveBeenCalledWith('https://www.youtube.com/@127.0.0.1:9911/');
+    });
+
+    test('accepts a handle with combining marks as the channel id', async () => {
+      arrangeNewChannel();
+      const channelMetadataFetcher = require('../channelMetadataFetcher');
+      channelMetadataFetcher.fetchChannelMetadata.mockResolvedValue({
+        uploader_id: '@हिंदी',
+        title: 'Hindi',
+        uploader: 'Hindi',
+        entries: [{ id: 'vid1' }],
+      });
+
+      await expect(channelProvisioning.getChannelInfo(NEW_CHANNEL_URL, false, true)).resolves.toBeDefined();
+    });
+
     test('rejects a channel id that is not a YouTube id or handle', async () => {
       arrangeNewChannel();
       const channelMetadataFetcher = require('../channelMetadataFetcher');

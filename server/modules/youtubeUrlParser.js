@@ -82,6 +82,8 @@ function toYoutubeUrl(input) {
   } catch (error) {
     return null;
   }
+  // A trailing dot is the same host; yt-dlp only knows the name without it.
+  if (parsed.hostname.endsWith('.')) parsed.hostname = parsed.hostname.slice(0, -1);
   const hostname = parsed.hostname.toLowerCase();
   const isYoutubeHost = hostname === 'youtube.com' || hostname.endsWith('.youtube.com') || hostname === 'youtu.be';
   if (!['http:', 'https:'].includes(parsed.protocol) || !isYoutubeHost) return null;
