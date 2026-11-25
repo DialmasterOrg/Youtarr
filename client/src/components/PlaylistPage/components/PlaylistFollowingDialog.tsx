@@ -167,7 +167,7 @@ export default function PlaylistFollowingDialog({ playlist, token, mode, default
               {currentPreview && (
                 <>
                   <p className="text-sm font-medium" aria-live="polite">{selectedIds.length} {selectedIds.length === 1 ? 'video' : 'videos'} selected. Review or adjust the checkboxes before queuing.</p>
-                  <p className="text-xs text-muted-foreground">Previously downloaded, excluded, and unavailable videos are omitted. Downloads use your saved playlist and channel settings.</p>
+                  <p className="text-xs text-muted-foreground">Previously downloaded, ignored, and unavailable videos are omitted. Downloads use your saved playlist and channel settings.</p>
                   {filteredCandidateCount > 0 && (
                     <p className="text-xs text-muted-foreground">
                       {`${filteredCandidateCount} ${filteredCandidateCount === 1 ? 'video' : 'videos'} skipped by this playlist's download filters ${filteredCandidateCount === 1 ? 'is' : 'are'} not preselected. Check any you want anyway.`}

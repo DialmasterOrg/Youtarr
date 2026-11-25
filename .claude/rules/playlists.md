@@ -43,6 +43,11 @@ YouTube playlist following, playlist downloads, and the `.m3u` files.
 - Older requests rotate by `playlistvideos.auto_download_last_attempt_at`, recorded before queue submission (explicit saved batches and scheduled retry selection), outside the pure selector; null attempts stay in the bounded pool. The original batch queues in full.
 - Already-active entries (queued or downloading, per `videoActivity`) are excluded before selection.
 - Without allowRedownload, entries the archive lists without a Videos row (`archiveOnlyIds.findArchiveOnlyIds`; channel-ignored videos excepted, since a download removes their entry) are not eligible on any path: yt-dlp would skip them, so a sweep would queue them again every run.
+- An ignore change only sets `playlistvideos.ignored`; `playlistOutputRefresh.scheduleIfListed` rebuilds the m3u and re-syncs 30 s after the playlist's last change, because a sync can take minutes. Videos with no file, or a deleted one, schedule nothing.
+- `runPending` starts that waiting refresh early: the page calls it on leaving, and Sync now uses it so the pending timer does not sync a second time. The timer is in memory, so a restart drops it.
+- The waiting refresh rechecks `enabled` when it starts, because neither `m3uGenerator` nor `mediaServerSync` does, and a playlist removed meanwhile must keep its outputs unchanged.
+- Bulk ignore covers videos the outputs list (a file, or a missing one); the client confirms those first (`isListedInOutputs`), sends at most 1000 ids per request, and the route schedules a refresh only when a row changed.
+- The page's selection holds only loaded rows: a sort change or refetch reloads page one alone, and an action on an id that is no longer loaded was silently skipped.
 - Explicit-id downloads can override ignored. `following_requested_count` reports eligible outstanding selections in the header without claiming they failed.
 - `playlistDownloadGrouper` resolves per-video settings override -> channel -> playlist -> global and groups videos by the result.
 - `playlistVideoFilters` orders before pagination and resolves `downloadState`/`watchedState` into a youtube_id constraint; models and `watchStatusQueries` are passed at call time so the route keeps its dependency injection.

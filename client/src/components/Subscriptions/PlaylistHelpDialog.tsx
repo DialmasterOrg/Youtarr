@@ -108,7 +108,7 @@ function PlaylistHelpDialog({ open, onClose, isMobile }: PlaylistHelpDialogProps
             <p>
               Use <strong>Choose existing videos</strong> to preview a batch by publication date,
               the beginning or end of the YouTube playlist, or manual selection. Previously downloaded
-              and excluded videos are skipped. Missing publication dates require a positional or manual
+              and ignored videos are skipped. Missing publication dates require a positional or manual
               choice. The full selection queues immediately and does not reset automatic tracking.
               A selected video that is also a new discovery uses only the discovery allowance.
               Saved retries appear separately in Download History.

@@ -465,10 +465,10 @@ describe('usePlaylistDetail sorting and pagination', () => {
     );
   });
 
-  test('markVideoIgnored flips the ignored flag locally without refetching', async () => {
+  test('markVideosIgnored flips the ignored flag of the given rows locally without refetching', async () => {
     axios.get.mockImplementation((url: string) => {
       if (url.endsWith('/videos')) {
-        return Promise.resolve({ data: { total: 1, videos: [makeVideo(1)] } });
+        return Promise.resolve({ data: { total: 3, videos: [makeVideo(1), makeVideo(2), makeVideo(3)] } });
       }
       return Promise.resolve({ data: { playlist: { playlist_id: 'PL1' } } });
     });
@@ -477,14 +477,14 @@ describe('usePlaylistDetail sorting and pagination', () => {
       usePlaylistDetail({ token: 't', playlistId: 'PL1' })
     );
 
-    await waitFor(() => expect(result.current.videos).toHaveLength(1));
+    await waitFor(() => expect(result.current.videos).toHaveLength(3));
     const callsBefore = axios.get.mock.calls.length;
 
     act(() => {
-      result.current.markVideoIgnored('vid1', true);
+      result.current.markVideosIgnored(['vid1', 'vid3'], true);
     });
 
-    expect(result.current.videos[0].ignored).toBe(true);
+    expect(result.current.videos.map((v) => v.ignored)).toEqual([true, false, true]);
     expect(axios.get).toHaveBeenCalledTimes(callsBefore);
   });
 

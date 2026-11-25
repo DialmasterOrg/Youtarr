@@ -15,7 +15,7 @@ import {
 import { PlaylistVideo } from '../../../types/playlist';
 import { formatDurationClock } from '../../../utils';
 import { Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon } from '../../../lib/icons';
-import { isSelectable, statusLabel, PlaylistVideoDates, toDownloadFileProps, showsMembersAccess } from './playlistVideoHelpers';
+import { isListedInOutputs, isSelectable, statusLabel, PlaylistVideoDates, toDownloadFileProps, showsMembersAccess } from './playlistVideoHelpers';
 import MembersAccessChip from '../../shared/MembersAccessChip';
 import DownloadFormatIndicator from '../../shared/DownloadFormatIndicator';
 import WatchedChip from '../../shared/WatchedChip';
@@ -100,11 +100,11 @@ const PlaylistVideoTable: React.FC<PlaylistVideoTableProps> = ({
                     />
                   )}
                   {v.ignored ? (
-                    <Tooltip title="Include this video in this playlist's downloads and server sync again">
+                    <Tooltip title="Unignore: include this video in this playlist's downloads and server sync again">
                       <IconButton
                         size="sm"
                         color="warning"
-                        aria-label={`Include ${label}`}
+                        aria-label={`Unignore ${label}`}
                         onClick={() => onUnignore(v.youtube_id)}
                         disabled={isPending}
                       >
@@ -114,15 +114,15 @@ const PlaylistVideoTable: React.FC<PlaylistVideoTableProps> = ({
                   ) : (
                     <Tooltip
                       title={
-                        v.downloaded
-                          ? 'Exclude from this playlist: removed from synced server playlists and M3U files; the file stays on disk'
-                          : 'Exclude from this playlist: skipped when downloading this playlist'
+                        isListedInOutputs(v)
+                          ? 'Ignore for this playlist: removed from synced server playlists and M3U files; no file is deleted'
+                          : 'Ignore for this playlist: skipped when downloading this playlist'
                       }
                     >
                       <IconButton
                         size="sm"
                         className="text-muted-foreground"
-                        aria-label={`Exclude ${label}`}
+                        aria-label={`Ignore ${label}`}
                         onClick={() => onIgnore(v.youtube_id)}
                         disabled={isPending}
                       >

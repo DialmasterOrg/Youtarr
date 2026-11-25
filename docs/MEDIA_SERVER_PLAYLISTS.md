@@ -107,7 +107,7 @@ Existing downloads are never converted or re-downloaded when the setting changes
 
 ## Replace semantics
 
-When a playlist's video list changes (new videos downloaded, ignored videos removed, downloaded files deleted), Youtarr re-syncs. Videos whose file was deleted are left out (a video marked missing stays, since its file may come back). If none of the playlist's videos has a file left, Plex empties the existing playlist, and Jellyfin and Emby, which cannot hold an empty playlist, delete it; it comes back on the next sync with items:
+When a playlist's video list changes (new videos downloaded, downloaded videos ignored or unignored, downloaded files deleted), Youtarr re-syncs. After an ignore or unignore the sync and the `.m3u` rebuild start about half a minute after the last change, or when you leave the playlist page, so several changes in a row cost one sync. Ignored videos and videos whose file was deleted are left out (a video marked missing stays, since its file may come back). If none of the playlist's videos has a file left, Plex empties the existing playlist, and Jellyfin and Emby, which cannot hold an empty playlist, delete it; it comes back on the next sync with items:
 
 - **Plex**: deletes existing items in place and PUTs the new URI list. Same playlist ID retained.
 - **Jellyfin / Emby**: deletes the entire playlist and recreates it. The `playlist_sync_state.server_playlist_id` is updated to point at the new ID. This is required because both servers' `DELETE /Playlists/{id}/Items` returns errors on current versions; full replace is the only reliable path.

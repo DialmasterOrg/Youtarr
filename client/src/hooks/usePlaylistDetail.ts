@@ -257,13 +257,11 @@ export const usePlaylistDetail = ({
     }
   }, [token, playlistId]);
 
-  const markVideoIgnored = useCallback((youtubeId: string, ignored: boolean) => {
+  const markVideosIgnored = useCallback((youtubeIds: string[], ignored: boolean) => {
+    const ids = new Set(youtubeIds);
+    const ignoredAt = ignored ? new Date().toISOString() : null;
     setVideos((prev) =>
-      prev.map((v) =>
-        v.youtube_id === youtubeId
-          ? { ...v, ignored, ignored_at: ignored ? new Date().toISOString() : null }
-          : v
-      )
+      prev.map((v) => (ids.has(v.youtube_id) ? { ...v, ignored, ignored_at: ignoredAt } : v))
     );
   }, []);
 
@@ -349,7 +347,7 @@ export const usePlaylistDetail = ({
     loadMore,
     refetch: loadInitial,
     refetchMeta,
-    markVideoIgnored,
+    markVideosIgnored,
     markVideoDeleted,
     refresh,
     sync,

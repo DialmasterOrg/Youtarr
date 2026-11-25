@@ -89,14 +89,14 @@ describe('PlaylistVideoTable selection', () => {
     expect(el.tagName.toLowerCase()).toBe('em');
   });
 
-  test('renders the Exclude action and fires onIgnore', () => {
+  test('renders the Ignore action and fires onIgnore', () => {
     const onIgnore = jest.fn();
     render(<PlaylistVideoTable {...baseProps} onIgnore={onIgnore} videos={[makeVideo({ youtube_id: 'x', title: 'Clip X' })]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Exclude Clip X' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ignore Clip X' }));
     expect(onIgnore).toHaveBeenCalledWith('x');
   });
 
-  test('renders the Include action for an excluded video and fires onUnignore', () => {
+  test('renders the Unignore action for an ignored video and fires onUnignore', () => {
     const onUnignore = jest.fn();
     render(
       <PlaylistVideoTable
@@ -105,7 +105,7 @@ describe('PlaylistVideoTable selection', () => {
         videos={[makeVideo({ youtube_id: 'x', title: 'Clip X', ignored: true })]}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Include Clip X' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Unignore Clip X' }));
     expect(onUnignore).toHaveBeenCalledWith('x');
   });
 
@@ -159,7 +159,7 @@ describe('PlaylistVideoTable selection', () => {
       expect(screen.queryByTestId('download-format-indicator')).not.toBeInTheDocument();
     });
 
-    test('keeps the Excluded chip visible next to the indicator for a downloaded excluded video', () => {
+    test('keeps the Ignored chip visible next to the indicator for a downloaded ignored video', () => {
       render(
         <PlaylistVideoTable
           {...baseProps}
@@ -170,7 +170,7 @@ describe('PlaylistVideoTable selection', () => {
         />
       );
       expect(screen.getByTestId('download-format-indicator')).toBeInTheDocument();
-      expect(screen.getByText('Excluded')).toBeInTheDocument();
+      expect(screen.getByText('Ignored')).toBeInTheDocument();
     });
 
     test('renders a Watched chip for a video watched on a server', () => {

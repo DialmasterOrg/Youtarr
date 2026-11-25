@@ -51,14 +51,14 @@ describe('PlaylistVideoCard', () => {
     expect(screen.getByText('Unknown').tagName.toLowerCase()).toBe('em');
   });
 
-  test('fires onIgnore from the Exclude button', () => {
+  test('fires onIgnore from the Ignore button', () => {
     const onIgnore = jest.fn();
     render(<PlaylistVideoCard {...baseProps} onIgnore={onIgnore} video={makeVideo({ youtube_id: 'x' })} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Exclude' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ignore' }));
     expect(onIgnore).toHaveBeenCalledWith('x');
   });
 
-  test('fires onUnignore from the Include button on an excluded video', () => {
+  test('fires onUnignore from the Unignore button on an ignored video', () => {
     const onUnignore = jest.fn();
     render(
       <PlaylistVideoCard
@@ -67,7 +67,7 @@ describe('PlaylistVideoCard', () => {
         video={makeVideo({ youtube_id: 'x', ignored: true })}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Include' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Unignore' }));
     expect(onUnignore).toHaveBeenCalledWith('x');
   });
 
@@ -91,7 +91,7 @@ describe('PlaylistVideoCard', () => {
       expect(screen.queryByTestId('download-format-indicator')).not.toBeInTheDocument();
     });
 
-    test('keeps the Excluded chip visible next to the indicator for a downloaded excluded video', () => {
+    test('keeps the Ignored chip visible next to the indicator for a downloaded ignored video', () => {
       render(
         <PlaylistVideoCard
           {...baseProps}
@@ -102,7 +102,7 @@ describe('PlaylistVideoCard', () => {
         />
       );
       expect(screen.getByTestId('download-format-indicator')).toBeInTheDocument();
-      expect(screen.getByText('Excluded')).toBeInTheDocument();
+      expect(screen.getByText('Ignored')).toBeInTheDocument();
     });
 
     test('renders a Watched chip for a video watched on a server', () => {

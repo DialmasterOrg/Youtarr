@@ -16,7 +16,7 @@ const SIGN_IN_DEMANDED_WITH_COOKIES = 'YouTube asked for a sign-in even though c
 
 const playlistNotFoundMessage = (err) => (err.usedCookies ? NOT_FOUND_WITH_COOKIES : NOT_FOUND_WITHOUT_COOKIES);
 
-function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard, membersAccess = null }) {
+function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, playlistOutputRefresh, storageGuard, membersAccess = null }) {
   const router = express.Router();
   const { Playlist, PlaylistVideo, Video } = models;
   const downloadDeps = { PlaylistVideo, Video, playlistModule, downloadModule, storageGuard };
@@ -751,7 +751,11 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       // The sync polls media-server library scans with backoff and can take
       // minutes; run it in the background and report acceptance. The outcome
       // (last_synced_at / last_error) lands in playlist_sync_state.
-      mediaServers.mediaServerSync.syncPlaylist(p.id).catch(logBgFailure(req, p.playlist_id, 'playlist sync'));
+      // A refresh waiting after an ignore change includes this sync, so it
+      // runs now instead: leaving it waiting would sync a second time.
+      if (!playlistOutputRefresh.runPending(p.id)) {
+        mediaServers.mediaServerSync.syncPlaylist(p.id).catch(logBgFailure(req, p.playlist_id, 'playlist sync'));
+      }
       res.status(202).json({ success: true });
     } catch (err) {
       req.log.error({ err }, 'sync failed');
@@ -1132,7 +1136,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    * /api/playlists/{playlistId}/videos/{ytId}/ignore:
    *   post:
    *     summary: Ignore a playlist video
-   *     description: Ignored videos are skipped by auto and bulk downloads but remain individually downloadable.
+   *     description: Ignored videos are skipped by auto and bulk downloads but remain individually downloadable. They are left out of the playlist's .m3u file and synced media server playlists; when the video has a file, both are rebuilt in the background shortly after the last ignore change.
    *     tags: [Playlists]
    *     parameters:
    *       - in: path
@@ -1163,6 +1167,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
         { ignored: true, ignored_at: new Date() },
         { where: { playlist_id: req.params.playlistId, youtube_id: req.params.ytId } }
       );
+      await playlistOutputRefresh.scheduleIfListed(p.id, [req.params.ytId]);
       res.json({ success: true });
     } catch (err) {
       req.log.error({ err }, 'ignore failed');
@@ -1175,6 +1180,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    * /api/playlists/{playlistId}/videos/{ytId}/unignore:
    *   post:
    *     summary: Un-ignore a playlist video
+   *     description: When the video has a file, the playlist's .m3u file and synced media server playlists are rebuilt in the background shortly after the last ignore change.
    *     tags: [Playlists]
    *     parameters:
    *       - in: path
@@ -1205,10 +1211,120 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
         { ignored: false, ignored_at: null },
         { where: { playlist_id: req.params.playlistId, youtube_id: req.params.ytId } }
       );
+      await playlistOutputRefresh.scheduleIfListed(p.id, [req.params.ytId]);
       res.json({ success: true });
     } catch (err) {
       req.log.error({ err }, 'unignore failed');
       res.status(500).json({ error: 'Unignore failed' });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/playlists/{playlistId}/videos/bulk-ignore:
+   *   post:
+   *     summary: Ignore several playlist videos
+   *     description: Marks the given videos of the playlist as ignored; videos already ignored keep their original ignore time. When any of them has a file, the playlist's .m3u file and synced media server playlists are rebuilt in the background shortly after the last ignore change.
+   *     tags: [Playlists]
+   *     parameters:
+   *       - in: path
+   *         name: playlistId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: YouTube playlist ID
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [videoIds]
+   *             properties:
+   *               videoIds:
+   *                 type: array
+   *                 minItems: 1
+   *                 maxItems: 1000
+   *                 items:
+   *                   type: string
+   *                 description: YouTube video IDs
+   *     responses:
+   *       200:
+   *         description: Number of videos newly ignored
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 ignored:
+   *                   type: integer
+   *       400:
+   *         description: videoIds is missing, empty, too long, or not a list of strings
+   *       404:
+   *         description: Playlist not found
+   *       500:
+   *         description: Internal server error
+   */
+  router.post('/api/playlists/:playlistId/videos/bulk-ignore', verifyToken, async (req, res) => {
+    const { videoIds } = req.body || {};
+    if (!validBatchIds(videoIds) || !videoIds.length) {
+      return res.status(400).json({ error: `Select between 1 and ${MAX_SELECTED_DOWNLOAD_IDS} videos` });
+    }
+    try {
+      const p = await findEnabledPlaylist(req.params.playlistId);
+      if (!p) return res.status(404).json({ error: 'Playlist not found' });
+      const [ignored] = await PlaylistVideo.update(
+        { ignored: true, ignored_at: new Date() },
+        { where: { playlist_id: req.params.playlistId, youtube_id: videoIds, ignored: false } }
+      );
+      // Nothing changed (another session ignored them first): no rebuild is due.
+      if (ignored > 0) await playlistOutputRefresh.scheduleIfListed(p.id, videoIds);
+      res.json({ success: true, ignored });
+    } catch (err) {
+      req.log.error({ err }, 'bulk ignore failed');
+      res.status(500).json({ error: 'Ignore failed' });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/playlists/{playlistId}/run-pending-refresh:
+   *   post:
+   *     summary: Run a waiting playlist refresh now
+   *     description: Ignore changes rebuild the playlist's .m3u file and synced media server playlists after a short delay. This starts a waiting rebuild at once, in the background, and does nothing when none is waiting.
+   *     tags: [Playlists]
+   *     parameters:
+   *       - in: path
+   *         name: playlistId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: YouTube playlist ID
+   *     responses:
+   *       200:
+   *         description: Whether a rebuild was waiting and has started
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 started:
+   *                   type: boolean
+   *       404:
+   *         description: Playlist not found
+   *       500:
+   *         description: Internal server error
+   */
+  router.post('/api/playlists/:playlistId/run-pending-refresh', verifyToken, async (req, res) => {
+    try {
+      const p = await findEnabledPlaylist(req.params.playlistId);
+      if (!p) return res.status(404).json({ error: 'Playlist not found' });
+      res.json({ started: playlistOutputRefresh.runPending(p.id) });
+    } catch (err) {
+      req.log.error({ err }, 'run pending refresh failed');
+      res.status(500).json({ error: 'Could not start the playlist refresh' });
     }
   });
 

@@ -42,6 +42,7 @@ const subfolderModule = require('../modules/subfolderModule');
 const supportPromptModule = require('../modules/supportPromptModule');
 const playlistVideoFilters = require('../modules/playlistVideoFilters');
 const playlistDownloadModule = require('../modules/playlistDownloadModule');
+const playlistOutputRefresh = require('../modules/playlistOutputRefresh');
 const membersAccess = require('../modules/membersAccess');
 const models = require('../models');
 const videoLocalStatus = require('../modules/videoLocalStatus');
@@ -179,7 +180,7 @@ function registerRoutes(app, deps) {
   app.use(createVideoDetailRoutes({ verifyToken, videosModule, videoMetadataModule, mediaServers }));
 
   // Playlist routes
-  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard, membersAccess }));
+  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, playlistOutputRefresh, storageGuard, membersAccess }));
 
   // Media server routes
   app.use(createMediaServerRoutes({ verifyToken, configModule, mediaServers, scheduledTaskManager }));

@@ -19,6 +19,10 @@ export interface VideoListSelectionPillProps<IdType extends string | number> {
   menuId?: string;
 }
 
+// On a phone, a labelled Clear button no longer fits on the row beside three
+// actions, so from that many on it shows its icon alone.
+const ICON_ONLY_CLEAR_MIN_ACTIONS = 3;
+
 function pillClassName(intent: SelectionIntent | undefined, open: boolean): string {
   const base = 'selection-action-fab focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
   const intentClass = intent === 'danger'
@@ -65,6 +69,7 @@ function VideoListSelectionPill<IdType extends string | number>({
   const primaryIntent = actions.find((a) => a.intent && a.intent !== 'base')?.intent;
 
   if (isMobile) {
+    const iconOnlyClear = actions.length >= ICON_ONLY_CLEAR_MIN_ACTIONS;
     return createPortal(
       <div
         style={{
@@ -113,8 +118,10 @@ function VideoListSelectionPill<IdType extends string | number>({
               onClick={clear}
               className="intent-base"
               startIcon={<ClearIcon size={14} />}
+              aria-label={iconOnlyClear ? 'Clear selection' : undefined}
+              title={iconOnlyClear ? 'Clear selection' : undefined}
             >
-              Clear
+              {iconOnlyClear ? null : 'Clear'}
             </Button>
           </div>
         </ActionBar>
