@@ -160,3 +160,100 @@ describe('usePlaylistMutations.updateSettings', () => {
     expect(result.current.error).toBe('Failed to update settings');
   });
 });
+
+describe('usePlaylistMutations.ignoreVideos', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('posts the selected video ids to the bulk ignore endpoint', async () => {
+    axios.post.mockResolvedValue({ data: { success: true, ignored: 2 } });
+
+    const { result } = renderHook(() => usePlaylistMutations({ token: 't' }));
+
+    let res: number | null = null;
+    await act(async () => {
+      res = await result.current.ignoreVideos('PL1', ['a', 'b']);
+    });
+
+    expect(axios.post).toHaveBeenCalledWith(
+      '/api/playlists/PL1/videos/bulk-ignore',
+      { videoIds: ['a', 'b'] },
+      { headers: { 'x-access-token': 't' } }
+    );
+    expect(res).toBe(2);
+  });
+
+  test('returns the number the server newly ignored, which can be fewer than sent', async () => {
+    axios.post.mockResolvedValue({ data: { success: true, ignored: 0 } });
+
+    const { result } = renderHook(() => usePlaylistMutations({ token: 't' }));
+
+    let res: number | null = null;
+    await act(async () => {
+      res = await result.current.ignoreVideos('PL1', ['a', 'b']);
+    });
+
+    expect(res).toBe(0);
+  });
+
+  test('returns null and sets error when the request fails', async () => {
+    axios.post.mockRejectedValue(new Error('boom'));
+
+    const { result } = renderHook(() => usePlaylistMutations({ token: 't' }));
+
+    let res: number | null = 1;
+    await act(async () => {
+      res = await result.current.ignoreVideos('PL1', ['a']);
+    });
+
+    expect(res).toBeNull();
+    expect(result.current.error).toBe('Failed to ignore videos');
+  });
+
+  test('sends nothing without a token', async () => {
+    const { result } = renderHook(() => usePlaylistMutations({ token: null }));
+
+    let res: number | null = 1;
+    await act(async () => {
+      res = await result.current.ignoreVideos('PL1', ['a']);
+    });
+
+    expect(res).toBeNull();
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+});
+
+describe('usePlaylistMutations.runPendingRefresh', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('asks the server to run the waiting refresh', async () => {
+    axios.post.mockResolvedValue({ data: { started: true } });
+
+    const { result } = renderHook(() => usePlaylistMutations({ token: 't' }));
+
+    await act(async () => {
+      await result.current.runPendingRefresh('PL1');
+    });
+
+    expect(axios.post).toHaveBeenCalledWith(
+      '/api/playlists/PL1/run-pending-refresh',
+      {},
+      { headers: { 'x-access-token': 't' } }
+    );
+  });
+
+  test('resolves without setting an error when the request fails', async () => {
+    axios.post.mockRejectedValue(new Error('boom'));
+
+    const { result } = renderHook(() => usePlaylistMutations({ token: 't' }));
+
+    await act(async () => {
+      await result.current.runPendingRefresh('PL1');
+    });
+
+    expect(result.current.error).toBeNull();
+  });
+});

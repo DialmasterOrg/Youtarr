@@ -36,6 +36,13 @@ export function isDeletable(v: PlaylistVideo): boolean {
   return !v.activity && v.downloaded;
 }
 
+// Whether the playlist's .m3u file and synced server playlists list the video:
+// one with a file, or a missing file, which stays listed since it may return.
+// Ignoring such a video removes it from both.
+export function isListedInOutputs(v: PlaylistVideo): boolean {
+  return v.downloaded || (v.previously_downloaded && removedState(v.removed_reason) === 'missing');
+}
+
 // One selection serves both actions: each applies to the selected videos it fits.
 export function isSelectable(v: PlaylistVideo): boolean {
   return isDownloadable(v) || isDeletable(v);
@@ -96,9 +103,9 @@ export function toModalData(v: PlaylistVideo): VideoModalData {
 
 export function statusLabel(v: PlaylistVideo): PlaylistVideoStatus {
   if (v.activity) return { label: v.activity === 'queued' ? 'Queued…' : 'Downloading…', color: 'info' };
-  // "Excluded" is the user-facing name for the per-playlist `ignored` flag:
-  // left out of this playlist's downloads, server sync, and M3U files.
-  if (v.ignored) return { label: 'Excluded', color: 'warning' };
+  // Ignored for this playlist: left out of its downloads, server sync, and
+  // M3U files.
+  if (v.ignored) return { label: 'Ignored', color: 'warning' };
   if (v.youtube_removed) return { label: 'Removed on YT', color: 'error' };
   if (v.downloaded) return { label: 'Downloaded', color: 'success' };
   if (v.previously_downloaded) {

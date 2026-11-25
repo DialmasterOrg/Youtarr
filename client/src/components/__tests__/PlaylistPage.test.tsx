@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import PlaylistPage from '../PlaylistPage';
@@ -12,6 +12,9 @@ const mockMarkVideoDeleted = jest.fn();
 const mockRefetchMeta = jest.fn();
 const mockIgnoreVideo = jest.fn();
 const mockUnignoreVideo = jest.fn();
+const mockIgnoreVideos = jest.fn();
+const mockRunPendingRefresh = jest.fn();
+const mockMarkVideosIgnored = jest.fn();
 const mockDeleteVideosByYoutubeIds = jest.fn();
 const mockRefresh = jest.fn();
 let mockLocationState: unknown = null;
@@ -60,7 +63,7 @@ const mockDownloadedVideo: PlaylistVideo = {
   file_size: 1024,
 };
 
-const mockExcludedVideo: PlaylistVideo = {
+const mockIgnoredVideo: PlaylistVideo = {
   ...mockVideo,
   id: 4,
   youtube_id: 'vidD',
@@ -161,7 +164,7 @@ const mockDetailOverride: { current: Record<string, unknown> } = { current: {} }
 jest.mock('../../hooks/usePlaylistDetail', () => ({
   usePlaylistDetail: () => ({
     playlist: mockPlaylist,
-    videos: mockVideosOverride.current ?? [mockVideo, mockMissingVideo, mockDownloadedVideo, mockExcludedVideo],
+    videos: mockVideosOverride.current ?? [mockVideo, mockMissingVideo, mockDownloadedVideo, mockIgnoredVideo],
     notDownloadedCount: 1,
     loading: false,
     loadingMore: false,
@@ -170,7 +173,7 @@ jest.mock('../../hooks/usePlaylistDetail', () => ({
     loadMore: jest.fn(),
     refetch: jest.fn(),
     refetchMeta: (...args: unknown[]) => mockRefetchMeta(...args),
-    markVideoIgnored: jest.fn(),
+    markVideosIgnored: (...args: unknown[]) => mockMarkVideosIgnored(...args),
     markVideoDeleted: (...args: unknown[]) => mockMarkVideoDeleted(...args),
     refresh: (...args: unknown[]) => mockRefresh(...args),
     sync: jest.fn(),
@@ -188,6 +191,9 @@ jest.mock('../../hooks/usePlaylistMutations', () => ({
     toggleAutoDownload: (...args: unknown[]) => mockToggleAutoDownload(...args),
     ignoreVideo: (...args: unknown[]) => mockIgnoreVideo(...args),
     unignoreVideo: (...args: unknown[]) => mockUnignoreVideo(...args),
+    ignoreVideos: (...args: unknown[]) => mockIgnoreVideos(...args),
+    // The same function every render, as the real hook returns.
+    runPendingRefresh: mockRunPendingRefresh,
   }),
 }));
 
@@ -503,6 +509,23 @@ describe('PlaylistPage mixed selection actions', () => {
     await waitFor(() => expect(mockTriggerDownload).toHaveBeenCalledWith(['vidA'], undefined));
   });
 
+  test('drops selected videos that are no longer loaded after the list reloads', async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderWithProviders(<PlaylistPage token="t" />);
+    await selectVideos(user, ['Vid A', 'Vid C']);
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+
+    // A sort change or refetch reloads the first page, which may not hold them all.
+    mockVideosOverride.current = [mockDownloadedVideo];
+    try {
+      rerender(<PlaylistPage token="t" />);
+
+      expect(await screen.findByText('1 selected')).toBeInTheDocument();
+    } finally {
+      mockVideosOverride.current = null;
+    }
+  });
+
   test('Download is unavailable when only downloaded videos are selected', async () => {
     const user = userEvent.setup();
     renderWithProviders(<PlaylistPage token="t" />);
@@ -574,52 +597,153 @@ describe('PlaylistPage mixed selection actions', () => {
   });
 });
 
-describe('PlaylistPage exclude action feedback', () => {
+describe('PlaylistPage ignore action feedback', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  test('excluding a not-downloaded video explains the download skip', async () => {
+  test('ignoring a not-downloaded video explains the download skip', async () => {
     const user = userEvent.setup();
     mockIgnoreVideo.mockResolvedValue(true);
 
     renderWithProviders(<PlaylistPage token="t" />);
 
-    // Exclude buttons render in list order: Vid A, Vid B, Vid C (Vid D shows Include).
-    await user.click(screen.getAllByRole('button', { name: 'Exclude' })[0]);
+    // Ignore buttons render in list order: Vid A, Vid B, Vid C (Vid D shows Unignore).
+    await user.click(screen.getAllByRole('button', { name: 'Ignore' })[0]);
 
     await waitFor(() => expect(mockIgnoreVideo).toHaveBeenCalledWith('PL1', 'vidA'));
     expect(
-      await screen.findByText(/won't be auto-downloaded/i)
+      await screen.findByText(/won't be downloaded with this playlist/i)
     ).toBeInTheDocument();
   });
 
-  test('excluding a downloaded video explains the sync removal', async () => {
+  test('ignoring a downloaded video says its playlist outputs will update', async () => {
     const user = userEvent.setup();
     mockIgnoreVideo.mockResolvedValue(true);
 
     renderWithProviders(<PlaylistPage token="t" />);
 
-    await user.click(screen.getAllByRole('button', { name: 'Exclude' })[2]);
+    await user.click(screen.getAllByRole('button', { name: 'Ignore' })[2]);
 
     await waitFor(() => expect(mockIgnoreVideo).toHaveBeenCalledWith('PL1', 'vidC'));
     expect(
-      await screen.findByText(/removed from synced server playlists/i)
+      await screen.findByText(/synced server playlists will update shortly; no file is deleted/i)
     ).toBeInTheDocument();
   });
 
-  test('including a video confirms it is back in the playlist', async () => {
+  test('unignoring a video confirms it is no longer ignored', async () => {
     const user = userEvent.setup();
     mockUnignoreVideo.mockResolvedValue(true);
 
     renderWithProviders(<PlaylistPage token="t" />);
 
-    await user.click(screen.getByRole('button', { name: 'Include' }));
+    await user.click(screen.getByRole('button', { name: 'Unignore' }));
 
     await waitFor(() => expect(mockUnignoreVideo).toHaveBeenCalledWith('PL1', 'vidD'));
     expect(
-      await screen.findByText(/included in this playlist again/i)
+      await screen.findByText(/no longer ignored/i)
     ).toBeInTheDocument();
+  });
+});
+
+describe('PlaylistPage bulk ignore', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Resolves to how many videos were newly ignored.
+    mockIgnoreVideos.mockImplementation((_playlistId: string, ids: string[]) => Promise.resolve(ids.length));
+  });
+
+  const selectVideos = async (user: ReturnType<typeof userEvent.setup>, titles: string[]) => {
+    for (const title of titles) {
+      await user.click(screen.getByRole('checkbox', { name: `Select ${title}` }));
+    }
+  };
+
+  test('ignores selected videos that are not downloaded without asking', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await selectVideos(user, ['Vid A', 'Vid B']);
+    await user.click(screen.getByTestId('selection-action-ignore'));
+
+    await waitFor(() => expect(mockIgnoreVideos).toHaveBeenCalledWith('PL1', ['vidA', 'vidB']));
+    expect(mockMarkVideosIgnored).toHaveBeenCalledWith(['vidA', 'vidB'], true);
+    expect(await screen.findByText(/Ignored 2 videos\. They won't be downloaded/)).toBeInTheDocument();
+    expect(screen.queryByText('2 selected')).not.toBeInTheDocument();
+  });
+
+  test('asks first when the selection includes a downloaded video', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await selectVideos(user, ['Vid A', 'Vid C']);
+    await user.click(screen.getByTestId('selection-action-ignore'));
+
+    expect(await screen.findByText('Ignore 2 videos?')).toBeInTheDocument();
+    expect(
+      screen.getByText(/1 of them is listed in this playlist's \.m3u file.*Ignoring removes it from both/)
+    ).toBeInTheDocument();
+    expect(mockIgnoreVideos).not.toHaveBeenCalled();
+  });
+
+  test('ignores the whole selection once confirmed', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await selectVideos(user, ['Vid A', 'Vid C']);
+    await user.click(screen.getByTestId('selection-action-ignore'));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Ignore' }));
+
+    await waitFor(() => expect(mockIgnoreVideos).toHaveBeenCalledWith('PL1', ['vidA', 'vidC']));
+    expect(
+      await screen.findByText(/Ignored 2 videos\. The \.m3u file and any synced server playlists will update shortly/)
+    ).toBeInTheDocument();
+    expect(screen.queryByText('2 selected')).not.toBeInTheDocument();
+  });
+
+  test('cancelling the confirmation ignores nothing and keeps the selection', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await selectVideos(user, ['Vid C']);
+    await user.click(screen.getByTestId('selection-action-ignore'));
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }));
+
+    expect(mockIgnoreVideos).not.toHaveBeenCalled();
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+  });
+
+  test('leaves already ignored videos out of the request', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await selectVideos(user, ['Vid A', 'Vid D']);
+    await user.click(screen.getByTestId('selection-action-ignore'));
+
+    await waitFor(() => expect(mockIgnoreVideos).toHaveBeenCalledWith('PL1', ['vidA']));
+  });
+
+  test('Ignore is unavailable when every selected video is already ignored', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await selectVideos(user, ['Vid D']);
+
+    expect(screen.getByTestId('selection-action-ignore')).toBeDisabled();
+  });
+
+  test('a failed bulk ignore reports it and keeps the selection', async () => {
+    const user = userEvent.setup();
+    mockIgnoreVideos.mockResolvedValue(null);
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await selectVideos(user, ['Vid A']);
+    await user.click(screen.getByTestId('selection-action-ignore'));
+
+    expect(await screen.findByText(/could not ignore the selected videos/i)).toBeInTheDocument();
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    expect(mockMarkVideosIgnored).not.toHaveBeenCalled();
   });
 });
 

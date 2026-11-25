@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { isDeletable, isDownloadable, isSelectable, showsMembersAccess, statusLabel, PublishedDate, toDownloadFileProps, toModalData } from '../playlistVideoHelpers';
+import { isDeletable, isDownloadable, isListedInOutputs, isSelectable, showsMembersAccess, statusLabel, PublishedDate, toDownloadFileProps, toModalData } from '../playlistVideoHelpers';
 import { PlaylistVideo } from '../../../../types/playlist';
 
 function makeVideo(overrides: Partial<PlaylistVideo> = {}): PlaylistVideo {
@@ -73,6 +73,28 @@ describe('isDeletable', () => {
   });
 });
 
+describe('isListedInOutputs', () => {
+  test('true for a downloaded video', () => {
+    expect(isListedInOutputs(makeVideo({ downloaded: true }))).toBe(true);
+  });
+
+  test('true for a video whose file is missing, since it stays listed', () => {
+    expect(
+      isListedInOutputs(makeVideo({ previously_downloaded: true, removed_reason: 'not_found' }))
+    ).toBe(true);
+  });
+
+  test('false for a video the user deleted', () => {
+    expect(
+      isListedInOutputs(makeVideo({ previously_downloaded: true, removed_reason: 'user_deleted' }))
+    ).toBe(false);
+  });
+
+  test('false for a video that was never downloaded', () => {
+    expect(isListedInOutputs(makeVideo())).toBe(false);
+  });
+});
+
 describe('isSelectable', () => {
   test('true for a video that can be downloaded', () => {
     expect(isSelectable(makeVideo())).toBe(true);
@@ -92,9 +114,9 @@ describe('statusLabel', () => {
   test('returns Downloaded for a downloaded video', () => {
     expect(statusLabel(makeVideo({ downloaded: true })).label).toBe('Downloaded');
   });
-  test('returns Excluded (takes priority) for an excluded video', () => {
+  test('returns Ignored (takes priority) for an ignored video', () => {
     expect(statusLabel(makeVideo({ ignored: true, downloaded: true }))).toEqual({
-      label: 'Excluded',
+      label: 'Ignored',
       color: 'warning',
     });
   });
@@ -137,8 +159,8 @@ describe('statusLabel', () => {
       tooltip: "Skipped by this playlist's download filters. Select it to download it anyway.",
     });
   });
-  test('Excluded wins over Filtered, since excluding is the user\'s own choice', () => {
-    expect(statusLabel(makeVideo({ filtered: true, ignored: true })).label).toBe('Excluded');
+  test('Ignored wins over Filtered, since ignoring is the user\'s own choice', () => {
+    expect(statusLabel(makeVideo({ filtered: true, ignored: true })).label).toBe('Ignored');
   });
   test('Deleted wins over Filtered for a video downloaded before', () => {
     expect(statusLabel(makeVideo({ filtered: true, previously_downloaded: true })).label).toBe('Deleted');

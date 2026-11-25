@@ -86,6 +86,11 @@ const buildDeps = (overrides = {}) => ({
   // time, so the filter tests exercise the actual set logic through the route.
   playlistVideoFilters: require('../../modules/playlistVideoFilters'),
   playlistDownloadModule: require('../../modules/playlistDownloadModule'),
+  playlistOutputRefresh: {
+    scheduleIfListed: jest.fn().mockResolvedValue(false),
+    runPending: jest.fn().mockReturnValue(false),
+    ...overrides.playlistOutputRefresh,
+  },
   storageGuard: {
     isPausedError: jest.fn((err) => Boolean(err && err.code === 'DOWNLOADS_PAUSED')),
     ...overrides.storageGuard,
@@ -1996,6 +2001,22 @@ describe('POST /api/playlists/:playlistId/sync', () => {
     releaseSync();
   });
 
+  test('runs a refresh waiting after an ignore change instead of syncing twice', async () => {
+    const playlist = makePlaylist();
+    const deps = buildDeps({
+      Playlist: { findOne: jest.fn().mockResolvedValue(playlist) },
+      playlistOutputRefresh: { runPending: jest.fn().mockReturnValue(true) },
+    });
+    const handler = getHandler('post', '/api/playlists/:playlistId/sync', deps);
+    const res = createResponse();
+
+    await handler({ params: { playlistId: 'PLtest123' }, log: loggerMock }, res);
+
+    expect(deps.playlistOutputRefresh.runPending).toHaveBeenCalledWith(playlist.id);
+    expect(deps.mediaServers.mediaServerSync.syncPlaylist).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(202);
+  });
+
   test('returns 404 when the playlist does not exist or is soft-deleted', async () => {
     const deps = buildDeps({
       Playlist: { findOne: jest.fn().mockResolvedValue(null) },
@@ -2444,6 +2465,16 @@ describe('POST /api/playlists/:playlistId/videos/:ytId/ignore', () => {
     expect(res.json).toHaveBeenCalledWith({ success: true });
   });
 
+  test('schedules the playlist refresh for the ignored video', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.update.mockResolvedValue([1]);
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/videos/:ytId/ignore', deps);
+    await handler({ params: { playlistId: 'PLtest123', ytId: 'vid1' }, log: loggerMock }, createResponse());
+
+    expect(deps.playlistOutputRefresh.scheduleIfListed).toHaveBeenCalledWith(1, ['vid1']);
+  });
+
   test('returns 500 on db error', async () => {
     const deps = buildDeps();
     deps.models.PlaylistVideo.update.mockRejectedValue(new Error('db error'));
@@ -2504,6 +2535,142 @@ describe('POST /api/playlists/:playlistId/videos/:ytId/unignore', () => {
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Unignore failed' });
+  });
+
+  test('schedules the playlist refresh for the unignored video', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.update.mockResolvedValue([1]);
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/videos/:ytId/unignore', deps);
+    await handler({ params: { playlistId: 'PLtest123', ytId: 'vid1' }, log: loggerMock }, createResponse());
+
+    expect(deps.playlistOutputRefresh.scheduleIfListed).toHaveBeenCalledWith(1, ['vid1']);
+  });
+});
+
+describe('POST /api/playlists/:playlistId/videos/bulk-ignore', () => {
+  const ROUTE = '/api/playlists/:playlistId/videos/bulk-ignore';
+  const run = async (deps, body, playlistId = 'PLtest123') => {
+    const res = createResponse();
+    await getHandler('post', ROUTE, deps)({ params: { playlistId }, body, log: loggerMock }, res);
+    return res;
+  };
+
+  test('ignores the given videos that are not ignored yet and reports how many', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.update.mockResolvedValue([2]);
+
+    const res = await run(deps, { videoIds: ['vid1', 'vid2', 'vid3'] });
+
+    expect(deps.models.PlaylistVideo.update).toHaveBeenCalledWith(
+      { ignored: true, ignored_at: expect.any(Date) },
+      { where: { playlist_id: 'PLtest123', youtube_id: ['vid1', 'vid2', 'vid3'], ignored: false } }
+    );
+    expect(res.json).toHaveBeenCalledWith({ success: true, ignored: 2 });
+  });
+
+  test('schedules one playlist refresh for the whole selection', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.update.mockResolvedValue([2]);
+
+    await run(deps, { videoIds: ['vid1', 'vid2'] });
+
+    expect(deps.playlistOutputRefresh.scheduleIfListed).toHaveBeenCalledTimes(1);
+    expect(deps.playlistOutputRefresh.scheduleIfListed).toHaveBeenCalledWith(1, ['vid1', 'vid2']);
+  });
+
+  test('schedules no refresh when every video was already ignored', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.update.mockResolvedValue([0]);
+
+    const res = await run(deps, { videoIds: ['vid1'] });
+
+    expect(res.json).toHaveBeenCalledWith({ success: true, ignored: 0 });
+    expect(deps.playlistOutputRefresh.scheduleIfListed).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['a missing list', {}],
+    ['an empty list', { videoIds: [] }],
+    ['a non-array', { videoIds: 'vid1' }],
+    ['a non-string id', { videoIds: ['vid1', 7] }],
+    ['an empty id', { videoIds: [''] }],
+    ['more ids than the limit', { videoIds: Array.from({ length: 1001 }, (_, i) => `vid${i}`) }],
+  ])('returns 400 for %s', async (_name, body) => {
+    const deps = buildDeps();
+
+    const res = await run(deps, body);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Select between 1 and 1000 videos' });
+    expect(deps.models.PlaylistVideo.update).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 for a soft-deleted playlist without updating rows', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(null);
+
+    const res = await run(deps, { videoIds: ['vid1'] }, 'PLdeleted');
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Playlist not found' });
+    expect(deps.models.PlaylistVideo.update).not.toHaveBeenCalled();
+  });
+
+  test('returns 500 on db error', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.update.mockRejectedValue(new Error('db error'));
+
+    const res = await run(deps, { videoIds: ['vid1'] });
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Ignore failed' });
+    expect(deps.playlistOutputRefresh.scheduleIfListed).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/playlists/:playlistId/run-pending-refresh', () => {
+  const ROUTE = '/api/playlists/:playlistId/run-pending-refresh';
+
+  test('starts a waiting refresh and reports it', async () => {
+    const deps = buildDeps({ playlistOutputRefresh: { runPending: jest.fn().mockReturnValue(true) } });
+    const res = createResponse();
+
+    await getHandler('post', ROUTE, deps)({ params: { playlistId: 'PLtest123' }, log: loggerMock }, res);
+
+    expect(deps.playlistOutputRefresh.runPending).toHaveBeenCalledWith(1);
+    expect(res.json).toHaveBeenCalledWith({ started: true });
+  });
+
+  test('reports that nothing was waiting', async () => {
+    const deps = buildDeps();
+    const res = createResponse();
+
+    await getHandler('post', ROUTE, deps)({ params: { playlistId: 'PLtest123' }, log: loggerMock }, res);
+
+    expect(res.json).toHaveBeenCalledWith({ started: false });
+  });
+
+  test('returns 404 for a soft-deleted playlist', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(null);
+    const res = createResponse();
+
+    await getHandler('post', ROUTE, deps)({ params: { playlistId: 'PLdeleted' }, log: loggerMock }, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(deps.playlistOutputRefresh.runPending).not.toHaveBeenCalled();
+  });
+
+  test('returns 500 on db error', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockRejectedValue(new Error('db down'));
+    const res = createResponse();
+
+    await getHandler('post', ROUTE, deps)({ params: { playlistId: 'PLtest123' }, log: loggerMock }, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Could not start the playlist refresh' });
   });
 });
 

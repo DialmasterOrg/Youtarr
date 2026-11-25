@@ -32,11 +32,12 @@ import PlaylistWatchedFilterControl from './PlaylistPage/components/PlaylistWatc
 import { useVideoSelection } from './shared/VideoList/hooks/useVideoSelection';
 import VideoListSelectionPill from './shared/VideoList/VideoListSelectionPill';
 import { SelectionAction } from './shared/VideoList/types';
-import { Delete as DeleteIcon, Download as DownloadIcon } from '../lib/icons';
+import { Block as BlockIcon, Delete as DeleteIcon, Download as DownloadIcon } from '../lib/icons';
 import PlaylistFollowingDialog, { FollowingDialogMode } from './PlaylistPage/components/PlaylistFollowingDialog';
 import PlaylistSettingsDialog from './PlaylistPage/components/PlaylistSettingsDialog';
 import { isDeletable, isDownloadable, toModalData } from './PlaylistPage/components/playlistVideoHelpers';
 import { usePlaylistVideoDeletion } from './PlaylistPage/hooks/usePlaylistVideoDeletion';
+import { usePlaylistVideoIgnore } from './PlaylistPage/hooks/usePlaylistVideoIgnore';
 import { usePlaylistSyncUpdates } from './PlaylistPage/hooks/usePlaylistSyncUpdates';
 import DeleteVideosDialog from './shared/DeleteVideosDialog';
 import DownloadSettingsDialog from './DownloadManager/ManualDownload/DownloadSettingsDialog';
@@ -82,7 +83,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     loadMore,
     refetch,
     refetchMeta,
-    markVideoIgnored,
+    markVideosIgnored,
     markVideoDeleted,
     refresh,
     sync,
@@ -127,8 +128,6 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     toggleSyncTarget,
     togglePublic,
     toggleAutoDownload,
-    ignoreVideo,
-    unignoreVideo,
   } = usePlaylistMutations({ token });
 
   const navigate = useNavigate();
@@ -142,7 +141,6 @@ function PlaylistPage({ token }: PlaylistPageProps) {
   const [followingMode, setFollowingMode] = useState<FollowingDialogMode | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [confirmPublicOpen, setConfirmPublicOpen] = useState(false);
-  const [pendingVideoId, setPendingVideoId] = useState<string | null>(null);
   const [modalVideo, setModalVideo] = useState<VideoModalData | null>(null);
   const [snackbar, setSnackbar] = useState<SnackbarState>({
     open: false,
@@ -203,6 +201,17 @@ function PlaylistPage({ token }: PlaylistPageProps) {
 
   const deletion = usePlaylistVideoDeletion({ token, markVideoDeleted, refetchMeta });
 
+  const clearSelection = useCallback(() => selectionClearRef.current(), []);
+  const ignore = usePlaylistVideoIgnore({
+    token,
+    playlistId: playlist?.playlist_id ?? null,
+    videosById,
+    markVideosIgnored,
+    refetchMeta,
+    notify: showSnackbar,
+    onBulkIgnored: clearSelection,
+  });
+
   const handleDownloadSelected = useCallback((ids: string[]) => {
     const downloadable = idsThatFit(ids, isDownloadable);
     if (!downloadable.length) return;
@@ -260,6 +269,14 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         onClick: handleDownloadSelected,
       },
       {
+        id: 'ignore',
+        label: 'Ignore',
+        intent: 'warning',
+        icon: <BlockIcon size={14} />,
+        disabled: (ids) => !ignore.canBulkIgnore(ids),
+        onClick: ignore.requestBulkIgnore,
+      },
+      {
         id: 'delete',
         label: 'Delete',
         intent: 'danger',
@@ -268,22 +285,25 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         onClick: (ids) => deletion.requestDelete(idsThatFit(ids, isDeletable)),
       },
     ],
-    [handleDownloadSelected, idsThatFit, deletion.loading, deletion.requestDelete]
+    [handleDownloadSelected, idsThatFit, deletion.loading, deletion.requestDelete, ignore.canBulkIgnore, ignore.requestBulkIgnore]
   );
 
   const selection = useVideoSelection<string>({ actions: selectionActions });
+  // The selection holds only loaded videos that are not queued or downloading.
+  // A sort change or a refetch reloads the first page alone, and an action
+  // cannot apply to a video that is no longer loaded.
   useEffect(() => {
-    const eligible = selection.selectedIds.filter(id => !snapshot.videos[id]?.state);
+    const eligible = selection.selectedIds.filter(id => videosById.has(id) && !snapshot.videos[id]?.state);
     if (eligible.length !== selection.selectedIds.length) selection.set(eligible);
-  }, [snapshot, selection.selectedIds, selection.set]);
+  }, [snapshot, videosById, selection.selectedIds, selection.set]);
 
   useEffect(() => {
     selectionClearRef.current = selection.clear;
   }, [selection.clear]);
 
   // Clear selection when a filter changes so bulk actions can't fire on
-  // videos hidden by the new filter. Sort is deliberately excluded: it does
-  // not change the selection's eligible set.
+  // videos hidden by the new filter. Sort is not listed: its reload only drops
+  // the selected videos that are no longer loaded (the effect above).
   useEffect(() => {
     selection.clear();
   }, [downloadState, watchedState, selection.clear]);
@@ -346,28 +366,6 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     [playlist, togglePublic, refetch, showSnackbar]
   );
 
-  const handleIgnoreVideo = useCallback(
-    async (ytId: string) => {
-      if (!playlist) return;
-      setPendingVideoId(ytId);
-      const ok = await ignoreVideo(playlist.playlist_id, ytId);
-      setPendingVideoId(null);
-      if (ok) {
-        // Update the row in place and refresh only the count, so the user's
-        // scroll position in a long (paginated) list is preserved.
-        markVideoIgnored(ytId, true);
-        const isDownloaded = videos.find((v) => v.youtube_id === ytId)?.downloaded;
-        showSnackbar(
-          isDownloaded
-            ? 'Excluded from this playlist. It will be removed from synced server playlists; the file stays on disk.'
-            : 'Excluded from this playlist. It won\'t be auto-downloaded.'
-        );
-        await refetchMeta();
-      }
-    },
-    [playlist, ignoreVideo, markVideoIgnored, refetchMeta, videos, showSnackbar]
-  );
-
   const handleConfirmDelete = async () => {
     const outcome = await deletion.confirmDelete();
     if (!outcome) return;
@@ -382,21 +380,6 @@ function PlaylistPage({ token }: PlaylistPageProps) {
       void refetchMeta();
     },
     [markVideoDeleted, refetchMeta]
-  );
-
-  const handleUnignoreVideo = useCallback(
-    async (ytId: string) => {
-      if (!playlist) return;
-      setPendingVideoId(ytId);
-      const ok = await unignoreVideo(playlist.playlist_id, ytId);
-      setPendingVideoId(null);
-      if (ok) {
-        markVideoIgnored(ytId, false);
-        showSnackbar('Included in this playlist again.');
-        await refetchMeta();
-      }
-    },
-    [playlist, unignoreVideo, markVideoIgnored, refetchMeta, showSnackbar]
   );
 
   const handleSettingsSaved = useCallback(
@@ -510,10 +493,10 @@ function PlaylistPage({ token }: PlaylistPageProps) {
             videos={videos}
             sortOrder={sortOrder}
             loading={loading}
-            onIgnore={handleIgnoreVideo}
-            onUnignore={handleUnignoreVideo}
+            onIgnore={ignore.ignoreOne}
+            onUnignore={ignore.unignoreOne}
             onVideoClick={(v) => setModalVideo(toModalData(v))}
-            pendingId={pendingVideoId}
+            pendingId={ignore.pendingVideoId}
             isSelected={selection.isSelected}
             onToggle={selection.toggle}
             onSelectAll={(ids) => selection.selectAll(ids)}
@@ -595,6 +578,29 @@ function PlaylistPage({ token }: PlaylistPageProps) {
             onClick={() => handleConfirmPublic(!playlist.public_on_servers)}
           >
             Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={ignore.dialogOpen} onClose={ignore.cancelBulkIgnore} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Ignore {ignore.confirmCount} video{ignore.confirmCount === 1 ? '' : 's'}?
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            {ignore.confirmListedCount === ignore.confirmCount
+              ? (ignore.confirmCount === 1 ? 'This video is ' : 'These videos are ')
+              : `${ignore.confirmListedCount} of them ${ignore.confirmListedCount === 1 ? 'is' : 'are'} `}
+            listed in this playlist&apos;s .m3u file and synced server playlists. Ignoring
+            removes {ignore.confirmListedCount === 1 ? 'it' : 'them'} from both. No file is deleted.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button variant="text" onClick={ignore.cancelBulkIgnore}>
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={ignore.confirmBulkIgnore}>
+            Ignore
           </Button>
         </DialogActions>
       </Dialog>

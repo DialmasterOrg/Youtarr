@@ -87,6 +87,30 @@ describe('VideoListSelectionPill', () => {
       await user.click(screen.getByRole('button', { name: /^clear$/i }));
       expect(screen.queryByText(/selected/i)).not.toBeInTheDocument();
     });
+
+    describe('with three actions', () => {
+      const threeActions = [
+        { id: 'download', label: 'Download', onClick: jest.fn() },
+        { id: 'ignore', label: 'Ignore', onClick: jest.fn() },
+        { id: 'delete', label: 'Delete', onClick: jest.fn() },
+      ];
+
+      test('shows Clear as an icon alone so it fits beside the actions', () => {
+        renderWithProviders(<Harness initialIds={[1]} isMobile actions={threeActions} />);
+
+        expect(screen.getByRole('button', { name: 'Clear selection' })).toBeInTheDocument();
+        expect(screen.queryByText('Clear')).not.toBeInTheDocument();
+      });
+
+      test('the icon-only Clear still clears the selection', async () => {
+        const user = userEvent.setup();
+        renderWithProviders(<Harness initialIds={[1, 2]} isMobile actions={threeActions} />);
+
+        await user.click(screen.getByRole('button', { name: 'Clear selection' }));
+
+        expect(screen.queryByText(/selected/i)).not.toBeInTheDocument();
+      });
+    });
   });
 
   describe('desktop layout', () => {

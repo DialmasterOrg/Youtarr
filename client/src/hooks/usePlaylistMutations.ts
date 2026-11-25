@@ -230,6 +230,48 @@ export const usePlaylistMutations = ({ token }: UsePlaylistMutationsParams) => {
     [token]
   );
 
+  // Resolves to how many of the videos were newly ignored (the server leaves
+  // already ignored ones alone), or null when the request failed.
+  const ignoreVideos = useCallback(
+    async (playlistId: string, ytIds: string[]): Promise<number | null> => {
+      if (!token) return null;
+      setPending(true);
+      setError(null);
+      try {
+        const res = await axios.post<{ ignored?: number }>(
+          `/api/playlists/${playlistId}/videos/bulk-ignore`,
+          { videoIds: ytIds },
+          { headers: authHeaders(token) }
+        );
+        return typeof res.data?.ignored === 'number' ? res.data.ignored : ytIds.length;
+      } catch (err: unknown) {
+        setError(extractMessage(err, 'Failed to ignore videos'));
+        return null;
+      } finally {
+        setPending(false);
+      }
+    },
+    [token]
+  );
+
+  // Called as the playlist page unmounts, so it sets no state. A failure needs
+  // no handling: the server runs the waiting refresh itself after its delay.
+  const runPendingRefresh = useCallback(
+    async (playlistId: string): Promise<void> => {
+      if (!token) return;
+      try {
+        await axios.post(
+          `/api/playlists/${playlistId}/run-pending-refresh`,
+          {},
+          { headers: authHeaders(token) }
+        );
+      } catch {
+        // Covered by the server's own delay.
+      }
+    },
+    [token]
+  );
+
   return {
     error,
     pending,
@@ -243,5 +285,7 @@ export const usePlaylistMutations = ({ token }: UsePlaylistMutationsParams) => {
     toggleAutoDownload,
     ignoreVideo,
     unignoreVideo,
+    ignoreVideos,
+    runPendingRefresh,
   };
 };

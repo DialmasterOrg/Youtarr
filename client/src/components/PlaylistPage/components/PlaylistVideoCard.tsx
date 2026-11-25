@@ -3,7 +3,7 @@ import { PlaylistSortOrder } from '../../../hooks/usePlaylistDetail';
 import { Button, Card, CardContent, Checkbox, Chip, Tooltip, Typography } from '../../ui';
 import { PlaylistVideo } from '../../../types/playlist';
 import { formatDurationClock } from '../../../utils';
-import { isSelectable, statusLabel, PlaylistVideoDates, toDownloadFileProps, showsMembersAccess } from './playlistVideoHelpers';
+import { isListedInOutputs, isSelectable, statusLabel, PlaylistVideoDates, toDownloadFileProps, showsMembersAccess } from './playlistVideoHelpers';
 import MembersAccessChip from '../../shared/MembersAccessChip';
 import DownloadFormatIndicator from '../../shared/DownloadFormatIndicator';
 import WatchedChip from '../../shared/WatchedChip';
@@ -102,7 +102,7 @@ const PlaylistVideoCard: React.FC<PlaylistVideoCardProps> = ({
         </div>
         <div className="mt-2" onClick={(e) => e.stopPropagation()}>
           {video.ignored ? (
-            <Tooltip title="Include this video in this playlist's downloads and server sync again">
+            <Tooltip title="Unignore: include this video in this playlist's downloads and server sync again">
               <Button
                 size="sm"
                 variant="outlined"
@@ -110,15 +110,15 @@ const PlaylistVideoCard: React.FC<PlaylistVideoCardProps> = ({
                 onClick={() => onUnignore(video.youtube_id)}
                 disabled={isPending}
               >
-                Include
+                Unignore
               </Button>
             </Tooltip>
           ) : (
             <Tooltip
               title={
-                video.downloaded
-                  ? 'Exclude from this playlist: removed from synced server playlists and M3U files; the file stays on disk'
-                  : 'Exclude from this playlist: skipped when downloading this playlist'
+                isListedInOutputs(video)
+                  ? 'Ignore for this playlist: removed from synced server playlists and M3U files; no file is deleted'
+                  : 'Ignore for this playlist: skipped when downloading this playlist'
               }
             >
               <Button
@@ -128,7 +128,7 @@ const PlaylistVideoCard: React.FC<PlaylistVideoCardProps> = ({
                 onClick={() => onIgnore(video.youtube_id)}
                 disabled={isPending}
               >
-                Exclude
+                Ignore
               </Button>
             </Tooltip>
           )}
