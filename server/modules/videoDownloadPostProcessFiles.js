@@ -11,8 +11,9 @@ const downloadSettingsResolver = require('./download/downloadSettingsResolver');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const { selectSubtitleFilesToPrune } = require('./download/subtitleSidecarPruner');
 const { slimInfoJson } = require('./infoJsonSlimmer');
-const { JobVideoDownload } = require('../models');
+const { JobVideoDownload, Video } = require('../models');
 const videoPersistence = require('./videoPersistence');
+const { channelFolderCreationBlock } = require('./libraryRootCheck');
 const { VIDEO_PERSISTED_MARKER } = require('./constants/outputMarkers');
 const { CHANNEL_THUMBNAIL_SCALE_FILTER } = require('./constants/channelThumbnail');
 const logger = require('../logger');
@@ -395,6 +396,18 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
 }
 
 // Main execution wrapped in async IIFE to handle async operations
+// The library check failure that stops this channel folder from being created
+// (libraryRootCheck), or null. A check that cannot run never blocks the move:
+// fail open, like the pause.
+async function channelFolderBlock(channelFolder) {
+  try {
+    return await channelFolderCreationBlock(configModule.directoryPath, channelFolder, Video);
+  } catch (err) {
+    logger.warn({ err }, '[Post-Process] Could not check the downloads folder before the move; moving anyway');
+    return null;
+  }
+}
+
 (async () => {
   if (fs.existsSync(jsonPath)) {
     // Read the JSON file to get the upload_date. Every later write of
@@ -763,6 +776,27 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
       }
 
       logger.info({ from: videoDirectory, to: targetVideoDirectory, isFlatMode }, '[Post-Process] Moving video directory');
+
+      // The download pause is only checked when a job starts, and never for a
+      // `__subfolder`. A share that is down leaves a bare mount point here, and
+      // a channel folder created on it would make the folder look like the
+      // library to every later check. Ask before creating one.
+      const libraryBlock = await channelFolderBlock(targetChannelFolderForMove);
+      if (libraryBlock) {
+        logger.error(
+          {
+            reason: libraryBlock.reason,
+            storageFolder: libraryBlock.path,
+            detail: libraryBlock.message,
+            src: videoDirectory,
+            dest: targetVideoDirectory
+          },
+          '[Post-Process] The destination folder looks unmounted; not moving this video into it'
+        );
+        logger.error({ videoDirectory }, '[Post-Process] Files remain in temp location');
+        process.exit(1);
+        return;
+      }
 
       try {
         // Ensure parent channel directory exists (with retries for NFS/cross-filesystem transient errors)

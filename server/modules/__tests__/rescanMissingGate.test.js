@@ -1,4 +1,5 @@
 /* eslint-env jest */
+jest.mock('../../logger');
 const { buildMissingGate, loadMissingGate } = require('../rescanMissingGate');
 
 const ROOT = '/data/youtube';
@@ -24,7 +25,7 @@ describe('buildMissingGate', () => {
     const rows = rowsIn('Channel', 16801);
     const gate = buildMissingGate(rows, walkFound(rows.slice(0, 2)), ROOT);
 
-    expect(gate.held).toEqual([{ dir: ROOT, total: 16801, notFound: 16799 }]);
+    expect(gate.held).toEqual([{ dir: ROOT, total: 16801, notFound: 16799, channelFolderGone: 16799 }]);
     expect(gate.holdsBack(rows[500])).toBe(true);
     expect(gate.message).toBe('Only 2 of the 16,801 downloaded videos stored in the downloads folder were found.');
   });
@@ -41,7 +42,7 @@ describe('buildMissingGate', () => {
     const channels = rowsIn('Channel', 200);
     const gate = buildMissingGate([...music, ...channels], walkFound(channels), ROOT);
 
-    expect(gate.held).toEqual([{ dir: `${ROOT}/__Music`, total: 40, notFound: 40 }]);
+    expect(gate.held).toEqual([{ dir: `${ROOT}/__Music`, total: 40, notFound: 40, channelFolderGone: 40 }]);
     expect(gate.holdsBack(music[0])).toBe(true);
     expect(gate.holdsBack(channels[0])).toBe(false);
     expect(gate.message).toBe('Only 0 of the 40 downloaded videos stored in the subfolder __Music were found.');
@@ -53,7 +54,7 @@ describe('buildMissingGate', () => {
     }));
     const gate = buildMissingGate(rows, new Map(), ROOT);
 
-    expect(gate.held).toEqual([{ dir: `${ROOT}/__Music`, total: 30, notFound: 30 }]);
+    expect(gate.held).toEqual([{ dir: `${ROOT}/__Music`, total: 30, notFound: 30, channelFolderGone: 30 }]);
   });
 
   test('ignores videos stored outside the downloads folder', () => {
@@ -68,16 +69,54 @@ describe('buildMissingGate', () => {
     const rows = Array.from({ length: 30 }, (_, i) => ({ youtubeId: `r${i}`, filePath: `${ROOT}/__odd name [r${i}].mp4`, audioFilePath: null }));
     const gate = buildMissingGate(rows, new Map(), ROOT);
 
-    expect(gate.held).toEqual([{ dir: ROOT, total: 30, notFound: 30 }]);
+    expect(gate.held).toEqual([{ dir: ROOT, total: 30, notFound: 30, channelFolderGone: 30 }]);
+  });
+
+  test('does not count videos gone from a channel folder that is still on disk', () => {
+    const rows = rowsIn('Channel', 56);
+    const gate = buildMissingGate(rows, walkFound(rows.slice(0, 15)), ROOT, new Set([`${ROOT}/Channel`]));
+
+    expect(gate.held).toEqual([]);
+    expect(gate.holdsBack(rows[55])).toBe(false);
+  });
+
+  test('still holds a folder back when most of its videos went with their channel folders', () => {
+    const deleted = rowsIn('Kept Channel', 10, 'kept');
+    const gone = rowsIn('Gone Channel', 40, 'gone');
+    const gate = buildMissingGate([...deleted, ...gone], new Map(), ROOT, new Set([`${ROOT}/Kept Channel`]));
+
+    expect(gate.held).toEqual([{ dir: ROOT, total: 50, notFound: 50, channelFolderGone: 40 }]);
+    expect(gate.message).toBe('Only 0 of the 50 downloaded videos stored in the downloads folder were found.');
+  });
+
+  test('finds the channel folder inside a subfolder', () => {
+    const music = rowsIn('__Music/Artist', 40, 'music');
+    const gate = buildMissingGate(music, new Map(), ROOT, new Set([`${ROOT}/__Music/Artist`]));
+
+    expect(gate.held).toEqual([]);
+  });
+
+  test('counts a video stored with no channel folder as gone with it', () => {
+    const rows = Array.from({ length: 30 }, (_, i) => ({ youtubeId: `m${i}`, filePath: `${ROOT}/__Music/Track [m${i}].mp3`, audioFilePath: null }));
+    const gate = buildMissingGate(rows, new Map(), ROOT, new Set([`${ROOT}/__Music`]));
+
+    expect(gate.held).toEqual([{ dir: `${ROOT}/__Music`, total: 30, notFound: 30, channelFolderGone: 30 }]);
   });
 });
 
 describe('loadMissingGate', () => {
+  const fsError = (code) => Object.assign(new Error(code), { code });
+  // A stat that finds only the given folders.
+  const statFinding = (...folders) => jest.fn(async (target) => {
+    if (folders.includes(target)) return { isDirectory: () => true };
+    throw fsError('ENOENT');
+  });
+
   test('reads the location of every present video', async () => {
     const rows = rowsIn('Channel', 30);
     const Video = { findAll: jest.fn().mockResolvedValue(rows) };
 
-    const gate = await loadMissingGate(Video, new Map(), ROOT);
+    const gate = await loadMissingGate(Video, new Map(), ROOT, { stat: statFinding() });
 
     expect(Video.findAll).toHaveBeenCalledWith({
       attributes: ['youtubeId', 'filePath', 'audioFilePath'],
@@ -85,5 +124,43 @@ describe('loadMissingGate', () => {
       raw: true,
     });
     expect(gate.held).toHaveLength(1);
+  });
+
+  test('holds nothing back when the missing videos\' channel folders are still on disk', async () => {
+    const rows = [...rowsIn('Channel A', 30, 'a'), ...rowsIn('Channel B', 26, 'b')];
+    const Video = { findAll: jest.fn().mockResolvedValue(rows) };
+    const stat = statFinding(`${ROOT}/Channel A`, `${ROOT}/Channel B`);
+
+    const gate = await loadMissingGate(Video, walkFound(rows.slice(0, 15)), ROOT, { stat });
+
+    expect(gate.held).toEqual([]);
+    expect(gate.holdsBack(rows[55])).toBe(false);
+  });
+
+  test('checks each channel folder once', async () => {
+    const rows = [...rowsIn('Channel A', 30, 'a'), ...rowsIn('Channel B', 26, 'b')];
+    const stat = statFinding();
+
+    await loadMissingGate({ findAll: jest.fn().mockResolvedValue(rows) }, new Map(), ROOT, { stat });
+
+    expect(stat.mock.calls.map(([target]) => target).sort()).toEqual([`${ROOT}/Channel A`, `${ROOT}/Channel B`]);
+  });
+
+  test('holds the folder back when a channel folder cannot be checked', async () => {
+    const rows = rowsIn('Channel', 30);
+    const stat = jest.fn().mockRejectedValue(fsError('EACCES'));
+
+    const gate = await loadMissingGate({ findAll: jest.fn().mockResolvedValue(rows) }, new Map(), ROOT, { stat });
+
+    expect(gate.held).toEqual([{ dir: ROOT, total: 30, notFound: 30, channelFolderGone: 30 }]);
+  });
+
+  test('does not touch the disk when the walk found the library', async () => {
+    const rows = rowsIn('Channel', 100);
+    const stat = statFinding();
+
+    await loadMissingGate({ findAll: jest.fn().mockResolvedValue(rows) }, walkFound(rows.slice(0, 60)), ROOT, { stat });
+
+    expect(stat).not.toHaveBeenCalled();
   });
 });
