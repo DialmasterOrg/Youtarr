@@ -162,7 +162,8 @@ class ChannelProvisioning {
     }
 
     // Extract the actual current handle URL from the response
-    const actualChannelUrl = channelData.channel_url || channelData.url || channelUrl;
+    // Stored and fetched again later, so it gets the same check.
+    const actualChannelUrl = toYoutubeUrl(channelData.channel_url || channelData.url) || channelUrl;
 
     // Get the proper channel ID - prefer channel_id, then uploader_id, fallback to id
     // yt-dlp sometimes returns the handle as 'id', but channel_id or uploader_id should have the UCxxx format

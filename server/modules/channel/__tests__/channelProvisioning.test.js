@@ -629,6 +629,22 @@ describe('channelProvisioning', () => {
         .toHaveBeenCalledWith('https://www.youtube.com/@127.0.0.1:9911/');
     });
 
+    test('stores the requested URL when yt-dlp reports a non-YouTube channel URL', async () => {
+      arrangeNewChannel();
+      const channelMetadataFetcher = require('../channelMetadataFetcher');
+      channelMetadataFetcher.fetchChannelMetadata.mockResolvedValue({
+        channel_id: 'UC999',
+        channel_url: 'http://127.0.0.1:9911/probe',
+        title: 'New Channel',
+        uploader: 'New Channel',
+        entries: [{ id: 'vid1' }],
+      });
+
+      await channelProvisioning.getChannelInfo(NEW_CHANNEL_URL, false, true);
+
+      expect(Channel.create).toHaveBeenCalledWith(expect.objectContaining({ url: NEW_CHANNEL_URL }));
+    });
+
     test('accepts a handle with combining marks as the channel id', async () => {
       arrangeNewChannel();
       const channelMetadataFetcher = require('../channelMetadataFetcher');
