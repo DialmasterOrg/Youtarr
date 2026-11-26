@@ -58,6 +58,7 @@ class YtdlpOutputRouter {
     // Partial stderr line waiting on its newline, so a split line never
     // matches against half of itself.
     this.stderrLineRemainder = '';
+    this.stdoutLineRemainder = '';
     // After dispose() (only possible when the executor stopped waiting for
     // stdio to close) output is logged but not classified or broadcast.
     this.disposed = false;
@@ -104,9 +105,11 @@ class YtdlpOutputRouter {
       logger.debug({ source: 'yt-dlp', afterDispose: true }, chunk.toString());
       return;
     }
-    chunk
-      .toString()
-      .split('\n')
+    // Complete lines only, like stderr: a chunk can end mid-line, and half a
+    // line reads as something else (a title cut just before "ERROR:").
+    const lines = (this.stdoutLineRemainder + chunk.toString()).split('\n');
+    this.stdoutLineRemainder = lines.pop();
+    lines
       .map((line) => line.trim())
       .filter(Boolean)
       .forEach((line) => {
@@ -197,9 +200,11 @@ class YtdlpOutputRouter {
         }
 
         // Suppress the line when errorTracker.handleErrorLine consumed it
-        // (expected skip or termination).
+        // (expected skip or termination). Only at the start of the line:
+        // archive and filter skips print the video's title, which can
+        // contain "ERROR:".
         let suppressErrorLine = false;
-        if (line.includes('ERROR:')) {
+        if (line.startsWith('ERROR:')) {
           suppressErrorLine = this.errorTracker.handleErrorLine(line, 'stdout');
         }
 
@@ -234,6 +239,14 @@ class YtdlpOutputRouter {
           this.emitCookiesSuggestion();
         }
       });
+  }
+
+  // Process whatever is still buffered without a newline.
+  flushStdout() {
+    if (this.stdoutLineRemainder.trim()) {
+      this.handleStdoutChunk('\n');
+    }
+    this.stdoutLineRemainder = '';
   }
 
   handleStderrChunk(data) {
@@ -489,7 +502,8 @@ class YtdlpOutputRouter {
 
   // Flush any pending throttled message before the final status broadcast.
   dispose() {
-    // Flush first so the remainder still gets classified.
+    // Flush first so the remainders still get processed.
+    this.flushStdout();
     this.flushStderr();
     this.disposed = true;
     this.stopHeartbeat();

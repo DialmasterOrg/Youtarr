@@ -390,6 +390,15 @@ describe('YtDlpRunner', () => {
       expect(ytDlpRunner.isTerminatedAccountError(message)).toBe(true);
     });
 
+    it('matches a channel that no longer exists', () => {
+      expect(ytDlpRunner.isTerminatedAccountError('[youtube:tab] UC1lg-nYUcZ1pjo6EC2Nj5Sw: YouTube said: This channel does not exist.')).toBe(true);
+      expect(ytDlpRunner.isTerminatedAccountError('The channel/playlist does not exist and the URL redirected to youtube.com home page')).toBe(true);
+    });
+
+    it('returns false for a missing playlist, which is how an empty tab reports', () => {
+      expect(ytDlpRunner.isTerminatedAccountError('YouTube said: The playlist does not exist.')).toBe(false);
+    });
+
     it('returns false for members-only errors', () => {
       expect(ytDlpRunner.isTerminatedAccountError('Join this channel to get access to members-only content')).toBe(false);
     });

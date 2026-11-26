@@ -76,7 +76,7 @@ function formatDownloadMessage(finalSummary, videoData, options = {}) {
       : 'See Youtarr channels list for details.';
 
     fields.push({
-      name: '⚠️ Channels marked terminated',
+      name: '⚠️ Channels marked terminated or deleted',
       value: terminatedValue,
       inline: false
     });
@@ -90,7 +90,7 @@ function formatDownloadMessage(finalSummary, videoData, options = {}) {
       : 'Check Youtarr logs for details.';
 
     fields.push({
-      name: '⚠️ Terminations not auto-disabled',
+      name: '⚠️ Terminated or deleted channels not auto-disabled',
       value: failuresValue,
       inline: false
     });

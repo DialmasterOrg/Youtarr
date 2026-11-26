@@ -3,6 +3,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { Avatar, Card, CardActionArea, CardContent, Chip, Tooltip, Typography } from '../../ui';
 import { Delete as DeleteIcon, Edit as EditIcon, Image as ImageIcon, Folder as FolderIcon } from '../../../lib/icons';
 import { Channel } from '../../../types/Channel';
+import { isUsingDefaultSubfolder } from '../../../utils/channelHelpers';
 import { QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip, DownloadFormatConfigIndicator, TerminatedChip, ProtectedChip } from './chips';
 
 const THUMBNAIL_ASPECT_PADDING = '56.25%';
@@ -137,7 +138,9 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                                 <FolderIcon size={16} style={{ color: 'var(--muted-foreground)' }} data-testid="FolderIcon" />
                                 <Typography variant="body2" color="text.secondary" noWrap>
-                                    {channel.sub_folder ? `/${channel.sub_folder}` : 'Default Folder'}
+                                    {isUsingDefaultSubfolder(channel.sub_folder)
+                                        ? 'global default'
+                                        : channel.sub_folder ? `/${channel.sub_folder}` : 'Default Folder'}
                                 </Typography>
                             </div>
                         </div>

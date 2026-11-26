@@ -132,8 +132,8 @@ describe('downloadStatusResolver', () => {
         flags: { hasOnlyExpectedSkips: false, hasOnlyHandledErrors: true }
       });
       expect(result.status).toBe('Error');
-      expect(result.output).toBe('5 videos, 2 channels marked terminated.');
-      expect(result.notes).toBe('2 channels marked terminated by YouTube');
+      expect(result.output).toBe('5 videos, 2 channels marked terminated or deleted.');
+      expect(result.notes).toBe('2 channels terminated or deleted on YouTube');
     });
 
     it('prefers the handled-terminations branch over skips-only Complete when channels were terminated', () => {
@@ -144,8 +144,8 @@ describe('downloadStatusResolver', () => {
         flags: { hasOnlyExpectedSkips: true, hasOnlyHandledErrors: true }
       });
       expect(result.status).toBe('Error');
-      expect(result.output).toBe('3 videos, 2 channels marked terminated.');
-      expect(result.notes).toBe('2 channels marked terminated by YouTube');
+      expect(result.output).toBe('3 videos, 2 channels marked terminated or deleted.');
+      expect(result.notes).toBe('2 channels terminated or deleted on YouTube');
     });
 
     it('uses singular wording for a single terminated channel', () => {
@@ -155,8 +155,8 @@ describe('downloadStatusResolver', () => {
         terminatedChannelCount: 1,
         flags: { hasOnlyExpectedSkips: false, hasOnlyHandledErrors: true }
       });
-      expect(result.output).toBe('1 videos, 1 channel marked terminated.');
-      expect(result.notes).toBe('1 channel marked terminated by YouTube');
+      expect(result.output).toBe('1 videos, 1 channel marked terminated or deleted.');
+      expect(result.notes).toBe('1 channel terminated or deleted on YouTube');
     });
 
     it('recommends cookies when HTTP 403 was detected without cookies configured', () => {
@@ -421,7 +421,7 @@ describe('downloadStatusResolver', () => {
         terminatedChannelCount: 1
       });
       expect(result.finalState).toBe('warning');
-      expect(result.finalText).toBe('Download completed with errors: 1 channel marked terminated');
+      expect(result.finalText).toBe('Download completed with errors: 1 channel marked terminated or deleted');
     });
 
     it('pluralizes multiple handled terminations on exit 1', () => {
@@ -432,7 +432,7 @@ describe('downloadStatusResolver', () => {
         terminatedChannelCount: 2
       });
       expect(result.finalState).toBe('warning');
-      expect(result.finalText).toBe('Download completed with errors: 2 channels marked terminated');
+      expect(result.finalText).toBe('Download completed with errors: 2 channels marked terminated or deleted');
     });
 
     it('reports warning for terminations on a clean exit', () => {
@@ -441,7 +441,7 @@ describe('downloadStatusResolver', () => {
         terminatedChannelCount: 1
       });
       expect(result.finalState).toBe('warning');
-      expect(result.finalText).toBe('Download completed with errors: 1 channel marked terminated');
+      expect(result.finalText).toBe('Download completed with errors: 1 channel marked terminated or deleted');
     });
 
     it('mentions termination failures that could not be auto-disabled', () => {
@@ -449,7 +449,7 @@ describe('downloadStatusResolver', () => {
         ...baseInput,
         terminationFailureCount: 1
       });
-      expect(result.finalText).toContain('1 termination could not be auto-disabled');
+      expect(result.finalText).toContain('1 terminated or deleted channel could not be auto-disabled');
     });
 
     it('pluralizes multiple termination failures that could not be auto-disabled', () => {
@@ -457,7 +457,7 @@ describe('downloadStatusResolver', () => {
         ...baseInput,
         terminationFailureCount: 2
       });
-      expect(result.finalText).toContain('2 terminations could not be auto-disabled');
+      expect(result.finalText).toContain('2 terminated or deleted channels could not be auto-disabled');
     });
 
     it('reports warning with errors wording for partial success on exit 1', () => {

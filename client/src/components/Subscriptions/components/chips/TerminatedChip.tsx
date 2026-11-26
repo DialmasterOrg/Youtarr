@@ -23,13 +23,13 @@ const TerminatedChip: React.FC<TerminatedChipProps> = ({ terminatedAt }) => {
     return null;
   }
 
-  const tooltipText = `YouTube terminated this channel; detected on ${formatDetectionDate(terminatedAt)}. Scheduled downloads are disabled. If the channel has been reinstated, load the channel page to update its status automatically.`;
+  const tooltipText = `This channel was terminated or deleted on YouTube; detected on ${formatDetectionDate(terminatedAt)}. Scheduled downloads are disabled. If the channel has been reinstated, load the channel page to update its status automatically.`;
 
   return (
     <Tooltip title={tooltipText}>
       <Chip
         icon={<WarningIcon size={14} data-testid="WarningIcon" />}
-        label="Terminated"
+        label="Terminated or deleted"
         size="small"
         color="error"
         aria-label={tooltipText}

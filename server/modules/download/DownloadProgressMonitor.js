@@ -364,7 +364,8 @@ class DownloadProgressMonitor {
     if (line.includes('[ExtractAudio]')) return 'extracting_audio';
     if (line.includes('[ModifyChapters]')) return 'processing';
     if (line.includes('Completed:')) return 'complete';
-    if (line.includes('ERROR:')) {
+    // Start of the line only: skip lines print video titles (see YtdlpOutputRouter).
+    if (line.startsWith('ERROR:')) {
       this.hasError = true;
       return 'error';
     }

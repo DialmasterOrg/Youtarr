@@ -572,10 +572,10 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             parts.push(`${finalSummary.totalMembersOnly} members-only video${finalSummary.totalMembersOnly !== 1 ? 's' : ''} skipped`);
           }
           if (terminatedCount > 0) {
-            parts.push(`${terminatedCount} channel${terminatedCount !== 1 ? 's' : ''} marked terminated`);
+            parts.push(`${terminatedCount} channel${terminatedCount !== 1 ? 's' : ''} marked terminated or deleted`);
           }
           if (terminationFailureCount > 0) {
-            parts.push(`${terminationFailureCount} termination${terminationFailureCount !== 1 ? 's' : ''} could not be auto-disabled`);
+            parts.push(`${terminationFailureCount} terminated or deleted channel${terminationFailureCount !== 1 ? 's' : ''} could not be auto-disabled`);
           }
           if (totalAlreadyDownloaded > 0) {
             parts.push(`${totalAlreadyDownloaded} already downloaded`);
@@ -620,7 +620,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             {finalSummary.terminatedChannels && finalSummary.terminatedChannels.length > 0 && (
               <Box className="mt-4">
                 <Alert severity="warning">
-                  <AlertTitle>Channels Marked Terminated by YouTube</AlertTitle>
+                  <AlertTitle>Channels Terminated or Deleted on YouTube</AlertTitle>
                   <Typography variant="body2" component="div" className="mb-1">
                     Scheduled downloads have been disabled for the following channel{finalSummary.terminatedChannels.length !== 1 ? 's' : ''}:
                   </Typography>
@@ -644,9 +644,9 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             {finalSummary.terminationFailures && finalSummary.terminationFailures.length > 0 && (
               <Box className="mt-4">
                 <Alert severity="warning">
-                  <AlertTitle>Terminations Could Not Be Auto-Disabled</AlertTitle>
+                  <AlertTitle>Terminated or Deleted Channels Could Not Be Auto-Disabled</AlertTitle>
                   <Typography variant="body2" component="div" className="mb-1">
-                    YouTube reported the following channel{finalSummary.terminationFailures.length !== 1 ? 's' : ''} as terminated, but Youtarr could not disable scheduled downloads. Check the channel manually:
+                    YouTube reported the following channel{finalSummary.terminationFailures.length !== 1 ? 's' : ''} as terminated or deleted, but Youtarr could not disable scheduled downloads. Check the channel manually:
                   </Typography>
                   <Box className="mt-1 pl-4">
                     {finalSummary.terminationFailures.map((channelId) => (

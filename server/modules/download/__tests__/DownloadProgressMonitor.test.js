@@ -428,6 +428,13 @@ describe('DownloadProgressMonitor', () => {
       it('should identify error state', () => {
         expect(monitor.determineState('ERROR: Something went wrong')).toBe('error');
       });
+
+      it('should not read a video title containing "ERROR:" as an error', () => {
+        const state = monitor.determineState('[download] How to fix ERROR: 0x80070057 does not pass filter (duration>60), skipping ..');
+
+        expect(state).not.toBe('error');
+        expect(monitor.hasError).toBe(false);
+      });
     });
 
     it('should return null for unrecognized lines', () => {

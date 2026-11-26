@@ -82,8 +82,8 @@ function describeNonZeroExit({
     output = `${videoCount} videos.`;
   } else if (flags.hasOnlyHandledErrors && terminatedChannelCount > 0) {
     // Code 1 but every error was recognized: warning-shaped success.
-    output = `${videoCount} videos, ${terminatedChannelCount} channel${terminatedChannelCount !== 1 ? 's' : ''} marked terminated.`;
-    notes = `${terminatedChannelCount} channel${terminatedChannelCount !== 1 ? 's' : ''} marked terminated by YouTube`;
+    output = `${videoCount} videos, ${terminatedChannelCount} channel${terminatedChannelCount !== 1 ? 's' : ''} marked terminated or deleted.`;
+    notes = `${terminatedChannelCount} channel${terminatedChannelCount !== 1 ? 's' : ''} terminated or deleted on YouTube`;
   } else if (flags.hasOnlySubtitleFailures || (flags.hasOnlyHandledErrors && sponsorBlockFailureCount > 0)) {
     output = `${videoCount} videos.`;
     if (subtitleFailureCount > 0) {
@@ -243,10 +243,10 @@ function resolveFinalPresentation({
       parts.push(`${notAvailableCount} not available`);
     }
     if (terminatedChannelCount > 0) {
-      parts.push(`${terminatedChannelCount} channel${terminatedChannelCount !== 1 ? 's' : ''} marked terminated`);
+      parts.push(`${terminatedChannelCount} channel${terminatedChannelCount !== 1 ? 's' : ''} marked terminated or deleted`);
     }
     if (terminationFailureCount > 0) {
-      parts.push(`${terminationFailureCount} termination${terminationFailureCount !== 1 ? 's' : ''} could not be auto-disabled`);
+      parts.push(`${terminationFailureCount} terminated or deleted channel${terminationFailureCount !== 1 ? 's' : ''} could not be auto-disabled`);
     }
     if (subtitleFailureCount > 0) {
       parts.push(`${subtitleFailureCount} subtitle download${subtitleFailureCount !== 1 ? 's' : ''} failed`);

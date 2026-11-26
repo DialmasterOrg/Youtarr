@@ -105,8 +105,8 @@ function buildTitle(totalDownloaded, terminatedCount = 0, terminationFailureCoun
   if (totalDownloaded === 0 && (terminatedCount + terminationFailureCount) > 0) {
     const total = terminatedCount + terminationFailureCount;
     return total === 1
-      ? '⚠️ Channel Termination Detected'
-      : `⚠️ ${total} Channel Terminations Detected`;
+      ? '⚠️ Terminated or Deleted Channel Detected'
+      : `⚠️ ${total} Terminated or Deleted Channels Detected`;
   }
   if (totalDownloaded === 1) {
     return '🎬 New Video Downloaded';
@@ -131,7 +131,7 @@ function getTerminatedCount(finalSummary = {}) {
  * @returns {string} Human-readable terminated count
  */
 function buildTerminatedCountLabel(count) {
-  return `${count} ${count === 1 ? 'channel' : 'channels'} marked terminated`;
+  return `${count} ${count === 1 ? 'channel' : 'channels'} marked terminated or deleted`;
 }
 
 /**
@@ -161,7 +161,7 @@ function getTerminationFailureCount(finalSummary = {}) {
  * @returns {string} Human-readable label
  */
 function buildTerminationFailureCountLabel(count) {
-  return `${count} termination${count === 1 ? '' : 's'} could not be auto-disabled`;
+  return `${count} terminated or deleted channel${count === 1 ? '' : 's'} could not be auto-disabled`;
 }
 
 /**
@@ -170,7 +170,7 @@ function buildTerminationFailureCountLabel(count) {
  * @returns {string} Human-readable line
  */
 function formatTerminationFailureLine(channelId) {
-  return `${channelId}: detected as terminated but could not be auto-disabled (check the channel manually)`;
+  return `${channelId}: detected as terminated or deleted but could not be auto-disabled (check the channel manually)`;
 }
 
 /**

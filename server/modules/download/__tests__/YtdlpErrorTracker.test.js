@@ -182,7 +182,7 @@ describe('YtdlpErrorTracker', () => {
         },
       ]);
       expect(deps.emitWarningMessage).toHaveBeenCalledWith(
-        expect.stringContaining('marked terminated by YouTube; scheduled downloads disabled')
+        expect.stringContaining('was terminated or deleted on YouTube; scheduled downloads disabled')
       );
     });
 
@@ -222,6 +222,50 @@ describe('YtdlpErrorTracker', () => {
       expect(consumed).toBe(false);
       expect(tracker.unexpectedErrorCount).toBe(1);
       expect(deps.persistTerminatedChannel).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['YouTube\'s alert', `ERROR: [youtube:tab] ${TERMINATED_CHANNEL_ID}: YouTube said: This channel does not exist.`],
+      ['the alert without its "YouTube said" prefix', `ERROR: [youtube:tab] ${TERMINATED_CHANNEL_ID}: This channel does not exist`],
+      ['yt-dlp\'s home page redirect', `ERROR: [youtube:tab] ${TERMINATED_CHANNEL_ID}: The channel/playlist does not exist and the URL redirected to youtube.com home page`],
+    ])('disables a channel that no longer exists (%s) without failing the last video', async (_name, line) => {
+      const { tracker, deps } = createTracker();
+      tracker.trackVideoStart('vid12345678');
+
+      const consumed = tracker.handleErrorLine(line, 'stderr');
+      await tracker.settlePersistence();
+
+      expect(consumed).toBe(true);
+      expect(deps.persistTerminatedChannel).toHaveBeenCalledWith(TERMINATED_CHANNEL_ID);
+      expect(tracker.terminatedChannelIds.has(TERMINATED_CHANNEL_ID)).toBe(true);
+      expect(tracker.failedVideos.size).toBe(0);
+      expect(tracker.unexpectedErrorCount).toBe(0);
+    });
+
+    it.each([
+      ['a channel without the requested tab', `ERROR: [youtube:tab] ${TERMINATED_CHANNEL_ID}: This channel does not have a shorts tab`],
+      ['a channel page that did not load', `ERROR: [youtube:tab] ${TERMINATED_CHANNEL_ID}: Unable to download webpage: HTTP Error 500: Internal Server Error`],
+      ['a URL no YouTube extractor handles', 'ERROR: [generic] Unable to download webpage: HTTP Error 404: Not Found'],
+      ['an unsupported URL, which yt-dlp reports without an extractor name', 'ERROR: Unsupported URL: https://example.com/'],
+    ])('does not blame the last video for %s', (_name, line) => {
+      const { tracker } = createTracker();
+      tracker.trackVideoStart('vid12345678');
+      tracker.trackVideoFromDestination('vid12345678');
+
+      const consumed = tracker.handleErrorLine(line, 'stderr');
+
+      expect(consumed).toBe(false);
+      expect(tracker.failedVideos.size).toBe(0);
+      expect(tracker.unexpectedErrorCount).toBe(1);
+    });
+
+    it('still blames the current video for a download error that starts with a bracketed tag', () => {
+      const { tracker } = createTracker();
+      tracker.trackVideoStart('vid12345678');
+
+      tracker.handleErrorLine('ERROR: [download] Got error: Read timed out. Giving up after 2 retries', 'stderr');
+
+      expect(tracker.failedVideos.has('vid12345678')).toBe(true);
     });
 
     it('records the first failure for the current video and does not overwrite it', () => {

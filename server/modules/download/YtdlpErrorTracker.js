@@ -41,6 +41,17 @@ function extractChannelIdFromYtdlpError(message = '') {
   return match ? match[1] : null;
 }
 
+// yt-dlp starts an extractor's error with "[<extractor>] ". Only the video
+// extractor, "[youtube]", reports on a video: a channel tab or a URL no YouTube
+// extractor handles fails before any of its videos is reached. Other bracketed
+// tags ("[download] Got error") do belong to the current video. yt-dlp prints
+// "Unsupported URL: <url>" with no extractor name at all.
+const NON_VIDEO_ERROR_PATTERN = /^(?:\[(?:youtube:[^\]]+|generic)\]|Unsupported URL:)/;
+
+function isNonVideoError(message = '') {
+  return NON_VIDEO_ERROR_PATTERN.test(String(message));
+}
+
 // Per-download classification and bookkeeping of yt-dlp ERROR lines.
 // One instance per doDownload run.
 class YtdlpErrorTracker {
@@ -185,14 +196,14 @@ class YtdlpErrorTracker {
               });
               const displayName = row.uploader || channelId;
               this.emitWarningMessage(
-                `Channel "${displayName}" marked terminated by YouTube; scheduled downloads disabled`
+                `Channel "${displayName}" was terminated or deleted on YouTube; scheduled downloads disabled`
               );
             } else {
               this.unexpectedErrorCount += 1;
               this.terminationFailures.push(channelId);
               logger.warn({ channelId, source }, 'Termination detected but could not be auto-disabled; channel will continue to retry');
               this.emitWarningMessage(
-                `Channel ${channelId} reported as terminated by YouTube but could not be auto-disabled`
+                `Channel ${channelId} was terminated or deleted on YouTube but could not be auto-disabled`
               );
             }
           });
@@ -208,6 +219,12 @@ class YtdlpErrorTracker {
       ? 'Error detected in stderr'
       : 'Error detected during download';
     logger.warn({ error: this.lastErrorMessage, currentVideoId: this.currentVideoId }, errorLogMessage);
+    // currentVideoId still names the last video of the previous channel here.
+    // Recording this against it would drop a finished download from the
+    // archive and download it again on every run.
+    if (isNonVideoError(this.lastErrorMessage)) {
+      return false;
+    }
     if (this.currentVideoId) {
       // Undefined once the video has an error from outside the subtitle step.
       const subtitleErrors = this.failedVideos.has(this.currentVideoId)

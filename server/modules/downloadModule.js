@@ -592,10 +592,10 @@ class DownloadModule {
       if (failedVideos.length > 0) messageParts.push(`${failedVideos.length} failed`);
       if (autoRetriedCount > 0) messageParts.push(`${autoRetriedCount} queued for auto-retry`);
       if (terminatedChannels.length > 0) {
-        messageParts.push(`${terminatedChannels.length} channel${terminatedChannels.length !== 1 ? 's' : ''} marked terminated`);
+        messageParts.push(`${terminatedChannels.length} channel${terminatedChannels.length !== 1 ? 's' : ''} marked terminated or deleted`);
       }
       if (terminationFailures.length > 0) {
-        messageParts.push(`${terminationFailures.length} termination${terminationFailures.length !== 1 ? 's' : ''} could not be auto-disabled`);
+        messageParts.push(`${terminationFailures.length} terminated or deleted channel${terminationFailures.length !== 1 ? 's' : ''} could not be auto-disabled`);
       }
       let completionText = `Download completed: ${messageParts.join(', ')} across ${groups.length} groups`;
       if (stopped) {
