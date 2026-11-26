@@ -1033,6 +1033,133 @@ describe('useChannelVideos', () => {
       expect(result.current.videos).toHaveLength(1);
       expect(result.current.totalCount).toBe(1);
     });
+
+    test('refetch past page 1 reloads every loaded page and replaces the list', async () => {
+      const listResponse = (videos: ChannelVideo[]) => ({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({ videos, totalCount: 3 }),
+      });
+      mockFetch.mockResolvedValueOnce(listResponse(pageOneVideos));
+
+      const { result, rerender } = renderHook(
+        ({ params }: { params: Parameters<typeof useChannelVideos>[0] }) =>
+          useChannelVideos(params),
+        {
+          initialProps: {
+            params: { ...defaultParams, append: true, resetKey: 'key-A', page: 1 },
+          },
+        }
+      );
+      await waitFor(() => {
+        expect(result.current.videos).toEqual(pageOneVideos);
+      });
+
+      mockFetch.mockResolvedValueOnce(listResponse(pageTwoVideos));
+      rerender({
+        params: { ...defaultParams, append: true, resetKey: 'key-A', page: 2 },
+      });
+      await waitFor(() => {
+        expect(result.current.videos).toHaveLength(3);
+      });
+
+      // A first-page video was deleted since it was loaded.
+      const reloadedVideos = [
+        { ...pageOneVideos[0], added: true, removed: true },
+        pageOneVideos[1],
+        ...pageTwoVideos,
+      ];
+      mockFetch.mockResolvedValueOnce(listResponse(reloadedVideos));
+
+      await act(async () => {
+        await result.current.refetch();
+      });
+
+      const reloadUrl = new URL(mockFetch.mock.calls[2][0], 'http://localhost');
+      expect(reloadUrl.searchParams.get('page')).toBe('1');
+      expect(reloadUrl.searchParams.get('pageSize')).toBe('32');
+      expect(result.current.videos).toEqual(reloadedVideos);
+    });
+
+    test('a refetch held from an earlier render reloads the pages loaded now', async () => {
+      // Load More and a delete call refetch after a long wait, during which
+      // the list can load another page.
+      const listResponse = (videos: ChannelVideo[]) => ({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({ videos, totalCount: 3 }),
+      });
+      mockFetch.mockResolvedValueOnce(listResponse(pageOneVideos));
+
+      const { result, rerender } = renderHook(
+        ({ params }: { params: Parameters<typeof useChannelVideos>[0] }) =>
+          useChannelVideos(params),
+        {
+          initialProps: {
+            params: { ...defaultParams, append: true, resetKey: 'key-A', page: 1 },
+          },
+        }
+      );
+      await waitFor(() => {
+        expect(result.current.videos).toEqual(pageOneVideos);
+      });
+      const refetchHeldFromPageOne = result.current.refetch;
+
+      mockFetch.mockResolvedValueOnce(listResponse(pageTwoVideos));
+      rerender({
+        params: { ...defaultParams, append: true, resetKey: 'key-A', page: 2 },
+      });
+      await waitFor(() => {
+        expect(result.current.videos).toHaveLength(3);
+      });
+
+      mockFetch.mockResolvedValueOnce(listResponse([...pageOneVideos, ...pageTwoVideos]));
+      await act(async () => {
+        await refetchHeldFromPageOne();
+      });
+
+      const reloadUrl = new URL(mockFetch.mock.calls[2][0], 'http://localhost');
+      expect(reloadUrl.searchParams.get('pageSize')).toBe('32');
+      expect(result.current.videos).toHaveLength(3);
+    });
+
+    test('reports a reload past page 1 as a load from the top, unlike an appended page', async () => {
+      const listResponse = (videos: ChannelVideo[]) => ({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({ videos, totalCount: 3 }),
+      });
+      mockFetch.mockResolvedValueOnce(listResponse(pageOneVideos));
+
+      const { result, rerender } = renderHook(
+        ({ params }: { params: Parameters<typeof useChannelVideos>[0] }) =>
+          useChannelVideos(params),
+        {
+          initialProps: {
+            params: { ...defaultParams, append: true, resetKey: 'key-A', page: 1 },
+          },
+        }
+      );
+      await waitFor(() => {
+        expect(result.current.videos).toEqual(pageOneVideos);
+      });
+      const firstLoadSeq = result.current.topLoadSeq;
+
+      mockFetch.mockResolvedValueOnce(listResponse(pageTwoVideos));
+      rerender({
+        params: { ...defaultParams, append: true, resetKey: 'key-A', page: 2 },
+      });
+      await waitFor(() => {
+        expect(result.current.videos).toHaveLength(3);
+      });
+      const afterAppendSeq = result.current.topLoadSeq;
+
+      mockFetch.mockResolvedValueOnce(listResponse([...pageOneVideos, ...pageTwoVideos]));
+      await act(async () => {
+        await result.current.refetch();
+      });
+
+      expect(firstLoadSeq).not.toBeNull();
+      expect(afterAppendSeq).toBe(firstLoadSeq);
+      expect(result.current.topLoadSeq).not.toBe(firstLoadSeq);
+    });
   });
 
   describe('onFirstLoad callback', () => {
@@ -1168,6 +1295,30 @@ describe('useChannelVideos', () => {
   describe('Background Refresh Signal', () => {
     const respondWith = (body: object) =>
       mockFetch.mockResolvedValueOnce({ ok: true, json: jest.fn().mockResolvedValueOnce(body) });
+
+    test('keeps naming the listing the rows waited for while later pages load', async () => {
+      const finishedAt = '2026-11-13T12:00:00.000Z';
+      respondWith({ ...mockResponse, freshFetchPerformed: true, listingFinishedAt: finishedAt });
+      respondWith(mockResponse);
+
+      const { result, rerender } = renderHook(
+        ({ page }: { page: number }) => useChannelVideos({ ...defaultParams, append: true, page }),
+        { initialProps: { page: 1 } }
+      );
+      await waitFor(() => {
+        expect(result.current.awaitedListingFinishedAt).toBe(finishedAt);
+      });
+
+      rerender({ page: 2 });
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+      });
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      expect(result.current.awaitedListingFinishedAt).toBe(finishedAt);
+    });
 
     test('reports no refresh before any response', () => {
       mockFetch.mockImplementation(() => new Promise(() => {}));

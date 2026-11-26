@@ -2,133 +2,130 @@ import React, { useState } from 'react';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
+import axios from 'axios';
 import useMediaQuery from '../../../hooks/useMediaQuery';
 import ChannelVideos from '../ChannelVideos';
 import { ChannelVideo } from '../../../types/ChannelVideo';
 import { renderWithProviders, createMockWebSocketContext } from '../../../test-utils';
+import { useChannelVideos } from '../hooks/useChannelVideos';
+import { useChannelFetchStatus } from '../hooks/useChannelFetchStatus';
+import { useChannelTabStats } from '../hooks/useChannelTabStats';
+import { useRefreshChannelVideos } from '../hooks/useRefreshChannelVideos';
+import { useVideoDeletion } from '../../shared/useVideoDeletion';
+import { useConfig } from '../../../hooks/useConfig';
+import { useTriggerDownloads } from '../../../hooks/useTriggerDownloads';
 
-// Mock custom hooks
+// These tests cover how ChannelVideos wires its hooks and views together.
+// The rules of each piece are tested beside it, in hooks/__tests__ and
+// components/__tests__.
+
 jest.mock('../../../hooks/useMediaQuery');
 
-// Mock react-router-dom
 const mockNavigate = jest.fn();
-const mockParams = { channel_id: 'UC123456' };
+const mockParams: { channel_id: string | undefined } = { channel_id: 'UC123456' };
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
   useParams: () => mockParams,
   useNavigate: () => mockNavigate,
 }));
 
-// Mock react-swipeable
 jest.mock('react-swipeable', () => ({
   useSwipeable: () => ({}),
 }));
 
-// Mock child components
 jest.mock('../VideoCard', () => ({
   __esModule: true,
-  default: function MockVideoCard({ video, onCheckChange, onVideoClick, onDeletionChange, onToggleIgnore, selectionMode }: any) {
+  default: function MockVideoCard({
+    video,
+    selectionMode,
+    onCheckChange,
+    onDeletionChange,
+    onToggleIgnore,
+    onVideoClick,
+  }: {
+    video: { youtube_id: string; title: string; ignored?: boolean };
+    selectionMode: 'download' | 'delete' | null;
+    onCheckChange: (videoId: string, isChecked: boolean) => void;
+    onDeletionChange: (videoId: string, isChecked: boolean) => void;
+    onToggleIgnore: (videoId: string) => void;
+    onVideoClick: (video: unknown) => void;
+  }) {
     const React = require('react');
-    // Mirror the real VideoCard's gating: when the other mode is active,
-    // the corresponding selection affordance is disabled so the parent's
-    // canSelectDownload / canSelectDeletion contract is observable here.
-    const downloadDisabled = selectionMode === 'delete';
-    const deleteDisabled = selectionMode === 'download';
+    const button = (testId: string, label: string, onClick: () => void, disabled = false) =>
+      React.createElement(
+        'button',
+        { type: 'button', 'data-testid': `${testId}-${video.youtube_id}`, disabled, onClick },
+        label
+      );
+    // Like the real card, the checkbox of the other selection mode is disabled.
     return React.createElement(
       'div',
       {
         'data-testid': `video-card-${video.youtube_id}`,
         'data-selection-mode': selectionMode ?? 'null',
+        'data-ignored': String(Boolean(video.ignored)),
       },
       React.createElement('span', null, video.title),
-      React.createElement(
-        'button',
-        { type: 'button', 'data-testid': `toggle-ignore-${video.youtube_id}`, onClick: () => onToggleIgnore?.(video.youtube_id) },
-        'Toggle ignore'
-      ),
-      React.createElement(
-        'button',
-        {
-          type: 'button',
-          'data-testid': `select-video-${video.youtube_id}`,
-          disabled: downloadDisabled,
-          onClick: () => {
-            if (downloadDisabled) return;
-            onCheckChange?.(video.youtube_id, true);
-          },
-        },
-        'Select'
-      ),
-      React.createElement(
-        'button',
-        {
-          type: 'button',
-          'data-testid': `select-delete-${video.youtube_id}`,
-          disabled: deleteDisabled,
-          onClick: () => {
-            if (deleteDisabled) return;
-            onDeletionChange?.(video.youtube_id, true);
-          },
-        },
-        'Select for delete'
-      ),
-      // Ungated delete affordance -- used only to simulate a hypothetical broken
-      // child-level gate so the parent's ternary-order invariant can be tested
-      // when both checkedBoxes and selectedForDeletion would coexist.
-      React.createElement(
-        'button',
-        {
-          type: 'button',
-          'data-testid': `force-select-delete-${video.youtube_id}`,
-          onClick: () => onDeletionChange?.(video.youtube_id, true),
-        },
-        'Force select for delete'
-      ),
-      React.createElement(
-        'button',
-        {
-          type: 'button',
-          'data-testid': `open-video-${video.youtube_id}`,
-          onClick: () => onVideoClick?.(video),
-        },
-        'Open'
-      )
+      button('toggle-ignore', 'Toggle ignore', () => onToggleIgnore(video.youtube_id)),
+      button('select-video', 'Select', () => onCheckChange(video.youtube_id, true), selectionMode === 'delete'),
+      button('select-delete', 'Select for delete', () => onDeletionChange(video.youtube_id, true), selectionMode === 'download'),
+      // Never disabled: stands for a card whose own gate failed, so both
+      // kinds of selection can exist at once.
+      button('force-select-delete', 'Force select for delete', () => onDeletionChange(video.youtube_id, true)),
+      button('open-video', 'Open', () => onVideoClick(video))
     );
-  }
+  },
 }));
 
 jest.mock('../VideoListItem', () => ({
   __esModule: true,
-  default: function MockVideoListItem({ video }: any) {
+  default: function MockVideoListItem({ video }: { video: { youtube_id: string; title: string } }) {
     const React = require('react');
-    return React.createElement('div', {
-      'data-testid': `video-list-item-${video.youtube_id}`
-    }, video.title);
-  }
+    return React.createElement('div', { 'data-testid': `video-list-item-${video.youtube_id}` }, video.title);
+  },
 }));
 
 jest.mock('../VideoTableView', () => ({
   __esModule: true,
-  default: function MockVideoTableView({ videos }: any) {
+  default: function MockVideoTableView({ videos }: { videos: unknown[] }) {
     const React = require('react');
-    return React.createElement('div', {
-      'data-testid': 'video-table-view'
-    }, `Table with ${videos.length} videos`);
-  }
+    return React.createElement('div', { 'data-testid': 'video-table-view' }, `Table with ${videos.length} videos`);
+  },
 }));
 
-// The old ChannelVideosHeader / ChannelVideosFilters components have been replaced
-// by the shared VideoList module. We mock that module with a minimal passthrough
-// so tests can continue to focus on ChannelVideos' data flow and selection logic.
+// A minimal stand-in for the shared list container: it renders the slots it is
+// given, the content or empty state, the selection pill's actions, and one
+// control for the watched filter.
 jest.mock('../../shared/VideoList', () => {
   const React = require('react');
   const actual = jest.requireActual('../../shared/VideoList');
+  interface MockSelection {
+    hasSelection: boolean;
+    count: number;
+    selectedIds: string[];
+    clear: () => void;
+    actions: Array<{ id: string; label: string; onClick: (selectedIds: string[]) => void }>;
+  }
+  interface MockContainerProps {
+    state: { viewMode: string };
+    selection?: MockSelection;
+    filters: Array<{ id: string; value?: string; onChange?: (value: string) => void }>;
+    headerSlot: unknown;
+    tabsSlot: unknown;
+    itemCount: number;
+    isLoading: boolean;
+    isError: boolean;
+    errorMessage?: string;
+    loadingSkeleton?: unknown;
+    renderContent: (viewMode: string) => unknown;
+    infiniteScrollSentinel: unknown;
+    pagination: unknown;
+  }
   return {
     ...actual,
-    VideoListContainer: function MockVideoListContainer(props: any) {
-      const selectionCount = props.selection?.count ?? 0;
-      const empty = (props.itemCount ?? 0) === 0;
-      const selectionPill = props.selection?.hasSelection
+    VideoListContainer: function MockVideoListContainer(props: MockContainerProps) {
+      const { selection } = props;
+      const selectionPill = selection?.hasSelection
         ? React.createElement(
             'div',
             null,
@@ -137,67 +134,39 @@ jest.mock('../../shared/VideoList', () => {
               {
                 type: 'button',
                 'data-testid': 'video-list-selection-pill',
-                'aria-label': `Actions for ${props.selection.count} selected video${props.selection.count !== 1 ? 's' : ''}`,
+                'aria-label': `Actions for ${selection.count} selected video${selection.count !== 1 ? 's' : ''}`,
               },
               'Selection FAB'
             ),
             React.createElement(
               'ul',
               { role: 'menu' },
-              ...(props.selection.actions || []).map((action: any) =>
+              ...selection.actions.map((action) =>
                 React.createElement(
                   'li',
-                  {
-                    key: action.id,
-                    role: 'menuitem',
-                    onClick: () => action.onClick?.(props.selection.selectedIds),
-                  },
+                  { key: action.id, role: 'menuitem', onClick: () => action.onClick(selection.selectedIds) },
                   `${action.label} Selected`
                 )
               ),
-              React.createElement(
-                'li',
-                {
-                  role: 'menuitem',
-                  onClick: () => props.selection.clear?.(),
-                },
-                'Clear Selection'
-              )
+              React.createElement('li', { role: 'menuitem', onClick: () => selection.clear() }, 'Clear Selection')
             )
           )
         : null;
-      const content = empty
-        ? props.isError
-          ? React.createElement('div', { role: 'alert' }, props.errorMessage || 'error')
-          : props.isLoading
-            ? (props.loadingSkeleton || React.createElement('div', { 'data-testid': 'loading' }, 'Loading...'))
-            : React.createElement('div', { 'data-testid': 'video-list-empty-state' }, 'No videos found')
-        : (typeof props.renderContent === 'function'
-            ? props.renderContent(props.state?.viewMode ?? 'grid')
-            : null);
-      const watchedFilter = (props.filters || []).find((f: any) => f.id === 'watched');
-      const watchedControl = watchedFilter
-        ? React.createElement(
-            'button',
-            {
-              type: 'button',
-              'data-testid': 'watched-filter-only',
-              onClick: () => watchedFilter.onChange('only'),
-            },
-            `Watched: ${watchedFilter.value}`
-          )
-        : null;
+      let emptyContent = React.createElement('div', { 'data-testid': 'video-list-empty-state' }, 'No videos found');
+      if (props.isLoading) emptyContent = props.loadingSkeleton;
+      if (props.isError) emptyContent = React.createElement('div', { role: 'alert' }, props.errorMessage);
+      const watchedFilter = props.filters.find((filter) => filter.id === 'watched');
       return React.createElement(
         'div',
-        {
-          'data-testid': 'video-list-container',
-          'data-view-mode': props.state?.viewMode,
-          'data-selection-count': selectionCount,
-        },
+        { 'data-testid': 'video-list-container' },
         props.headerSlot,
         props.tabsSlot,
-        watchedControl,
-        content,
+        React.createElement(
+          'button',
+          { type: 'button', 'data-testid': 'watched-filter-only', onClick: () => watchedFilter?.onChange?.('only') },
+          `Watched: ${watchedFilter?.value}`
+        ),
+        props.itemCount === 0 ? emptyContent : props.renderContent(props.state.viewMode),
         props.infiniteScrollSentinel,
         props.pagination,
         selectionPill
@@ -208,21 +177,41 @@ jest.mock('../../shared/VideoList', () => {
 
 jest.mock('../ChannelVideosDialogs', () => ({
   __esModule: true,
-  default: function MockChannelVideosDialogs(props: any) {
+  default: function MockChannelVideosDialogs(props: {
+    downloadDialogOpen: boolean;
+    deleteDialogOpen: boolean;
+    successMessage: string | null;
+    videoCount: number;
+    missingVideoCount: number;
+    defaultResolution: string;
+    defaultResolutionSource: string;
+    defaultAudioFormat?: string | null;
+    defaultAudioFormatSource?: string;
+    defaultProtect?: boolean;
+    tabStats?: { total: number | null; loaded?: number };
+    onRefreshConfirm: () => void;
+  }) {
     const React = require('react');
-    return React.createElement('div', {
-      'data-testid': 'channel-videos-dialogs',
-      'data-default-resolution': props.defaultResolution,
-      'data-default-resolution-source': props.defaultResolutionSource,
-      'data-default-protect': String(props.defaultProtect),
-      'data-selected-tab': props.selectedTab,
-      'data-tab-label': props.tabLabel,
-      'data-missing-video-count': props.missingVideoCount,
-      'data-mobile-tooltip': props.mobileTooltip,
-      'data-tab-total': props.tabStats?.total,
-      'data-tab-loaded': props.tabStats?.loaded,
-    }, React.createElement('button', { onClick: props.onRefreshConfirm }, 'Mock confirm Load More'));
-  }
+    return React.createElement(
+      'div',
+      {
+        'data-testid': 'channel-videos-dialogs',
+        'data-download-dialog-open': String(props.downloadDialogOpen),
+        'data-delete-dialog-open': String(props.deleteDialogOpen),
+        'data-success-message': props.successMessage ?? '',
+        'data-video-count': props.videoCount,
+        'data-missing-video-count': props.missingVideoCount,
+        'data-default-resolution': props.defaultResolution,
+        'data-default-resolution-source': props.defaultResolutionSource,
+        'data-default-audio-format': String(props.defaultAudioFormat),
+        'data-default-audio-format-source': props.defaultAudioFormatSource,
+        'data-default-protect': String(props.defaultProtect),
+        'data-tab-total': props.tabStats?.total,
+        'data-tab-loaded': props.tabStats?.loaded,
+      },
+      React.createElement('button', { onClick: () => props.onRefreshConfirm() }, 'Mock confirm Load More')
+    );
+  },
 }));
 
 jest.mock('../DownloadAllVideosDialog', () => ({
@@ -230,7 +219,6 @@ jest.mock('../DownloadAllVideosDialog', () => ({
   default: function MockDownloadAllVideosDialog(props: {
     open: boolean;
     tabType: string;
-    tabLabel: string;
     defaultProtect?: boolean;
   }) {
     const React = require('react');
@@ -239,17 +227,28 @@ jest.mock('../DownloadAllVideosDialog', () => ({
       'data-default-protect': String(props.defaultProtect),
       'data-open': String(props.open),
       'data-tab-type': props.tabType,
-      'data-tab-label': props.tabLabel,
     });
-  }
+  },
 }));
 
-// Mock custom hooks
-const mockRefetchVideos = jest.fn();
-const mockRefreshVideos = jest.fn();
-const mockClearError = jest.fn();
-const mockTriggerDownloads = jest.fn();
-const mockDeleteVideosByYoutubeIds = jest.fn();
+jest.mock('../../shared/VideoModal', () => ({
+  __esModule: true,
+  default: function MockVideoModal(props: {
+    video: { youtubeId: string; title: string; channelName: string };
+    onIgnoreChanged: (youtubeId: string, isIgnored: boolean) => void;
+  }) {
+    const React = require('react');
+    return React.createElement(
+      'div',
+      { role: 'dialog', 'aria-label': props.video.title, 'data-channel-name': props.video.channelName },
+      React.createElement(
+        'button',
+        { onClick: () => props.onIgnoreChanged(props.video.youtubeId, true) },
+        'Mock modal ignore'
+      )
+    );
+  },
+}));
 
 jest.mock('../hooks/useChannelVideos', () => ({
   useChannelVideos: jest.fn(),
@@ -266,7 +265,7 @@ jest.mock('../hooks/useChannelFetchStatus', () => ({
 }));
 
 jest.mock('../hooks/useChannelTabStats', () => ({
-  useChannelTabStats: jest.fn(() => ({ data: null, loading: false, error: null, refetch: jest.fn() })),
+  useChannelTabStats: jest.fn(),
 }));
 
 jest.mock('../../../hooks/useConfig', () => ({
@@ -281,1256 +280,193 @@ jest.mock('../../shared/useVideoDeletion', () => ({
   useVideoDeletion: jest.fn(),
 }));
 
-// Mock fetch
-const mockFetch = jest.fn();
-global.fetch = mockFetch as any;
+// The channel's tabs are read with axios.get and ignores are saved with axios.post.
+jest.mock('axios', () => ({
+  get: jest.fn(),
+  post: jest.fn(),
+}));
+const mockGet = axios.get as jest.Mock;
+const mockPost = axios.post as jest.Mock;
 
-const { useChannelVideos } = require('../hooks/useChannelVideos');
-const { useChannelFetchStatus } = require('../hooks/useChannelFetchStatus');
+// Only the real fetch status hook still uses fetch.
+const mockFetch = jest.fn();
+global.fetch = mockFetch as unknown as typeof fetch;
+
+const mockUseChannelVideos = useChannelVideos as jest.Mock;
+const mockUseChannelFetchStatus = useChannelFetchStatus as jest.Mock;
+const mockUseChannelTabStats = useChannelTabStats as jest.Mock;
+const mockUseRefreshChannelVideos = useRefreshChannelVideos as jest.Mock;
+const mockUseConfig = useConfig as jest.Mock;
 const actualUseChannelFetchStatus =
   jest.requireActual('../hooks/useChannelFetchStatus').useChannelFetchStatus;
-const { useRefreshChannelVideos } = require('../hooks/useRefreshChannelVideos');
-const { useVideoDeletion } = require('../../shared/useVideoDeletion');
-const { useConfig } = require('../../../hooks/useConfig');
-const { useTriggerDownloads } = require('../../../hooks/useTriggerDownloads');
 
-describe('ChannelVideos Component', () => {
+describe('ChannelVideos', () => {
   const mockToken = 'test-token';
+  const mockRefetchVideos = jest.fn();
+  const mockRefreshVideos = jest.fn();
+  const mockRefetchTabStats = jest.fn();
+
+  const video = (youtubeId: string, title: string, overrides: Partial<ChannelVideo> = {}): ChannelVideo => ({
+    title,
+    youtube_id: youtubeId,
+    publishedAt: '2023-01-01T00:00:00Z',
+    thumbnail: `https://i.ytimg.com/vi/${youtubeId}/mqdefault.jpg`,
+    added: false,
+    duration: 300,
+    media_type: 'video',
+    live_status: null,
+    ...overrides,
+  });
 
   const mockVideos: ChannelVideo[] = [
-    {
-      title: 'Test Video 1',
-      youtube_id: 'video1',
-      publishedAt: '2023-01-01T00:00:00Z',
-      thumbnail: 'https://i.ytimg.com/vi/video1/mqdefault.jpg',
-      added: false,
-      duration: 300,
-      media_type: 'video',
-      live_status: null,
-    },
-    {
-      title: 'Test Video 2',
-      youtube_id: 'video2',
-      publishedAt: '2023-01-02T00:00:00Z',
-      thumbnail: 'https://i.ytimg.com/vi/video2/mqdefault.jpg',
-      added: true,
-      removed: false,
-      duration: 600,
-      media_type: 'video',
-      live_status: null,
-    },
-    {
-      title: 'Test Short 1',
-      youtube_id: 'short1',
-      publishedAt: '2023-01-03T00:00:00Z',
-      thumbnail: 'https://i.ytimg.com/vi/short1/mqdefault.jpg',
-      added: false,
-      duration: 30,
-      media_type: 'short',
-      live_status: null,
-    },
+    video('video1', 'Test Video 1'),
+    video('video2', 'Test Video 2', { added: true, removed: false }),
+    video('short1', 'Test Short 1', { media_type: 'short', duration: 30 }),
   ];
+  const missingVideo = video('missing1', 'Missing Video', { added: true, removed: true });
 
-  const renderChannelVideos = (props = {}) => {
-    const wsCtx = createMockWebSocketContext();
-    return renderWithProviders(
-      <ChannelVideos token={mockToken} {...props} />,
-      { websocketValue: wsCtx }
-    );
+  // What the videos hook hands back for a loaded list.
+  const listed = (videos: ChannelVideo[], overrides: Record<string, unknown> = {}) => ({
+    videos,
+    totalCount: videos.length,
+    oldestVideoDate: null,
+    error: null,
+    autoDownloadsEnabled: false,
+    availableTabs: [],
+    loading: false,
+    refreshSeq: null,
+    loadedView: null,
+    refetch: mockRefetchVideos,
+    ...overrides,
+  });
+  const listVideos = (videos: ChannelVideo[], overrides: Record<string, unknown> = {}) =>
+    mockUseChannelVideos.mockReturnValue(listed(videos, overrides));
+
+  const tabStatsAre = (data: Record<string, unknown> | null) =>
+    mockUseChannelTabStats.mockReturnValue({ data, loading: false, error: null, refetch: mockRefetchTabStats });
+  const countedTab = { total: 10, fetchedAt: null, downloaded: 5, ignored: 0, percent: 50, loaded: 8 };
+
+  // Replaces the fetch status hook with one the test completes by hand.
+  type Completion = { lastResult: { type: string; newVideos: number; failed: boolean; finishedAt: string } | null };
+  const mockTrackRefresh = jest.fn();
+  let completeFetch: (completion: Completion) => void;
+  const stubFetchStatus = (overrides: Record<string, unknown> = {}) => {
+    mockUseChannelFetchStatus.mockImplementation(() => ({
+      isFetching: false,
+      fetchType: null,
+      startTime: null,
+      progress: null,
+      onFetchComplete: (callback: (completion: Completion) => void) => {
+        completeFetch = callback;
+      },
+      startPolling: jest.fn(),
+      trackRefresh: mockTrackRefresh,
+      ...overrides,
+    }));
   };
+
+  const serverTabsAre = (availableTabs: string[]) =>
+    mockGet.mockResolvedValue({ data: { availableTabs } });
+
+  const renderChannelVideos = (props: Partial<React.ComponentProps<typeof ChannelVideos>> = {}) =>
+    renderWithProviders(<ChannelVideos token={mockToken} {...props} />, {
+      websocketValue: createMockWebSocketContext(),
+    });
+
+  // Every render asks for the channel's tabs; this waits for the answer to show.
+  const renderWithTabsLoaded = async (props: Partial<React.ComponentProps<typeof ChannelVideos>> = {}) => {
+    renderChannelVideos(props);
+    await screen.findByRole('tab', { name: /Videos/i });
+  };
+
+  const dialogs = () => screen.getByTestId('channel-videos-dialogs');
+  const lastVideosQuery = () => mockUseChannelVideos.mock.calls[mockUseChannelVideos.mock.calls.length - 1][0];
+  const openSelectionMenu = async (count = 1) =>
+    userEvent.click(await screen.findByRole('button', { name: `Actions for ${count} selected video${count === 1 ? '' : 's'}` }));
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGet.mockReset();
+    mockPost.mockReset();
+    mockPost.mockResolvedValue({ data: {} });
     mockFetch.mockReset();
-    require('../hooks/useChannelTabStats').useChannelTabStats.mockReturnValue({
-      data: null, loading: false, error: null, refetch: jest.fn(),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: jest.fn().mockResolvedValue({ isFetching: false }) });
+    mockParams.channel_id = 'UC123456';
     (useMediaQuery as jest.Mock).mockReturnValue(false);
-    mockNavigate.mockClear();
     localStorage.removeItem('youtarr.channelVideos.pageSize');
-    // Pin the view so tests asserting VideoCard selection/ignore behavior keep
-    // rendering the grid. The "default is table on desktop" test below clears
-    // this to exercise the real default.
+    // Most tests drive the mocked cards, so pin the grid view; the default
+    // view tests remove this.
     localStorage.setItem('youtarr:channelVideosViewMode', 'grid');
 
-    // Default mock responses
-    useChannelVideos.mockReturnValue({
-      videos: [],
-      totalCount: 0,
-      oldestVideoDate: null,
-      error: null,
-      autoDownloadsEnabled: false,
-      loading: false,
-      refetch: mockRefetchVideos,
-    });
-
-    useChannelFetchStatus.mockImplementation(actualUseChannelFetchStatus);
-
-    useRefreshChannelVideos.mockReturnValue({
+    listVideos([]);
+    tabStatsAre(null);
+    serverTabsAre(['videos']);
+    mockUseChannelFetchStatus.mockImplementation(actualUseChannelFetchStatus);
+    mockUseRefreshChannelVideos.mockReturnValue({
       refreshVideos: mockRefreshVideos,
       loading: false,
       error: null,
-      clearError: mockClearError,
+      clearError: jest.fn(),
     });
-
-    useVideoDeletion.mockReturnValue({
-      deleteVideosByYoutubeIds: mockDeleteVideosByYoutubeIds,
-      loading: false,
-    });
-
-    useConfig.mockReturnValue({
-      config: { preferredResolution: '1080' },
-    });
-
-    useTriggerDownloads.mockReturnValue({
-      triggerDownloads: mockTriggerDownloads,
-    });
-
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: jest.fn().mockResolvedValue({ availableTabs: ['videos'] }),
-    });
+    (useVideoDeletion as jest.Mock).mockReturnValue({ deleteVideosByYoutubeIds: jest.fn(), loading: false });
+    mockUseConfig.mockReturnValue({ config: { preferredResolution: '1080' } });
+    (useTriggerDownloads as jest.Mock).mockReturnValue({ triggerDownloads: jest.fn() });
   });
 
-  describe('Component Rendering', () => {
-    test('renders without crashing', () => {
-      renderChannelVideos();
-      expect(screen.getByTestId('channel-videos-header')).toBeInTheDocument();
-    });
+  describe('list states', () => {
+    test('shows the loading message while the first page loads', async () => {
+      listVideos([], { loading: true });
 
-    test('renders with loading state initially', () => {
-      useChannelVideos.mockReturnValue({
-        videos: [],
-        totalCount: 0,
-        oldestVideoDate: null,
-        autoDownloadsEnabled: false,
-        loading: true,
-        refetch: mockRefetchVideos,
-      });
+      await renderWithTabsLoaded();
 
-      renderChannelVideos();
       expect(screen.getByText('Loading and fetching/indexing new videos for this channel tab...')).toBeInTheDocument();
     });
 
-    test('renders videos in table view by default on desktop', () => {
-      localStorage.removeItem('youtarr:channelVideosViewMode');
-      useChannelVideos.mockReturnValue({
-        videos: mockVideos,
-        totalCount: 3,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
+    test('shows the empty state, not an error, when the tab has no videos', async () => {
+      await renderWithTabsLoaded();
 
-      renderChannelVideos();
-      expect(screen.getByTestId('video-table-view')).toBeInTheDocument();
-      expect(screen.getByText('Table with 3 videos')).toBeInTheDocument();
-    });
-
-    test('shows no videos message when empty', () => {
-      renderChannelVideos();
-      expect(screen.getByText('No videos found')).toBeInTheDocument();
-    });
-
-    test('shows error message when fetch fails', () => {
-      useChannelVideos.mockReturnValue({
-        videos: [],
-        totalCount: 0,
-        oldestVideoDate: null,
-        error: new Error('Network error'),
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-      expect(screen.getByText('Failed to fetch channel videos. Please try again later.')).toBeInTheDocument();
-    });
-
-    test('shows filtered empty message when an active filter returns no videos', () => {
-      // No thrown error, just zero results. ChannelVideos must not treat
-      // this as an error; the shared VideoListEmptyState surfaces the
-      // filter-aware empty copy when the user has an active filter.
-      useChannelVideos.mockReturnValue({
-        videos: [],
-        totalCount: 0,
-        oldestVideoDate: null,
-        error: null,
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-      expect(
-        screen.queryByText('Failed to fetch channel videos. Please try again later.')
-      ).not.toBeInTheDocument();
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
       expect(screen.getByTestId('video-list-empty-state')).toBeInTheDocument();
-    });
-  });
-
-  describe('Watched filter', () => {
-    test('setting the watched filter re-fetches with watchedFilter=only and resets the page', async () => {
-      const user = userEvent.setup();
-      renderChannelVideos();
-
-      expect(useChannelVideos).toHaveBeenLastCalledWith(
-        expect.objectContaining({ watchedFilter: 'off' })
-      );
-
-      await user.click(screen.getByTestId('watched-filter-only'));
-
-      await waitFor(() => {
-        expect(useChannelVideos).toHaveBeenLastCalledWith(
-          expect.objectContaining({ watchedFilter: 'only', page: 1 })
-        );
-      });
-    });
-  });
-
-  describe('Download All', () => {
-    test('the header button opens the download-all dialog for the active tab', () => {
-      renderChannelVideos();
-
-      expect(screen.getByTestId('download-all-dialog')).toHaveAttribute('data-open', 'false');
-
-      fireEvent.click(screen.getByTestId('channel-download-all-button'));
-
-      const dialog = screen.getByTestId('download-all-dialog');
-      expect(dialog).toHaveAttribute('data-open', 'true');
-      expect(dialog).toHaveAttribute('data-tab-type', 'videos');
-    });
-  });
-
-  describe('Tab download stats refresh', () => {
-    const mockRefetchTabStats = jest.fn();
-
-    beforeEach(() => {
-      require('../hooks/useChannelTabStats').useChannelTabStats.mockReturnValue({
-        data: null, loading: false, error: null, refetch: mockRefetchTabStats,
-      });
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
 
-    test('refreshes download stats when the listing size changes', async () => {
-      const { rerender } = renderChannelVideos();
-      expect(await screen.findByTestId('channel-videos-header')).toBeInTheDocument();
-      mockRefetchTabStats.mockClear();
+    test('shows an error when the videos could not be fetched', async () => {
+      listVideos([], { error: new Error('Network error') });
 
-      useChannelVideos.mockReturnValue({
-        videos: mockVideos,
-        totalCount: 50,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-      rerender(<ChannelVideos token={mockToken} />);
+      await renderWithTabsLoaded();
 
-      await waitFor(() => expect(mockRefetchTabStats).toHaveBeenCalledTimes(1));
+      expect(screen.getByRole('alert')).toHaveTextContent('Failed to fetch channel videos. Please try again later.');
     });
 
-    test('refreshes download stats when another tab loads the same number of videos', async () => {
-      const listed = (loadedView: string) => ({
-        videos: mockVideos,
-        totalCount: 50,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        loadedView,
-        refetch: mockRefetchVideos,
-      });
-      useChannelVideos.mockReturnValue(listed('UC123456:videos'));
-      const { rerender } = renderChannelVideos();
-      expect(await screen.findByTestId('channel-videos-header')).toBeInTheDocument();
-      mockRefetchTabStats.mockClear();
+    test('shows the table by default on desktop', async () => {
+      localStorage.removeItem('youtarr:channelVideosViewMode');
+      listVideos(mockVideos);
 
-      useChannelVideos.mockReturnValue(listed('UC123456:shorts'));
-      rerender(<ChannelVideos token={mockToken} />);
+      await renderWithTabsLoaded();
 
-      await waitFor(() => expect(mockRefetchTabStats).toHaveBeenCalledTimes(1));
+      expect(screen.getByTestId('video-table-view')).toHaveTextContent('Table with 3 videos');
     });
 
-    test('does not refresh download stats again on the first render', async () => {
-      renderChannelVideos();
-
-      expect(await screen.findByTestId('channel-videos-header')).toBeInTheDocument();
-      expect(mockRefetchTabStats).not.toHaveBeenCalled();
-    });
-
-    test('passes the selected tab counts to the Load More dialog', async () => {
-      require('../hooks/useChannelTabStats').useChannelTabStats.mockReturnValue({
-        data: { videos: { total: 449, fetchedAt: null, downloaded: 5, ignored: 0, percent: 1, loaded: 50 } },
-        loading: false,
-        error: null,
-        refetch: mockRefetchTabStats,
-      });
-      renderChannelVideos();
-
-      const dialogs = await screen.findByTestId('channel-videos-dialogs');
-      expect([dialogs.getAttribute('data-tab-total'), dialogs.getAttribute('data-tab-loaded')]).toEqual(['449', '50']);
-    });
-
-    test('refreshes download stats after ignoring a video', async () => {
-      useChannelVideos.mockReturnValue({
-        videos: [mockVideos[0]],
-        totalCount: 1,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-      renderChannelVideos();
-      expect(await screen.findByTestId('video-card-video1')).toBeInTheDocument();
-      mockFetch.mockResolvedValueOnce({ ok: true, json: jest.fn().mockResolvedValueOnce({ success: true }) });
-
-      await userEvent.click(screen.getByTestId('toggle-ignore-video1'));
-
-      await waitFor(() => expect(mockRefetchTabStats).toHaveBeenCalled());
-    });
-  });
-
-  describe('Load More completion', () => {
-    const mockRefetchTabStats = jest.fn();
-    let finishLoadMore: () => void;
-
-    beforeEach(() => {
-      require('../hooks/useChannelTabStats').useChannelTabStats.mockReturnValue({
-        data: null, loading: false, error: null, refetch: mockRefetchTabStats,
-      });
-      mockRefreshVideos.mockImplementation(() => new Promise((resolve) => {
-        finishLoadMore = () => resolve(null);
-      }));
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: jest.fn().mockResolvedValue({ availableTabs: ['videos', 'shorts'], isFetching: false }),
-      });
-    });
-
-    const startLoadMore = async () => {
-      await userEvent.click(await screen.findByRole('button', { name: 'Mock confirm Load More' }));
-      await waitFor(() => expect(mockRefreshVideos).toHaveBeenCalled());
-    };
-
-    test('reloads the list when Load More finishes on the same tab', async () => {
-      renderChannelVideos();
-      await startLoadMore();
-      mockRefetchVideos.mockClear();
-
-      await act(async () => finishLoadMore());
-
-      expect(mockRefetchVideos).toHaveBeenCalledTimes(1);
-    });
-
-    test('reloads the download stats when Load More finishes on the same channel', async () => {
-      renderChannelVideos();
-      await startLoadMore();
-      mockRefetchTabStats.mockClear();
-
-      await act(async () => finishLoadMore());
-
-      expect(mockRefetchTabStats).toHaveBeenCalledTimes(1);
-    });
-
-    test('does not reload the list over another tab the user switched to', async () => {
-      renderChannelVideos();
-      await startLoadMore();
-      await userEvent.click(await screen.findByRole('tab', { name: /Shorts/i }));
-      mockRefetchVideos.mockClear();
-
-      await act(async () => finishLoadMore());
-
-      expect(mockRefetchVideos).not.toHaveBeenCalled();
-    });
-
-    test('does not reload the list or stats over another channel the user switched to', async () => {
-      const { rerender } = renderChannelVideos({ channelId: 'UC123456' });
-      await startLoadMore();
-      rerender(<ChannelVideos token={mockToken} channelId="UC999999" />);
-      mockRefetchVideos.mockClear();
-      mockRefetchTabStats.mockClear();
-
-      await act(async () => finishLoadMore());
-
-      expect([mockRefetchVideos.mock.calls.length, mockRefetchTabStats.mock.calls.length]).toEqual([0, 0]);
-    });
-  });
-
-  describe('Tab Management', () => {
-    test('shows the tab download percentage on the tab label', async () => {
-      const { useChannelTabStats } = require('../hooks/useChannelTabStats');
-      useChannelTabStats.mockReturnValue({
-        data: { videos: { total: 10, fetchedAt: null, downloaded: 5, ignored: 0, percent: 50, loaded: 8 } },
-        loading: false,
-        error: null,
-        refetch: jest.fn(),
-      });
-
-      renderChannelVideos();
-
-      expect(await screen.findByRole('progressbar', { name: 'Videos: 5 of 10 downloaded' })).toBeInTheDocument();
-    });
-
-    test('shows how many videos are on YouTube and loaded', async () => {
-      const { useChannelTabStats } = require('../hooks/useChannelTabStats');
-      useChannelTabStats.mockReturnValue({
-        data: { videos: { total: 10, fetchedAt: null, downloaded: 5, ignored: 0, percent: 50, loaded: 8 } },
-        loading: false,
-        error: null,
-        refetch: jest.fn(),
-      });
-
-      renderChannelVideos();
-
-      expect(await screen.findByTestId('tab-download-summary')).toHaveTextContent('Videos tab · 5 of 10 downloaded · 8 loaded');
-    });
-
-    describe('item count chip', () => {
-      const threeVideos = () => useChannelVideos.mockReturnValue({
-        videos: mockVideos,
-        totalCount: 3,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      test('is left out when the tab summary shows the counts', async () => {
-        threeVideos();
-        require('../hooks/useChannelTabStats').useChannelTabStats.mockReturnValue({
-          data: { videos: { total: 10, fetchedAt: null, downloaded: 5, ignored: 0, percent: 50, loaded: 3 } },
-          loading: false,
-          error: null,
-          refetch: jest.fn(),
-        });
-
-        renderChannelVideos();
-
-        await screen.findByTestId('tab-download-summary');
-        expect(screen.queryByText('3 items')).not.toBeInTheDocument();
-      });
-
-      test('shows the item count before the tab has been counted', async () => {
-        threeVideos();
-
-        renderChannelVideos();
-
-        expect(await screen.findByText('3 items')).toBeInTheDocument();
-      });
-
-      test('shows how many videos match while a filter is on', async () => {
-        const user = userEvent.setup();
-        threeVideos();
-        renderChannelVideos();
-
-        await user.click(await screen.findByTestId('watched-filter-only'));
-
-        expect(await screen.findByText('3 matches')).toBeInTheDocument();
-      });
-    });
-
-    test('does not show tabs while fetching, then shows tabs after loading', async () => {
-      // Setup a delayed response to catch the loading state
-      let resolveTabsFetch: (value: any) => void;
-      const tabsFetchPromise = new Promise((resolve) => {
-        resolveTabsFetch = resolve;
-      });
-
-      mockFetch.mockReturnValueOnce(tabsFetchPromise as any);
-
-      renderChannelVideos();
-
-      // While loading, tabs should not be present
-      expect(screen.queryByRole('tab', { name: /Videos/i })).not.toBeInTheDocument();
-      expect(screen.queryByRole('tab', { name: /Shorts/i })).not.toBeInTheDocument();
-
-      // Resolve the fetch with multiple tabs
-      resolveTabsFetch!({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ availableTabs: ['videos', 'shorts'] }),
-      });
-
-      // Wait for tabs to appear after loading
-      await waitFor(() => {
-        expect(screen.getByRole('tab', { name: /Videos/i })).toBeInTheDocument();
-      });
-      expect(screen.getByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
-    });
-
-    test('fetches available tabs on mount', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ availableTabs: ['videos', 'shorts', 'streams'] }),
-      });
-
-      renderChannelVideos();
-
-      await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(
-          '/api/channels/UC123456/tabs',
-          expect.objectContaining({
-            headers: { 'x-access-token': mockToken },
-          })
-        );
-      });
-    });
-
-    test('displays tabs when multiple tabs are available', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ availableTabs: ['videos', 'shorts', 'streams'] }),
-      });
-
-      renderChannelVideos();
-
-      await waitFor(() => {
-        expect(screen.getByRole('tab', { name: /Videos/i })).toBeInTheDocument();
-      });
-
-      expect(screen.getByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /Live/i })).toBeInTheDocument();
-    });
-
-    test('does not display tabs when only one tab available', () => {
-      renderChannelVideos();
-      expect(screen.queryByRole('tab')).not.toBeInTheDocument();
-    });
-
-    test('handles tab change', async () => {
-      const user = userEvent.setup();
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ availableTabs: ['videos', 'shorts'] }),
-      });
-
-      renderChannelVideos();
-
-      await waitFor(() => {
-        expect(screen.getByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
-      });
-
-      await user.click(screen.getByRole('tab', { name: /Shorts/i }));
-
-      // Verify that useChannelVideos was called with the new tab
-      await waitFor(() => {
-        expect(useChannelVideos).toHaveBeenCalledWith(
-          expect.objectContaining({
-            tabType: 'shorts',
-          })
-        );
-      });
-    });
-
-    test('prevents tab change while videos are loading', async () => {
-      const user = userEvent.setup();
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ availableTabs: ['videos', 'shorts'] }),
-      });
-
-      useChannelVideos.mockReturnValue({
-        videos: [],
-        totalCount: 0,
-        oldestVideoDate: null,
-        autoDownloadsEnabled: false,
-        loading: true,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-
-      await waitFor(() => {
-        expect(screen.getByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
-      });
-
-      const shortsTab = screen.getByRole('tab', { name: /Shorts/i });
-      await user.click(shortsTab);
-
-      // Tab should not change when loading - we can't really test this with current setup
-      // since React state changes happen internally
-    });
-  });
-
-  describe('View Modes', () => {
-    test('renders in list view on mobile by default', () => {
+    test('shows the list by default on mobile', async () => {
       localStorage.removeItem('youtarr:channelVideosViewMode');
       (useMediaQuery as jest.Mock).mockReturnValue(true);
+      listVideos(mockVideos);
 
-      useChannelVideos.mockReturnValue({
-        videos: mockVideos,
-        totalCount: 3,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
+      await renderWithTabsLoaded();
 
       expect(screen.getByTestId('video-list-item-video1')).toBeInTheDocument();
-    });
-
-    test('shows a desktop floating selection action button when a video is selected', async () => {
-      const user = userEvent.setup();
-
-      useChannelVideos.mockReturnValue({
-        videos: [mockVideos[0]],
-        totalCount: 1,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-
-      await user.click(screen.getByTestId('select-video-video1'));
-
-      const floatingAction = await screen.findByRole('button', {
-        name: /Actions for 1 selected video/i,
-      });
-
-      expect(floatingAction).toBeInTheDocument();
-      expect(screen.getByTestId('video-list-selection-pill')).toHaveAccessibleName(/1 selected video/i);
-
-      await user.click(floatingAction);
-
-      expect(screen.getByRole('menuitem', { name: /Download Selected/i })).toBeInTheDocument();
-      expect(screen.getByRole('menuitem', { name: /Ignore Selected/i })).toBeInTheDocument();
-      expect(screen.getByRole('menuitem', { name: /Clear Selection/i })).toBeInTheDocument();
+      expect(screen.queryByTestId('video-card-video1')).not.toBeInTheDocument();
     });
   });
 
-  describe('Missing video count', () => {
-    const missingVideo: ChannelVideo = {
-      title: 'Missing Video',
-      youtube_id: 'missing1',
-      publishedAt: '2023-01-04T00:00:00Z',
-      thumbnail: 'https://i.ytimg.com/vi/missing1/mqdefault.jpg',
-      added: true,
-      removed: true,
-      duration: 300,
-      media_type: 'video',
-      live_status: null,
-    };
-
-    test('counts a selected previously-downloaded (missing) video', async () => {
-      const user = userEvent.setup();
-
-      useChannelVideos.mockReturnValue({
-        videos: [...mockVideos, missingVideo],
-        totalCount: 4,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-
-      await user.click(screen.getByTestId('select-video-missing1'));
-
-      await waitFor(() => {
-        expect(screen.getByTestId('channel-videos-dialogs')).toHaveAttribute('data-missing-video-count', '1');
-      });
-    });
-
-    test('does not count a selected never-downloaded video', async () => {
-      const user = userEvent.setup();
-
-      useChannelVideos.mockReturnValue({
-        videos: [...mockVideos, missingVideo],
-        totalCount: 4,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-
-      await user.click(screen.getByTestId('select-video-video1'));
-
-      await waitFor(() => {
-        expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'download');
-      });
-      expect(screen.getByTestId('channel-videos-dialogs')).toHaveAttribute('data-missing-video-count', '0');
-    });
-
-    test('counts a selected never-downloaded video that is in the download archive', async () => {
-      const user = userEvent.setup();
-      const archivedVideo: ChannelVideo = {
-        ...missingVideo,
-        title: 'Archived Video',
-        youtube_id: 'archived1',
-        added: false,
-        removed: false,
-        inArchive: true,
-      };
-
-      useChannelVideos.mockReturnValue({
-        videos: [...mockVideos, archivedVideo],
-        totalCount: 4,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-
-      await user.click(screen.getByTestId('select-video-archived1'));
-
-      await waitFor(() => {
-        expect(screen.getByTestId('channel-videos-dialogs')).toHaveAttribute('data-missing-video-count', '1');
-      });
-    });
-
-    test('keeps counting a selected missing video after the loaded page no longer contains it', async () => {
-      const user = userEvent.setup();
-
-      useChannelVideos.mockReturnValue({
-        videos: [...mockVideos, missingVideo],
-        totalCount: 4,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      const { rerender } = renderChannelVideos();
-
-      await user.click(screen.getByTestId('select-video-missing1'));
-
-      await waitFor(() => {
-        expect(screen.getByTestId('channel-videos-dialogs')).toHaveAttribute('data-missing-video-count', '1');
-      });
-
-      // Simulate a page change replacing the loaded videos with a page that
-      // does not include the selected video.
-      useChannelVideos.mockReturnValue({
-        videos: mockVideos,
-        totalCount: 4,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-      rerender(<ChannelVideos token={mockToken} />);
-
-      expect(screen.getByTestId('channel-videos-dialogs')).toHaveAttribute('data-missing-video-count', '1');
-    });
-  });
-
-  describe('Selection mode mutual exclusion', () => {
-    test('selecting a video for download locks all rows into download selectionMode', async () => {
-      const user = userEvent.setup();
-
-      useChannelVideos.mockReturnValue({
-        videos: mockVideos,
-        totalCount: 3,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-
-      await user.click(screen.getByTestId('select-video-video1'));
-
-      await waitFor(() => {
-        expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'download');
-      });
-      expect(screen.getByTestId('video-card-video2')).toHaveAttribute('data-selection-mode', 'download');
-      expect(screen.getByTestId('video-card-short1')).toHaveAttribute('data-selection-mode', 'download');
-
-      const floatingAction = await screen.findByRole('button', {
-        name: /Actions for 1 selected video/i,
-      });
-      await user.click(floatingAction);
-      expect(screen.getByRole('menuitem', { name: /Download Selected/i })).toBeInTheDocument();
-      expect(screen.queryByRole('menuitem', { name: /Delete Selected/i })).not.toBeInTheDocument();
-    });
-
-    test('selecting a video for deletion locks all rows into delete selectionMode', async () => {
-      const user = userEvent.setup();
-
-      useChannelVideos.mockReturnValue({
-        videos: mockVideos,
-        totalCount: 3,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-
-      await user.click(screen.getByTestId('select-delete-video2'));
-
-      await waitFor(() => {
-        expect(screen.getByTestId('video-card-video2')).toHaveAttribute('data-selection-mode', 'delete');
-      });
-      expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'delete');
-      expect(screen.getByTestId('video-card-short1')).toHaveAttribute('data-selection-mode', 'delete');
-
-      const floatingAction = await screen.findByRole('button', {
-        name: /Actions for 1 selected video/i,
-      });
-      await user.click(floatingAction);
-      expect(screen.getByRole('menuitem', { name: /Delete Selected/i })).toBeInTheDocument();
-      expect(screen.queryByRole('menuitem', { name: /Download Selected/i })).not.toBeInTheDocument();
-    });
-
-    test('prefers download mode when both selections would coexist (ternary order)', async () => {
-      const user = userEvent.setup();
-
-      useChannelVideos.mockReturnValue({
-        videos: mockVideos,
-        totalCount: 3,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-
-      // Enter download mode first by selecting a downloadable row.
-      await user.click(screen.getByTestId('select-video-video1'));
-
-      await waitFor(() => {
-        expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'download');
-      });
-
-      // Child-level gating contract: with download mode active, every row's
-      // normal delete affordance is disabled, mirroring the real VideoCard.
-      expect(screen.getByTestId('select-delete-video2')).toBeDisabled();
-
-      // Simulate a state where the child-level gate failed and both arrays
-      // end up populated simultaneously. The parent's ternary must still
-      // pick 'download' as the active mode (first branch wins).
-      await user.click(screen.getByTestId('force-select-delete-video2'));
-
-      expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'download');
-      expect(screen.getByTestId('video-card-video2')).toHaveAttribute('data-selection-mode', 'download');
-      expect(screen.getByTestId('video-card-short1')).toHaveAttribute('data-selection-mode', 'download');
-
-      const floatingAction = await screen.findByRole('button', {
-        name: /Actions for 1 selected video/i,
-      });
-      await user.click(floatingAction);
-      expect(screen.getByRole('menuitem', { name: /Download Selected/i })).toBeInTheDocument();
-      expect(screen.queryByRole('menuitem', { name: /Delete Selected/i })).not.toBeInTheDocument();
-    });
-
-    test('pill "Clear Selection" wipes both download and delete selection arrays', async () => {
-      // Pins the cross-clear invariant of syncedDownload/DeleteSelection.clear:
-      // clearing one mode via the pill must also clear the other mode's array,
-      // so a previously-stuck selection in the non-active mode can't linger.
-      const user = userEvent.setup();
-
-      useChannelVideos.mockReturnValue({
-        videos: mockVideos,
-        totalCount: 3,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-
-      // Populate both selection arrays via the force-select-delete escape hatch
-      // so clearing via the pill must zero both.
-      await user.click(screen.getByTestId('select-video-video1'));
-      await user.click(screen.getByTestId('force-select-delete-video2'));
-
-      await waitFor(() => {
-        expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'download');
-      });
-
-      const floatingAction = await screen.findByRole('button', {
-        name: /Actions for 1 selected video/i,
-      });
-      await user.click(floatingAction);
-
-      const clearItem = screen.getByRole('menuitem', { name: /Clear Selection/i });
-      await user.click(clearItem);
-
-      // Pill disappears -> hasSelection is false on both hooks, meaning both
-      // selection arrays went back to empty.
-      await waitFor(() => {
-        expect(screen.queryByTestId('video-list-selection-pill')).not.toBeInTheDocument();
-      });
-
-      // Neither card still advertises a locked selectionMode.
-      expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'null');
-      expect(screen.getByTestId('video-card-video2')).toHaveAttribute('data-selection-mode', 'null');
-    });
-  });
-
-  describe('Pagination', () => {
-    test('displays pagination when multiple pages exist', () => {
-      useChannelVideos.mockReturnValue({
-        videos: mockVideos,
-        totalCount: 32,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-
-      const paginationElements = screen.getAllByRole('navigation');
-      expect(paginationElements.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('Page Size Selector', () => {
-    test('renders page size selector when videos exist', () => {
-      useChannelVideos.mockReturnValue({
-        videos: mockVideos,
-        totalCount: 3,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-
-      expect(screen.getAllByRole('button', { name: '16' }).length).toBeGreaterThan(0);
-    });
-
-    test('does not render page size selector when no videos', () => {
-      useChannelVideos.mockReturnValue({
-        videos: [],
-        totalCount: 0,
-        oldestVideoDate: null,
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-
-      expect(screen.queryByLabelText('videos per page')).not.toBeInTheDocument();
-    });
-
-    test('does not render page size selector while loading', () => {
-      useChannelVideos.mockReturnValue({
-        videos: [],
-        totalCount: 0,
-        oldestVideoDate: null,
-        autoDownloadsEnabled: false,
-        loading: true,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-
-      expect(screen.queryByLabelText('videos per page')).not.toBeInTheDocument();
-    });
-
-    test('selector shows default value of 16', () => {
-      useChannelVideos.mockReturnValue({
-        videos: mockVideos,
-        totalCount: 3,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-
-      const selects = screen.getAllByRole('button', { name: '16' });
-      expect(selects.length).toBeGreaterThan(0);
-      expect(selects[0]).toHaveTextContent('16');
-    });
-
-    test('selector reads stored value from localStorage', () => {
-      localStorage.setItem('youtarr.channelVideos.pageSize', '32');
-
-      useChannelVideos.mockReturnValue({
-        videos: mockVideos,
-        totalCount: 3,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-
-      expect(useChannelVideos).toHaveBeenCalledWith(
-        expect.objectContaining({
-          pageSize: 32,
-        })
-      );
-    });
-
-    test('changing page size updates fetch params and writes to localStorage', async () => {
-      const user = userEvent.setup();
-
-      useChannelVideos.mockReturnValue({
-        videos: mockVideos,
-        totalCount: 48, // enough for multiple pages at size 16
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-
-      // Navigate to page 2 first so we can verify page resets to 1
-      await waitFor(() => {
-        expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0);
-      });
-      const page2Buttons = screen.getAllByRole('button', { name: 'go to page 2' });
-      await user.click(page2Buttons[0]);
-
-      expect(useChannelVideos).toHaveBeenLastCalledWith(
-        expect.objectContaining({ page: 2 })
-      );
-
-      // Open the MUI Select dropdown by clicking its displayed value text.
-      // MUI Select (non-native) opens on mouseDown on the inner trigger div.
-      // The "Per page:" label precedes the Select, and the Select displays "16".
-      // Use within() on the labeled container to find the trigger by its text content.
-      const selectContainers = screen.getAllByRole('button', { name: '16' });
-      const trigger = within(selectContainers[0]).getByText('16');
-      fireEvent.mouseDown(trigger);
-
-      // Choose 32
-      const option = await screen.findByRole('option', { name: '32' });
-      await user.click(option);
-
-      expect(localStorage.getItem('youtarr.channelVideos.pageSize')).toBe('32');
-      expect(useChannelVideos).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          pageSize: 32,
-          page: 1,
-        })
-      );
-    });
-
-    test('renders selector without pagination buttons when only one page', () => {
-      useChannelVideos.mockReturnValue({
-        videos: mockVideos,
-        totalCount: 3,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-
-      // Selector should be present
-      expect(screen.getAllByRole('button', { name: '16' }).length).toBeGreaterThan(0);
-
-      // Only 1 page total (3 videos < 16 per page), so no page 2 button should exist
-      expect(screen.queryByRole('button', { name: 'go to page 2' })).not.toBeInTheDocument();
-    });
-
-    test('renders both selector and pagination when multiple pages', () => {
-      useChannelVideos.mockReturnValue({
-        videos: mockVideos,
-        totalCount: 32,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-
-      // Both should be present
-      expect(screen.getAllByRole('button', { name: '16' }).length).toBeGreaterThan(0);
-      expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('Pending dates indicator', () => {
-    const estimatedVideo: ChannelVideo = {
-      title: 'Pending Date Video',
-      youtube_id: 'pending1',
-      publishedAt: null,
-      published_at_source: 'estimated',
-      thumbnail: 'https://i.ytimg.com/vi/pending1/mqdefault.jpg',
-      added: false,
-      duration: 120,
-      media_type: 'video',
-      live_status: null,
-    };
-
-    const mockVideosReturn = (videos: ChannelVideo[]) => {
-      useChannelVideos.mockReturnValue({
-        videos,
-        totalCount: videos.length,
-        oldestVideoDate: null,
-        error: null,
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-    };
-
-    test('mobile video list info explains pending dates when estimated rows are present', async () => {
-      (useMediaQuery as jest.Mock).mockReturnValue(true);
-      mockVideosReturn([estimatedVideo]);
-
-      renderChannelVideos();
-      fireEvent.click(screen.getByLabelText('Video list info'));
-
-      expect(await screen.findByText(/^Pending means YouTube listed the video without a date\./)).toBeInTheDocument();
-    });
-
-    test('video list info omits the pending explanation when all rows have dates', async () => {
-      mockVideosReturn(mockVideos);
-
-      renderChannelVideos();
-      fireEvent.click(screen.getByLabelText('Video list info'));
-
-      await screen.findByText(/^Dates come from YouTube\./);
-      expect(screen.queryByText(/Pending means/)).not.toBeInTheDocument();
-    });
-
-    test('highlights the video list info icon when estimated rows are present', () => {
-      mockVideosReturn([estimatedVideo]);
-
-      renderChannelVideos();
-
-      expect(screen.getByLabelText('Video list info')).toHaveStyle({ color: 'var(--warning)' });
-    });
-
-    test('does not highlight the video list info icon when all rows have dates', () => {
-      mockVideosReturn(mockVideos);
-
-      renderChannelVideos();
-
-      expect(screen.getByLabelText('Video list info')).not.toHaveStyle({ color: 'var(--warning)' });
-    });
-
-    test('shows one info button in the header', () => {
-      mockVideosReturn(mockVideos);
-
-      renderChannelVideos();
-
-      expect(within(screen.getByTestId('channel-videos-header')).getAllByRole('button', { name: /info/i })).toHaveLength(1);
-    });
-
-    test('explains only the missing publish dates on the Shorts tab', async () => {
-      const user = userEvent.setup();
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ availableTabs: ['videos', 'shorts'] }),
-      });
-      mockVideosReturn(mockVideos);
-      renderChannelVideos();
-
-      await user.click(await screen.findByRole('tab', { name: /Shorts/i }));
-      await user.click(screen.getByLabelText('Video list info'));
-
-      expect(await screen.findByText("YouTube doesn't provide publish dates for Shorts.")).toBeInTheDocument();
-    });
-  });
-
-  describe('Error Handling', () => {
-    test('handles tab fetch error gracefully', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
-
-      renderChannelVideos();
-
-      await waitFor(() => {
-        expect(consoleErrorSpy).toHaveBeenCalledWith(
-          'Error fetching available tabs:',
-          expect.any(Error)
-        );
-      });
-
-      consoleErrorSpy.mockRestore();
-    });
-
-    test('handles non-ok tab response', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        statusText: 'Not Found',
-      });
-
-      renderChannelVideos();
-
-      // Should still render without tabs
-      await waitFor(() => {
-        expect(screen.getByTestId('channel-videos-header')).toBeInTheDocument();
-      });
-    });
-  });
-
-  describe('Edge Cases', () => {
-    test('handles null token', () => {
-      renderChannelVideos({ token: null });
-
-      expect(screen.getByTestId('channel-videos-header')).toBeInTheDocument();
-    });
-
-    test('handles empty tabs array from server', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ availableTabs: [] }),
-      });
-
-      renderChannelVideos();
-
-      await waitFor(() => {
-        expect(screen.getByTestId('channel-videos-header')).toBeInTheDocument();
-      });
-
-      // Should display fallback 'Videos' tab when server returns empty array
-      await waitFor(() => {
-        expect(screen.getByRole('tab', { name: /Videos/i })).toBeInTheDocument();
-      });
-    });
-
-    test('handles undefined channelAutoDownloadTabs prop', () => {
-      renderChannelVideos({ channelAutoDownloadTabs: undefined });
-
-      expect(screen.getByTestId('channel-videos-header')).toBeInTheDocument();
-    });
-
-    test('initializes tab auto-download status from prop', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ availableTabs: ['videos', 'shorts', 'streams'] }),
-      });
-
-      renderChannelVideos({ channelAutoDownloadTabs: 'video,short' });
-
-      // Component should initialize the tab auto-download status
-      // This is internal state so we can't directly test it, but we can verify it rendered
-      await waitFor(() => {
-        expect(screen.getByTestId('channel-videos-header')).toBeInTheDocument();
-      });
-    });
-  });
-
-  describe('Data Fetching', () => {
-    test('calls useChannelVideos hook with correct parameters', () => {
-      renderChannelVideos();
-
-      // Initially called with null tabType until tabs are loaded
-      expect(useChannelVideos).toHaveBeenCalledWith(expect.objectContaining({
+  describe('fetching videos', () => {
+    test('asks for the first page of the route channel, newest first and unfiltered', async () => {
+      await renderWithTabsLoaded();
+
+      // The tab is not known until the tabs request answers.
+      expect(mockUseChannelVideos).toHaveBeenCalledWith(expect.objectContaining({
         channelId: 'UC123456',
         page: 1,
-        pageSize: 16, // Desktop default
+        pageSize: 16,
         downloadedFilter: 'off',
         searchQuery: '',
         sortBy: 'date',
@@ -1546,631 +482,564 @@ describe('ChannelVideos Component', () => {
         resetKey: expect.any(String),
         protectedFilter: 'off',
         missingFilter: 'off',
+        deletedFilter: 'off',
         ignoredFilter: 'off',
+        watchedFilter: 'off',
       }));
     });
 
-    test('calls useRefreshChannelVideos hook with correct parameters', () => {
-      renderChannelVideos();
-
-      // Initially called with null tabType until tabs are loaded
-      expect(useRefreshChannelVideos).toHaveBeenCalledWith(
-        'UC123456',
-        1, // page
-        16, // pageSize
-        'off', // downloadedFilter
-        null, // tabType - null until tabs are loaded
-        mockToken
-      );
-    });
-  });
-
-  describe('Props Override', () => {
-    test('uses channelId prop when provided instead of route param', async () => {
-      const propChannelId = 'UCCustomChannel';
-      renderChannelVideos({ channelId: propChannelId });
-
-      await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(
-          `/api/channels/${propChannelId}/tabs`,
-          expect.objectContaining({
-            headers: { 'x-access-token': mockToken },
-          })
-        );
-      });
-
-      expect(useChannelVideos).toHaveBeenCalledWith(
-        expect.objectContaining({
-          channelId: propChannelId,
-        })
-      );
-    });
-
-    test('uses route param channelId when prop not provided', async () => {
-      renderChannelVideos();
-
-      await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(
-          '/api/channels/UC123456/tabs',
-          expect.objectContaining({
-            headers: { 'x-access-token': mockToken },
-          })
-        );
-      });
-
-      expect(useChannelVideos).toHaveBeenCalledWith(
-        expect.objectContaining({
-          channelId: 'UC123456',
-        })
-      );
-    });
-
-    test('uses channel-level video quality when provided', () => {
-      renderChannelVideos({ channelVideoQuality: '720' });
-
-      // The defaultResolution should use the channel override
-      const dialogsElement = screen.getByTestId('channel-videos-dialogs');
-      expect(dialogsElement).toBeInTheDocument();
-      expect(dialogsElement).toHaveAttribute('data-default-resolution', '720');
-      expect(dialogsElement).toHaveAttribute('data-default-resolution-source', 'channel');
-    });
-
-    test('uses global video quality when channel override not provided', () => {
-      useConfig.mockReturnValue({
-        config: { preferredResolution: '1080' },
-      });
-
-      renderChannelVideos();
-
-      // The defaultResolution should fall back to global config
-      const dialogsElement = screen.getByTestId('channel-videos-dialogs');
-      expect(dialogsElement).toBeInTheDocument();
-      expect(dialogsElement).toHaveAttribute('data-default-resolution', '1080');
-      expect(dialogsElement).toHaveAttribute('data-default-resolution-source', 'global');
-    });
-
-    test('hands the protect manual downloads default to both download dialogs', () => {
-      useConfig.mockReturnValue({
-        config: { preferredResolution: '1080', protectManualDownloads: true },
-      });
-
-      renderChannelVideos();
-
-      expect(screen.getByTestId('channel-videos-dialogs')).toHaveAttribute('data-default-protect', 'true');
-      expect(screen.getByTestId('download-all-dialog')).toHaveAttribute('data-default-protect', 'true');
-    });
-
-    test('prioritizes channel quality over global quality', () => {
-      useConfig.mockReturnValue({
-        config: { preferredResolution: '1080' },
-      });
-
-      renderChannelVideos({ channelVideoQuality: '720' });
-
-      // Channel override should take precedence
-      const dialogsElement = screen.getByTestId('channel-videos-dialogs');
-      expect(dialogsElement).toBeInTheDocument();
-      expect(dialogsElement).toHaveAttribute('data-default-resolution', '720');
-      expect(dialogsElement).toHaveAttribute('data-default-resolution-source', 'channel');
-    });
-
-    test('handles null channelVideoQuality', () => {
-      useConfig.mockReturnValue({
-        config: { preferredResolution: '1080' },
-      });
-
-      renderChannelVideos({ channelVideoQuality: null });
-
-      const dialogsElement = screen.getByTestId('channel-videos-dialogs');
-      expect(dialogsElement).toHaveAttribute('data-default-resolution', '1080');
-      expect(dialogsElement).toHaveAttribute('data-default-resolution-source', 'global');
-    });
-
-    test('falls back to 1080 when no config or channel quality provided', () => {
-      useConfig.mockReturnValue({
-        config: {},
-      });
-
-      renderChannelVideos();
-
-      const dialogsElement = screen.getByTestId('channel-videos-dialogs');
-      expect(dialogsElement).toHaveAttribute('data-default-resolution', '1080');
-      expect(dialogsElement).toHaveAttribute('data-default-resolution-source', 'global');
-    });
-  });
-
-  describe('Loading Skeletons', () => {
-    test('displays skeleton loaders while fetching videos', () => {
-      useChannelVideos.mockReturnValue({
-        videos: [],
-        totalCount: 0,
-        oldestVideoDate: null,
-        autoDownloadsEnabled: false,
-        loading: true,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-
-      expect(screen.getByText('Loading and fetching/indexing new videos for this channel tab...')).toBeInTheDocument();
-    });
-  });
-
-  describe('Mobile Features', () => {
-    beforeEach(() => {
+    test('uses the same page size on mobile', async () => {
       (useMediaQuery as jest.Mock).mockReturnValue(true);
+
+      await renderWithTabsLoaded();
+
+      expect(lastVideosQuery().pageSize).toBe(16);
     });
 
-    test('uses same page size on mobile as desktop (unified setting)', () => {
-      renderChannelVideos();
+    test('sets Load More up for the same channel, page, page size and filter', async () => {
+      await renderWithTabsLoaded();
 
-      expect(useChannelVideos).toHaveBeenCalledWith(
-        expect.objectContaining({
-          pageSize: 16,
-        })
-      );
+      expect(mockUseRefreshChannelVideos).toHaveBeenCalledWith('UC123456', 1, 16, 'off', null, mockToken);
     });
 
-    test('renders list view by default on mobile', () => {
-      localStorage.removeItem('youtarr:channelVideosViewMode');
-      useChannelVideos.mockReturnValue({
-        videos: mockVideos,
-        totalCount: 3,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
+    test('prefers the channelId prop over the route param', async () => {
+      renderChannelVideos({ channelId: 'UCCustomChannel' });
+
+      await waitFor(() => {
+        expect(mockGet).toHaveBeenCalledWith('/api/channels/UCCustomChannel/tabs', expect.anything());
       });
+      expect(lastVideosQuery().channelId).toBe('UCCustomChannel');
+    });
 
+    test('setting a filter fetches the filtered list from the first page', async () => {
+      listVideos(mockVideos, { totalCount: 48 });
+      renderChannelVideos();
+      await userEvent.click(screen.getAllByRole('button', { name: 'go to page 2' })[0]);
+
+      await userEvent.click(screen.getByTestId('watched-filter-only'));
+
+      await waitFor(() => {
+        expect(lastVideosQuery()).toMatchObject({ watchedFilter: 'only', page: 1 });
+      });
+    });
+
+    test('shows how many videos match while a filter is on', async () => {
+      listVideos(mockVideos);
       renderChannelVideos();
 
-      expect(screen.getByTestId('video-list-item-video1')).toBeInTheDocument();
-      expect(screen.queryByTestId('video-card-video1')).not.toBeInTheDocument();
+      await userEvent.click(await screen.findByTestId('watched-filter-only'));
+
+      expect(await screen.findByText('3 matches')).toBeInTheDocument();
     });
   });
 
-  describe('Ignore/Unignore Functionality', () => {
-    const ignoredVideo: ChannelVideo = {
-      title: 'Ignored Video',
-      youtube_id: 'ignored1',
-      publishedAt: '2023-01-04T00:00:00Z',
-      thumbnail: 'https://i.ytimg.com/vi/ignored1/mqdefault.jpg',
-      added: false,
-      duration: 400,
-      media_type: 'video',
-      live_status: null,
-      ignored: true,
-      ignored_at: '2023-01-05T00:00:00Z',
-    };
+  describe('tabs', () => {
+    test('shows no tabs until the server lists them', async () => {
+      let answerTabs: (response: unknown) => void = () => {};
+      mockGet.mockReturnValueOnce(new Promise((resolve) => { answerTabs = resolve; }));
+      renderChannelVideos();
+      const tabsWhileWaiting = screen.queryAllByRole('tab').length;
 
-    beforeEach(() => {
-      mockFetch.mockClear();
+      answerTabs({ data: { availableTabs: ['videos', 'shorts', 'streams'] } });
+
+      expect(await screen.findByRole('tab', { name: /Live/i })).toBeInTheDocument();
+      expect(tabsWhileWaiting).toBe(0);
+    });
+
+    test('shows the tabs the video listing reports', async () => {
+      mockGet.mockReturnValue(new Promise(() => {}));
+      listVideos(mockVideos, { availableTabs: ['videos', 'shorts'] });
+
+      renderChannelVideos();
+
+      expect(await screen.findByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
+    });
+
+    test('marks the tabs that download automatically', async () => {
+      serverTabsAre(['videos', 'shorts']);
+
+      renderChannelVideos({ channelAutoDownloadTabs: 'short' });
+
+      const shortsTab = await screen.findByRole('tab', { name: /Shorts/i });
+      expect(within(shortsTab).getByTitle('Auto-download enabled')).toBeInTheDocument();
+    });
+
+    test('switching tab fetches that tab', async () => {
+      serverTabsAre(['videos', 'shorts']);
+      renderChannelVideos();
+
+      await userEvent.click(await screen.findByRole('tab', { name: /Shorts/i }));
+
+      await waitFor(() => expect(lastVideosQuery().tabType).toBe('shorts'));
+    });
+
+    test('switching tab turns the status filters off', async () => {
+      serverTabsAre(['videos', 'shorts']);
+      renderChannelVideos();
+      await userEvent.click(await screen.findByTestId('watched-filter-only'));
+
+      await userEvent.click(await screen.findByRole('tab', { name: /Shorts/i }));
+
+      await waitFor(() => expect(lastVideosQuery()).toMatchObject({ tabType: 'shorts', watchedFilter: 'off' }));
+    });
+
+    test('switching tab drops the selection', async () => {
+      serverTabsAre(['videos', 'shorts']);
+      listVideos(mockVideos);
+      renderChannelVideos();
+      await userEvent.click(screen.getByTestId('select-video-video1'));
+
+      await userEvent.click(await screen.findByRole('tab', { name: /Shorts/i }));
+
+      await waitFor(() => expect(dialogs()).toHaveAttribute('data-video-count', '0'));
+    });
+
+    test('ignores a tab click while videos are loading', async () => {
+      serverTabsAre(['videos', 'shorts']);
+      listVideos(mockVideos, { loading: true });
+      renderChannelVideos();
+
+      await userEvent.click(await screen.findByRole('tab', { name: /Shorts/i }));
+
+      expect(lastVideosQuery().tabType).toBe('videos');
+    });
+
+    test('updates the tab strip when the parent passes a new tab list', async () => {
+      // The tabs request and the prop agree at first, so their order does not matter.
+      serverTabsAre(['videos', 'shorts', 'streams']);
+      let setTabsProp: (value: string) => void = () => {};
+      const Harness = () => {
+        const [tabs, setTabs] = useState('videos,shorts,streams');
+        setTabsProp = setTabs;
+        return <ChannelVideos token={mockToken} channelAvailableTabs={tabs} />;
+      };
+      renderWithProviders(<Harness />);
+      expect(await screen.findByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
+
+      act(() => setTabsProp('videos,streams'));
+
+      await waitFor(() => expect(screen.queryByRole('tab', { name: /Shorts/i })).not.toBeInTheDocument());
+      expect(screen.getByRole('tab', { name: /Live/i })).toBeInTheDocument();
+    });
+  });
+
+  describe('tab download stats', () => {
+    test('are reloaded when the listing size changes', async () => {
+      const { rerender } = renderChannelVideos();
+      expect(await screen.findByTestId('channel-videos-header')).toBeInTheDocument();
+      mockRefetchTabStats.mockClear();
+
+      listVideos(mockVideos, { totalCount: 50 });
+      rerender(<ChannelVideos token={mockToken} />);
+
+      await waitFor(() => expect(mockRefetchTabStats).toHaveBeenCalledTimes(1));
+    });
+
+    test('are reloaded when another tab loads the same number of videos', async () => {
+      listVideos(mockVideos, { totalCount: 50, loadedView: 'UC123456:videos' });
+      const { rerender } = renderChannelVideos();
+      expect(await screen.findByTestId('channel-videos-header')).toBeInTheDocument();
+      mockRefetchTabStats.mockClear();
+
+      listVideos(mockVideos, { totalCount: 50, loadedView: 'UC123456:shorts' });
+      rerender(<ChannelVideos token={mockToken} />);
+
+      await waitFor(() => expect(mockRefetchTabStats).toHaveBeenCalledTimes(1));
+    });
+
+    test('are not reloaded on the first render', async () => {
+      renderChannelVideos();
+
+      expect(await screen.findByTestId('channel-videos-header')).toBeInTheDocument();
+      expect(mockRefetchTabStats).not.toHaveBeenCalled();
+    });
+
+    test('are reloaded after a video is ignored', async () => {
+      listVideos([mockVideos[0]]);
+      renderChannelVideos();
+
+      await userEvent.click(await screen.findByTestId('toggle-ignore-video1'));
+
+      await waitFor(() => expect(mockRefetchTabStats).toHaveBeenCalled());
+    });
+
+    test('for the selected tab reach the header and the Load More dialog', async () => {
+      tabStatsAre({ videos: countedTab });
+
+      renderChannelVideos();
+
+      expect(await screen.findByTestId('tab-download-summary')).toHaveTextContent('5 of 10 downloaded · 8 loaded');
+      expect([dialogs().getAttribute('data-tab-total'), dialogs().getAttribute('data-tab-loaded')]).toEqual(['10', '8']);
+    });
+  });
+
+  describe('Load More and Download All', () => {
+    test('Download All opens its dialog for the selected tab', async () => {
+      renderChannelVideos();
+      await screen.findByRole('tab', { name: /Videos/i });
+      const openBefore = screen.getByTestId('download-all-dialog').getAttribute('data-open');
+
+      fireEvent.click(screen.getByTestId('channel-download-all-button'));
+
+      expect(openBefore).toBe('false');
+      expect(screen.getByTestId('download-all-dialog')).toHaveAttribute('data-open', 'true');
+      expect(screen.getByTestId('download-all-dialog')).toHaveAttribute('data-tab-type', 'videos');
+    });
+
+    test('confirming Load More loads from YouTube, then reloads the list', async () => {
+      mockRefreshVideos.mockResolvedValue(null);
+      stubFetchStatus();
+      renderChannelVideos();
+      await screen.findByRole('tab', { name: /Videos/i });
       mockRefetchVideos.mockClear();
-    });
 
-    test('toggleIgnore marks a video as ignored when not currently ignored', async () => {
-      useChannelVideos.mockReturnValue({
-        videos: [mockVideos[0]],
-        totalCount: 1,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
+      await userEvent.click(screen.getByRole('button', { name: 'Mock confirm Load More' }));
 
-      // Mock the ignore endpoint
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ success: true }),
-      });
-
-      renderChannelVideos();
-
-      await waitFor(() => {
-        expect(screen.getByTestId('channel-videos-header')).toBeInTheDocument();
-      });
-
-      // Simulate calling toggleIgnore (through the mocked child component)
-      // We need to test this indirectly since we can't access the function directly
-      // The function is passed as a prop to child components
-      expect(screen.getByTestId('video-card-video1')).toBeInTheDocument();
-    });
-
-    test('toggleIgnore unignores a video when currently ignored', async () => {
-      useChannelVideos.mockReturnValue({
-        videos: [ignoredVideo],
-        totalCount: 1,
-        oldestVideoDate: '2023-01-04',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      // Mock the unignore endpoint
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ success: true }),
-      });
-
-      renderChannelVideos();
-
-      await waitFor(() => {
-        expect(screen.getByTestId('channel-videos-header')).toBeInTheDocument();
-      });
-
-      expect(screen.getByTestId('video-card-ignored1')).toBeInTheDocument();
-    });
-
-    test('handleBulkIgnore ignores multiple selected videos', async () => {
-      useChannelVideos.mockReturnValue({
-        videos: mockVideos,
-        totalCount: 3,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      // Mock the bulk ignore endpoint
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({
-          message: 'Successfully ignored 2 videos',
-          success: true
-        }),
-      });
-
-      renderChannelVideos();
-
-      await waitFor(() => {
-        expect(screen.getByTestId('channel-videos-header')).toBeInTheDocument();
-      });
-
-      // The onBulkIgnoreClick is passed to the header
-      // In actual usage, videos would be selected first through checkboxes
-    });
-
-    test('handleBulkIgnore shows error when no videos selected', async () => {
-      useChannelVideos.mockReturnValue({
-        videos: mockVideos,
-        totalCount: 3,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-
-      await waitFor(() => {
-        expect(screen.getByTestId('channel-videos-header')).toBeInTheDocument();
-      });
-
-      // Component should handle the case where checkedBoxes is empty
-      // This is tested by verifying the component renders without errors
-    });
-
-    test('handleBulkIgnore handles API errors gracefully', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-
-      useChannelVideos.mockReturnValue({
-        videos: mockVideos,
-        totalCount: 3,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      // Mock a failed bulk ignore request
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        statusText: 'Internal Server Error',
-      });
-
-      renderChannelVideos();
-
-      await waitFor(() => {
-        expect(screen.getByTestId('channel-videos-header')).toBeInTheDocument();
-      });
-
-      consoleErrorSpy.mockRestore();
-    });
-
-    test('toggleIgnore handles API errors gracefully', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-
-      useChannelVideos.mockReturnValue({
-        videos: [mockVideos[0]],
-        totalCount: 1,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      // Mock a failed ignore request
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        statusText: 'Internal Server Error',
-      });
-
-      renderChannelVideos();
-
-      await waitFor(() => {
-        expect(screen.getByTestId('channel-videos-header')).toBeInTheDocument();
-      });
-
-      consoleErrorSpy.mockRestore();
-    });
-
-    test('toggleIgnore does nothing when channelId is missing', async () => {
-      // Set up a scenario where channelId would be undefined
-      mockParams.channel_id = undefined as any;
-
-      useChannelVideos.mockReturnValue({
-        videos: [mockVideos[0]],
-        totalCount: 1,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos({ channelId: undefined });
-
-      await waitFor(() => {
-        expect(screen.getByTestId('channel-videos-header')).toBeInTheDocument();
-      });
-
-      // toggleIgnore should early return when channelId is missing
-      // This is tested by verifying no fetch calls are made for ignore endpoints
-    });
-
-    test('toggleIgnore does nothing when token is missing', async () => {
-      useChannelVideos.mockReturnValue({
-        videos: [mockVideos[0]],
-        totalCount: 1,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos({ token: null });
-
-      await waitFor(() => {
-        expect(screen.getByTestId('channel-videos-header')).toBeInTheDocument();
-      });
-
-      // toggleIgnore should early return when token is missing
-    });
-
-    test('handleSelectAll includes ignored videos in selection', () => {
-      useChannelVideos.mockReturnValue({
-        videos: [
-          mockVideos[0], // never_downloaded
-          ignoredVideo, // ignored
-          mockVideos[1], // downloaded (added: true, removed: false)
-        ],
-        totalCount: 3,
-        oldestVideoDate: '2023-01-01',
-        autoDownloadsEnabled: false,
-        loading: false,
-        refetch: mockRefetchVideos,
-      });
-
-      renderChannelVideos();
-
-      // The selectAll functionality should now include videos with status 'ignored'
-      // This is verified by the component rendering successfully with ignored videos
-      expect(screen.getByTestId('video-card-video1')).toBeInTheDocument();
-      expect(screen.getByTestId('video-card-ignored1')).toBeInTheDocument();
-      expect(screen.getByTestId('video-card-video2')).toBeInTheDocument();
+      await waitFor(() => expect(mockRefetchVideos).toHaveBeenCalled());
+      expect(mockRefreshVideos).toHaveBeenCalledTimes(1);
     });
   });
 
-  describe('channelAvailableTabs prop sync', () => {
-    // Controlled harness: holds channelAvailableTabs in state and exposes a
-    // setter that tests call to simulate the parent passing a new value.
-    // This avoids interactions with RTL's `rerender` + wrapper option.
-    //
-    // Both the sync effect AND the internal tabs-fetch effect write to
-    // availableTabs state. To make these tests deterministic regardless of
-    // unrelated prior tests' scheduling, we ALSO mock the tabs fetch to
-    // return the same data the sync effect would produce so whichever effect
-    // "wins" the race yields an equivalent result. For tests that need the
-    // sync-effect state to be visible after a prop change, we seed the
-    // initial prop and let the sync effect establish state on mount.
-    let setTabsProp: ((val: string | null | undefined) => void) | null = null;
-
-    const Harness = ({ initial }: { initial?: string | null }) => {
-      const [prop, setProp] = useState<string | null | undefined>(initial);
-      setTabsProp = setProp;
-      return <ChannelVideos token={mockToken} channelAvailableTabs={prop} />;
-    };
-
-    // Build a fetch mock that always returns the same availableTabs the
-    // sync effect would set, so the fetch effect never introduces a
-    // different state into the race.
-    const mockTabsFetch = (tabs: string[]) => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: jest.fn().mockResolvedValue({ availableTabs: tabs }),
-      });
-    };
-
+  describe('selection', () => {
     beforeEach(() => {
-      setTabsProp = null;
+      listVideos([...mockVideos, missingVideo]);
     });
 
-    test('updates the rendered tab strip when parent passes a new channelAvailableTabs value', async () => {
-      // Both the fetch effect and the sync effect would set 3 tabs on mount
-      mockTabsFetch(['videos', 'shorts', 'streams']);
+    test('a video selected for download puts every row in download mode with the download actions', async () => {
+      renderChannelVideos();
 
-      renderWithProviders(<Harness initial="videos,shorts,streams" />);
+      await userEvent.click(screen.getByTestId('select-video-video1'));
+      await openSelectionMenu();
 
-      await waitFor(() => {
-        expect(screen.getByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
-      });
-      expect(screen.getByRole('tab', { name: /Live/i })).toBeInTheDocument();
-
-      // Parent now passes a filtered list down (shorts hidden)
-      act(() => {
-        setTabsProp?.('videos,streams');
-      });
-
-      await waitFor(() => {
-        expect(screen.queryByRole('tab', { name: /Shorts/i })).not.toBeInTheDocument();
-      });
-      expect(screen.getByRole('tab', { name: /Live/i })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /Videos/i })).toBeInTheDocument();
+      expect(screen.getByTestId('video-card-video2')).toHaveAttribute('data-selection-mode', 'download');
+      expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+        'Download Selected',
+        'Ignore Selected',
+        'Clear Selection',
+      ]);
     });
 
-    test('preserves the current selected tab when it remains in the new list', async () => {
-      const user = userEvent.setup();
-      mockTabsFetch(['videos', 'shorts', 'streams']);
+    test('a video selected for deletion puts every row in delete mode with the delete action', async () => {
+      renderChannelVideos();
 
-      renderWithProviders(<Harness initial="videos,shorts,streams" />);
+      await userEvent.click(screen.getByTestId('select-delete-video2'));
+      await openSelectionMenu();
+
+      expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'delete');
+      expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+        'Delete Selected',
+        'Clear Selection',
+      ]);
+    });
+
+    test('Clear Selection on the pill empties both kinds of selection', async () => {
+      renderChannelVideos();
+      await userEvent.click(screen.getByTestId('select-video-video1'));
+      await userEvent.click(screen.getByTestId('force-select-delete-video2'));
+      await openSelectionMenu();
+
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Clear Selection' }));
+
+      await waitFor(() => expect(screen.queryByTestId('video-list-selection-pill')).not.toBeInTheDocument());
+      expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'null');
+    });
+
+    test('Download Selected opens the download dialog with the selected and missing counts', async () => {
+      renderChannelVideos();
+      await userEvent.click(screen.getByTestId('select-video-video1'));
+      await userEvent.click(screen.getByTestId('select-video-missing1'));
+      await openSelectionMenu(2);
+
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Download Selected' }));
+
+      expect(dialogs()).toHaveAttribute('data-download-dialog-open', 'true');
+      expect(dialogs()).toHaveAttribute('data-video-count', '2');
+      expect(dialogs()).toHaveAttribute('data-missing-video-count', '1');
+    });
+
+    test('Delete Selected asks for confirmation', async () => {
+      renderChannelVideos();
+      await userEvent.click(screen.getByTestId('select-delete-video2'));
+      await openSelectionMenu();
+
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Delete Selected' }));
+
+      expect(dialogs()).toHaveAttribute('data-delete-dialog-open', 'true');
+    });
+
+    test('Ignore Selected ignores the selected videos and shows them as ignored', async () => {
+      renderChannelVideos();
+      await userEvent.click(screen.getByTestId('select-video-video1'));
+      await openSelectionMenu();
+      mockPost.mockResolvedValueOnce({ data: { message: 'Ignored 1 video' } });
+
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Ignore Selected' }));
+
+      await waitFor(() => expect(dialogs()).toHaveAttribute('data-success-message', 'Ignored 1 video'));
+      expect(mockPost).toHaveBeenCalledWith(
+        '/api/channels/UC123456/videos/bulk-ignore',
+        { youtubeIds: ['video1'] },
+        expect.anything()
+      );
+      expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-ignored', 'true');
+    });
+  });
+
+  describe('row actions', () => {
+    test('ignoring a video saves it, shows it as ignored and says so', async () => {
+      listVideos(mockVideos);
+      renderChannelVideos();
+      await screen.findByRole('tab', { name: /Videos/i });
+
+      await userEvent.click(screen.getByTestId('toggle-ignore-video1'));
 
       await waitFor(() => {
-        expect(screen.getByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
-      });
-
-      await user.click(screen.getByRole('tab', { name: /Shorts/i }));
-
-      await waitFor(() => {
-        expect(useChannelVideos).toHaveBeenLastCalledWith(
-          expect.objectContaining({ tabType: 'shorts' })
+        expect(dialogs()).toHaveAttribute(
+          'data-success-message',
+          'Video ignored. Channel downloads will exclude this video'
         );
       });
-
-      // Parent passes [videos, shorts] (streams hidden, shorts still present)
-      act(() => {
-        setTabsProp?.('videos,shorts');
-      });
-
-      // Selected tab should still be shorts
-      await waitFor(() => {
-        expect(useChannelVideos).toHaveBeenLastCalledWith(
-          expect.objectContaining({ tabType: 'shorts' })
-        );
-      });
-      expect(screen.queryByRole('tab', { name: /Live/i })).not.toBeInTheDocument();
+      expect(mockPost).toHaveBeenCalledWith(
+        '/api/channels/UC123456/videos/video1/ignore',
+        undefined,
+        expect.anything()
+      );
+      expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-ignored', 'true');
     });
 
-    test('falls back to videos when the current tab is dropped from the new list', async () => {
-      const user = userEvent.setup();
-      mockTabsFetch(['videos', 'shorts', 'streams']);
+    test('opening a video shows it in the video modal with the channel name', async () => {
+      listVideos(mockVideos);
+      renderChannelVideos({ channelName: 'Some Channel' });
 
-      renderWithProviders(<Harness initial="videos,shorts,streams" />);
+      await userEvent.click(screen.getByTestId('open-video-video2'));
 
-      await waitFor(() => {
-        expect(screen.getByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
-      });
-
-      // Select the shorts tab
-      await user.click(screen.getByRole('tab', { name: /Shorts/i }));
-
-      await waitFor(() => {
-        expect(useChannelVideos).toHaveBeenLastCalledWith(
-          expect.objectContaining({ tabType: 'shorts' })
-        );
-      });
-
-      // Parent hides shorts; new list = [videos, streams], current 'shorts' is gone
-      act(() => {
-        setTabsProp?.('videos,streams');
-      });
-
-      // Selected tab should fall back to 'videos' (preferred fallback)
-      await waitFor(() => {
-        expect(useChannelVideos).toHaveBeenLastCalledWith(
-          expect.objectContaining({ tabType: 'videos' })
-        );
-      });
+      expect(screen.getByRole('dialog', { name: 'Test Video 2' })).toHaveAttribute('data-channel-name', 'Some Channel');
     });
 
-    test('leaves the tab strip alone when channelAvailableTabs is undefined', async () => {
-      // Fetch and sync effect agree on 3 tabs from mount
-      mockTabsFetch(['videos', 'shorts', 'streams']);
+    test('a change made in the video modal shows on the row', async () => {
+      listVideos(mockVideos);
+      renderChannelVideos();
+      await userEvent.click(screen.getByTestId('open-video-video2'));
 
-      renderWithProviders(<Harness initial="videos,shorts,streams" />);
+      await userEvent.click(screen.getByRole('button', { name: 'Mock modal ignore' }));
 
-      await waitFor(() => {
-        expect(screen.getByRole('tab', { name: /Live/i })).toBeInTheDocument();
-      });
-
-      // Explicit undefined: the sync effect must early-return and leave state alone
-      act(() => {
-        setTabsProp?.(undefined);
-      });
-
-      expect(screen.getByRole('tab', { name: /Videos/i })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /Live/i })).toBeInTheDocument();
+      expect(screen.getByTestId('video-card-video2')).toHaveAttribute('data-ignored', 'true');
     });
 
-    test('leaves the tab strip alone when channelAvailableTabs is an empty string', async () => {
-      mockTabsFetch(['videos', 'shorts', 'streams']);
+    describe('with a second page loaded', () => {
+      const originalIntersectionObserver = window.IntersectionObserver;
+      let sentinelScrolledIntoView: () => void;
 
-      renderWithProviders(<Harness initial="videos,shorts,streams" />);
-
-      await waitFor(() => {
-        expect(screen.getByRole('tab', { name: /Live/i })).toBeInTheDocument();
+      beforeEach(() => {
+        window.IntersectionObserver = jest.fn((callback: IntersectionObserverCallback) => {
+          const observer = { observe: jest.fn(), disconnect: jest.fn() } as unknown as IntersectionObserver;
+          sentinelScrolledIntoView = () =>
+            callback(
+              [{ isIntersecting: true, boundingClientRect: { bottom: 0 }, rootBounds: { height: 0 } } as IntersectionObserverEntry],
+              observer
+            );
+          return observer;
+        }) as unknown as typeof IntersectionObserver;
+        listVideos(mockVideos, { totalCount: 48 });
       });
 
-      // Empty string parses to empty array, so the sync effect should early-return
-      act(() => {
-        setTabsProp?.('');
+      afterEach(() => {
+        window.IntersectionObserver = originalIntersectionObserver;
       });
 
-      expect(screen.getByRole('tab', { name: /Videos/i })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /Live/i })).toBeInTheDocument();
+      const ignoreFirstVideo = async () => {
+        await userEvent.click(screen.getByTestId('toggle-ignore-video1'));
+        await waitFor(() => expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-ignored', 'true'));
+      };
+
+      const scrollToSecondPageWithFirstVideoIgnored = async () => {
+        mockUseConfig.mockReturnValue({ config: { preferredResolution: '1080', channelVideosHotLoad: true } });
+        renderChannelVideos();
+        await screen.findByRole('tab', { name: /Videos/i });
+        await ignoreFirstVideo();
+        act(() => sentinelScrolledIntoView());
+        await waitFor(() => expect(lastVideosQuery().page).toBe(2));
+      };
+
+      test('infinite scroll keeps an ignored row ignored, because the row is not loaded again', async () => {
+        await scrollToSecondPageWithFirstVideoIgnored();
+
+        expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-ignored', 'true');
+      });
+
+      test('going back to the first page of an infinite list shows the rows as that page loaded them', async () => {
+        stubFetchStatus();
+        listVideos(mockVideos, { totalCount: 48, refreshSeq: 1 });
+        await scrollToSecondPageWithFirstVideoIgnored();
+        act(() => completeFetch({
+          lastResult: { type: 'autoRefresh', newVideos: 2, failed: false, finishedAt: '2026-11-13T12:00:00.000Z' },
+        }));
+
+        await userEvent.click(screen.getByRole('button', { name: 'Show' }));
+
+        await waitFor(() => expect(lastVideosQuery().page).toBe(1));
+        expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-ignored', 'false');
+      });
+
+      describe('after a load failed with rows on screen', () => {
+        const renderWithFailedLoad = async () => {
+          mockUseConfig.mockReturnValue({ config: { preferredResolution: '1080', channelVideosHotLoad: true } });
+          listVideos(mockVideos, { totalCount: 48, error: new Error('Network error') });
+          // Stays a no-op unless the list starts watching its sentinel.
+          sentinelScrolledIntoView = () => undefined;
+          renderChannelVideos();
+          await screen.findByRole('tab', { name: /Videos/i });
+        };
+
+        test('infinite scroll does not ask for the page after the one that failed', async () => {
+          await renderWithFailedLoad();
+
+          act(() => sentinelScrolledIntoView());
+
+          expect(lastVideosQuery().page).toBe(1);
+        });
+
+        test('Retry reloads the list', async () => {
+          await renderWithFailedLoad();
+
+          await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+          expect(mockRefetchVideos).toHaveBeenCalledTimes(1);
+        });
+      });
+
+      test('a paged list shows the rows as the next page loaded them', async () => {
+        renderChannelVideos();
+        await screen.findByRole('tab', { name: /Videos/i });
+        await ignoreFirstVideo();
+
+        await userEvent.click(screen.getAllByRole('button', { name: 'go to page 2' })[0]);
+
+        await waitFor(() => expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-ignored', 'false'));
+      });
+    });
+  });
+
+  describe('pagination', () => {
+    test('shows the page size selector without page buttons for a single page', async () => {
+      listVideos(mockVideos);
+
+      await renderWithTabsLoaded();
+
+      expect(within(screen.getByTestId('video-list-pagination-bar-bottom')).getByRole('button', { name: '16' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'go to page 2' })).not.toBeInTheDocument();
+    });
+
+    test('shows page buttons when there are more pages', async () => {
+      listVideos(mockVideos, { totalCount: 32 });
+
+      await renderWithTabsLoaded();
+
+      expect(screen.getByRole('button', { name: 'go to page 2' })).toBeInTheDocument();
+    });
+
+    test.each([
+      ['an empty list', { loading: false }],
+      ['a list that is still loading', { loading: true }],
+    ])('shows no pagination bar for %s', async (_case, overrides) => {
+      listVideos([], overrides);
+
+      await renderWithTabsLoaded();
+
+      expect(screen.queryByTestId('video-list-pagination-bar-bottom')).not.toBeInTheDocument();
+    });
+
+    test('fetches with the stored page size', async () => {
+      localStorage.setItem('youtarr.channelVideos.pageSize', '32');
+
+      await renderWithTabsLoaded();
+
+      expect(lastVideosQuery().pageSize).toBe(32);
+    });
+
+    test('changing the page size stores it and fetches the first page again', async () => {
+      listVideos(mockVideos, { totalCount: 48 });
+      renderChannelVideos();
+      await userEvent.click(screen.getByRole('button', { name: 'go to page 2' }));
+      const pageBeforeChange = lastVideosQuery().page;
+
+      // The Select opens on mouseDown of its trigger, which shows the current size.
+      fireEvent.mouseDown(within(screen.getByRole('button', { name: '16' })).getByText('16'));
+      await userEvent.click(await screen.findByRole('option', { name: '32' }));
+
+      expect(pageBeforeChange).toBe(2);
+      expect(localStorage.getItem('youtarr.channelVideos.pageSize')).toBe('32');
+      expect(lastVideosQuery()).toMatchObject({ pageSize: 32, page: 1 });
+    });
+  });
+
+  describe('download dialog defaults', () => {
+    test('use the channel quality over the global one', async () => {
+      await renderWithTabsLoaded({ channelVideoQuality: '720' });
+
+      expect(dialogs()).toHaveAttribute('data-default-resolution', '720');
+      expect(dialogs()).toHaveAttribute('data-default-resolution-source', 'channel');
+    });
+
+    test('use the global quality when the channel sets none', async () => {
+      mockUseConfig.mockReturnValue({ config: { preferredResolution: '480' } });
+
+      await renderWithTabsLoaded({ channelVideoQuality: null });
+
+      expect(dialogs()).toHaveAttribute('data-default-resolution', '480');
+      expect(dialogs()).toHaveAttribute('data-default-resolution-source', 'global');
+    });
+
+    test('fall back to 1080 when neither sets a quality', async () => {
+      mockUseConfig.mockReturnValue({ config: {} });
+
+      await renderWithTabsLoaded();
+
+      expect(dialogs()).toHaveAttribute('data-default-resolution', '1080');
+      expect(dialogs()).toHaveAttribute('data-default-resolution-source', 'global');
+    });
+
+    test('use the channel audio format when it sets one', async () => {
+      await renderWithTabsLoaded({ channelAudioFormat: 'mp3_only' });
+
+      expect(dialogs()).toHaveAttribute('data-default-audio-format', 'mp3_only');
+      expect(dialogs()).toHaveAttribute('data-default-audio-format-source', 'channel');
+    });
+
+    test('have no audio format when the channel sets none', async () => {
+      await renderWithTabsLoaded();
+
+      expect(dialogs()).toHaveAttribute('data-default-audio-format', 'null');
+      expect(dialogs()).toHaveAttribute('data-default-audio-format-source', 'global');
+    });
+
+    test('hand the protect manual downloads setting to both download dialogs', async () => {
+      mockUseConfig.mockReturnValue({ config: { preferredResolution: '1080', protectManualDownloads: true } });
+
+      await renderWithTabsLoaded();
+
+      expect(dialogs()).toHaveAttribute('data-default-protect', 'true');
+      expect(screen.getByTestId('download-all-dialog')).toHaveAttribute('data-default-protect', 'true');
     });
   });
 
   describe('Background refresh', () => {
-    type Completion = { lastResult: { type: string; newVideos: number; failed: boolean; finishedAt: string } | null };
-
-    const mockTrackRefresh = jest.fn();
-    let completeFetch: (completion: Completion) => void;
     const found = (newVideos: number, failed = false): Completion => ({
       lastResult: { type: 'autoRefresh', newVideos, failed, finishedAt: '2026-11-13T12:00:00.000Z' },
     });
 
-    const stubFetchStatus = (overrides: Record<string, unknown> = {}) => {
-      useChannelFetchStatus.mockImplementation(() => ({
-        isFetching: false,
-        fetchType: null,
-        startTime: null,
-        progress: null,
-        onFetchComplete: (callback: (completion: Completion) => void) => {
-          completeFetch = callback;
-        },
-        startPolling: jest.fn(),
-        trackRefresh: mockTrackRefresh,
-        ...overrides,
-      }));
-    };
-
-    // Only the Videos tab reports a background refresh, so a tab switch leaves it behind.
     // What the videos hook hands back; a test replaces it to stand for a reload.
     let listedVideos: ChannelVideo[] = mockVideos;
     let listedTotal = mockVideos.length;
 
+    // Only the Videos tab reports a background refresh, so a tab switch leaves it behind.
     const stubVideos = (refreshingTab: string | null = 'videos') => {
-      useChannelVideos.mockImplementation(({ tabType }: { tabType: string | null }) => ({
-        videos: listedVideos,
-        totalCount: listedTotal,
-        oldestVideoDate: null,
-        error: null,
-        autoDownloadsEnabled: false,
-        loading: false,
-        refreshSeq: refreshingTab !== null && tabType === refreshingTab ? 1 : null,
-        refetch: mockRefetchVideos,
-      }));
+      mockUseChannelVideos.mockImplementation(({ tabType }: { tabType: string | null }) =>
+        listed(listedVideos, {
+          totalCount: listedTotal,
+          refreshSeq: refreshingTab !== null && tabType === refreshingTab ? 1 : null,
+        })
+      );
     };
 
     const renderTracked = async (props = {}) => {
@@ -2179,16 +1048,11 @@ describe('ChannelVideos Component', () => {
     };
 
     beforeEach(() => {
-      // An earlier test clears the shared route param and leaves it cleared.
-      mockParams.channel_id = 'UC123456';
       listedVideos = mockVideos;
       listedTotal = mockVideos.length;
       stubFetchStatus();
       stubVideos();
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: jest.fn().mockResolvedValue({ availableTabs: ['videos', 'shorts'] }),
-      });
+      serverTabsAre(['videos', 'shorts']);
     });
 
     test('shows the checking status while a background refresh runs', async () => {
@@ -2254,7 +1118,7 @@ describe('ChannelVideos Component', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Show' }));
 
-      expect(useChannelVideos).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 }));
+      expect(lastVideosQuery().page).toBe(1);
       expect(mockRefetchVideos).not.toHaveBeenCalled();
     });
 
@@ -2393,5 +1257,4 @@ describe('ChannelVideos Component', () => {
       expect(await screen.findByTestId('channel-refresh-button')).toHaveTextContent('Loading...');
     });
   });
-
 });

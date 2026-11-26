@@ -4,12 +4,7 @@ import InfoPopoverButton from '../../shared/InfoPopoverButton';
 import { ChannelTabType, TabDownloadStats, TabDownloadStatsByTab } from '../../../types/Channel';
 import { describeTabCounts, PUBLIC_ONLY_NOTE } from '../../../utils/tabDownloadStats';
 import { formatDateTime } from '../../../utils/formatters';
-
-const TAB_LABELS: Record<ChannelTabType, string> = {
-  videos: 'Videos',
-  shorts: 'Shorts',
-  streams: 'Live',
-};
+import { CHANNEL_TABS, CHANNEL_TAB_TYPES } from '../../../utils/channelTabs';
 
 export const LOADED_EXCEEDS_TOTAL_NOTE =
   'More videos are loaded than YouTube lists because some were made private or deleted ' +
@@ -28,7 +23,7 @@ interface ChannelVideosInfoProps {
 // The one explanation for the channel videos header: download progress per
 // tab and how publish dates work.
 const ChannelVideosInfo: React.FC<ChannelVideosInfoProps> = ({ tabStats, dateText, highlight }) => {
-  const countedTabs = (Object.keys(TAB_LABELS) as ChannelTabType[])
+  const countedTabs = CHANNEL_TAB_TYPES
     .map((tab) => ({ tab, stats: tabStats?.[tab] }))
     .filter((entry): entry is { tab: ChannelTabType; stats: TabDownloadStats } =>
       Boolean(entry.stats) && entry.stats?.total !== null);
@@ -54,7 +49,7 @@ const ChannelVideosInfo: React.FC<ChannelVideosInfoProps> = ({ tabStats, dateTex
             {countedTabs.map(({ tab, stats }) => (
               <React.Fragment key={tab}>
                 <Typography variant="body2">
-                  {`${TAB_LABELS[tab]}: ${describeTabCounts(stats)}`}
+                  {`${CHANNEL_TABS[tab].label}: ${describeTabCounts(stats)}`}
                 </Typography>
                 {loadedExceedsTotal(stats) && (
                   <Typography variant="caption" color="warning">{LOADED_EXCEEDS_TOTAL_NOTE}</Typography>

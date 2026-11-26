@@ -3,7 +3,8 @@ import { Chip, IconButton, Popover, Tooltip, Typography } from '../../../../comp
 import { Circle as CircleIcon } from 'lucide-react';
 import { CheckCircle as CheckCircleIcon, FileDownload as FileDownloadIcon, Info as InfoOutlinedIcon } from '../../../../lib/icons';
 import { SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE, SHARED_CHIP_RADIUS } from '../../../shared/chipStyles';
-import { ChannelTabType, TabDownloadStatsByTab } from '../../../../types/Channel';
+import { TabDownloadStatsByTab } from '../../../../types/Channel';
+import { CHANNEL_TABS, isChannelTab } from '../../../../utils/channelTabs';
 import { describeTabStats, formatTabPercent } from '../../../../utils/tabDownloadStats';
 
 // On mobile the toggles share the row equally and grow to a comfortable tap height.
@@ -35,18 +36,6 @@ const AutoDownloadChips: React.FC<AutoDownloadChipsProps> = ({
   toggleDisabled = false,
 }) => {
   const [infoAnchor, setInfoAnchor] = useState<HTMLElement | null>(null);
-
-  const availableToMediaTypeMap: Record<string, string> = {
-    videos: 'video',
-    shorts: 'short',
-    streams: 'livestream',
-  };
-
-  const tabDisplayMap: Record<string, { full: string; short: string }> = {
-    videos: { full: 'Videos', short: 'Videos' },
-    shorts: { full: 'Shorts', short: 'Shorts' },
-    streams: { full: 'Live', short: 'Live' },
-  };
 
   const available = availableTabs
     ? availableTabs.split(',').map((tab) => tab.trim()).filter((tab) => tab.length > 0)
@@ -108,13 +97,11 @@ const AutoDownloadChips: React.FC<AutoDownloadChipsProps> = ({
 
   const chips = available
     .map((tab) => {
-      const tabInfo = tabDisplayMap[tab];
-      if (!tabInfo) return null;
-      const mediaType = availableToMediaTypeMap[tab];
-      const isAutoDownloadEnabled = mediaType && autoDownloadEnabled.includes(mediaType);
-      const stats = tabStats?.[tab as ChannelTabType];
+      if (!isChannelTab(tab)) return null;
+      const { label: baseLabel, mediaType } = CHANNEL_TABS[tab];
+      const isAutoDownloadEnabled = autoDownloadEnabled.includes(mediaType);
+      const stats = tabStats?.[tab];
       const percentText = formatTabPercent(stats);
-      const baseLabel = isMobile ? tabInfo.short : tabInfo.full;
       const isToggle = Boolean(onToggle);
 
       let icon: React.ReactNode = isAutoDownloadEnabled ? <FileDownloadIcon size={12} /> : undefined;
@@ -135,7 +122,7 @@ const AutoDownloadChips: React.FC<AutoDownloadChipsProps> = ({
           onClick={onToggle ? () => onToggle(tab, !isAutoDownloadEnabled) : undefined}
           disabled={isToggle ? toggleDisabled : undefined}
           aria-pressed={isToggle ? Boolean(isAutoDownloadEnabled) : undefined}
-          aria-label={isToggle ? `Auto-download ${tabInfo.full}` : undefined}
+          aria-label={isToggle ? `Auto-download ${baseLabel}` : undefined}
           className={isToggle ? 'hover:ring-1 hover:ring-ring' : undefined}
           style={{
             fontSize: '0.7rem',
@@ -163,8 +150,8 @@ const AutoDownloadChips: React.FC<AutoDownloadChipsProps> = ({
         ) : chip;
       }
       const toggleHint = isAutoDownloadEnabled
-        ? `Click to stop auto-downloading ${tabInfo.full}`
-        : `Click to auto-download ${tabInfo.full}`;
+        ? `Click to stop auto-downloading ${baseLabel}`
+        : `Click to auto-download ${baseLabel}`;
       // Touch taps toggle directly; a tap-opened tooltip would only cover the chips.
       return (
         <Tooltip key={tab} title={statsText ? `${statsText}. ${toggleHint}` : toggleHint} disableTouchListener>

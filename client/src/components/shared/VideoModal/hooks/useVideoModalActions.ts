@@ -8,6 +8,7 @@ import { useVideoProtection } from '../../useVideoProtection';
 import { useVideoDeletion } from '../../useVideoDeletion';
 import { useTriggerDownloads } from '../../../../hooks/useTriggerDownloads';
 import { DownloadSettings } from '../../../DownloadManager/ManualDownload/types';
+import { toDownloadOverrideSettings } from '../../../../utils/downloadOverrideSettings';
 
 interface SnackbarState {
   open: boolean;
@@ -235,17 +236,7 @@ export function useVideoModalActions({
     }
 
     const url = `https://www.youtube.com/watch?v=${localVideo.youtubeId}`;
-    const overrideSettings = settings
-      ? {
-          resolution: settings.resolution,
-          allowRedownload: settings.allowRedownload,
-          subfolder: settings.subfolder,
-          audioFormat: settings.audioFormat,
-          rating: settings.rating,
-          skipVideoFolder: settings.skipVideoFolder,
-          protect: settings.protect,
-        }
-      : undefined;
+    const overrideSettings = toDownloadOverrideSettings(settings);
 
     const success = await triggerDownloads({
       urls: [url],

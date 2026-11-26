@@ -1,65 +1,32 @@
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { useVideoActivity } from '../../providers/VideoActivityProvider';
-import { useParams, useNavigate } from 'react-router-dom';
-import {
-  Card,
-  Typography,
-  Grid,
-  Skeleton,
-  Tabs,
-  Tab,
-  Button,
-  Chip,
-} from '../ui';
+import React, { useState, useEffect } from 'react';
+import { Card } from '../ui';
 import {
   Download as DownloadIcon,
   Trash2 as DeleteIcon,
   Ban as BlockIcon,
-  RefreshCw as RefreshIcon,
 } from '../../lib/icons';
-
 import useMediaQuery from '../../hooks/useMediaQuery';
-import { DownloadSettings } from '../DownloadManager/ManualDownload/types';
-import { useVideoDeletion } from '../shared/useVideoDeletion';
-import { useVideoProtection } from '../shared/useVideoProtection';
-import { getVideoStatus, isRemovedStatus } from '../../utils/videoStatus';
-import VideoCard from './VideoCard';
-import VideoListItem from './VideoListItem';
-import VideoTableView from './VideoTableView';
-import ChannelVideosDialogs from './ChannelVideosDialogs';
-import DownloadAllVideosDialog from './DownloadAllVideosDialog';
-import { useChannelVideos } from './hooks/useChannelVideos';
-import { useRefreshChannelVideos } from './hooks/useRefreshChannelVideos';
-import { useChannelFetchStatus } from './hooks/useChannelFetchStatus';
-import { useNewVideosNotice } from './hooks/useNewVideosNotice';
-import { useChannelTabStats } from './hooks/useChannelTabStats';
-import TabDownloadProgress from './components/TabDownloadProgress';
-import LoadMoreProgress from './components/LoadMoreProgress';
-import NewVideosNotice from './components/NewVideosNotice';
-import TabDownloadSummary from './components/TabDownloadSummary';
-import ChannelVideosInfo from './components/ChannelVideosInfo';
-import { ChannelTabType } from '../../types/Channel';
-import { useChannelVideoFilters } from './hooks/useChannelVideoFilters';
-import { useConfig } from '../../hooks/useConfig';
-import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
-import { useDownloadListingsRefresh } from '../../hooks/useDownloadListingsRefresh';
+import { ChannelVideo } from '../../types/ChannelVideo';
 import VideoModal from '../shared/VideoModal';
-import { VideoModalData } from '../shared/VideoModal/types';
-import { ChannelVideo, MembersAccessState } from '../../types/ChannelVideo';
 import {
-  INFINITE_SCROLL_FETCH_SIZE,
   VideoListContainer,
   VideoListPaginationBar,
-  useListPageSize,
   useVideoListState,
-  useVideoSelection,
-  type ChipFilterMode,
-  type FilterConfig,
-  type PageSize,
   type SelectionAction,
   type VideoListViewMode,
 } from '../shared/VideoList';
-import { intentStyles } from '../../utils/intentStyles';
+import ChannelVideosDialogs from './ChannelVideosDialogs';
+import DownloadAllVideosDialog from './DownloadAllVideosDialog';
+import ChannelVideosContent from './components/ChannelVideosContent';
+import ChannelVideosHeader from './components/ChannelVideosHeader';
+import ChannelVideosLoadingSkeleton from './components/ChannelVideosLoadingSkeleton';
+import ChannelVideosSelectButtons from './components/ChannelVideosSelectButtons';
+import ChannelVideosTabs from './components/ChannelVideosTabs';
+import InfiniteScrollSentinel from './components/InfiniteScrollSentinel';
+import { channelVideoToModalData } from './channelVideoModalData';
+import { useChannelSelectionPill } from './hooks/useChannelVideoSelection';
+import { useChannelVideosController } from './hooks/useChannelVideosController';
+import { getTabLabel } from '../../utils/channelTabs';
 
 interface ChannelVideosProps {
   token: string | null;
@@ -72,1259 +39,109 @@ interface ChannelVideosProps {
   onVideosLoaded?: (channelId: string) => void;
 }
 
-type SortBy = 'date' | 'title' | 'duration' | 'size';
-type SortOrder = 'asc' | 'desc';
-
 const VIEW_MODE_STORAGE_KEY = 'youtarr:channelVideosViewMode';
-
-function channelVideoToModalData(
-  video: ChannelVideo,
-  channelName: string,
-  channelId: string | undefined
-): VideoModalData {
-  const status = getVideoStatus({ ...video, activity: undefined });
-  return {
-    youtubeId: video.youtube_id,
-    title: video.title,
-    channelName,
-    thumbnailUrl: video.thumbnail,
-    duration: video.duration,
-    publishedAt: video.publishedAt || null,
-    addedAt: null,
-    mediaType: video.media_type || 'video',
-    status,
-    inArchive: video.inArchive,
-    membersAccess: video.members_access ?? null,
-    isDownloaded: video.added && !video.removed,
-    filePath: video.filePath || null,
-    fileSize: video.fileSize || null,
-    audioFilePath: video.audioFilePath || null,
-    audioFileSize: video.audioFileSize || null,
-    isProtected: video.protected || false,
-    isIgnored: video.ignored || false,
-    normalizedRating: video.normalized_rating || null,
-    ratingSource: video.rating_source || null,
-    databaseId: video.id || null,
-    channelId: channelId || null,
-  };
-}
+const MOBILE_VIEW_MODES: VideoListViewMode[] = ['grid', 'list'];
+const DESKTOP_VIEW_MODES: VideoListViewMode[] = ['grid', 'table'];
 
 function ChannelVideos({
   token,
   channelAutoDownloadTabs,
-  channelId: propChannelId,
   channelName = '',
-  channelVideoQuality,
-  channelAudioFormat,
-  channelAvailableTabs,
-  onVideosLoaded,
+  ...channelProps
 }: ChannelVideosProps) {
   const isMobile = useMediaQuery('(max-width: 767px)');
-  const initialViewMode: VideoListViewMode = isMobile ? 'list' : 'table';
-
   const listState = useVideoListState({
-    initialViewMode,
+    initialViewMode: isMobile ? 'list' : 'table',
     viewModeStorageKey: VIEW_MODE_STORAGE_KEY,
   });
+  const { viewMode, setViewMode } = listState;
 
-  // Legacy selection state: preserved so existing VideoCard/VideoListItem/VideoTableView
-  // continue to receive the same props. We expose a synthesized selection object
-  // to VideoListContainer based on whichever set is active.
-  const [checkedBoxes, setCheckedBoxes] = useState<string[]>([]);
-  const [selectedForDeletion, setSelectedForDeletion] = useState<string[]>([]);
-
-  const [sortBy, setSortBy] = useState<SortBy>('date');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
-  const [maxRating, setMaxRating] = useState('');
-  const [protectedFilter, setProtectedFilter] = useState<ChipFilterMode>('off');
-  const [missingFilter, setMissingFilter] = useState<ChipFilterMode>('off');
-  const [deletedFilter, setDeletedFilter] = useState<ChipFilterMode>('off');
-  const [ignoredFilter, setIgnoredFilter] = useState<ChipFilterMode>('off');
-  const [watchedFilter, setWatchedFilter] = useState<ChipFilterMode>('off');
-
-  const [selectedTab, setSelectedTab] = useState<string | null>(null);
-  const [availableTabs, setAvailableTabs] = useState<string[]>([]);
-  const [tabsLoading, setTabsLoading] = useState<boolean>(true);
-
-  const [pageSize, setPageSize] = useListPageSize('youtarr.channelVideos.pageSize');
-  const [page, setPage] = useState(1);
-  const [downloadedFilter, setDownloadedFilter] = useState<ChipFilterMode>('off');
   const [mobileTooltip, setMobileTooltip] = useState<string | null>(null);
-  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
-  const [hoveredVideo, setHoveredVideo] = useState<string | null>(null);
-  const [refreshConfirmOpen, setRefreshConfirmOpen] = useState(false);
-  const [downloadAllOpen, setDownloadAllOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const loadMoreRef = useRef<HTMLDivElement | null>(null);
-  const lastTriggerTimeRef = useRef<number>(0);
-  const canTriggerNextRef = useRef<boolean>(true);
-
   const [modalVideo, setModalVideo] = useState<ChannelVideo | null>(null);
-  const [localIgnoreStatus, setLocalIgnoreStatus] = useState<Record<string, boolean>>({});
-  const [localProtectedStatus, setLocalProtectedStatus] = useState<Record<string, boolean>>({});
-  const [localAvailabilityStatus, setLocalAvailabilityStatus] = useState<Record<string, { availability: string | null; members_access?: MembersAccessState | null }>>({});
-  const [localPublishedAtStatus, setLocalPublishedAtStatus] = useState<Record<string, string>>({});
 
   const {
-    filters,
-    inputMinDuration,
-    inputMaxDuration,
-    setMinDuration,
-    setMaxDuration,
-    setDateFrom,
-    setDateTo,
-    clearAllFilters: clearBaseFilters,
-    hasActiveFilters: hasDurationOrDateFilter,
-  } = useChannelVideoFilters();
-
-  const { deleteVideosByYoutubeIds, loading: deleteLoading } = useVideoDeletion();
-  const {
-    toggleProtection,
-    successMessage: protectionSuccess,
-    error: protectionError,
-    clearMessages: clearProtectionMessages,
-  } = useVideoProtection(token);
-
-  const { channel_id: routeChannelId } = useParams();
-  const channelId = propChannelId ?? routeChannelId ?? undefined;
-
-  useEffect(() => {
-    const fetchAvailableTabs = async () => {
-      if (!channelId || !token) return;
-      setTabsLoading(true);
-      try {
-        const response = await fetch(`/api/channels/${channelId}/tabs`, {
-          headers: { 'x-access-token': token },
-        });
-        if (response.ok) {
-          const data = await response.json();
-          if (data.availableTabs && data.availableTabs.length > 0) {
-            setAvailableTabs(data.availableTabs);
-            const defaultTab = data.availableTabs.includes('videos') ? 'videos' : data.availableTabs[0];
-            setSelectedTab(defaultTab);
-          } else {
-            setAvailableTabs(['videos']);
-            setSelectedTab('videos');
-          }
-          setTabsLoading(false);
-        } else {
-          setAvailableTabs(['videos']);
-          setSelectedTab('videos');
-          setTabsLoading(false);
-        }
-      } catch (err) {
-        console.error('Error fetching available tabs:', err);
-        setAvailableTabs(['videos']);
-        setSelectedTab('videos');
-        setTabsLoading(false);
-      }
-    };
-    fetchAvailableTabs();
-  }, [channelId, token]);
-
-  useEffect(() => {
-    if (!channelId || !token || !tabsLoading) return;
-    const pollInterval = setInterval(async () => {
-      try {
-        const response = await fetch(`/api/channels/${channelId}/tabs`, {
-          headers: { 'x-access-token': token },
-        });
-        if (response.ok) {
-          const data = await response.json();
-          if (data.availableTabs && data.availableTabs.length > 0) {
-            setAvailableTabs(data.availableTabs);
-            const defaultTab = data.availableTabs.includes('videos') ? 'videos' : data.availableTabs[0];
-            setSelectedTab(defaultTab);
-          } else {
-            setAvailableTabs(['videos']);
-            setSelectedTab('videos');
-          }
-          setTabsLoading(false);
-          clearInterval(pollInterval);
-        }
-      } catch {
-        /* retry silently */
-      }
-    }, 2000);
-    return () => clearInterval(pollInterval);
-  }, [channelId, token, tabsLoading]);
-
-  // Derived: map each tab to whether auto-download is enabled for its media
-  // type. Derived (not state) so that saving new settings via the dialog --
-  // which updates channelAutoDownloadTabs upstream -- always refreshes the
-  // indicator dots without requiring a reload.
-  const tabAutoDownloadStatus = useMemo<Record<string, boolean>>(() => {
-    const mediaTypeMap: Record<string, string> = {
-      videos: 'video',
-      shorts: 'short',
-      streams: 'livestream',
-    };
-    const enabled = channelAutoDownloadTabs
-      ? channelAutoDownloadTabs.split(',').map((t) => t.trim())
-      : [];
-    const status: Record<string, boolean> = {};
-    availableTabs.forEach((tabType) => {
-      const mediaType = mediaTypeMap[tabType];
-      status[tabType] = mediaType ? enabled.includes(mediaType) : false;
-    });
-    return status;
-  }, [channelAutoDownloadTabs, availableTabs]);
-
-  const { config } = useConfig(token);
-  const hasChannelOverride = Boolean(channelVideoQuality);
-  const defaultResolution = channelVideoQuality || config.preferredResolution || '1080';
-  const defaultResolutionSource: 'channel' | 'global' = hasChannelOverride ? 'channel' : 'global';
-  const useInfiniteScroll = config.channelVideosHotLoad ?? false;
-  const effectivePageSize = useInfiniteScroll ? INFINITE_SCROLL_FETCH_SIZE : pageSize;
-
-  const resetKey = useMemo(
-    () =>
-      [
-        channelId || '',
-        selectedTab || '',
-        downloadedFilter,
-        listState.search,
-        sortBy,
-        sortOrder,
-        maxRating,
-        filters.minDuration,
-        filters.maxDuration,
-        filters.dateFrom ? filters.dateFrom.toISOString() : '',
-        filters.dateTo ? filters.dateTo.toISOString() : '',
-        protectedFilter,
-        missingFilter,
-        deletedFilter,
-        ignoredFilter,
-        watchedFilter,
-        useInfiniteScroll,
-      ].join('|'),
-    [
-      channelId,
-      selectedTab,
-      downloadedFilter,
-      listState.search,
-      sortBy,
-      sortOrder,
-      maxRating,
-      filters.minDuration,
-      filters.maxDuration,
-      filters.dateFrom,
-      filters.dateTo,
-      protectedFilter,
-      missingFilter,
-      deletedFilter,
-      ignoredFilter,
-      watchedFilter,
-      useInfiniteScroll,
-    ]
-  );
-
-  const {
+    channelId,
+    useInfiniteScroll,
+    availableTabs,
+    selectedTab,
+    changeTab,
+    query,
     videos,
+    displayedVideos,
     totalCount,
+    totalPages,
+    hasNextPage,
     oldestVideoDate,
-    error: fetchError,
-    availableTabs: availableTabsFromVideos,
-    loading: videosLoading,
-    refreshSeq,
-    loadedView,
-    refetch: refetchVideos,
-  } = useChannelVideos({
-    channelId,
-    page,
-    pageSize: effectivePageSize,
-    downloadedFilter,
-    searchQuery: listState.search,
-    sortBy,
-    sortOrder,
-    maxRating,
-    tabType: selectedTab,
-    token,
-    minDuration: filters.minDuration,
-    maxDuration: filters.maxDuration,
-    dateFrom: filters.dateFrom,
-    dateTo: filters.dateTo,
-    append: useInfiniteScroll,
-    resetKey,
-    protectedFilter,
-    missingFilter,
-    deletedFilter,
-    ignoredFilter,
-    watchedFilter,
-    onFirstLoad: onVideosLoaded,
-  });
-
-  useDownloadListingsRefresh(refetchVideos);
-
-  const { data: tabStats, refetch: refetchTabStats } = useChannelTabStats(channelId, token);
-  useDownloadListingsRefresh(refetchTabStats);
-
-  // A change in the listing size (an automatic or background fetch, Load More,
-  // tabs detected for an imported channel) changes the loaded and ignored
-  // counts, and can make a first count possible. The tab is part of the
-  // comparison because a newly listed tab can hold as many videos as the
-  // tab it was opened from.
-  const listingKey = `${loadedView}:${totalCount}`;
-  const previousListingKey = useRef(listingKey);
-  useEffect(() => {
-    if (previousListingKey.current === listingKey) return;
-    previousListingKey.current = listingKey;
-    void refetchTabStats();
-  }, [listingKey, refetchTabStats]);
-
-  useEffect(() => {
-    if (availableTabsFromVideos && availableTabsFromVideos.length > 0) {
-      setAvailableTabs(availableTabsFromVideos);
-    }
-  }, [availableTabsFromVideos]);
-
-  useEffect(() => {
-    if (channelAvailableTabs === undefined) return;
-    const nextTabs = channelAvailableTabs
-      ? channelAvailableTabs.split(',').map((tab) => tab.trim()).filter((tab) => tab.length > 0)
-      : [];
-    if (nextTabs.length === 0) return;
-    setAvailableTabs(nextTabs);
-    setSelectedTab((current) => {
-      if (current && nextTabs.includes(current)) return current;
-      return nextTabs.includes('videos') ? 'videos' : nextTabs[0];
-    });
-  }, [channelAvailableTabs]);
-
-  useEffect(() => {
-    setLocalIgnoreStatus({});
-    setLocalProtectedStatus({});
-  }, [page, selectedTab, downloadedFilter, listState.search, sortBy, sortOrder, filters]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [
-    filters.minDuration,
-    filters.maxDuration,
-    filters.dateFrom,
-    filters.dateTo,
-    listState.search,
-    maxRating,
-    protectedFilter,
-    missingFilter,
-    deletedFilter,
-    ignoredFilter,
-    watchedFilter,
-    downloadedFilter,
-    sortBy,
-    sortOrder,
-    selectedTab,
-  ]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [useInfiniteScroll]);
-
-  const hasChannelAudioOverride = Boolean(channelAudioFormat);
-  const defaultAudioFormat = channelAudioFormat || null;
-  const defaultAudioFormatSource: 'channel' | 'global' = hasChannelAudioOverride ? 'channel' : 'global';
-
-  const { triggerDownloads } = useTriggerDownloads(token);
-
-  const {
-    refreshVideos,
-    loading: localFetchingAllVideos,
-    error: fetchAllError,
-    clearError: clearFetchAllError,
-  } = useRefreshChannelVideos(channelId, page, effectivePageSize, downloadedFilter, selectedTab, token);
-
-  const {
-    isFetching: backgroundFetching,
-    fetchType,
-    progress: fetchProgress,
-    onFetchComplete,
-    startPolling,
-    trackRefresh,
-  } = useChannelFetchStatus(channelId, selectedTab, token);
-
-  // Any fetch of the tab blocks Load More and Download All; only a Load More
-  // fetch shows as loading, since a background refresh takes a second or two.
-  const fetchingAllVideos = localFetchingAllVideos || backgroundFetching;
-  const showLoadMoreProgress = localFetchingAllVideos || (backgroundFetching && fetchType === 'fetchAll');
-
-  const newVideosNotice = useNewVideosNotice({
-    channelId,
-    selectedTab,
-    refreshSeq,
-    resetKey,
-    videos,
-    page,
-    setPage,
+    loading,
+    fetchError,
     refetchVideos,
-    trackRefresh,
-    onFetchComplete,
-    onVideosLoaded,
-  });
+    tabStats,
+    selectedTabStats,
+    overrides,
+    selection,
+    rowActions,
+    bulkActions,
+    listing,
+    newVideosNotice,
+    loadMoreRef,
+    downloadDefaults,
+    successMessage,
+    errorMessage,
+    clearSuccessMessage,
+    clearErrorMessage,
+  } = useChannelVideosController({ token, ...channelProps, search: listState.search });
 
-  const navigate = useNavigate();
-
-  const videosWithOverrides = useMemo(() => {
-    return videos.map((video) => {
-      const hasIgnoreOverride = video.youtube_id in localIgnoreStatus;
-      const hasProtectedOverride = video.youtube_id in localProtectedStatus;
-      const hasAvailabilityOverride = video.youtube_id in localAvailabilityStatus;
-      const hasPublishedAtOverride = video.youtube_id in localPublishedAtStatus;
-      if (!hasIgnoreOverride && !hasProtectedOverride && !hasAvailabilityOverride && !hasPublishedAtOverride) return video;
-      return {
-        ...video,
-        ...(hasIgnoreOverride
-          ? {
-              ignored: localIgnoreStatus[video.youtube_id],
-              ignored_at: localIgnoreStatus[video.youtube_id] ? new Date().toISOString() : null,
-            }
-          : {}),
-        ...(hasProtectedOverride
-          ? { protected: localProtectedStatus[video.youtube_id] }
-          : {}),
-        ...(hasAvailabilityOverride
-          ? localAvailabilityStatus[video.youtube_id]
-          : {}),
-        ...(hasPublishedAtOverride
-          ? {
-              publishedAt: localPublishedAtStatus[video.youtube_id],
-              published_at_source: 'exact' as const,
-            }
-          : {}),
-      };
-    });
-  }, [videos, localIgnoreStatus, localProtectedStatus, localAvailabilityStatus, localPublishedAtStatus]);
-
-  const { snapshot } = useVideoActivity();
-  const paginatedVideos = useMemo(() => videosWithOverrides.map(video => ({
-    ...video, activity: snapshot.videos[video.youtube_id]?.state,
-  })), [videosWithOverrides, snapshot]);
-  useEffect(() => {
-    setCheckedBoxes(previous => {
-      const eligible = previous.filter(id => !snapshot.videos[id]?.state);
-      return eligible.length === previous.length ? previous : eligible;
-    });
-  }, [snapshot]);
-  const totalPages = Math.ceil(totalCount / effectivePageSize) || 1;
-  const hasNextPage = page < totalPages;
-
-  const selectionMode: 'download' | 'delete' | null =
-    checkedBoxes.length > 0 ? 'download' : selectedForDeletion.length > 0 ? 'delete' : null;
-
-  const handleCheckChange = useCallback((videoId: string, isChecked: boolean) => {
-    setCheckedBoxes((prev) => (isChecked ? [...prev, videoId] : prev.filter((id) => id !== videoId)));
-  }, []);
-
-  const handleDeletionChange = useCallback((videoId: string, isChecked: boolean) => {
-    setSelectedForDeletion((prev) => (isChecked ? [...prev, videoId] : prev.filter((id) => id !== videoId)));
-  }, []);
-
-  const clearAllSelections = useCallback(() => {
-    setCheckedBoxes([]);
-    setSelectedForDeletion([]);
-  }, []);
-
-  // Clear selection when a filter changes so bulk actions can't fire on IDs
-  // that are no longer in the filtered dataset. Sort and pagination are
-  // deliberately excluded: they do not remove videos from the selection's
-  // eligible set. Tab changes are handled separately in handleTabChange.
-  useEffect(() => {
-    clearAllSelections();
-  }, [
-    filters.minDuration,
-    filters.maxDuration,
-    filters.dateFrom,
-    filters.dateTo,
-    listState.search,
-    maxRating,
-    protectedFilter,
-    missingFilter,
-    deletedFilter,
-    ignoredFilter,
-    watchedFilter,
-    downloadedFilter,
-    clearAllSelections,
-  ]);
-
-  const handleSelectAll = useCallback(() => {
-    if (selectionMode === 'delete') {
-      const deletable = paginatedVideos
-        .filter((video) => video.added && !video.removed)
-        .map((video) => video.youtube_id);
-      setSelectedForDeletion((prev) => {
-        const newIds = deletable.filter((id) => !prev.includes(id));
-        return [...prev, ...newIds];
-      });
-      return;
-    }
-    const downloadable = paginatedVideos
-      .filter((video) => {
-        const status = getVideoStatus(video);
-        return status === 'never_downloaded' || isRemovedStatus(status) || status === 'ignored';
-      })
-      .map((video) => video.youtube_id);
-    setCheckedBoxes((prev) => {
-      const newIds = downloadable.filter((id) => !prev.includes(id));
-      return [...prev, ...newIds];
-    });
-  }, [paginatedVideos, selectionMode]);
-
-  const handleSelectAllDownloaded = useCallback(() => {
-    const ids = paginatedVideos
-      .filter((video) => video.added && !video.removed)
-      .map((video) => video.youtube_id);
-    setSelectedForDeletion((prev) => {
-      const newIds = ids.filter((id) => !prev.includes(id));
-      return [...prev, ...newIds];
-    });
-  }, [paginatedVideos]);
-
-  const handleSelectAllNotDownloaded = useCallback(() => {
-    const ids = paginatedVideos
-      .filter((video) => {
-        const status = getVideoStatus(video);
-        return status === 'never_downloaded' || isRemovedStatus(status) || status === 'ignored';
-      })
-      .map((video) => video.youtube_id);
-    setCheckedBoxes((prev) => {
-      const newIds = ids.filter((id) => !prev.includes(id));
-      return [...prev, ...newIds];
-    });
-  }, [paginatedVideos]);
-
-  const handleDownloadClick = useCallback(() => {
-    setDownloadDialogOpen(true);
-  }, []);
-
-  const handleDownloadConfirm = async (settings: DownloadSettings | null) => {
-    setDownloadDialogOpen(false);
-    const eligibleIds = checkedBoxes.filter(id => !snapshot.videos[id]?.state);
-    if (!eligibleIds.length) return;
-    const urls = eligibleIds.map((id) => `https://www.youtube.com/watch?v=${id}`);
-    const overrideSettings = settings
-      ? {
-          resolution: settings.resolution,
-          allowRedownload: settings.allowRedownload,
-          subfolder: settings.subfolder,
-          audioFormat: settings.audioFormat,
-          rating: settings.rating,
-          skipVideoFolder: settings.skipVideoFolder,
-          protect: settings.protect,
-        }
-      : undefined;
-    const success = await triggerDownloads({ urls, overrideSettings, channelId });
-    if (success === null) return;
-    if (!success) { setErrorMessage('Failed to queue downloads'); return; }
-    setCheckedBoxes([]);
-    navigate('/downloads/activity');
-  };
-
-  const handleRefreshClick = () => setRefreshConfirmOpen(true);
-
-  const handleDownloadAllClick = useCallback(() => {
-    // Start fetch-status polling so the header progress bar tracks the
-    // metadata fetch the dialog kicks off, and the list refetches when done.
-    startPolling();
-    setDownloadAllOpen(true);
-  }, [startPolling]);
-
-  const handleDownloadAllStarted = useCallback(() => {
-    setDownloadAllOpen(false);
-    navigate('/downloads/activity');
-  }, [navigate]);
-
-  // Load More can outlive the channel or tab it started on. Its refetches come
-  // from that render, so running them after a switch would load the old view's
-  // list or stats over the current one.
-  const currentViewRef = useRef({ channelId, selectedTab });
-  currentViewRef.current = { channelId, selectedTab };
-
-  const handleRefreshConfirm = async () => {
-    setRefreshConfirmOpen(false);
-    startPolling();
-    await refreshVideos();
-    const view = currentViewRef.current;
-    if (view.channelId !== channelId) return;
-    if (view.selectedTab === selectedTab) await refetchVideos();
-    await refetchTabStats();
-  };
-
-  const handleRefreshCancel = () => setRefreshConfirmOpen(false);
-
-  useEffect(() => {
-    if (protectionSuccess) {
-      setSuccessMessage(protectionSuccess);
-      clearProtectionMessages();
-    }
-  }, [protectionSuccess, clearProtectionMessages]);
-
-  useEffect(() => {
-    if (protectionError) {
-      setErrorMessage(protectionError);
-      clearProtectionMessages();
-    }
-  }, [protectionError, clearProtectionMessages]);
-
-  const handleToggleProtection = async (youtubeId: string) => {
-    const video = paginatedVideos.find((v) => v.youtube_id === youtubeId);
-    if (!video || !video.id) return;
-    const currentState = video.protected || false;
-    const newState = await toggleProtection(video.id, currentState);
-    if (newState !== undefined) {
-      setLocalProtectedStatus((prev) => ({ ...prev, [youtubeId]: newState }));
-    }
-  };
-
-  const handleDeleteClick = () => {
-    if (selectedForDeletion.length === 0) {
-      setErrorMessage('No videos selected for deletion');
-      return;
-    }
-    setDeleteDialogOpen(true);
-  };
-
-  const handleDeleteConfirm = async () => {
-    setDeleteDialogOpen(false);
-    const result = await deleteVideosByYoutubeIds(selectedForDeletion, token);
-    if (result.success) {
-      setSuccessMessage(
-        `Successfully deleted ${result.deleted.length} video${result.deleted.length !== 1 ? 's' : ''}`
-      );
-      setSelectedForDeletion([]);
-      await refetchVideos();
-    } else {
-      const deletedCount = result.deleted.length;
-      const failedCount = result.failed.length;
-      if (deletedCount > 0) {
-        setSuccessMessage(
-          `Deleted ${deletedCount} video${deletedCount !== 1 ? 's' : ''}, but ${failedCount} failed`
-        );
-        setSelectedForDeletion((prev) => prev.filter((id) => !result.deleted.includes(id)));
-        await refetchVideos();
-      } else {
-        setErrorMessage(`Failed to delete videos: ${result.failed[0]?.error || 'Unknown error'}`);
-      }
-    }
-  };
-
-  const handleDeleteCancel = () => setDeleteDialogOpen(false);
-
-  const toggleIgnore = async (youtubeId: string) => {
-    if (!channelId || !token) return;
-    const video = paginatedVideos.find((v) => v.youtube_id === youtubeId);
-    const isCurrentlyIgnored = video?.ignored;
-    const endpoint = isCurrentlyIgnored ? 'unignore' : 'ignore';
-    const newIgnoreStatus = !isCurrentlyIgnored;
-    const originalIgnoreStatus = isCurrentlyIgnored ?? false;
-
-    setLocalIgnoreStatus((prev) => ({ ...prev, [youtubeId]: newIgnoreStatus }));
-    try {
-      const response = await fetch(
-        `/api/channels/${channelId}/videos/${youtubeId}/${endpoint}`,
-        { method: 'POST', headers: { 'x-access-token': token } }
-      );
-      if (!response.ok) throw new Error(`Failed to ${endpoint} video`);
-      void refetchTabStats();
-      setSuccessMessage(
-        isCurrentlyIgnored
-          ? 'Video unignored. Channel downloads will include this video'
-          : 'Video ignored. Channel downloads will exclude this video'
-      );
-    } catch (error) {
-      setLocalIgnoreStatus((prev) => ({ ...prev, [youtubeId]: originalIgnoreStatus }));
-      console.error('Error toggling ignore:', error);
-      setErrorMessage(`Failed to ${endpoint} video`);
-    }
-  };
-
-  const handleBulkIgnore = async () => {
-    if (!channelId || !token || checkedBoxes.length === 0) {
-      setErrorMessage('No videos selected to ignore');
-      return;
-    }
-    const originalIgnoreStates: Record<string, boolean> = {};
-    checkedBoxes.forEach((youtubeId) => {
-      const video = paginatedVideos.find((v) => v.youtube_id === youtubeId);
-      originalIgnoreStates[youtubeId] = video?.ignored ?? false;
-    });
-    const bulkIgnoreUpdates: Record<string, boolean> = {};
-    checkedBoxes.forEach((youtubeId) => {
-      bulkIgnoreUpdates[youtubeId] = true;
-    });
-    setLocalIgnoreStatus((prev) => ({ ...prev, ...bulkIgnoreUpdates }));
-    try {
-      const response = await fetch(`/api/channels/${channelId}/videos/bulk-ignore`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-access-token': token },
-        body: JSON.stringify({ youtubeIds: checkedBoxes }),
-      });
-      if (!response.ok) throw new Error('Failed to bulk ignore videos');
-      const result = await response.json();
-      setSuccessMessage(result.message || `Successfully ignored ${checkedBoxes.length} videos`);
-      setCheckedBoxes([]);
-      void refetchTabStats();
-    } catch (error) {
-      setLocalIgnoreStatus((prev) => ({ ...prev, ...originalIgnoreStates }));
-      console.error('Error bulk ignoring:', error);
-      setErrorMessage('Failed to bulk ignore videos');
-    }
-  };
-
-  const handleTabChange = (event: React.SyntheticEvent, newTab: string | number) => {
-    if (videosLoading) return;
-    setSelectedTab(String(newTab));
-    setPage(1);
-    clearAllSelections();
-    clearBaseFilters();
-    setProtectedFilter('off');
-    setMissingFilter('off');
-    setIgnoredFilter('off');
-    setWatchedFilter('off');
-    setDownloadedFilter('off');
-  };
-
-  const handlePageChange = (value: number) => setPage(value);
-
-  const handlePageSizeChange = (newSize: PageSize) => {
-    setPageSize(newSize);
-    setPage(1);
-  };
-
-  const handleSortChange = (newSortBy: SortBy) => {
-    if (sortBy === newSortBy) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortBy(newSortBy);
-      setSortOrder('desc');
-    }
-    setPage(1);
-  };
-
-  // Accumulates missing status for every video seen on any loaded page, so
-  // selections survive page swaps. Checkboxes only exist on loaded rows, so
-  // lookups always hit. A video listed in the download archive without a
-  // database record counts too: yt-dlp skips it unless re-download is allowed.
-  const missingByIdRef = useRef(new Map<string, boolean>());
-  useEffect(() => {
-    videos.forEach((video) => {
-      missingByIdRef.current.set(
-        video.youtube_id,
-        Boolean(video.added ? video.removed : video.inArchive)
-      );
-    });
-  }, [videos]);
-
-  const getMissingVideoCount = () => {
-    return checkedBoxes.reduce(
-      (count, videoId) => (missingByIdRef.current.get(videoId) ? count + 1 : count),
-      0
-    );
-  };
-
-  const getTabLabel = (tabType: string) => {
-    switch (tabType) {
-      case 'videos':
-        return 'Videos';
-      case 'shorts':
-        return 'Shorts';
-      case 'streams':
-        return 'Live';
-      default:
-        return tabType;
-    }
-  };
-
-  const isTabAutoDownloadEnabled = (tabType: string): boolean => tabAutoDownloadStatus[tabType] || false;
-
-  useEffect(() => {
-    if (!loadMoreRef.current) return;
-    if (videosLoading || !hasNextPage) return;
-    if (!useInfiniteScroll) return;
-
-    let didTrigger = false;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const [entry] = entries;
-        const now = Date.now();
-        const viewportHeight =
-          entry.rootBounds?.height ?? (typeof window !== 'undefined' ? window.innerHeight : 0);
-        const sentinelBottom = entry.boundingClientRect.bottom;
-        const nearBottom = viewportHeight === 0 || sentinelBottom >= viewportHeight - 120;
-
-        if (!entry.isIntersecting) {
-          canTriggerNextRef.current = true;
-          return;
-        }
-        if (
-          entry.isIntersecting &&
-          nearBottom &&
-          canTriggerNextRef.current &&
-          !didTrigger &&
-          now - lastTriggerTimeRef.current > 500
-        ) {
-          didTrigger = true;
-          canTriggerNextRef.current = false;
-          lastTriggerTimeRef.current = now;
-          setPage((prev) => prev + 1);
-        }
-      },
-      { root: null, rootMargin: '0px 0px 200px 0px', threshold: 0 }
-    );
-
-    observer.observe(loadMoreRef.current);
-    return () => observer.disconnect();
-  }, [videosLoading, hasNextPage, useInfiniteScroll, page]);
-
-  // Assemble filter config
-  const filterConfigs = useMemo<FilterConfig[]>(() => {
-    const configs: FilterConfig[] = [
-      {
-        id: 'duration',
-        min: filters.minDuration,
-        max: filters.maxDuration,
-        inputMin: inputMinDuration,
-        inputMax: inputMaxDuration,
-        onMinChange: setMinDuration,
-        onMaxChange: setMaxDuration,
-      },
-      {
-        id: 'dateRange',
-        dateFrom: filters.dateFrom,
-        dateTo: filters.dateTo,
-        onFromChange: setDateFrom,
-        onToChange: setDateTo,
-        hidden: selectedTab === 'shorts',
-        hiddenReason: selectedTab === 'shorts' ? 'Shorts do not have date information' : undefined,
-      },
-      { id: 'maxRating', value: maxRating, onChange: setMaxRating },
-      { id: 'protected', value: protectedFilter, onChange: setProtectedFilter },
-      { id: 'missing', value: missingFilter, onChange: setMissingFilter },
-      { id: 'deleted', value: deletedFilter, onChange: setDeletedFilter },
-      { id: 'ignored', value: ignoredFilter, onChange: setIgnoredFilter },
-      { id: 'downloaded', value: downloadedFilter, onChange: setDownloadedFilter },
-      { id: 'watched', value: watchedFilter, onChange: setWatchedFilter },
-    ];
-    return configs;
-  }, [
-    filters.minDuration,
-    filters.maxDuration,
-    filters.dateFrom,
-    filters.dateTo,
-    inputMinDuration,
-    inputMaxDuration,
-    setMinDuration,
-    setMaxDuration,
-    setDateFrom,
-    setDateTo,
-    maxRating,
-    protectedFilter,
-    missingFilter,
-    deletedFilter,
-    ignoredFilter,
-    watchedFilter,
-    downloadedFilter,
-    selectedTab,
-  ]);
-
-  // Build selection actions per render. Memoizing here is a lie because the
-  // closures capture handleBulkIgnore / handleDeleteClick, which are created
-  // fresh each render; the useMemo cache would just hand back a stale closure.
   const downloadActions: SelectionAction<string>[] = [
     {
       id: 'download',
       label: 'Download',
       icon: <DownloadIcon size={14} />,
       intent: 'success',
-      onClick: handleDownloadClick,
+      onClick: bulkActions.openDownloadDialog,
     },
     {
       id: 'ignore',
       label: 'Ignore',
       icon: <BlockIcon size={14} />,
       intent: 'warning',
-      onClick: () => handleBulkIgnore(),
+      onClick: () => bulkActions.ignoreSelected(),
     },
   ];
-
   const deleteActions: SelectionAction<string>[] = [
     {
       id: 'delete',
       label: 'Delete',
       icon: <DeleteIcon size={14} />,
       intent: 'danger',
-      disabled: () => deleteLoading,
-      onClick: () => handleDeleteClick(),
+      disabled: () => bulkActions.deleteLoading,
+      onClick: () => bulkActions.requestDelete(),
     },
   ];
+  const activeSelection = useChannelSelectionPill(selection, downloadActions, deleteActions);
 
-  const downloadSelection = useVideoSelection<string>({ actions: downloadActions });
-  const deleteSelection = useVideoSelection<string>({ actions: deleteActions });
-
-  // Sync external state arrays into the hook's selectedIds so the SelectionPill shows correct count.
+  const availableViewModes = isMobile ? MOBILE_VIEW_MODES : DESKTOP_VIEW_MODES;
   useEffect(() => {
-    downloadSelection.set(checkedBoxes);
-  }, [checkedBoxes]); // eslint-disable-line react-hooks/exhaustive-deps
+    const viewModes = isMobile ? MOBILE_VIEW_MODES : DESKTOP_VIEW_MODES;
+    if (!viewModes.includes(viewMode)) {
+      setViewMode(isMobile ? 'list' : 'table');
+    }
+  }, [isMobile, viewMode, setViewMode]);
 
-  useEffect(() => {
-    deleteSelection.set(selectedForDeletion);
-  }, [selectedForDeletion]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // When user clears via the pill, keep the external arrays in sync.
-  const syncedDownloadSelection = useMemo(
-    () => ({
-      ...downloadSelection,
-      clear: () => {
-        setCheckedBoxes([]);
-        setSelectedForDeletion([]);
-        downloadSelection.clear();
-      },
-    }),
-    [downloadSelection]
-  );
-
-  const syncedDeleteSelection = useMemo(
-    () => ({
-      ...deleteSelection,
-      clear: () => {
-        setCheckedBoxes([]);
-        setSelectedForDeletion([]);
-        deleteSelection.clear();
-      },
-    }),
-    [deleteSelection]
-  );
-
-  const activeSelection =
-    selectionMode === 'download'
-      ? syncedDownloadSelection
-      : selectionMode === 'delete'
-      ? syncedDeleteSelection
-      : undefined;
+  const tabLabel = getTabLabel(selectedTab || 'videos');
 
   const renderPaginationBar = (placement: 'top' | 'bottom') => (
     <VideoListPaginationBar
       placement={placement}
       hasContent={totalCount > 0}
       useInfiniteScroll={useInfiniteScroll}
-      page={page}
+      page={query.page}
       totalPages={totalPages}
-      onPageChange={handlePageChange}
-      pageSize={pageSize}
-      onPageSizeChange={handlePageSizeChange}
+      onPageChange={query.setPage}
+      pageSize={query.pageSize}
+      onPageSizeChange={query.changePageSize}
       isMobile={isMobile}
     />
   );
-
-  const paginationTopNode = renderPaginationBar('top');
-  const paginationNode = renderPaginationBar('bottom');
-
-  const infiniteSentinel = useInfiniteScroll ? (
-    <>
-      <div
-        ref={loadMoreRef}
-        style={{ height: 24, width: '100%', marginTop: 32, marginBottom: 32 }}
-      />
-      {videosLoading && videos.length > 0 && hasNextPage && (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '16px 0' }}>
-          <div className="playful-loading-dots" aria-label="Loading more videos">
-            <span />
-            <span />
-            <span />
-          </div>
-        </div>
-      )}
-      {!hasNextPage && videos.length > 0 && (
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          align="center"
-          style={{ display: 'block', padding: '16px 0' }}
-        >
-          {"You're all caught up."}
-        </Typography>
-      )}
-    </>
-  ) : null;
-
-  // Render loading skeleton for the content area
-  const loadingSkeleton = (
-    <div style={{ textAlign: 'center', paddingTop: 24 }}>
-      <Typography variant="body1" color="text.secondary" gutterBottom>
-        Loading and fetching/indexing new videos for this channel tab...
-      </Typography>
-      <Grid container spacing={2} style={{ marginTop: 16 }}>
-        {[...Array(effectivePageSize)].map((_, index) => (
-          <Grid item xs={12} sm={6} md={4} lg={3} key={`skeleton-${index}`}>
-            <Skeleton variant="rectangular" height={200} />
-            <Skeleton variant="text" style={{ marginTop: 8 }} />
-            <Skeleton variant="text" width="60%" />
-          </Grid>
-        ))}
-      </Grid>
-    </div>
-  );
-
-  const renderTabLabel = (tabType: string) => {
-    const label = getTabLabel(tabType);
-    const isEnabled = isTabAutoDownloadEnabled(tabType);
-    return (
-      <div className="flex flex-col items-center gap-1">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Typography variant="caption" style={{ fontWeight: 700, color: 'inherit' }}>
-            {label}
-          </Typography>
-          <div
-            style={{
-              width: 12,
-              height: 12,
-              borderRadius: '50%',
-              backgroundColor: isEnabled ? 'var(--success)' : 'rgba(0,0,0,0.08)',
-              border: isEnabled ? '2px solid var(--success)' : '1px solid rgba(0,0,0,0.25)',
-              transition: 'all 200ms ease',
-              display: 'inline-block',
-              boxShadow: isEnabled ? '0 0 8px rgba(34,197,94,0.4)' : 'none',
-            }}
-            title={isEnabled ? 'Auto-download enabled' : 'Auto-download disabled'}
-          />
-        </div>
-        <TabDownloadProgress label={label} stats={tabStats?.[tabType as ChannelTabType]} />
-      </div>
-    );
-  };
-
-  const selectedTabStats = selectedTab ? tabStats?.[selectedTab as ChannelTabType] : undefined;
-  const showsTabSummary = Boolean(
-    selectedTabStats && selectedTabStats.total !== null && selectedTabStats.loaded !== undefined
-  );
-  // The summary already gives the tab's size; the list count only adds
-  // something while a search or filter narrows the list.
-  const listIsFiltered = Boolean(listState.search) || hasDurationOrDateFilter || maxRating !== ''
-    || [downloadedFilter, protectedFilter, missingFilter, deletedFilter, ignoredFilter, watchedFilter].some((mode) => mode !== 'off');
-  let countChipLabel: string | null = null;
-  if (totalCount > 0 && listIsFiltered) {
-    countChipLabel = `${totalCount} ${totalCount === 1 ? 'match' : 'matches'}`;
-  } else if (totalCount > 0 && !showsTabSummary) {
-    countChipLabel = `${totalCount} ${totalCount === 1 ? 'item' : 'items'}`;
-  }
-
-  const hasPendingDates = videos.some(
-    (v) => v.published_at_source === 'estimated' && v.media_type !== 'short'
-  );
-  const dateTooltipBase =
-    'Dates come from YouTube. A ~ marks an estimate (YouTube said something like "1 month ago"); ' +
-    'it becomes exact once the video is downloaded or opened. If the order looks off, Load More rebuilds it.';
-  const pendingDatesSentence = 'Pending means YouTube listed the video without a date. ';
-  const dateTooltipText =
-    selectedTab === 'shorts'
-      ? "YouTube doesn't provide publish dates for Shorts."
-      : (hasPendingDates ? pendingDatesSentence : '') + dateTooltipBase;
-
-  const headerSlot = (
-    <div
-      style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 10,
-        backgroundColor: 'var(--card)',
-        borderBottom: '1px solid var(--border)',
-        padding: '12px 16px 8px 16px',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 8,
-        }}
-        data-testid="channel-videos-header"
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          {countChipLabel && (
-            <Chip label={countChipLabel} size="small" color="primary" />
-          )}
-          <TabDownloadSummary tabLabel={getTabLabel(selectedTab || 'videos')} stats={selectedTabStats} />
-          {oldestVideoDate && selectedTab !== 'shorts' && !isMobile && (
-            <Typography variant="caption" color="text.secondary">
-              Oldest: {new Date(oldestVideoDate).toLocaleDateString()}
-            </Typography>
-          )}
-          <ChannelVideosInfo tabStats={tabStats} dateText={dateTooltipText} highlight={hasPendingDates} />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <Button
-            onClick={handleDownloadAllClick}
-            variant="outlined"
-            size="small"
-            color="inherit"
-            disabled={fetchingAllVideos}
-            startIcon={<DownloadIcon size={16} />}
-            className={intentStyles.base}
-            data-testid="channel-download-all-button"
-          >
-            Download All
-          </Button>
-          <Button
-            onClick={handleRefreshClick}
-            variant="outlined"
-            size="small"
-            color="inherit"
-            disabled={fetchingAllVideos}
-            startIcon={<RefreshIcon size={16} />}
-            className={intentStyles.base}
-            data-testid="channel-refresh-button"
-          >
-            {showLoadMoreProgress ? 'Loading...' : 'Load More'}
-          </Button>
-        </div>
-      </div>
-      {showLoadMoreProgress && <LoadMoreProgress progress={fetchProgress} total={selectedTabStats?.total} />}
-      <NewVideosNotice
-        checking={newVideosNotice.checking}
-        newCount={newVideosNotice.newCount}
-        onShow={newVideosNotice.show}
-        onDismiss={newVideosNotice.dismiss}
-        raised={Boolean(isMobile && activeSelection?.hasSelection)}
-      />
-    </div>
-  );
-
-  const tabsSlot =
-    availableTabs.length > 0 ? (
-      <div
-        style={{
-          borderBottom: '1px solid var(--border)',
-          padding: isMobile ? '0 10px' : '0 16px',
-        }}
-      >
-        <Tabs
-          value={selectedTab || 'videos'}
-          onChange={handleTabChange}
-          variant={isMobile ? 'fullWidth' : 'standard'}
-          centered={!isMobile}
-          aria-label="channel video tabs"
-        >
-          {availableTabs.map((tab) => (
-            <Tab key={tab} label={renderTabLabel(tab)} value={tab} />
-          ))}
-        </Tabs>
-      </div>
-    ) : null;
-
-  const renderContent = (mode: VideoListViewMode) => {
-    if (mode === 'grid') {
-      return (
-        <Grid container spacing={2}>
-          {paginatedVideos.map((video) => (
-            <VideoCard
-              key={video.youtube_id}
-              video={video}
-              isMobile={isMobile}
-              checkedBoxes={checkedBoxes}
-              hoveredVideo={hoveredVideo}
-              selectedForDeletion={selectedForDeletion}
-              selectionMode={selectionMode}
-              onCheckChange={handleCheckChange}
-              onHoverChange={setHoveredVideo}
-              onDeletionChange={handleDeletionChange}
-              onToggleIgnore={toggleIgnore}
-              onToggleProtection={handleToggleProtection}
-              onMobileTooltip={setMobileTooltip}
-              onVideoClick={setModalVideo}
-            />
-          ))}
-        </Grid>
-      );
-    }
-    if (mode === 'list') {
-      return (
-        <div>
-          {paginatedVideos.map((video) => (
-            <VideoListItem
-              key={video.youtube_id}
-              video={video}
-              checkedBoxes={checkedBoxes}
-              selectedForDeletion={selectedForDeletion}
-              selectionMode={selectionMode}
-              onCheckChange={handleCheckChange}
-              onDeletionChange={handleDeletionChange}
-              onToggleIgnore={toggleIgnore}
-              onToggleProtection={handleToggleProtection}
-              onMobileTooltip={setMobileTooltip}
-              onVideoClick={setModalVideo}
-            />
-          ))}
-        </div>
-      );
-    }
-    return (
-      <VideoTableView
-        videos={paginatedVideos}
-        checkedBoxes={checkedBoxes}
-        selectedForDeletion={selectedForDeletion}
-        selectionMode={selectionMode}
-        sortBy={sortBy}
-        sortOrder={sortOrder}
-        onCheckChange={handleCheckChange}
-        onSelectAll={handleSelectAll}
-        onClearSelection={clearAllSelections}
-        onSortChange={handleSortChange}
-        onDeletionChange={handleDeletionChange}
-        onToggleIgnore={toggleIgnore}
-        onToggleProtection={handleToggleProtection}
-        onMobileTooltip={setMobileTooltip}
-        onVideoClick={setModalVideo}
-      />
-    );
-  };
-
-  const toolbarRightActions = !isMobile ? (
-    <div style={{ display: 'flex', gap: 8 }}>
-      <Button
-        size="small"
-        variant="outlined"
-        onClick={handleSelectAllNotDownloaded}
-        disabled={
-          paginatedVideos.filter((video) => {
-            const status = getVideoStatus(video);
-            return status === 'never_downloaded' || isRemovedStatus(status) || status === 'ignored';
-          }).length === 0
-        }
-        className="intent-warning"
-      >
-        Select pending
-      </Button>
-      <Button
-        size="small"
-        variant="outlined"
-        onClick={handleSelectAllDownloaded}
-        disabled={
-          paginatedVideos.filter((video) => video.added && !video.removed).length === 0
-        }
-        className="intent-base"
-      >
-        Select downloaded
-      </Button>
-    </div>
-  ) : null;
-
-  const itemCount = paginatedVideos.length;
-  const fetchErrorMessage = fetchError
-    ? 'Failed to fetch channel videos. Please try again later.'
-    : undefined;
-
-  const availableViewModes: VideoListViewMode[] = isMobile
-    ? ['grid', 'list']
-    : ['grid', 'table'];
-
-  useEffect(() => {
-    if (!availableViewModes.includes(listState.viewMode)) {
-      listState.setViewMode(isMobile ? 'list' : 'table');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMobile, listState.viewMode]);
 
   return (
     <>
@@ -1338,71 +155,131 @@ function ChannelVideos({
           state={listState}
           selection={activeSelection}
           viewModes={availableViewModes}
-          filters={filterConfigs}
+          filters={query.filterConfigs}
           searchPlaceholder="Search videos..."
-          headerSlot={headerSlot}
-          toolbarRightActions={toolbarRightActions}
-          tabsSlot={tabsSlot}
-          itemCount={itemCount}
-          isLoading={videosLoading}
+          headerSlot={
+            <ChannelVideosHeader
+              isMobile={isMobile}
+              selectedTab={selectedTab}
+              videos={videos}
+              totalCount={totalCount}
+              isFiltered={query.isFiltered}
+              oldestVideoDate={oldestVideoDate}
+              tabStats={tabStats}
+              isFetching={listing.isFetching}
+              showLoadMoreProgress={listing.showLoadMoreProgress}
+              fetchProgress={listing.fetchProgress}
+              onDownloadAll={listing.openDownloadAll}
+              onLoadMore={listing.requestLoadMore}
+              checkingForNewVideos={newVideosNotice.checking}
+              newVideoCount={newVideosNotice.newCount}
+              onShowNewVideos={newVideosNotice.show}
+              onDismissNewVideos={newVideosNotice.dismiss}
+              raiseNewVideosNotice={Boolean(isMobile && activeSelection?.hasSelection)}
+            />
+          }
+          toolbarRightActions={
+            isMobile ? null : (
+              <ChannelVideosSelectButtons
+                canSelectPending={selection.canSelectNotDownloaded}
+                canSelectDownloaded={selection.canSelectDownloaded}
+                onSelectPending={selection.selectAllNotDownloaded}
+                onSelectDownloaded={selection.selectAllDownloaded}
+              />
+            )
+          }
+          tabsSlot={
+            availableTabs.length > 0 ? (
+              <ChannelVideosTabs
+                availableTabs={availableTabs}
+                selectedTab={selectedTab}
+                autoDownloadTabs={channelAutoDownloadTabs}
+                tabStats={tabStats}
+                isMobile={isMobile}
+                onChange={changeTab}
+              />
+            ) : null
+          }
+          itemCount={displayedVideos.length}
+          isLoading={loading}
           isError={Boolean(fetchError)}
-          errorMessage={fetchErrorMessage}
-          renderContent={renderContent}
-          loadingSkeleton={videosLoading && videos.length === 0 ? loadingSkeleton : undefined}
-          pagination={paginationNode}
-          paginationTop={paginationTopNode}
+          errorMessage={fetchError ? 'Failed to fetch channel videos. Please try again later.' : undefined}
+          renderContent={(mode) => (
+            <ChannelVideosContent
+              viewMode={mode}
+              videos={displayedVideos}
+              isMobile={isMobile}
+              selection={selection}
+              sortBy={query.sortBy}
+              sortOrder={query.sortOrder}
+              onSortChange={query.changeSort}
+              onToggleIgnore={rowActions.toggleIgnore}
+              onToggleProtection={rowActions.toggleProtection}
+              onMobileTooltip={setMobileTooltip}
+              onVideoClick={setModalVideo}
+            />
+          )}
+          loadingSkeleton={
+            loading && videos.length === 0 ? (
+              <ChannelVideosLoadingSkeleton count={query.effectivePageSize} />
+            ) : undefined
+          }
+          pagination={renderPaginationBar('bottom')}
+          paginationTop={renderPaginationBar('top')}
           paginationMode={useInfiniteScroll ? 'infinite' : 'pages'}
-          infiniteScrollSentinel={infiniteSentinel}
+          infiniteScrollSentinel={
+            useInfiniteScroll ? (
+              <InfiniteScrollSentinel
+                sentinelRef={loadMoreRef}
+                loadingMore={loading && videos.length > 0}
+                caughtUp={!hasNextPage && videos.length > 0 && !fetchError && !loading}
+                loadFailed={Boolean(fetchError) && videos.length > 0}
+                onRetry={() => void refetchVideos()}
+              />
+            ) : null
+          }
           isMobile={isMobile}
         />
       </Card>
 
       <ChannelVideosDialogs
         token={token}
-        downloadDialogOpen={downloadDialogOpen}
-        refreshConfirmOpen={refreshConfirmOpen}
-        deleteDialogOpen={deleteDialogOpen}
-        fetchAllError={fetchAllError}
+        downloadDialogOpen={bulkActions.downloadDialogOpen}
+        refreshConfirmOpen={listing.loadMoreConfirmOpen}
+        deleteDialogOpen={bulkActions.deleteDialogOpen}
+        fetchAllError={listing.loadMoreError}
         mobileTooltip={mobileTooltip}
         successMessage={successMessage}
         errorMessage={errorMessage}
-        videoCount={checkedBoxes.length}
-        missingVideoCount={getMissingVideoCount()}
-        selectedForDeletion={selectedForDeletion.length}
-        defaultResolution={defaultResolution}
-        defaultResolutionSource={defaultResolutionSource}
-        defaultAudioFormat={defaultAudioFormat}
-        defaultAudioFormatSource={defaultAudioFormatSource}
-        defaultProtect={config.protectManualDownloads}
+        videoCount={selection.checkedBoxes.length}
+        missingVideoCount={selection.missingVideoCount}
+        selectedForDeletion={selection.selectedForDeletion.length}
+        {...downloadDefaults}
         selectedTab={selectedTab || 'videos'}
-        tabLabel={getTabLabel(selectedTab || 'videos')}
+        tabLabel={tabLabel}
         tabStats={selectedTabStats}
-        onDownloadDialogClose={() => setDownloadDialogOpen(false)}
-        onDownloadConfirm={handleDownloadConfirm}
-        onRefreshCancel={handleRefreshCancel}
-        onRefreshConfirm={handleRefreshConfirm}
-        onDeleteCancel={handleDeleteCancel}
-        onDeleteConfirm={handleDeleteConfirm}
-        onFetchAllErrorClose={clearFetchAllError}
+        onDownloadDialogClose={bulkActions.closeDownloadDialog}
+        onDownloadConfirm={bulkActions.confirmDownload}
+        onRefreshCancel={listing.cancelLoadMore}
+        onRefreshConfirm={listing.confirmLoadMore}
+        onDeleteCancel={bulkActions.cancelDelete}
+        onDeleteConfirm={bulkActions.confirmDelete}
+        onFetchAllErrorClose={listing.clearLoadMoreError}
         onMobileTooltipClose={() => setMobileTooltip(null)}
-        onSuccessMessageClose={() => setSuccessMessage(null)}
-        onErrorMessageClose={() => setErrorMessage(null)}
+        onSuccessMessageClose={clearSuccessMessage}
+        onErrorMessageClose={clearErrorMessage}
       />
 
       <DownloadAllVideosDialog
-        open={downloadAllOpen}
-        onClose={() => setDownloadAllOpen(false)}
+        open={listing.downloadAllOpen}
+        onClose={listing.closeDownloadAll}
         channelId={channelId}
         token={token}
         tabType={selectedTab || 'videos'}
-        tabLabel={getTabLabel(selectedTab || 'videos')}
-        defaultResolution={defaultResolution}
-        defaultResolutionSource={defaultResolutionSource}
-        defaultAudioFormat={defaultAudioFormat}
-        defaultAudioFormatSource={defaultAudioFormatSource}
-        defaultProtect={config.protectManualDownloads}
-        runMetadataFetch={refreshVideos}
-        onStarted={handleDownloadAllStarted}
+        tabLabel={tabLabel}
+        {...downloadDefaults}
+        runMetadataFetch={listing.runMetadataFetch}
+        onStarted={listing.onDownloadAllStarted}
       />
 
       {modalVideo && (
@@ -1415,20 +292,12 @@ function ChannelVideos({
             setModalVideo(null);
             refetchVideos();
           }}
-          onProtectionChanged={(youtubeId, isProtected) => {
-            setLocalProtectedStatus((prev) => ({ ...prev, [youtubeId]: isProtected }));
-          }}
-          onIgnoreChanged={(youtubeId, isIgnored) => {
-            setLocalIgnoreStatus((prev) => ({ ...prev, [youtubeId]: isIgnored }));
-          }}
+          onProtectionChanged={overrides.setProtected}
+          onIgnoreChanged={(youtubeId, isIgnored) => overrides.setIgnored({ [youtubeId]: isIgnored })}
           onDownloadQueued={() => setModalVideo(null)}
           onRatingChanged={() => refetchVideos()}
-          onAvailabilityDetected={(youtubeId, availability, membersAccess) => {
-            setLocalAvailabilityStatus((prev) => ({ ...prev, [youtubeId]: { availability, members_access: membersAccess } }));
-          }}
-          onPublishedDateDetected={(youtubeId, isoDate) => {
-            setLocalPublishedAtStatus((prev) => ({ ...prev, [youtubeId]: isoDate }));
-          }}
+          onAvailabilityDetected={overrides.setAvailability}
+          onPublishedDateDetected={overrides.setPublishedAt}
         />
       )}
     </>

@@ -25,6 +25,7 @@ paths:
   - "client/src/components/FindChannels/**/*"
   - "client/src/components/SubscriptionImport/**/*"
   - "client/src/utils/tabDownloadStats.ts"
+  - "client/src/utils/channelTabs.ts"
 ---
 
 # Channels
@@ -40,8 +41,20 @@ Channel subscriptions, listings, title filters, per-tab download counts, channel
 - `channelVideosService.applyArchiveFlag` sets `inArchive` on the page `buildChannelVideosResponse` returns, so the date probe before each listing never reads the archive. The channel page counts such videos as previously downloaded, which turns on "Allow re-downloading".
 - The channel listing takes `deletedFilter` as the last positional argument through `channelModule` -> `channelVideosService` -> `channelVideoQuery`, and reads plain rows (`raw: true`): the library check spreads them, and a Sequelize instance loses its getters when spread.
 - `getChannelVideos` waits on yt-dlp only for a tab with no rows or no `last_fetched_by_tab` entry; otherwise it answers from the database and refreshes through `channelVideoFetcher.refreshTabTracked`, because that wait was the page's loading screen.
-- A finished `autoRefresh` stays in `fetchRegistry` as `lastResult` for 2 minutes; the client offers its new rows and reloads only an empty list, because a refetch moves rows under selections and cannot update an infinite list past page 1.
+- A finished `autoRefresh` stays in `fetchRegistry` as `lastResult` for 2 minutes; the client offers its new rows and reloads only an empty list, because a refetch moves rows under selections.
+- A listing the list request waited for also leaves a `lastResult`, which views that asked meanwhile need. The waiting client gets its `finishedAt` as `listingFinishedAt` and offers nothing for that result: its rows already hold those videos.
 - `useChannelVideos` reports a background refresh as `refreshSeq`, a new value per response, not a boolean: a latched flag never re-triggers tracking when the same view is refreshed again.
+- `ChannelVideos.tsx` is layout only; `useChannelVideosController` wires the list's hooks and has no test file of its own: `ChannelVideos.test.tsx` covers the wiring, and each hook's rules are tested beside it.
+- `useChannelVideoOverrides` drops ignore and protection toggles when the list is replaced (new `resetKey`, any page change), except when an infinite list appends a later page. A same-page reload keeps them, because it can answer before a toggle is saved.
+- `useChannelVideos.refetch` on an infinite list past page 1 requests every loaded page at once and replaces the list: merging one reloaded page left earlier rows stale. The page number stays, so toggles and scroll position hold.
+- `useChannelVideos.refetch` always runs the current render's fetch: Load More and delete call it after a long wait, and a captured one would reload the pages loaded back then over a list that has since grown.
+- The channel list pauses `useInfiniteScrollTrigger` while its last load failed and shows a Retry that calls `refetch`: the page number stays on the failed page, so loading the next one would skip its rows.
+- `useChannelVideos.topLoadSeq` changes on every load from the first row. `useNewVideosNotice` withdraws its offer on it, because a reload past page 1 keeps the page number and already brings in the offered videos.
+- `useChannelVideoQuery` returns to page 1 during render, not in an effect: an effect commits the old page with the new filter first, and the list requests that page before page 1.
+- `useInfiniteScrollTrigger` asks for a page whenever the sentinel is in range and nothing loads, and then not again until `loading` turns true: the sentinel can be reported again before the fetch starts, and a second ask would skip a page.
+- `useChannelTabs` uses only the first tabs answer per channel (the first request or a 2-second retry): a later one would reset the tab the user chose, and one from before a channel switch would show the previous channel's tabs.
+- `utils/channelTabs.ts` defines each channel tab (label, media type, auto-download label) for the channel page, its settings and the subscription list. `TabsEditor` keeps its own wording in a map typed by `ChannelTabType`, so a new tab must be added there to compile.
+- A new tab or media type also needs `tabsUtils.js` on the server and the client's media type lists that are not driven by tabs: `RssFeedsSection`, the API key `PolicyEditor`, `utils/videoStatus` and the manual download `VideoChip`.
 - Existence checks run after the response, so a YouTube removal shows one load later; a failed background refresh blocks another for that tab until its `lastResult` expires.
 - `channelFeedCheck` uses the `channel_id` and `UUMO` (members-only) feeds only to notice unlisted ids; rows come from the yt-dlp tab listing. A failed, truncated or mismatched feed is no information; a well-formed feed with no entries is valid.
 - The `UUMO` feed is read only after the channel feed answers and never counts toward the outage breaker. Its 404 means no members-only videos (remembered 24 hours), except for a channel with a `subscriber_only` row from the last 30 days, where it is an outage: no stamp.

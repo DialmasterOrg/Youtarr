@@ -39,6 +39,7 @@ import { RatingSelect } from '../shared/RatingSelect';
 import { RATING_OPTIONS } from '../../utils/ratings';
 import RatingBadge from '../shared/RatingBadge';
 import TabsEditor, { TabsEditorRefreshResult } from './components/TabsEditor';
+import { CHANNEL_TABS, CHANNEL_TAB_TYPES, getTabMediaType } from '../../utils/channelTabs';
 
 const M3U_SORT_ORDERS = ['oldest_first', 'newest_first'] as const;
 type M3uSortOrder = (typeof M3U_SORT_ORDERS)[number];
@@ -90,20 +91,6 @@ interface ChannelSettingsDialogProps {
   token: string | null;
   onSettingsSaved?: (settings: ChannelSettings & ChannelTabsState) => void;
 }
-
-const TAB_TO_MEDIA_TYPE: Record<string, string> = {
-  videos: 'video',
-  shorts: 'short',
-  streams: 'livestream',
-};
-
-const MEDIA_TYPE_LABEL: Record<string, string> = {
-  video: 'New Videos',
-  short: 'New Shorts',
-  livestream: 'New Live/Streams',
-};
-
-const MEDIA_TYPE_ORDER: string[] = ['video', 'short', 'livestream'];
 
 const regexExamples = [
   {
@@ -433,7 +420,7 @@ function ChannelSettingsDialog({
 
   const handleHiddenTabsChange = (nextHidden: string[]) => {
     const hiddenMediaTypes = new Set(
-      nextHidden.map((tab) => TAB_TO_MEDIA_TYPE[tab]).filter(Boolean)
+      nextHidden.map(getTabMediaType).filter((mediaType): mediaType is string => Boolean(mediaType))
     );
     setSettings((prev) => {
       const currentAuto = prev.auto_download_enabled_tabs
@@ -563,10 +550,9 @@ function ChannelSettingsDialog({
   };
 
   const hiddenTabsSet = new Set(settings.hidden_tabs);
-  const availableMediaTypes = MEDIA_TYPE_ORDER.filter((mediaType) => {
-    const tabType = Object.keys(TAB_TO_MEDIA_TYPE).find((t) => TAB_TO_MEDIA_TYPE[t] === mediaType);
-    return tabType !== undefined && detectedTabs.includes(tabType) && !hiddenTabsSet.has(tabType);
-  });
+  const autoDownloadTabs = CHANNEL_TAB_TYPES
+    .filter((tab) => detectedTabs.includes(tab) && !hiddenTabsSet.has(tab))
+    .map((tab) => CHANNEL_TABS[tab]);
 
   const renderSectionContent = (sectionId: string) => {
     switch (sectionId) {
@@ -594,13 +580,13 @@ function ChannelSettingsDialog({
                   Enable these to automatically download new content from this channel during scheduled tasks. Automatic downloads must be enabled in Settings -&gt; Core.
                 </Typography>
               </Alert>
-              {availableMediaTypes.length === 0 ? (
+              {autoDownloadTabs.length === 0 ? (
                 <Typography variant="body2" color="text.secondary">
                   No detected tabs are available for auto-download. Enable a tab above first.
                 </Typography>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
-                  {availableMediaTypes.map((mediaType) => (
+                  {autoDownloadTabs.map(({ mediaType, autoDownloadLabel }) => (
                     <FormControlLabel
                       key={mediaType}
                       control={
@@ -609,7 +595,7 @@ function ChannelSettingsDialog({
                           onChange={(e) => toggleAutoDownloadTab(mediaType, e.target.checked)}
                         />
                       }
-                      label={MEDIA_TYPE_LABEL[mediaType]}
+                      label={autoDownloadLabel}
                     />
                   ))}
                 </div>

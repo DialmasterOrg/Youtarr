@@ -566,6 +566,17 @@ describe('channelVideosService', () => {
       expect(result.freshFetchPerformed).toBe(true);
     });
 
+    test('names the listing it waited for by the finish time of its fetch-status result', async () => {
+      const listing = setupTab({ lastFetchedByTab: null });
+      listing.mockResolvedValue({ newVideos: 3 });
+
+      const result = await channelVideosService.getChannelVideos('UC123');
+
+      const { lastResult } = require('../fetchRegistry').isFetchInProgress('UC123', 'videos');
+      expect(lastResult.newVideos).toBe(3);
+      expect(result.listingFinishedAt).toBe(lastResult.finishedAt);
+    });
+
     test('waits for the listing when the tab has never been listed', async () => {
       const listing = setupTab({ lastFetchedByTab: JSON.stringify({ short: new Date().toISOString() }) });
       listing.mockResolvedValue({ newVideos: 3 });

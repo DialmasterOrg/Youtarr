@@ -48,3 +48,4 @@ Apply these when creating or substantially rewriting client code. Scope Discipli
 
 - Axios, with `headers: { 'x-access-token': token }`; hooks receive `token` from the calling component. Type requests and responses. Handle specific status codes (403, 404, 503) rather than generic catch-alls.
 - `hooks/useConfig.ts` and other older files use raw `fetch()`; do not copy them.
+- Log a failed axios request through `utils/requestError.describeRequestError`, never the error itself: an axios error carries its request, including the `x-access-token` header.

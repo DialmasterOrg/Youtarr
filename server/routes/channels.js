@@ -942,6 +942,10 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *                 freshFetchPerformed:
    *                   type: boolean
    *                   description: True when this request waited for a YouTube listing of the tab (a tab with no stored videos, or never listed) and it succeeded.
+   *                 listingFinishedAt:
+   *                   type: string
+   *                   format: date-time
+   *                   description: Present with `freshFetchPerformed`. The `finishedAt` of the `lastResult` that listing left on the fetch-status endpoint; the videos that result counts are already in this response.
    *                 refreshing:
    *                   type: boolean
    *                   description: True when a YouTube listing of the tab is running that this request did not wait for. The videos returned are the stored ones; follow the listing through the fetch-status endpoint, whose `lastResult` says how many videos it added.

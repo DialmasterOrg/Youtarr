@@ -37,11 +37,9 @@ export function useChannelVideoFilters(): UseChannelVideoFiltersReturn {
   const [inputMinDuration, setInputMinDuration] = useState<number | null>(null);
   const [inputMaxDuration, setInputMaxDuration] = useState<number | null>(null);
 
-  // Refs for debounce timers
   const minDurationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const maxDurationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Cleanup timers on unmount
   useEffect(() => {
     return () => {
       if (minDurationTimerRef.current) clearTimeout(minDurationTimerRef.current);
@@ -50,30 +48,24 @@ export function useChannelVideoFilters(): UseChannelVideoFiltersReturn {
   }, []);
 
   const setMinDuration = useCallback((value: number | null) => {
-    // Update input immediately for responsive UI
     setInputMinDuration(value);
 
-    // Clear existing timer
     if (minDurationTimerRef.current) {
       clearTimeout(minDurationTimerRef.current);
     }
 
-    // Debounce the actual filter update
     minDurationTimerRef.current = setTimeout(() => {
       setFilters((prev) => ({ ...prev, minDuration: value }));
     }, DEBOUNCE_DELAY);
   }, []);
 
   const setMaxDuration = useCallback((value: number | null) => {
-    // Update input immediately for responsive UI
     setInputMaxDuration(value);
 
-    // Clear existing timer
     if (maxDurationTimerRef.current) {
       clearTimeout(maxDurationTimerRef.current);
     }
 
-    // Debounce the actual filter update
     maxDurationTimerRef.current = setTimeout(() => {
       setFilters((prev) => ({ ...prev, maxDuration: value }));
     }, DEBOUNCE_DELAY);
@@ -88,11 +80,10 @@ export function useChannelVideoFilters(): UseChannelVideoFiltersReturn {
   }, []);
 
   const clearAllFilters = useCallback(() => {
-    // Clear any pending debounce timers
+    // A pending timer would set its duration again after the clear.
     if (minDurationTimerRef.current) clearTimeout(minDurationTimerRef.current);
     if (maxDurationTimerRef.current) clearTimeout(maxDurationTimerRef.current);
 
-    // Reset both input and filter state
     setInputMinDuration(null);
     setInputMaxDuration(null);
     setFilters(initialFilters);
