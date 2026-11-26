@@ -35,6 +35,7 @@ paths:
   - "client/src/utils/jobTypeLabel.ts"
   - "client/src/hooks/useLocalVideoStatus.ts"
   - "client/src/utils/videoResolution.ts"
+  - "client/src/utils/downloadOverrideSettings.ts"
   - "client/src/hooks/useDownloadPauseStatus.ts"
   - "client/src/components/layout/DownloadPauseBanner.tsx"
   - "client/src/components/shared/DownloadPauseAlert.tsx"

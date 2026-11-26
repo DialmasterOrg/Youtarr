@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTriggerDownloads } from '../../../hooks/useTriggerDownloads';
+import { toDownloadOverrideSettings } from '../../../utils/downloadOverrideSettings';
 import { isRemovedStatus } from '../../../utils/videoStatus';
 import { DownloadSettings } from '../../DownloadManager/ManualDownload/types';
 import { VideoSelectionState } from '../../shared/VideoList/hooks/useVideoSelection';
@@ -30,19 +31,6 @@ export interface ResultDownload {
   openForOne: (result: SearchResult) => void;
   close: () => void;
   confirm: (settings: DownloadSettings | null) => Promise<void>;
-}
-
-function toOverrideSettings(settings: DownloadSettings | null) {
-  if (!settings) return undefined;
-  return {
-    resolution: settings.resolution,
-    allowRedownload: settings.allowRedownload,
-    subfolder: settings.subfolder,
-    audioFormat: settings.audioFormat,
-    rating: settings.rating,
-    skipVideoFolder: settings.skipVideoFolder,
-    protect: settings.protect,
-  };
 }
 
 export function useResultDownload({ token, results, selection, activeVideos }: UseResultDownloadOptions): ResultDownload {
@@ -81,7 +69,7 @@ export function useResultDownload({ token, results, selection, activeVideos }: U
     const ids = targetIds.filter((id) => !activeVideos[id]?.state);
     if (ids.length === 0) return;
     const urls = ids.map((id) => `https://www.youtube.com/watch?v=${id}`);
-    const success = await triggerDownloads({ urls, overrideSettings: toOverrideSettings(settings) });
+    const success = await triggerDownloads({ urls, overrideSettings: toDownloadOverrideSettings(settings) });
     if (success === null) return;
     if (!success) {
       setError(QUEUE_FAILED_MESSAGE);

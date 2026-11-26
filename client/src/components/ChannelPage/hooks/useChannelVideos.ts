@@ -40,6 +40,14 @@ interface UseChannelVideosResult {
   // a refresh gives a new value, so a second refresh of the same view shows
   // as a change.
   refreshSeq: number | null;
+  // Set once a response for this view waited for a YouTube listing: the
+  // `finishedAt` of the result that listing left on fetch-status. The rows
+  // on hand already include what that result counts as new.
+  awaitedListingFinishedAt: string | null;
+  // A new value each time the list is loaded again from its first row: a
+  // first-page load, or the reload of every page of an infinite list. An
+  // appended page leaves it alone.
+  topLoadSeq: number | null;
   // The channel and tab the videos on hand were loaded for. After a tab
   // switch it still names the previous tab until the new tab's response.
   loadedView: string | null;
@@ -81,6 +89,10 @@ export function useChannelVideos({
   // carries over to another tab before that tab's own response arrives, and
   // the request that reported it.
   const [refresh, setRefresh] = useState<{ view: string; seq: number } | null>(null);
+  // Kept across later responses: the listing's result is reported after
+  // further pages of an infinite list may have loaded.
+  const [awaitedListing, setAwaitedListing] = useState<{ view: string; finishedAt: string } | null>(null);
+  const [topLoadSeq, setTopLoadSeq] = useState<number | null>(null);
   const [loadedView, setLoadedView] = useState<string | null>(null);
   const resetKeyRef = useRef<string | undefined>(resetKey);
   // Fire onFirstLoad once per channelId. Subsequent fetches (sort, page,
@@ -94,17 +106,24 @@ export function useChannelVideos({
   // of order (e.g. page 3 directly after page 1).
   const latestRequestId = useRef(0);
 
-  const fetchVideos = useCallback(async () => {
+  const fetchVideos = useCallback(async (reloadLoaded = false) => {
     if (!channelId || !token || !tabType) return;
 
     const requestId = ++latestRequestId.current;
     setLoading(true);
     setError(null);
 
+    // An infinite list past its first page holds every page loaded so far.
+    // Reloading only the current page would leave the earlier rows as they
+    // were, so a reload asks for all of them at once and replaces the list.
+    const reloadsAllPages = reloadLoaded && append && page > 1;
+    const requestPage = reloadsAllPages ? 1 : page;
+    const requestPageSize = reloadsAllPages ? page * pageSize : pageSize;
+
     try {
       const queryParams = new URLSearchParams({
-        page: page.toString(),
-        pageSize: pageSize.toString(),
+        page: requestPage.toString(),
+        pageSize: requestPageSize.toString(),
         searchQuery: searchQuery,
         sortBy: sortBy,
         sortOrder: sortOrder,
@@ -176,7 +195,7 @@ export function useChannelVideos({
       }
 
       if (data.videos !== undefined) {
-        if (!isReset && append && page > 1) {
+        if (!isReset && append && page > 1 && !reloadsAllPages) {
           setVideos((prev) => {
             const combined = [...prev, ...incomingVideos];
             const seen = new Set<string>();
@@ -192,12 +211,18 @@ export function useChannelVideos({
       } else if (isReset) {
         setVideos([]);
       }
+      if (requestPage === 1) {
+        setTopLoadSeq(requestId);
+      }
       setTotalCount(data.totalCount || 0);
       setLoadedView(`${channelId}:${tabType}`);
       setOldestVideoDate(data.oldestVideoDate || null);
       setAutoDownloadsEnabled(data.autoDownloadsEnabled || false);
       setAvailableTabs(data.availableTabs || []);
       setRefresh(data.refreshing === true ? { view: `${channelId}:${tabType}`, seq: requestId } : null);
+      if (typeof data.listingFinishedAt === 'string') {
+        setAwaitedListing({ view: `${channelId}:${tabType}`, finishedAt: data.listingFinishedAt });
+      }
       // Server sets fetchError when the upstream YouTube fetch failed and
       // no cached fallback was available. Surface it as an error so the UI
       // distinguishes "fetch failed" from "filter matched nothing".
@@ -228,6 +253,13 @@ export function useChannelVideos({
     fetchVideos();
   }, [fetchVideos]);
 
+  // Always the fetch of the current render. Load More and a delete call
+  // refetch after a long wait, and one captured before it would reload the
+  // pages loaded back then over a list that has since grown or moved on.
+  const fetchVideosRef = useRef(fetchVideos);
+  fetchVideosRef.current = fetchVideos;
+  const refetch = useCallback(() => fetchVideosRef.current(true), []);
+
   return {
     videos,
     totalCount,
@@ -237,7 +269,12 @@ export function useChannelVideos({
     autoDownloadsEnabled,
     availableTabs,
     refreshSeq: refresh !== null && refresh.view === `${channelId}:${tabType}` ? refresh.seq : null,
+    awaitedListingFinishedAt:
+      awaitedListing !== null && awaitedListing.view === `${channelId}:${tabType}`
+        ? awaitedListing.finishedAt
+        : null,
+    topLoadSeq,
     loadedView,
-    refetch: fetchVideos,
+    refetch,
   };
 }

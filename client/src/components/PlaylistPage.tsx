@@ -42,6 +42,7 @@ import { usePlaylistSyncUpdates } from './PlaylistPage/hooks/usePlaylistSyncUpda
 import DeleteVideosDialog from './shared/DeleteVideosDialog';
 import DownloadSettingsDialog from './DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from './DownloadManager/ManualDownload/types';
+import { toDownloadOverrideSettings } from '../utils/downloadOverrideSettings';
 import SubscriptionsBackButton from './shared/SubscriptionsBackButton';
 import VideoModal from './shared/VideoModal';
 import { VideoModalData } from './shared/VideoModal/types';
@@ -222,17 +223,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
   const handleConfirmDownload = useCallback(
     async (settings: DownloadSettings | null) => {
       setDownloadDialogOpen(false);
-      const overrideSettings = settings
-        ? {
-            resolution: settings.resolution,
-            allowRedownload: settings.allowRedownload,
-            subfolder: settings.subfolder,
-            audioFormat: settings.audioFormat,
-            rating: settings.rating,
-            skipVideoFolder: settings.skipVideoFolder,
-            protect: settings.protect,
-          }
-        : undefined;
+      const overrideSettings = toDownloadOverrideSettings(settings);
       const ids = pendingDownload.mode === 'selected' ? pendingDownload.ids.filter(id => !snapshot.videos[id]?.state) : undefined;
       if (ids && !ids.length) return;
       const ok = await handleAction('Download', () => triggerDownload(ids, overrideSettings));

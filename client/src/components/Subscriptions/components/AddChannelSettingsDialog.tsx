@@ -13,15 +13,10 @@ import {
   Typography,
 } from '../../ui';
 import { useConfig } from '../../../hooks/useConfig';
+import { CHANNEL_TABS, CHANNEL_TAB_TYPES } from '../../../utils/channelTabs';
 import { NewChannelSettings, PendingChannel, getNewChannelSettings } from '../newChannelSettings';
 import SubscriptionSettingsFields from './SubscriptionSettingsFields';
 
-// Channel tab types in display order, with the media type auto-download stores for each.
-const AUTO_DOWNLOAD_TABS = [
-  { tab: 'videos', mediaType: 'video', label: 'New Videos' },
-  { tab: 'shorts', mediaType: 'short', label: 'New Shorts' },
-  { tab: 'streams', mediaType: 'livestream', label: 'New Live/Streams' },
-];
 
 interface AddChannelSettingsDialogProps {
   open: boolean;
@@ -56,12 +51,14 @@ const AddChannelSettingsDialog: React.FC<AddChannelSettingsDialogProps> = ({
   if (!channel || !settings) return null;
 
   const detectedTabs = parseCsv(channel.available_tabs);
-  const tabOptions = AUTO_DOWNLOAD_TABS.filter(({ tab }) => detectedTabs.includes(tab));
+  const tabOptions = CHANNEL_TAB_TYPES
+    .filter((tab) => detectedTabs.includes(tab))
+    .map((tab) => CHANNEL_TABS[tab]);
   const enabledMediaTypes = parseCsv(settings.auto_download_enabled_tabs);
 
   const toggleMediaType = (mediaType: string, enabled: boolean) => {
-    const next = AUTO_DOWNLOAD_TABS
-      .map((option) => option.mediaType)
+    const next = CHANNEL_TAB_TYPES
+      .map((tab) => CHANNEL_TABS[tab].mediaType)
       .filter((type) => (type === mediaType ? enabled : enabledMediaTypes.includes(type)));
     setSettings({ ...settings, auto_download_enabled_tabs: next.join(',') });
   };
@@ -108,7 +105,7 @@ const AddChannelSettingsDialog: React.FC<AddChannelSettingsDialogProps> = ({
               </Typography>
             ) : (
               <div className="flex flex-wrap gap-4">
-                {tabOptions.map(({ mediaType, label }) => (
+                {tabOptions.map(({ mediaType, autoDownloadLabel }) => (
                   <FormControlLabel
                     key={mediaType}
                     control={
@@ -117,7 +114,7 @@ const AddChannelSettingsDialog: React.FC<AddChannelSettingsDialogProps> = ({
                         onChange={(e) => toggleMediaType(mediaType, e.target.checked)}
                       />
                     }
-                    label={label}
+                    label={autoDownloadLabel}
                   />
                 ))}
               </div>

@@ -203,6 +203,10 @@ class ChannelVideosService {
     // so it must NOT flip true on cache-only, background-refresh or
     // yt-dlp-failed-with-cache paths.
     let freshFetchPerformed = false;
+    // The `finishedAt` of the result that listing left for fetch-status. The
+    // client that waited uses it to tell that the result's videos are already
+    // in its rows; other clients still need the result to learn of them.
+    let listingFinishedAt;
     // True while a listing of this tab is running that this request did not
     // wait for; the client follows it through the fetch-status endpoint.
     let refreshing = false;
@@ -227,6 +231,7 @@ class ChannelVideosService {
           refreshing = this.isBackgroundRefreshInFlight(`${channelId}:${tabType}`);
         } else {
           freshFetchPerformed = true;
+          listingFinishedAt = fetchRegistry.getLastResult(`${channelId}:${tabType}`)?.finishedAt;
         }
       }
 
@@ -252,7 +257,7 @@ class ChannelVideosService {
         logger.warn({ err, channelId }, 'Video existence checks failed');
       });
 
-      return { ...response, freshFetchPerformed, refreshing };
+      return { ...response, freshFetchPerformed, refreshing, listingFinishedAt };
 
     } catch (error) {
       logger.error({ err: error, channelId }, 'Error fetching channel videos');

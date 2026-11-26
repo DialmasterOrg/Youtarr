@@ -8,6 +8,12 @@ interface UseNewVideosNoticeParams {
   // From useChannelVideos: set while the server is listing this tab in the
   // background, and different for every response that reports it.
   refreshSeq: number | null;
+  // From useChannelVideos: the `finishedAt` of the listing result the rows
+  // on hand already include, when their request waited for that listing.
+  awaitedListingFinishedAt: string | null;
+  // From useChannelVideos: changes each time the list is loaded again from
+  // its first row.
+  topLoadSeq: number | null;
   // Changes whenever the list restarts from its first page.
   resetKey: string;
   videos: ChannelVideo[];
@@ -32,11 +38,13 @@ interface UseNewVideosNoticeResult {
 
 // Follows a background refresh of the channel tab on screen and offers the
 // videos it found. The list never reloads on its own: a reload moves rows
-// under a selection and cannot update an infinite list past its first page.
+// under a selection.
 export function useNewVideosNotice({
   channelId,
   selectedTab,
   refreshSeq,
+  awaitedListingFinishedAt,
+  topLoadSeq,
   resetKey,
   videos,
   page,
@@ -68,6 +76,12 @@ export function useNewVideosNotice({
     if (page === 1) setNotice(null);
   }, [videos, page]);
 
+  // An infinite list past its first page reloads from the top too, with the
+  // page unchanged, and that reload brings in what the notice offers.
+  useEffect(() => {
+    setNotice(null);
+  }, [topLoadSeq]);
+
   // The server answered from its stored rows and is listing the tab in the
   // background: follow that listing instead of waiting for it. Keyed on the
   // response, not on a flag, so a later refresh of the same view is followed too.
@@ -97,6 +111,9 @@ export function useNewVideosNotice({
     usedResultRef.current = resultKey;
     if (channelId) onVideosLoaded?.(channelId);
     if (lastResult.newVideos === 0 || !viewKey) return;
+    // A tab's first listing: the list request waited for it and returned its
+    // rows. The server keeps the result for views that asked while it ran.
+    if (lastResult.finishedAt === awaitedListingFinishedAt) return;
     if (listIsEmpty) {
       // Nothing on screen for a reload to move: the tab's first listing was
       // still running when this view asked for its rows.
@@ -108,7 +125,7 @@ export function useNewVideosNotice({
       key: viewKey,
       count: (current && current.key === viewKey ? current.count : 0) + lastResult.newVideos,
     }));
-  }, [checkingViewKey, viewKey, refetchVideos, channelId, onVideosLoaded, listIsEmpty]);
+  }, [checkingViewKey, viewKey, refetchVideos, channelId, onVideosLoaded, listIsEmpty, awaitedListingFinishedAt]);
 
   useEffect(() => {
     onFetchComplete(handleFetchComplete);

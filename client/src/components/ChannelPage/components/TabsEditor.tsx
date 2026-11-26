@@ -10,9 +10,11 @@ import {
   Typography
 } from '../../ui';
 import { Refresh as RefreshIcon } from '../../../lib/icons';
+import { ChannelTabType } from '../../../types/Channel';
+import { CHANNEL_TAB_TYPES } from '../../../utils/channelTabs';
 
-const TAB_TYPE_ORDER: string[] = ['videos', 'shorts', 'streams'];
-const TAB_LABEL: Record<string, string> = {
+// This editor's own wording for the tabs.
+const TAB_LABEL: Record<ChannelTabType, string> = {
   videos: 'Videos',
   shorts: 'Shorts',
   streams: 'Live / Streams'
@@ -52,7 +54,7 @@ function TabsEditor({
   const allHidden = detectedTabs.length > 0 && effectiveTabs.length === 0;
 
   // Ensure tabs always render in a stable order, even if the backend returns them shuffled.
-  const orderedDetectedTabs = TAB_TYPE_ORDER.filter((tab) => detectedTabs.includes(tab));
+  const orderedDetectedTabs = CHANNEL_TAB_TYPES.filter((tab) => detectedTabs.includes(tab));
 
   const handleToggle = (tab: string, visible: boolean) => {
     // `visible` true  = checkbox checked = tab NOT hidden
@@ -126,7 +128,7 @@ function TabsEditor({
                   disabled={disabled || refreshing}
                 />
               }
-              label={TAB_LABEL[tab] || tab}
+              label={TAB_LABEL[tab]}
             />
           ))}
         </Box>

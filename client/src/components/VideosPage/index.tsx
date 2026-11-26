@@ -25,6 +25,7 @@ import HiddenDeletedNote from './components/HiddenDeletedNote';
 import { useMarkDeleted } from './hooks/useMarkDeleted';
 import DownloadSettingsDialog from '../DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from '../DownloadManager/ManualDownload/types';
+import { toDownloadOverrideSettings } from '../../utils/downloadOverrideSettings';
 import VideoCard from './components/VideoCard';
 import VideosTable from './components/VideosTable';
 import VideosListMobile from './components/VideosListMobile';
@@ -508,17 +509,7 @@ function VideosPage({ token }: VideosPageProps) {
         videoChannelMap[meta.youtubeId] = meta.channelId;
       }
     }
-    const overrideSettings = settings
-      ? {
-          resolution: settings.resolution,
-          allowRedownload: settings.allowRedownload,
-          subfolder: settings.subfolder,
-          audioFormat: settings.audioFormat,
-          rating: settings.rating,
-          skipVideoFolder: settings.skipVideoFolder,
-          protect: settings.protect,
-        }
-      : undefined;
+    const overrideSettings = toDownloadOverrideSettings(settings);
 
     const success = await triggerDownloads({ urls, overrideSettings, videoChannelMap });
     if (success === null) return;

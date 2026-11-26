@@ -46,6 +46,8 @@ describe('useNewVideosNotice', () => {
       channelId: 'UC123',
       selectedTab: 'videos',
       refreshSeq: 1,
+      awaitedListingFinishedAt: null,
+      topLoadSeq: 1,
       resetKey: 'UC123|videos',
       videos: storedVideos,
       page: 1,
@@ -130,6 +132,17 @@ describe('useNewVideosNotice', () => {
       expect(result.current.newCount).toBe(0);
     });
 
+    test('offers nothing for the listing the rows on screen waited for', () => {
+      // A tab's first listing: the list request waited for it and returned
+      // its rows, and its result is still reported when the listing ends.
+      const { result } = renderNotice({ refreshSeq: null, awaitedListingFinishedAt: FIRST_REFRESH_END });
+
+      act(() => completeFetch(found(50)));
+
+      expect(result.current.newCount).toBe(0);
+      expect(refetchVideos).not.toHaveBeenCalled();
+    });
+
     test('tells the parent the channel was listed', () => {
       renderNotice();
 
@@ -202,6 +215,15 @@ describe('useNewVideosNotice', () => {
       act(() => completeFetch(found(2)));
 
       rerender({ ...baseProps, videos: [...storedVideos] });
+
+      expect(result.current.newCount).toBe(0);
+    });
+
+    test('is withdrawn when an infinite list past its first page reloads from the top', () => {
+      const { result, rerender } = renderNotice({ page: 3 });
+      act(() => completeFetch(found(2)));
+
+      rerender({ ...baseProps, page: 3, topLoadSeq: 2, videos: [...storedVideos] });
 
       expect(result.current.newCount).toBe(0);
     });

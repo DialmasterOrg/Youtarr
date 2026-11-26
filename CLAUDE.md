@@ -101,7 +101,7 @@ These apply when you are authoring new code or doing an explicit rewrite. See Sc
 - **DRY when writing the third copy**: if you find yourself writing the same logic a third time in your own new code, extract it.
 - **Single responsibility**: one clear purpose per module, class or function. If a function name needs "and", split it.
 - **Extract deliberately, inline small snippets**: extract a block of roughly 30+ lines with its own props or state, or one used by two structurally different parents; inline one-off snippets. Three similar lines beat a premature abstraction. Before creating a file, decide whether it is substantial enough, which directory it belongs in, and which test file goes alongside it.
-- **File size targets for new files**: backend modules under ~500 lines, frontend components under ~300 lines. Legacy files that exceed them (`jobModule.js`, `channelSettingsModule.js`, `videoDeletionModule.js`, `VideosPage/`, `ChannelVideos.tsx`, `DownloadProgress.tsx`) are not examples to follow.
+- **File size targets for new files**: backend modules under ~500 lines, frontend components under ~300 lines. Legacy files that exceed them (`jobModule.js`, `channelSettingsModule.js`, `videoDeletionModule.js`, `VideosPage/`, `DownloadProgress.tsx`) are not examples to follow.
 - **Named constants for magic values**: timeouts, retry counts, limits and defaults.
 - **Early returns** for error and edge cases, to keep happy-path nesting shallow.
 - **Comments** only where the logic is not self-evident. Do not add docstrings, type comments or explanatory prose to code you did not change.

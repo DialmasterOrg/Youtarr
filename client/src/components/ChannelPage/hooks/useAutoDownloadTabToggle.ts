@@ -1,17 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
-
-const TAB_MEDIA_TYPE: Record<string, string> = {
-  videos: 'video',
-  shorts: 'short',
-  streams: 'livestream',
-};
-
-const TAB_LABEL: Record<string, string> = {
-  videos: 'Videos',
-  shorts: 'Shorts',
-  streams: 'Live',
-};
+import { getTabLabel, getTabMediaType } from '../../../utils/channelTabs';
 
 export type AutoDownloadToggleSeverity = 'success' | 'warning' | 'error';
 
@@ -104,9 +93,9 @@ export function useAutoDownloadTabToggle({
   }, []);
 
   const toggleTab = useCallback(async (tab: string, enabled: boolean) => {
-    const mediaType = TAB_MEDIA_TYPE[tab];
+    const mediaType = getTabMediaType(tab);
     if (!channelId || !mediaType) return;
-    const label = TAB_LABEL[tab];
+    const label = getTabLabel(tab);
     const requestChannelId = channelId;
     const previousValue = parseTabs(enabledTabs).join(',');
     const current = parseTabs(enabledTabs).filter((entry) => entry !== mediaType);
