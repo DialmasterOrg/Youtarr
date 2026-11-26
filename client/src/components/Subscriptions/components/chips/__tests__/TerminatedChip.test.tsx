@@ -14,10 +14,10 @@ describe('TerminatedChip', () => {
     expect(screen.queryByTestId('terminated-chip')).not.toBeInTheDocument();
   });
 
-  test('renders chip with Terminated label when terminatedAt is set', () => {
+  test('renders chip with its label when terminatedAt is set', () => {
     renderWithProviders(<TerminatedChip terminatedAt="2026-03-15T12:00:00Z" />);
     const chip = screen.getByTestId('terminated-chip');
-    expect(chip).toHaveTextContent('Terminated');
+    expect(chip).toHaveTextContent('Terminated or deleted');
   });
 
   test('uses an aria-label naming the formatted detection date', () => {
@@ -25,7 +25,7 @@ describe('TerminatedChip', () => {
     const chip = screen.getByTestId('terminated-chip');
     expect(chip).toHaveAttribute(
       'aria-label',
-      expect.stringContaining('YouTube terminated this channel; detected on')
+      expect.stringContaining('This channel was terminated or deleted on YouTube; detected on')
     );
   });
 

@@ -82,7 +82,7 @@ function buildSummaryText(summary) {
   if (summary.totalAlreadyDownloaded > 0) parts.push(`${summary.totalAlreadyDownloaded} already downloaded`);
   if (summary.totalNotAvailable > 0) parts.push(`${summary.totalNotAvailable} not available`);
   if (summary.totalTerminatedChannels > 0) {
-    parts.push(`${summary.totalTerminatedChannels} channel${summary.totalTerminatedChannels !== 1 ? 's' : ''} marked terminated`);
+    parts.push(`${summary.totalTerminatedChannels} channel${summary.totalTerminatedChannels !== 1 ? 's' : ''} marked terminated or deleted`);
   }
   const stoppedGroups = summary.stoppedGroups || [];
   for (const { group, reason, terminated } of stoppedGroups) {

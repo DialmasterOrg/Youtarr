@@ -17,7 +17,7 @@ describe('TerminatedNotice', () => {
   test('renders the full message with formatted date when terminatedAt is set', () => {
     renderWithProviders(<TerminatedNotice terminatedAt="2026-03-15T12:00:00Z" />);
     const notice = screen.getByTestId('terminated-notice');
-    expect(notice).toHaveTextContent(/YouTube terminated this channel; detected on/);
+    expect(notice).toHaveTextContent(/This channel was terminated or deleted on YouTube; detected on/);
     expect(notice).toHaveTextContent(/Scheduled downloads are disabled\./);
   });
 

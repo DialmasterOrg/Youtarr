@@ -24,16 +24,16 @@ describe('notification utils - terminated channel helpers', () => {
     });
 
     test('switches to termination headline when zero videos and one termination', () => {
-      expect(buildTitle(0, 1)).toBe('⚠️ Channel Termination Detected');
+      expect(buildTitle(0, 1)).toBe('⚠️ Terminated or Deleted Channel Detected');
     });
 
     test('pluralizes the termination headline for multiple events', () => {
-      expect(buildTitle(0, 3)).toBe('⚠️ 3 Channel Terminations Detected');
+      expect(buildTitle(0, 3)).toBe('⚠️ 3 Terminated or Deleted Channels Detected');
     });
 
     test('combines successes and failures in the title count', () => {
-      expect(buildTitle(0, 1, 1)).toBe('⚠️ 2 Channel Terminations Detected');
-      expect(buildTitle(0, 0, 1)).toBe('⚠️ Channel Termination Detected');
+      expect(buildTitle(0, 1, 1)).toBe('⚠️ 2 Terminated or Deleted Channels Detected');
+      expect(buildTitle(0, 0, 1)).toBe('⚠️ Terminated or Deleted Channel Detected');
     });
 
     test('falls back to video headline when all counts are zero', () => {
@@ -92,12 +92,12 @@ describe('notification utils - terminated channel helpers', () => {
 
   describe('buildTerminatedCountLabel', () => {
     test('singular form for count of 1', () => {
-      expect(buildTerminatedCountLabel(1)).toBe('1 channel marked terminated');
+      expect(buildTerminatedCountLabel(1)).toBe('1 channel marked terminated or deleted');
     });
 
     test('plural form for other counts', () => {
-      expect(buildTerminatedCountLabel(2)).toBe('2 channels marked terminated');
-      expect(buildTerminatedCountLabel(0)).toBe('0 channels marked terminated');
+      expect(buildTerminatedCountLabel(2)).toBe('2 channels marked terminated or deleted');
+      expect(buildTerminatedCountLabel(0)).toBe('0 channels marked terminated or deleted');
     });
   });
 
@@ -136,18 +136,18 @@ describe('notification utils - terminated channel helpers', () => {
 
   describe('buildTerminationFailureCountLabel', () => {
     test('singular form', () => {
-      expect(buildTerminationFailureCountLabel(1)).toBe('1 termination could not be auto-disabled');
+      expect(buildTerminationFailureCountLabel(1)).toBe('1 terminated or deleted channel could not be auto-disabled');
     });
 
     test('plural form', () => {
-      expect(buildTerminationFailureCountLabel(3)).toBe('3 terminations could not be auto-disabled');
+      expect(buildTerminationFailureCountLabel(3)).toBe('3 terminated or deleted channels could not be auto-disabled');
     });
   });
 
   describe('formatTerminationFailureLine', () => {
     test('renders a channel id with the auto-disable failure note', () => {
       expect(formatTerminationFailureLine('UC123')).toBe(
-        'UC123: detected as terminated but could not be auto-disabled (check the channel manually)'
+        'UC123: detected as terminated or deleted but could not be auto-disabled (check the channel manually)'
       );
     });
   });

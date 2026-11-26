@@ -526,7 +526,7 @@ async function finalizeDownloadJob({
       // Upgrade to warning shape when terminations were recorded.
       if (errorTracker.terminatedChannelIds.size > 0) {
         status = 'Complete with Warnings';
-        output = `${videoCount} videos, ${errorTracker.terminatedChannelIds.size} channel${errorTracker.terminatedChannelIds.size !== 1 ? 's' : ''} marked terminated.`;
+        output = `${videoCount} videos, ${errorTracker.terminatedChannelIds.size} channel${errorTracker.terminatedChannelIds.size !== 1 ? 's' : ''} marked terminated or deleted.`;
       } else {
         status = 'Complete';
         output = `${videoCount} videos.`;

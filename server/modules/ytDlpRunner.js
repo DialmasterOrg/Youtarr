@@ -14,7 +14,11 @@ const MEMBERS_ONLY_PATTERNS = [
 // YouTube uses two phrasings for terminations:
 //   "account has been terminated ..." (TOS violations)
 //   "channel was removed because it violated ..." (community guidelines)
-const TERMINATED_ACCOUNT_PATTERN = /(account has been terminated|channel was removed because it violated)/i;
+// A deleted channel is gone the same way: "This channel does not exist", or
+// yt-dlp's own "The channel/playlist does not exist ..." when YouTube
+// redirects its URL to the home page. "The playlist does not exist" is an
+// empty tab and must not match.
+const TERMINATED_ACCOUNT_PATTERN = /(account has been terminated|channel was removed because it violated|channel(?:\/playlist)? does not exist)/i;
 
 function isMembersOnlyError(message = '') {
   const normalized = String(message);

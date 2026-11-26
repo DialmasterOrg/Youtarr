@@ -229,6 +229,31 @@ describe('YtdlpOutputRouter', () => {
       expect(MessageEmitter.emitMessage).not.toHaveBeenCalled();
     });
 
+    it('does not treat a video title containing "ERROR:" as an error', () => {
+      router.handleStdoutChunk('[download] aaaaaaaaaaa: How to fix ERROR: 0x80070057 has already been recorded in the archive\n');
+      router.handleStdoutChunk('[download] How to fix ERROR: 0x80070057 does not pass filter (duration>60), skipping ..\n');
+
+      expect(errorTracker.handleErrorLine).not.toHaveBeenCalled();
+    });
+
+    it('reads a line split across chunks as one line, so a title cut before "ERROR:" is not an error', () => {
+      router.handleStdoutChunk('[download] How to fix ');
+      router.handleStdoutChunk('ERROR: 0x80070057 does not pass filter (duration>60), skipping ..\n');
+
+      expect(errorTracker.handleErrorLine).not.toHaveBeenCalled();
+      expect(router.filterSkippedCount).toBe(1);
+    });
+
+    it('reads a persisted marker split across chunks as one line', () => {
+      router.handleStdoutChunk('[Youtarr:videoPersis');
+      router.handleStdoutChunk('ted] abc123XYZ_d\n');
+
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast', null, 'download', 'videosUpdated', { youtubeId: 'abc123XYZ_d' }
+      );
+      expect(monitor.processProgress).not.toHaveBeenCalled();
+    });
+
     it('routes WARNING lines to the error tracker without suppressing them', () => {
       router.handleStdoutChunk('WARNING: Unable to download video subtitles for \'en\': Read timed out.\n');
 
@@ -848,6 +873,15 @@ describe('YtdlpOutputRouter', () => {
         'downloadProgress',
         { text: 'Progress 2', progress: null }
       );
+    });
+
+    it('processes a last stdout line that never got its newline', () => {
+      router.handleStdoutChunk('ERROR: final line');
+      expect(errorTracker.handleErrorLine).not.toHaveBeenCalled();
+
+      router.dispose();
+
+      expect(errorTracker.handleErrorLine).toHaveBeenCalledWith('ERROR: final line', 'stdout');
     });
 
     it('is a no-op when nothing is pending', () => {

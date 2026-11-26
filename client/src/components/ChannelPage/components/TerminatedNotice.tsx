@@ -24,7 +24,7 @@ const TerminatedNotice: React.FC<TerminatedNoticeProps> = ({ terminatedAt, isMob
     return null;
   }
 
-  const message = `YouTube terminated this channel; detected on ${formatDetectionDate(terminatedAt)}. Scheduled downloads are disabled.`;
+  const message = `This channel was terminated or deleted on YouTube; detected on ${formatDetectionDate(terminatedAt)}. Scheduled downloads are disabled.`;
 
   return (
     <Box

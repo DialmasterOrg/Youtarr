@@ -354,7 +354,7 @@ class DownloadExecutor {
         try {
           stopRunTimers();
 
-          // Flushes the stderr remainder, then ignores later output.
+          // Flushes the stdout and stderr remainders, then ignores later output.
           router.dispose();
 
           // Check for manual termination before clearing references

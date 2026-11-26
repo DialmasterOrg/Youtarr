@@ -526,8 +526,8 @@ describe('DownloadProgress', () => {
     await waitFor(() => {
       expect(screen.getByText('Last download')).toBeInTheDocument();
     });
-    expect(screen.getByText(/1 channel marked terminated/)).toBeInTheDocument();
-    expect(screen.getByText('Channels Marked Terminated by YouTube')).toBeInTheDocument();
+    expect(screen.getByText(/1 channel marked terminated or deleted/)).toBeInTheDocument();
+    expect(screen.getByText('Channels Terminated or Deleted on YouTube')).toBeInTheDocument();
     expect(screen.getByText(/• Banned Channel/)).toBeInTheDocument();
   });
 
@@ -559,8 +559,8 @@ describe('DownloadProgress', () => {
     await waitFor(() => {
       expect(screen.getByText('Last download')).toBeInTheDocument();
     });
-    expect(screen.getByText(/1 termination could not be auto-disabled/)).toBeInTheDocument();
-    expect(screen.getByText('Terminations Could Not Be Auto-Disabled')).toBeInTheDocument();
+    expect(screen.getByText(/1 terminated or deleted channel could not be auto-disabled/)).toBeInTheDocument();
+    expect(screen.getByText('Terminated or Deleted Channels Could Not Be Auto-Disabled')).toBeInTheDocument();
     expect(screen.getByText(/• UC1234567890123456789012/)).toBeInTheDocument();
   });
 
@@ -589,7 +589,7 @@ describe('DownloadProgress', () => {
     await waitFor(() => {
       expect(screen.getByText('Last download')).toBeInTheDocument();
     });
-    expect(screen.queryByText('Channels Marked Terminated by YouTube')).not.toBeInTheDocument();
+    expect(screen.queryByText('Channels Terminated or Deleted on YouTube')).not.toBeInTheDocument();
   });
 
   test('displays final summary with single video grammar', async () => {
