@@ -7,10 +7,6 @@ import {
   Button,
   Card,
   CardContent,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Snackbar,
   Typography,
 } from './ui';
@@ -42,6 +38,7 @@ import { isDeletable, isDownloadable, toModalData } from './PlaylistPage/compone
 import { usePlaylistVideoDeletion } from './PlaylistPage/hooks/usePlaylistVideoDeletion';
 import { usePlaylistVideoIgnore } from './PlaylistPage/hooks/usePlaylistVideoIgnore';
 import { usePlaylistSyncUpdates } from './PlaylistPage/hooks/usePlaylistSyncUpdates';
+import ConfirmDialog from './shared/ConfirmDialog';
 import DeleteVideosDialog from './shared/DeleteVideosDialog';
 import LoadMoreFailed from './shared/LoadMoreFailed';
 import DownloadSettingsDialog from './DownloadManager/ManualDownload/DownloadSettingsDialog';
@@ -548,59 +545,37 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         defaultProtect={config.protectManualDownloads}
       />
 
-      <Dialog
+      <ConfirmDialog
         open={confirmPublicOpen}
-        onClose={() => setConfirmPublicOpen(false)}
-        maxWidth="sm"
-        fullWidth
+        title={`Make playlist ${playlist.public_on_servers ? 'private' : 'public'}?`}
+        confirmLabel="Confirm"
+        onCancel={() => setConfirmPublicOpen(false)}
+        onConfirm={() => handleConfirmPublic(!playlist.public_on_servers)}
       >
-        <DialogTitle>
-          Make playlist {playlist.public_on_servers ? 'private' : 'public'}?
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2">
-            {playlist.public_on_servers
-              ? 'On Jellyfin and Emby, this playlist will no longer be visible to other users. ' +
-                'Plex playlists are shared manually, so this setting does not affect them.'
-              : 'On Jellyfin and Emby, this playlist will become visible to other users. ' +
-                'Plex has no automatic public setting; share Plex playlists with each user inside Plex.'}
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button variant="text" onClick={() => setConfirmPublicOpen(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            onClick={() => handleConfirmPublic(!playlist.public_on_servers)}
-          >
-            Confirm
-          </Button>
-        </DialogActions>
-      </Dialog>
+        <Typography variant="body2">
+          {playlist.public_on_servers
+            ? 'On Jellyfin and Emby, this playlist will no longer be visible to other users. ' +
+              'Plex playlists are shared manually, so this setting does not affect them.'
+            : 'On Jellyfin and Emby, this playlist will become visible to other users. ' +
+              'Plex has no automatic public setting; share Plex playlists with each user inside Plex.'}
+        </Typography>
+      </ConfirmDialog>
 
-      <Dialog open={ignore.dialogOpen} onClose={ignore.cancelBulkIgnore} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          Ignore {ignore.confirmCount} video{ignore.confirmCount === 1 ? '' : 's'}?
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2">
-            {ignore.confirmListedCount === ignore.confirmCount
-              ? (ignore.confirmCount === 1 ? 'This video is ' : 'These videos are ')
-              : `${ignore.confirmListedCount} of them ${ignore.confirmListedCount === 1 ? 'is' : 'are'} `}
-            listed in this playlist&apos;s .m3u file and synced server playlists. Ignoring
-            removes {ignore.confirmListedCount === 1 ? 'it' : 'them'} from both. No file is deleted.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button variant="text" onClick={ignore.cancelBulkIgnore}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={ignore.confirmBulkIgnore}>
-            Ignore
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ConfirmDialog
+        open={ignore.dialogOpen}
+        title={`Ignore ${ignore.confirmCount} video${ignore.confirmCount === 1 ? '' : 's'}?`}
+        confirmLabel="Ignore"
+        onCancel={ignore.cancelBulkIgnore}
+        onConfirm={ignore.confirmBulkIgnore}
+      >
+        <Typography variant="body2">
+          {ignore.confirmListedCount === ignore.confirmCount
+            ? (ignore.confirmCount === 1 ? 'This video is ' : 'These videos are ')
+            : `${ignore.confirmListedCount} of them ${ignore.confirmListedCount === 1 ? 'is' : 'are'} `}
+          listed in this playlist&apos;s .m3u file and synced server playlists. Ignoring
+          removes {ignore.confirmListedCount === 1 ? 'it' : 'them'} from both. No file is deleted.
+        </Typography>
+      </ConfirmDialog>
 
       <Snackbar
         open={snackbar.open}

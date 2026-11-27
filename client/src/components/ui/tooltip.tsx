@@ -71,15 +71,21 @@ const Tooltip: React.FC<TooltipProps> = ({
       return;
     }
 
-    const handlePointerDown = (event: PointerEvent) => {
+    const handleOutside = (event: Event) => {
       if (!triggerRef.current?.contains(event.target as Node) && !tooltipRef.current?.contains(event.target as Node)) {
         setTouchOpen(false);
         onClose?.();
       }
     };
 
-    document.addEventListener('pointerdown', handlePointerDown, true);
-    return () => document.removeEventListener('pointerdown', handlePointerDown, true);
+    // Focus leaving the trigger closes it too: a tapped button that opens a
+    // dialog moves focus into it, and no outside tap follows.
+    document.addEventListener('pointerdown', handleOutside, true);
+    document.addEventListener('focusin', handleOutside, true);
+    return () => {
+      document.removeEventListener('pointerdown', handleOutside, true);
+      document.removeEventListener('focusin', handleOutside, true);
+    };
   }, [touchOpen, onClose]);
 
   React.useEffect(() => {

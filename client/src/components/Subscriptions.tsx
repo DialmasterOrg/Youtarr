@@ -7,7 +7,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   Divider,
   Grid,
   LinearProgress,
@@ -51,6 +50,7 @@ import {
   normalizeSubFolderKey,
   formatSubFolderLabel,
 } from '../utils/channelHelpers';
+import ConfirmDialog from './shared/ConfirmDialog';
 import HelpDialog from './Subscriptions/HelpDialog';
 import PlaylistHelpDialog from './Subscriptions/PlaylistHelpDialog';
 import PendingSaveBanner from './Subscriptions/components/PendingSaveBanner';
@@ -861,43 +861,33 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
         </div>
       </Grow>
 
-      <Dialog
+      <ConfirmDialog
         open={deleteConfirmOpen}
-        onClose={() => setDeleteConfirmOpen(false)}
+        tone="danger"
+        title="Remove channel?"
+        confirmLabel="Remove"
+        onCancel={() => setDeleteConfirmOpen(false)}
+        onConfirm={handleDeleteConfirm}
       >
-        <DialogTitle>Remove channel?</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Removing this channel will stop automatic downloads but won't delete existing videos or history.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
-          <Button onClick={handleDeleteConfirm} color="error">
-            Remove
-          </Button>
-        </DialogActions>
-      </Dialog>
+        <Typography>
+          Removing this channel will stop automatic downloads but won't delete existing videos or history.
+        </Typography>
+      </ConfirmDialog>
 
-      <Dialog
+      <ConfirmDialog
         open={playlistDeleteConfirmOpen}
-        onClose={() => setPlaylistDeleteConfirmOpen(false)}
+        tone="danger"
+        title="Remove playlist?"
+        confirmLabel="Remove"
+        onCancel={() => setPlaylistDeleteConfirmOpen(false)}
+        onConfirm={handlePlaylistDeleteConfirm}
       >
-        <DialogTitle>Remove playlist?</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Removing this playlist will stop automatic downloads and hide it from your
-            subscriptions. Existing videos, media server playlists, and .m3u files won't be
-            deleted. Re-adding it later restores its previous settings.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPlaylistDeleteConfirmOpen(false)}>Cancel</Button>
-          <Button onClick={handlePlaylistDeleteConfirm} color="error">
-            Remove
-          </Button>
-        </DialogActions>
-      </Dialog>
+        <Typography>
+          Removing this playlist will stop automatic downloads and hide it from your
+          subscriptions. Existing videos, media server playlists, and .m3u files won't be
+          deleted. Re-adding it later restores its previous settings.
+        </Typography>
+      </ConfirmDialog>
 
       <HelpDialog open={helpDialogOpen} onClose={() => setHelpDialogOpen(false)} isMobile={isMobile} />
 

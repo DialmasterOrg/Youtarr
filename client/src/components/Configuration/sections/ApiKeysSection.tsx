@@ -11,7 +11,7 @@ import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 
 import { locationUtils } from '../../../utils/location';
 import BookmarkletKeysSection from './ApiKeysSection/BookmarkletKeysSection';
-import ConfirmKeyActionDialog from './ApiKeysSection/ConfirmKeyActionDialog';
+import ConfirmDialog from '../../shared/ConfirmDialog';
 import CreateKeyDialog from './ApiKeysSection/CreateKeyDialog';
 import CreatedKeyDialog from './ApiKeysSection/CreatedKeyDialog';
 import EditKeyDialog from './ApiKeysSection/EditKeyDialog';
@@ -250,8 +250,9 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
         onCopy={(text, label) => void copyToClipboard(text, label)}
       />
 
-      <ConfirmKeyActionDialog
+      <ConfirmDialog
         open={regenerateConfirm.key !== null}
+        tone="danger"
         title="Regenerate API Key?"
         confirmLabel="Regenerate Key"
         busyLabel="Regenerating…"
@@ -269,10 +270,11 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
           Its permissions and approved channels will stay the same. The replacement key is
           shown only once, so copy it before closing the next dialog.
         </Typography>
-      </ConfirmKeyActionDialog>
+      </ConfirmDialog>
 
-      <ConfirmKeyActionDialog
+      <ConfirmDialog
         open={revokeConfirm.key !== null}
+        tone="danger"
         title="Revoke API Key?"
         confirmLabel="Revoke"
         busy={revokeConfirm.busy}
@@ -285,7 +287,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
         <Typography variant="body2" color="secondary" className="mt-2">
           Any integration using this key will stop working immediately. Its audit history is retained.
         </Typography>
-      </ConfirmKeyActionDialog>
+      </ConfirmDialog>
 
       <Snackbar
         open={snackbar.open}

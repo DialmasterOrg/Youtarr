@@ -1,14 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import {
-  Alert,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Typography,
-} from '../../ui';
+import { Alert, Typography } from '../../ui';
 import { Checkbox, FormControlLabel } from '../../ui/form';
+import ConfirmDialog from '../../shared/ConfirmDialog';
 
 interface RescanAnywayDialogProps {
   open: boolean;
@@ -56,45 +49,40 @@ const RescanAnywayDialog: React.FC<RescanAnywayDialogProps> = ({
   }, [open]);
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Rescan anyway</DialogTitle>
-
-      <DialogContent>
-        <div className="space-y-3">
-          <Typography variant="body2" className="break-words">
-            {folderMessage ?? 'The last rescan could not find most of the videos stored in a folder.'} Youtarr is not
-            marking the videos stored there missing, in case a drive or network share is unmounted. Only continue if you
-            removed the files yourself. If a drive or network share is unmounted, mount it instead.
-          </Typography>
-          <Typography variant="body2">
-            If you moved your library on the host, change the volume mapping for the downloads folder in your Docker
-            setup and restart Youtarr instead. Changing YOUTUBE_OUTPUT_DIR alone does not move it.
-          </Typography>
-          <Typography variant="body2" className="font-semibold">
-            {describeAffected(affected, present, exact)}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            You can then mark them as deleted from this card.
-          </Typography>
-          <Alert severity="warning">
-            Nothing on disk is touched, but with a drive unmounted this would mark every video on it missing.
-          </Alert>
-          <FormControlLabel
-            control={<Checkbox checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} />}
-            label={acknowledgement(affected, exact)}
-          />
-        </div>
-      </DialogContent>
-
-      <DialogActions>
-        <Button onClick={onClose} variant="contained" color="primary" autoFocus>
-          Cancel
-        </Button>
-        <Button onClick={onConfirm} variant="outlined" color="warning" disabled={pending || !acknowledged}>
-          Rescan anyway
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <ConfirmDialog
+      open={open}
+      tone="warning"
+      title="Rescan anyway"
+      confirmLabel="Rescan anyway"
+      confirmDisabled={pending || !acknowledged}
+      onCancel={onClose}
+      onConfirm={onConfirm}
+    >
+      <div className="space-y-3">
+        <Typography variant="body2" className="break-words">
+          {folderMessage ?? 'The last rescan could not find most of the videos stored in a folder.'} Youtarr is not
+          marking the videos stored there missing, in case a drive or network share is unmounted. Only continue if you
+          removed the files yourself. If a drive or network share is unmounted, mount it instead.
+        </Typography>
+        <Typography variant="body2">
+          If you moved your library on the host, change the volume mapping for the downloads folder in your Docker
+          setup and restart Youtarr instead. Changing YOUTUBE_OUTPUT_DIR alone does not move it.
+        </Typography>
+        <Typography variant="body2" className="font-semibold">
+          {describeAffected(affected, present, exact)}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          You can then mark them as deleted from this card.
+        </Typography>
+        <Alert severity="warning">
+          Nothing on disk is touched, but with a drive unmounted this would mark every video on it missing.
+        </Alert>
+        <FormControlLabel
+          control={<Checkbox checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} />}
+          label={acknowledgement(affected, exact)}
+        />
+      </div>
+    </ConfirmDialog>
   );
 };
 

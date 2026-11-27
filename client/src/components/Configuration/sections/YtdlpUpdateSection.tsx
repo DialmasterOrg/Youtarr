@@ -5,11 +5,7 @@ import {
   Button,
   Chip,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
   DialogContentText,
-  DialogTitle,
   FormControl,
   FormControlLabel,
   FormHelperText,
@@ -25,6 +21,7 @@ import {
   ArrowRight as ArrowForwardIcon,
 } from 'lucide-react';
 import { YtDlpVersionInfo, YtDlpUpdateStatus } from '../hooks/useYtDlpUpdate';
+import ConfirmDialog from '../../shared/ConfirmDialog';
 import { ConfigurationCard } from '../common/ConfigurationCard';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../types';
@@ -194,37 +191,25 @@ export const YtdlpUpdateSection: React.FC<YtdlpUpdateSectionProps> = ({
         </>
       )}
 
-      <Dialog
+      <ConfirmDialog
         open={showUpdateDialog}
-        onClose={() => setShowUpdateDialog(false)}
-        aria-labelledby="ytdlp-update-dialog-title"
-        aria-describedby="ytdlp-update-dialog-description"
+        title="Update yt-dlp?"
+        confirmLabel="Update"
+        onCancel={() => setShowUpdateDialog(false)}
+        onConfirm={() => {
+          setShowUpdateDialog(false);
+          onYtDlpUpdate?.();
+        }}
       >
-        <DialogTitle id="ytdlp-update-dialog-title">Update yt-dlp?</DialogTitle>
-        <DialogContent>
-          <DialogContentText id="ytdlp-update-dialog-description">
-            This will update yt-dlp from{' '}
-            <strong>{ytDlpVersionInfo?.currentVersion || 'current version'}</strong> to{' '}
-            <strong>{ytDlpVersionInfo?.latestVersion || 'latest version'}</strong>.
-          </DialogContentText>
-          <DialogContentText className="mt-4">
-            Newer versions are not guaranteed to be fully compatible with Youtarr. Updating is only recommended if you are experiencing issues with downloading videos.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowUpdateDialog(false)}>Cancel</Button>
-          <Button
-            onClick={() => {
-              setShowUpdateDialog(false);
-              onYtDlpUpdate?.();
-            }}
-            variant="contained"
-            color="primary"
-          >
-            Update
-          </Button>
-        </DialogActions>
-      </Dialog>
+        <DialogContentText>
+          This will update yt-dlp from{' '}
+          <strong>{ytDlpVersionInfo?.currentVersion || 'current version'}</strong> to{' '}
+          <strong>{ytDlpVersionInfo?.latestVersion || 'latest version'}</strong>.
+        </DialogContentText>
+        <DialogContentText className="mt-4">
+          Newer versions are not guaranteed to be fully compatible with Youtarr. Updating is only recommended if you are experiencing issues with downloading videos.
+        </DialogContentText>
+      </ConfirmDialog>
     </ConfigurationCard>
   );
 };

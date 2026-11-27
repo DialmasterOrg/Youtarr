@@ -4,11 +4,7 @@ import {
   Box,
   Button,
   Checkbox,
-  Dialog,
-  DialogActions,
-  DialogContent,
   DialogContentText,
-  DialogTitle,
   FormControl,
   FormControlLabel,
   FormHelperText,
@@ -21,6 +17,7 @@ import {
   TextField,
   Typography,
 } from '../../ui';
+import ConfirmDialog from '../../shared/ConfirmDialog';
 import { ConfigurationCard } from '../common/ConfigurationCard';
 import { ConfigState, SnackbarState } from '../types';
 import { useDownloadsFeedToken } from '../hooks/useDownloadsFeedToken';
@@ -258,20 +255,18 @@ export const RssFeedsSection: React.FC<RssFeedsSectionProps> = ({
         </Grid>
       )}
 
-      <Dialog open={confirmingNewUrl} onClose={() => setConfirmingNewUrl(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Create a new feed URL?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            The current URL stops working right away. You&apos;ll need to add the new URL to your RSS reader.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmingNewUrl(false)}>Cancel</Button>
-          <Button variant="contained" onClick={createNewUrl}>
-            Replace URL
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ConfirmDialog
+        open={confirmingNewUrl}
+        tone="danger"
+        title="Create a new feed URL?"
+        confirmLabel="Replace URL"
+        onCancel={() => setConfirmingNewUrl(false)}
+        onConfirm={createNewUrl}
+      >
+        <DialogContentText>
+          The current URL stops working right away. You&apos;ll need to add the new URL to your RSS reader.
+        </DialogContentText>
+      </ConfirmDialog>
     </ConfigurationCard>
   );
 };

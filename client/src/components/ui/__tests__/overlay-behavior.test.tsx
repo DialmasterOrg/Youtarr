@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Menu, Popover, MenuItem as PlainMenuItem } from '../menu';
 import { Select, MenuItem } from '../select';
@@ -261,6 +261,25 @@ describe('mobile tooltip interactions', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Tooltip body');
 
     await user.click(document.body);
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  test('closes when focus moves elsewhere, as it does when the tapped button opens a dialog', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <>
+        <Tooltip title="Tooltip body">
+          <button type="button">Remove</button>
+        </Tooltip>
+        <button type="button">Cancel</button>
+      </>
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Remove' }));
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+
+    act(() => screen.getByRole('button', { name: 'Cancel' }).focus());
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
 

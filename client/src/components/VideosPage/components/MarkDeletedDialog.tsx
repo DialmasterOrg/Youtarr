@@ -1,13 +1,7 @@
 import React from 'react';
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  Typography,
-} from '../../ui';
+import { Typography } from '../../ui';
 import { FileX as MarkDeletedIcon } from 'lucide-react';
+import ConfirmDialog from '../../shared/ConfirmDialog';
 
 interface MarkDeletedDialogProps {
   open: boolean;
@@ -32,37 +26,29 @@ const MarkDeletedDialog: React.FC<MarkDeletedDialogProps> = ({
   skippedCount,
   pending,
 }) => (
-  <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-    <DialogTitle>
-      <MarkDeletedIcon size={20} className="shrink-0" />
-      Mark as deleted
-    </DialogTitle>
-
-    <DialogContent>
-      <div className="space-y-3">
-        <Typography component="p" variant="body2">
-          {count} missing {videos(count)} will be marked as deleted and hidden by default.
-        </Typography>
-        {skippedCount > 0 && (
-          <Typography component="p" variant="body2" color="text.secondary">
-            {skippedCount} selected {videos(skippedCount)} {skippedCount === 1 ? 'is' : 'are'} not missing and will not change.
-          </Typography>
-        )}
+  <ConfirmDialog
+    open={open}
+    tone="warning"
+    title={<><MarkDeletedIcon size={20} className="shrink-0" />Mark as deleted</>}
+    confirmLabel={`Mark ${count} as deleted`}
+    confirmDisabled={pending || count === 0}
+    onCancel={onClose}
+    onConfirm={onConfirm}
+  >
+    <div className="space-y-3">
+      <Typography component="p" variant="body2">
+        {count} missing {videos(count)} will be marked as deleted and hidden by default.
+      </Typography>
+      {skippedCount > 0 && (
         <Typography component="p" variant="body2" color="text.secondary">
-          The record is kept, so the video can still be re-downloaded; if its file turns up again, the rescan marks it downloaded.
+          {skippedCount} selected {videos(skippedCount)} {skippedCount === 1 ? 'is' : 'are'} not missing and will not change.
         </Typography>
-      </div>
-    </DialogContent>
-
-    <DialogActions>
-      <Button onClick={onClose} variant="contained" color="primary" autoFocus>
-        Cancel
-      </Button>
-      <Button onClick={onConfirm} variant="outlined" color="warning" disabled={pending || count === 0}>
-        Mark {count} as deleted
-      </Button>
-    </DialogActions>
-  </Dialog>
+      )}
+      <Typography component="p" variant="body2" color="text.secondary">
+        The record is kept, so the video can still be re-downloaded; if its file turns up again, the rescan marks it downloaded.
+      </Typography>
+    </div>
+  </ConfirmDialog>
 );
 
 export default MarkDeletedDialog;
