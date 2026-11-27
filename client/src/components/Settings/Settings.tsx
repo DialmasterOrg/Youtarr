@@ -5,7 +5,6 @@ import {
   Snackbar,
   Typography,
 } from '../ui';
-import { Info as InfoIcon } from '../../lib/icons';
 import { Link as RouterLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import PlexLibrarySelector from '../PlexLibrarySelector';
 import PlexAuthDialog from '../PlexAuthDialog';
@@ -82,7 +81,6 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
     message: '',
     severity: 'success',
   });
-  const [mobileTooltip, setMobileTooltip] = useState<string | null>(null);
   const [filenamePreviewedPrefix, setFilenamePreviewedPrefix] = useState<string | null>(null);
   const [channelApplyTarget, setChannelApplyTarget] = useState<'stable' | 'nightly' | null>(null);
 
@@ -324,7 +322,6 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
                 deploymentEnvironment={deploymentEnvironment}
                 isPlatformManaged={isPlatformManaged}
                 onConfigChange={handleConfigChange}
-                onMobileTooltipClick={setMobileTooltip}
                 token={token}
                 filenameTemplateSaveRequirement={filenameTemplateSaveRequirement}
                 onFilenameTemplatePreviewSuccess={handleFilenameTemplatePreviewSuccess}
@@ -343,7 +340,7 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
               token={token}
             />}
           />
-          <Route path="appearance" element={<AppearanceSettingsSection onMobileTooltipClick={setMobileTooltip} />} />
+          <Route path="appearance" element={<AppearanceSettingsSection />} />
           <Route
             path="plex"
             element={
@@ -358,7 +355,6 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
                 onTestConnection={testPlexConnection}
                 onOpenLibrarySelector={openLibrarySelector}
                 onOpenPlexAuthDialog={() => setOpenPlexAuthDialog(true)}
-                onMobileTooltipClick={setMobileTooltip}
                 token={token}
               />
             }
@@ -406,7 +402,6 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
               <SponsorBlockSection
                 config={config}
                 onConfigChange={handleConfigChange}
-                onMobileTooltipClick={setMobileTooltip}
               />
             }
           />
@@ -419,7 +414,6 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
                 setConfig={setConfig}
                 onConfigChange={handleConfigChange}
                 setSnackbar={setSnackbar}
-                onMobileTooltipClick={setMobileTooltip}
               />
             }
           />
@@ -430,7 +424,6 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
                 token={token}
                 config={config}
                 onConfigChange={handleConfigChange}
-                onMobileTooltipClick={setMobileTooltip}
                 setSnackbar={setSnackbar}
               />
             }
@@ -468,7 +461,6 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
                   deploymentEnvironment={deploymentEnvironment}
                   isPlatformManaged={isPlatformManaged}
                   onConfigChange={handleConfigChange}
-                  onMobileTooltipClick={setMobileTooltip}
                   ytDlpVersionInfo={ytDlpVersionInfo}
                   ytDlpUpdateStatus={ytDlpUpdateStatus}
                   onYtDlpUpdate={performYtDlpUpdate}
@@ -476,12 +468,10 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
                 <DownloadPerformanceSection
                   config={config}
                   onConfigChange={handleConfigChange}
-                  onMobileTooltipClick={setMobileTooltip}
                 />
                 <YtdlpOptionsSection
                   config={config}
                   onConfigChange={handleConfigChange}
-                  onMobileTooltipClick={setMobileTooltip}
                   token={token}
                   savedCustomArgsCheck={customArgsCheck}
                 />
@@ -498,7 +488,6 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
                 config={config}
                 storageAvailable={storageAvailable}
                 onConfigChange={handleConfigChange}
-                onMobileTooltipClick={setMobileTooltip}
               />
             }
           />
@@ -510,7 +499,6 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
                 config={config}
                 storageAvailable={storageAvailable}
                 onConfigChange={handleConfigChange}
-                onMobileTooltipClick={setMobileTooltip}
               />
             }
           />
@@ -598,16 +586,6 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
       >
         <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
           {snackbar.message}
-        </Alert>
-      </Snackbar>
-
-      <Snackbar
-        open={mobileTooltip !== null}
-        onClose={() => setMobileTooltip(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setMobileTooltip(null)} severity="info" icon={<InfoIcon />}>
-          {mobileTooltip}
         </Alert>
       </Snackbar>
     </div>

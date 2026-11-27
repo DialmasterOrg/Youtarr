@@ -11,7 +11,7 @@ import {
 } from '../../ui';
 import { Refresh as RefreshIcon, MoreHorizontal } from '../../../lib/icons';
 import { MediaServerStatus, MediaServerType, Playlist, PlaylistSyncStatus as SyncStatus } from '../../../types/playlist';
-import InfoHint from '../../shared/InfoHint';
+import { InfoTooltip } from '../../shared/InfoTooltip';
 import PlaylistSyncChips from './PlaylistSyncChips';
 import PlaylistSyncStatus from './PlaylistSyncStatus';
 
@@ -63,7 +63,7 @@ const MediaServerSyncGroup: React.FC<MediaServerSyncGroupProps> = ({
         <Typography variant="overline" color="text.secondary">
           Media Server Sync
         </Typography>
-        <InfoHint label="About media server sync">
+        <InfoTooltip label="About media server sync" text={
           <div>
             <p className="mb-2">
               Pick which connected servers show this playlist. Only servers connected in
@@ -81,7 +81,7 @@ const MediaServerSyncGroup: React.FC<MediaServerSyncGroupProps> = ({
               downloaded without a file of that type are left out.
             </p>
           </div>
-        </InfoHint>
+        } />
       </div>
 
       <div>
@@ -117,7 +117,7 @@ const MediaServerSyncGroup: React.FC<MediaServerSyncGroupProps> = ({
           }
           label="Public on media servers"
         />
-        <InfoHint label="About public playlists">
+        <InfoTooltip label="About public playlists" text={
           <div>
             <p className="mb-2">
               When on, Jellyfin and Emby make this playlist visible to other users on the
@@ -128,7 +128,7 @@ const MediaServerSyncGroup: React.FC<MediaServerSyncGroupProps> = ({
               inside Plex.
             </p>
           </div>
-        </InfoHint>
+        } />
       </div>
 
       <div className="flex flex-wrap gap-2 items-center">

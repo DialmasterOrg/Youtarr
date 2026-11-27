@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import ConfirmDialog from '../../shared/ConfirmDialog';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
-import { InfoTooltip } from '../common/InfoTooltip';
+import { InfoTooltip } from '../../shared/InfoTooltip';
 import { ConfigState, SnackbarState } from '../types';
 import {
   getDefaultNameForUrl,
@@ -51,7 +51,6 @@ interface NotificationsSectionProps {
   token: string | null;
   config: ConfigState;
   onConfigChange: (updates: Partial<ConfigState>) => void;
-  onMobileTooltipClick?: (text: string) => void;
   setSnackbar: (snackbar: SnackbarState) => void;
 }
 
@@ -59,7 +58,6 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
   token,
   config,
   onConfigChange,
-  onMobileTooltipClick,
   setSnackbar,
 }) => {
   const [newUrl, setNewUrl] = useState('');
@@ -328,7 +326,6 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
             {' '}— supports 100+ services including Discord, Telegram, Slack, and email.
             <InfoTooltip
               text="Receive notifications when new videos are downloaded successfully."
-              onMobileClick={onMobileTooltipClick}
             />
           </Typography>
         </Grid>

@@ -42,11 +42,13 @@ const Tooltip: React.FC<TooltipProps> = ({
     ? { position: 'relative', display: 'flex', width: '100%' }
     : { position: 'relative', display: 'inline-flex' };
   const [touchOpen, setTouchOpen] = React.useState(false);
+  const [hoverOpen, setHoverOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLElement | null>(null);
   const [coarsePointer, setCoarsePointer] = React.useState(false);
   const [touchPosition, setTouchPosition] = React.useState<{ top: number; left: number } | null>(null);
   const tooltipRef = React.useRef<HTMLDivElement | null>(null);
   const [touchTooltipStyle, setTouchTooltipStyle] = React.useState<React.CSSProperties | null>(null);
+  const touchTooltipId = React.useId();
 
   React.useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
@@ -74,6 +76,8 @@ const Tooltip: React.FC<TooltipProps> = ({
     const handleOutside = (event: Event) => {
       if (!triggerRef.current?.contains(event.target as Node) && !tooltipRef.current?.contains(event.target as Node)) {
         setTouchOpen(false);
+        // The hover tooltip must not surface in the bubble's place.
+        setHoverOpen(false);
         onClose?.();
       }
     };
@@ -199,8 +203,14 @@ const Tooltip: React.FC<TooltipProps> = ({
     );
   }
 
-  const childWithTouch = !disableTouchListener && coarsePointer
+  // A finger tap opens the bubble on any device. The pointer media query only
+  // names the main pointer, so on a touchscreen laptop it reports the trackpad,
+  // and Radix ignores touch; the event's own pointer type is what tells.
+  // The open bubble describes its trigger and is a live region, so a screen
+  // reader announces text that a tap brings up.
+  const childWithTouch = !disableTouchListener
     ? React.cloneElement(children, {
+        ...(touchOpen ? { 'aria-describedby': touchTooltipId } : {}),
         ref: (node: HTMLElement | null) => {
           triggerRef.current = node;
           const childRef = (children as any).ref;
@@ -211,7 +221,7 @@ const Tooltip: React.FC<TooltipProps> = ({
           }
         },
         onPointerUp: (e: React.PointerEvent) => {
-          if (e.pointerType !== 'mouse') {
+          if (coarsePointer ? e.pointerType !== 'mouse' : e.pointerType === 'touch') {
             if (triggerRef.current) {
               const rect = triggerRef.current.getBoundingClientRect();
               const top = placement.startsWith('bottom') ? rect.bottom + 8 : rect.top - 8;
@@ -222,11 +232,27 @@ const Tooltip: React.FC<TooltipProps> = ({
           (children.props as any).onPointerUp?.(e);
         },
         onClick: (e: React.MouseEvent) => {
-          setTouchOpen(true);
+          if (coarsePointer) setTouchOpen(true);
           (children.props as any).onClick?.(e);
         },
       })
     : children;
+
+  const touchBubble = touchOpen && touchPosition && typeof document !== 'undefined'
+    ? createPortal(
+      <div
+        ref={tooltipRef}
+        id={touchTooltipId}
+        role="tooltip"
+        aria-live="polite"
+        className={cn(tooltipClasses, 'animate-fade-in')}
+        style={touchTooltipStyle ?? undefined}
+      >
+        {title}
+      </div>,
+      document.body
+    )
+    : null;
 
   if (coarsePointer) {
     return (
@@ -234,49 +260,40 @@ const Tooltip: React.FC<TooltipProps> = ({
         <span style={triggerWrapperStyle}>
           {childWithTouch}
         </span>
-        {touchOpen && touchPosition && typeof document !== 'undefined'
-          ? createPortal(
-            <div
-              ref={tooltipRef}
-              role="tooltip"
-              className={cn(tooltipClasses, 'animate-fade-in')}
-              style={touchTooltipStyle ?? undefined}
-            >
-              {title}
-            </div>,
-            document.body
-          )
-          : null}
+        {touchBubble}
       </>
     );
   }
 
   return (
-    <TooltipProvider>
-      <TooltipPrimitive.Root
-        open={undefined}
-        onOpenChange={(o) => {
-          if (!o) {
-            setTouchOpen(false);
-          }
-        }}
-        delayDuration={disableHoverListener ? 999999 : enterDelay}
-      >
-        <TooltipPrimitive.Trigger asChild>{childWithTouch}</TooltipPrimitive.Trigger>
-        <TooltipPrimitive.Portal>
-          <TooltipPrimitive.Content
-            side={side}
-            align={align}
-            sideOffset={arrow ? 4 : 6}
-            collisionPadding={getOverlayInsets()}
-            className={cn(tooltipClasses, 'animate-fade-in')}
-          >
-            {title}
-            {arrow && <TooltipPrimitive.Arrow className="fill-foreground" />}
-          </TooltipPrimitive.Content>
-        </TooltipPrimitive.Portal>
-      </TooltipPrimitive.Root>
-    </TooltipProvider>
+    <>
+      <TooltipProvider>
+        {/* Radix stays shut while a tap's bubble is up: the tap also focuses the
+            trigger, which opens Radix, and the click that follows closes it. */}
+        <TooltipPrimitive.Root
+          open={hoverOpen && !touchOpen}
+          onOpenChange={(o) => {
+            if (!touchOpen) setHoverOpen(o);
+          }}
+          delayDuration={disableHoverListener ? 999999 : enterDelay}
+        >
+          <TooltipPrimitive.Trigger asChild>{childWithTouch}</TooltipPrimitive.Trigger>
+          <TooltipPrimitive.Portal>
+            <TooltipPrimitive.Content
+              side={side}
+              align={align}
+              sideOffset={arrow ? 4 : 6}
+              collisionPadding={getOverlayInsets()}
+              className={cn(tooltipClasses, 'animate-fade-in')}
+            >
+              {title}
+              {arrow && <TooltipPrimitive.Arrow className="fill-foreground" />}
+            </TooltipPrimitive.Content>
+          </TooltipPrimitive.Portal>
+        </TooltipPrimitive.Root>
+      </TooltipProvider>
+      {touchBubble}
+    </>
   );
 };
 

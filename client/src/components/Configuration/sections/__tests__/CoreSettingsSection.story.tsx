@@ -1,6 +1,6 @@
 import { MemoryRouter } from 'react-router-dom';
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, userEvent, within } from 'storybook/test';
 import React, { useState } from 'react';
 import { http, HttpResponse } from 'msw';
 import { DEFAULT_CONFIG } from '../../../../config/configSchema';
@@ -42,7 +42,6 @@ const meta: Meta<typeof CoreSettingsSection> = {
     token: 'storybook-token',
     deploymentEnvironment: { platform: null, isWsl: false },
     isPlatformManaged: { plexUrl: false, authEnabled: true, useTmpForDownloads: false, ytdlpUpdates: false, externalApiEnabled: false },
-    onMobileTooltipClick: fn(),
   },
 };
 

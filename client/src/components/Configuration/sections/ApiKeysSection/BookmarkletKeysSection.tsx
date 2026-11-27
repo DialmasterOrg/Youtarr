@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Button, Chip, IconButton, Paper, TextField, Tooltip, Typography } from '../../../ui';
 import { Plus as AddIcon, Trash2 as DeleteIcon } from '../../../../lib/icons';
-import { InfoTooltip } from '../../common/InfoTooltip';
+import { InfoTooltip } from '../../../shared/InfoTooltip';
 import { formatKeyDate } from './ExternalKeyCard';
 import { ApiKey, ApiKeyRole, STATUS_READ_ROLE } from './useApiKeys';
 

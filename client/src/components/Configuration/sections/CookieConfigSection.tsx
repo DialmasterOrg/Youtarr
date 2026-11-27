@@ -11,7 +11,6 @@ interface CookieConfigSectionProps {
   setConfig: React.Dispatch<React.SetStateAction<ConfigState>>;
   onConfigChange: (updates: Partial<ConfigState>) => void;
   setSnackbar: React.Dispatch<React.SetStateAction<SnackbarState>>;
-  onMobileTooltipClick?: (text: string) => void;
 }
 
 function getChip(cookiesEnabled: boolean, status: CookieStatus | null) {

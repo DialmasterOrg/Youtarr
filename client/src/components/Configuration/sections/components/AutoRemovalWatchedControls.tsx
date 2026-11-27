@@ -12,7 +12,7 @@ import {
   Switch,
   Typography,
 } from '../../../ui';
-import { InfoTooltip } from '../../common/InfoTooltip';
+import { InfoTooltip } from '../../../shared/InfoTooltip';
 import { ConfigState } from '../../types';
 
 const DAYS_SINCE_WATCHED_OPTIONS = ['1', '3', '7', '14', '30', '60', '90'];
@@ -21,13 +21,11 @@ const MIN_VIDEO_AGE_OPTIONS = ['7', '14', '30', '60', '90', '180', '365'];
 interface AutoRemovalWatchedControlsProps {
   config: ConfigState;
   onConfigChange: (updates: Partial<ConfigState>) => void;
-  onMobileTooltipClick?: (text: string) => void;
 }
 
 export const AutoRemovalWatchedControls: React.FC<AutoRemovalWatchedControlsProps> = ({
   config,
   onConfigChange,
-  onMobileTooltipClick,
 }) => {
   const daysSinceWatchedLabelId = useId();
   const minVideoAgeLabelId = useId();
@@ -47,7 +45,6 @@ export const AutoRemovalWatchedControls: React.FC<AutoRemovalWatchedControlsProp
           />
           <InfoTooltip
             text="Removes videos after they have been watched on your media server(s). What counts as watched follows the rule configured in Watch Status settings. Videos that have never been synced are treated as unwatched and are never removed by this rule."
-            onMobileClick={onMobileTooltipClick}
           />
         </Box>
 

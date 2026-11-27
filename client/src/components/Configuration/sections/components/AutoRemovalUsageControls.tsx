@@ -1,19 +1,17 @@
 import React from 'react';
 import { Box, Grid, Typography } from '../../../ui';
-import { InfoTooltip } from '../../common/InfoTooltip';
+import { InfoTooltip } from '../../../shared/InfoTooltip';
 import { StorageSizeInput } from '../../common/StorageSizeInput';
 import { ConfigState } from '../../types';
 
 interface AutoRemovalUsageControlsProps {
   config: ConfigState;
   onConfigChange: (updates: Partial<ConfigState>) => void;
-  onMobileTooltipClick?: (text: string) => void;
 }
 
 export const AutoRemovalUsageControls: React.FC<AutoRemovalUsageControlsProps> = ({
   config,
   onConfigChange,
-  onMobileTooltipClick,
 }) => (
   <Grid item xs={12}>
     <Box className="rounded-lg border border-border p-4">
@@ -32,7 +30,6 @@ export const AutoRemovalUsageControls: React.FC<AutoRemovalUsageControlsProps> =
             />
             <InfoTooltip
               text="Adds up the size of every video Youtarr has downloaded (video and MP3 files), using the sizes recorded at download time and refreshed by the nightly rescan. Unlike the low disk space rule, this works on network shares and cloud storage where free space is reported incorrectly. Thumbnails, subtitles and metadata files are not counted."
-              onMobileClick={onMobileTooltipClick}
             />
           </Box>
         </Grid>

@@ -23,7 +23,7 @@ import {
 import { YtDlpVersionInfo, YtDlpUpdateStatus } from '../hooks/useYtDlpUpdate';
 import ConfirmDialog from '../../shared/ConfirmDialog';
 import { ConfigurationCard } from '../common/ConfigurationCard';
-import { InfoTooltip } from '../common/InfoTooltip';
+import { InfoTooltip } from '../../shared/InfoTooltip';
 import { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../types';
 import { formatDateTime } from '../../../utils/formatters';
 
@@ -32,7 +32,6 @@ interface YtdlpUpdateSectionProps {
   deploymentEnvironment: DeploymentEnvironment;
   isPlatformManaged: PlatformManagedState;
   onConfigChange: (updates: Partial<ConfigState>) => void;
-  onMobileTooltipClick?: (text: string) => void;
   ytDlpVersionInfo?: YtDlpVersionInfo;
   ytDlpUpdateStatus?: YtDlpUpdateStatus;
   onYtDlpUpdate?: () => void;
@@ -43,7 +42,6 @@ export const YtdlpUpdateSection: React.FC<YtdlpUpdateSectionProps> = ({
   deploymentEnvironment,
   isPlatformManaged,
   onConfigChange,
-  onMobileTooltipClick,
   ytDlpVersionInfo,
   ytDlpUpdateStatus,
   onYtDlpUpdate,
@@ -139,7 +137,6 @@ export const YtdlpUpdateSection: React.FC<YtdlpUpdateSectionProps> = ({
                   Stable is the official tested release. Nightly gets extractor fixes days earlier but may occasionally break.
                   <InfoTooltip
                     text="Youtarr keeps yt-dlp on the selected channel: manual updates, automatic updates, and app restarts all install the latest release of this channel. Switching back to Stable downgrades to the latest stable release."
-                    onMobileClick={onMobileTooltipClick}
                   />
                 </span>
               </FormHelperText>
@@ -159,7 +156,6 @@ export const YtdlpUpdateSection: React.FC<YtdlpUpdateSectionProps> = ({
             />
             <InfoTooltip
               text="Checks for a new yt-dlp release on the selected update channel on the configured schedule and installs it automatically. If an update fails, Youtarr keeps running on the previous version."
-              onMobileClick={onMobileTooltipClick}
             />
           </Box>
 

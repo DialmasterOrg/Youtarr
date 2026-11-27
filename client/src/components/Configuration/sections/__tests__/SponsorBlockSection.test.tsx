@@ -17,7 +17,6 @@ const createSectionProps = (
 ): React.ComponentProps<typeof SponsorBlockSection> => ({
   config: createConfig(),
   onConfigChange: jest.fn(),
-  onMobileTooltipClick: jest.fn(),
   ...overrides,
 });
 
@@ -877,26 +876,6 @@ describe('SponsorBlockSection Component', () => {
           music_offtopic: true,
         }
       });
-    });
-  });
-
-  describe('InfoTooltip Integration', () => {
-    test('renders section with InfoTooltip support', async () => {
-      const user = userEvent.setup();
-      const props = createSectionProps();
-      renderWithProviders(<SponsorBlockSection {...props} />);
-
-
-      expect(screen.getByText('Enable SponsorBlock')).toBeInTheDocument();
-    });
-
-    test('works without onMobileTooltipClick prop', async () => {
-      const user = userEvent.setup();
-      const props = createSectionProps({ onMobileTooltipClick: undefined });
-      renderWithProviders(<SponsorBlockSection {...props} />);
-
-
-      expect(screen.getByText('SponsorBlock Integration')).toBeInTheDocument();
     });
   });
 

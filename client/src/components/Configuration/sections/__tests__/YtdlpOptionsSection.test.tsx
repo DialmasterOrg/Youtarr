@@ -37,7 +37,6 @@ const setup = ({ initialConfig = {}, token = 'tok', savedCustomArgsCheck = null 
       <YtdlpOptionsSection
         config={config}
         onConfigChange={handleConfigChange}
-        onMobileTooltipClick={jest.fn()}
         token={token}
         savedCustomArgsCheck={savedCustomArgsCheck}
       />

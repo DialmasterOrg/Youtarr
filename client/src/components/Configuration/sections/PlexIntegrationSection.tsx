@@ -12,7 +12,7 @@ import {
   Typography,
 } from '../../ui';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
-import { InfoTooltip } from '../common/InfoTooltip';
+import { InfoTooltip } from '../../shared/InfoTooltip';
 import { ConfigState, PlatformManagedState, PlexConnectionStatus } from '../types';
 import { PlexSubfolderMappings } from './PlexSubfolderMappings';
 import { PlexLibrary } from '../../../utils/plexLibraries';
@@ -30,7 +30,6 @@ interface PlexIntegrationSectionProps {
   onTestConnection: () => void;
   onOpenLibrarySelector: () => void;
   onOpenPlexAuthDialog: () => void;
-  onMobileTooltipClick?: (text: string) => void;
   token?: string | null;
 }
 
@@ -45,7 +44,6 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
   onTestConnection,
   onOpenLibrarySelector,
   onOpenPlexAuthDialog,
-  onMobileTooltipClick,
   token = null,
 }) => {
   // Auto-expand the playlist-scope disclosure when a test reveals an unclaimed
@@ -166,7 +164,6 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
                 ) : (
                   <InfoTooltip
                     text="The IP address of your Plex server. Use 'host.docker.internal' on Docker Desktop (Windows/macOS), or the machine's LAN IP (e.g., 192.168.x.x) when running Docker natively on Linux. You can also use your public IP for your Plex server."
-                    onMobileClick={onMobileTooltipClick}
                   />
                 )}
               </Box>
@@ -191,7 +188,6 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
                 Plex Port
                 <InfoTooltip
                   text="The TCP port Plex listens on. Defaults to 32400. Update this if you have changed the port in Plex settings or use a reverse proxy mapping."
-                  onMobileClick={onMobileTooltipClick}
                 />
               </Box>
             }
@@ -226,7 +222,6 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
                   ? 'HTTPS setting managed by platform'
                   : 'Enable if your Plex server uses HTTPS (e.g., via reverse proxy with SSL/TLS)'
               }
-              onMobileClick={onMobileTooltipClick}
             />
           </Box>
           <Typography variant="caption" color="secondary" className="ml-8 block">
@@ -259,7 +254,6 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
                 </Button>
                 <InfoTooltip
                   text="Click 'Get Key' to automatically obtain your Plex API key by logging into Plex, or enter it manually."
-                  onMobileClick={onMobileTooltipClick}
                 />
                 <Typography variant="caption" color="secondary">
                   <a
@@ -299,7 +293,6 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
             </Button>
             <InfoTooltip
               text="Test Connection will verify and auto-save your Plex credentials if successful."
-              onMobileClick={onMobileTooltipClick}
             />
           </Box>
           <DefaultPlexLibraryDisplay
@@ -308,7 +301,6 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
             plexConnectionStatus={plexConnectionStatus}
             hasPlexServerConfigured={hasPlexServerConfigured}
             hasPlexApiKey={Boolean(config.plexApiKey)}
-            onMobileTooltipClick={onMobileTooltipClick}
           />
         </Grid>
 

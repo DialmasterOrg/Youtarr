@@ -10,18 +10,16 @@ import {
 } from '../../ui';
 import { RadioGroup, RadioGroupItem } from '../../ui/form';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
-import { InfoTooltip } from '../common/InfoTooltip';
+import { InfoTooltip } from '../../shared/InfoTooltip';
 import { useThemeEngine } from '../../../contexts/ThemeEngineContext';
 import { ALL_THEMES, ThemeMode } from '../../../themes';
 
 interface AppearanceSettingsSectionProps {
-  onMobileTooltipClick?: (text: string) => void;
 }
 
 const isThemeMode = (value: string): value is ThemeMode => value in ALL_THEMES;
 
 export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps> = ({
-  onMobileTooltipClick,
 }) => {
   const {
     themeMode,
@@ -64,7 +62,6 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
             />
             <InfoTooltip
               text="Toggle between light and dark color mode. Your preference is saved locally."
-              onMobileClick={onMobileTooltipClick}
             />
           </div>
         </Grid>
@@ -83,7 +80,6 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
             />
             <InfoTooltip
               text={motionDescription}
-              onMobileClick={onMobileTooltipClick}
             />
           </div>
         </Grid>
@@ -102,7 +98,6 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
             </Typography>
             <InfoTooltip
               text="Choose between the Playful Geometric, Linear Modern, and Flat visual systems."
-              onMobileClick={onMobileTooltipClick}
             />
           </div>
         </Grid>
@@ -174,7 +169,6 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
                     />
                     <InfoTooltip
                       text="Show the circular Youtarr logo in the header"
-                      onMobileClick={onMobileTooltipClick}
                     />
                   </div>
                   <div className="flex items-center gap-2 -ml-2">
@@ -191,7 +185,6 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
                     />
                     <InfoTooltip
                       text="Show the Youtarr wordmark image in the header"
-                      onMobileClick={onMobileTooltipClick}
                     />
                   </div>
                   <div className="flex items-center gap-2 -ml-2">
@@ -208,7 +201,6 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
                     />
                     <InfoTooltip
                       text="Show icons next to the main navigation and section buttons"
-                      onMobileClick={onMobileTooltipClick}
                     />
                   </div>
                 </div>

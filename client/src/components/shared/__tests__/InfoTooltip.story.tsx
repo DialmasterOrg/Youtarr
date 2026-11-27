@@ -1,13 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, userEvent, within } from 'storybook/test';
 import { InfoTooltip } from '../InfoTooltip';
 
 const meta: Meta<typeof InfoTooltip> = {
-  title: 'Components/Configuration/InfoTooltip',
+  title: 'Components/Shared/InfoTooltip',
   component: InfoTooltip,
   args: {
     text: 'Tooltip details',
-    onMobileClick: fn(),
   },
 };
 

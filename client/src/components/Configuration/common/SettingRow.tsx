@@ -1,7 +1,7 @@
 import React from 'react';
 import { cn } from '../../../lib/cn';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
-import { InfoTooltip } from './InfoTooltip';
+import { InfoTooltip } from '../../shared/InfoTooltip';
 
 const PHONE_QUERY = '(max-width: 767px)';
 
@@ -18,7 +18,6 @@ export interface SettingRowProps {
   description?: React.ReactNode;
   /** Long detail only, after the label */
   tooltip?: string;
-  onMobileTooltipClick?: (text: string) => void;
   /** E.g. the Platform Managed chip, after the label */
   badge?: React.ReactNode;
   control?: React.ReactNode;
@@ -33,7 +32,7 @@ export interface SettingRowProps {
 
 /** Label and visible description on the left, the control on the right (Core 2.2). */
 export function SettingRow({
-  controlId, label, description, tooltip, onMobileTooltipClick, badge, control, controlSize = 'switch',
+  controlId, label, description, tooltip, badge, control, controlSize = 'switch',
   stackControlOnPhone = false, children, disabled = false,
 }: SettingRowProps) {
   const phone = useMediaQuery(PHONE_QUERY);
@@ -53,7 +52,7 @@ export function SettingRow({
             <label htmlFor={controlId} className="text-sm font-medium leading-5 text-foreground">{label}</label>
             {tooltip && (
               <span className={cn('inline-flex', phone && PHONE_HIT_AREA)}>
-                <InfoTooltip text={tooltip} onMobileClick={onMobileTooltipClick} />
+                <InfoTooltip text={tooltip} />
               </span>
             )}
             {badge}

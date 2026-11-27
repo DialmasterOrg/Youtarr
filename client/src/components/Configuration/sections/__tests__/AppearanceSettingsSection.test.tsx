@@ -38,7 +38,7 @@ jest.mock('../../../../contexts/ThemeEngineContext', () => ({
   useThemeEngine: () => mockUseThemeEngine(),
 }));
 
-jest.mock('../../common/InfoTooltip', () => ({
+jest.mock('../../../shared/InfoTooltip', () => ({
   InfoTooltip: () => null,
 }));
 

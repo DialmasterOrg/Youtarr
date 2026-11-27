@@ -1,7 +1,7 @@
 import React from 'react';
 import { Alert, Box, Button, FormControlLabel, Switch, Typography } from '../../ui';
 import { Refresh as RefreshIcon, Download as DownloadIcon } from '../../../lib/icons';
-import InfoHint from '../../shared/InfoHint';
+import { InfoTooltip } from '../../shared/InfoTooltip';
 import { Playlist } from '../../../types/playlist';
 import { MAX_PLAYLIST_VIDEOS } from '../playlistConstants';
 
@@ -60,7 +60,7 @@ const LibraryDownloadsGroup: React.FC<LibraryDownloadsGroupProps> = ({
         <Typography variant="overline" color="text.secondary">
           Library &amp; Downloads
         </Typography>
-        <InfoHint label="About library and downloads">
+        <InfoTooltip label="About library and downloads" text={
           <div>
             <p className="mb-2">
               <strong>Refresh from YouTube</strong> re-checks the entire playlist on YouTube
@@ -73,7 +73,7 @@ const LibraryDownloadsGroup: React.FC<LibraryDownloadsGroupProps> = ({
               out; select them in the list to download them anyway.
             </p>
           </div>
-        </InfoHint>
+        } />
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -113,12 +113,12 @@ const LibraryDownloadsGroup: React.FC<LibraryDownloadsGroupProps> = ({
           }
           label="Auto-download new videos"
         />
-        <InfoHint label="About auto-download">
+        <InfoTooltip label="About auto-download" text={<>
           After setup, Youtarr downloads newly discovered entries wherever they appear in this
           playlist. Selecting existing videos queues the full selection immediately. Each scheduled run can queue up to
           your limit in new discoveries, plus the same number of older saved selections to retry.
           Older retries take turns, starting with those tried least recently. Pausing preserves tracking and saved selections.
-        </InfoHint>
+        </>} />
       </div>
 
       {hasFollowingBaseline && (

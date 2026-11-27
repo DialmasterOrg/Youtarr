@@ -224,6 +224,36 @@ describe('overlay positioning guards', () => {
   });
 });
 
+// A touchscreen laptop reports its trackpad as the main pointer, so the pointer
+// media query cannot tell that a finger was used.
+describe('tooltip on a device with both a mouse and a touchscreen', () => {
+  test('shows on a finger tap', async () => {
+    const user = userEvent.setup();
+    render(
+      <Tooltip title="Tooltip body">
+        <button type="button">Info</button>
+      </Tooltip>
+    );
+
+    await user.pointer({ keys: '[TouchA]', target: screen.getByRole('button', { name: 'Info' }) });
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Tooltip body');
+  });
+
+  test('a mouse click does not pin the tooltip open', async () => {
+    const user = userEvent.setup();
+    render(
+      <Tooltip title="Tooltip body">
+        <button type="button">Info</button>
+      </Tooltip>
+    );
+
+    await user.pointer({ keys: '[MouseLeft]', target: screen.getByRole('button', { name: 'Info' }) });
+
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+});
+
 describe('mobile tooltip interactions', () => {
   const originalMatchMedia = window.matchMedia;
 
@@ -259,6 +289,7 @@ describe('mobile tooltip interactions', () => {
 
     await user.click(screen.getByRole('button', { name: 'Info' }));
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Tooltip body');
+    expect(screen.getByRole('button', { name: 'Info' })).toHaveAccessibleDescription('Tooltip body');
 
     await user.click(document.body);
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();

@@ -35,7 +35,6 @@ const setupSection = (overrides: Partial<React.ComponentProps<typeof StorageLimi
     config: createConfig(),
     storageAvailable: true,
     onConfigChange: jest.fn(),
-    onMobileTooltipClick: jest.fn(),
     ...overrides,
   };
   renderWithProviders(<StorageLimitsSection {...props} />);

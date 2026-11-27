@@ -15,7 +15,7 @@ import {
   TextField,
 } from '../../ui';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
-import { InfoTooltip } from '../common/InfoTooltip';
+import { InfoTooltip } from '../../shared/InfoTooltip';
 import { OrDivider } from '../common/OrDivider';
 import { ConfigState, AutoRemovalDryRunResult } from '../types';
 import { ScheduleSummary } from './components/ScheduleSummary';
@@ -30,7 +30,6 @@ interface AutoRemovalSectionProps {
   config: ConfigState;
   storageAvailable: boolean | null;
   onConfigChange: (updates: Partial<ConfigState>) => void;
-  onMobileTooltipClick?: (text: string) => void;
 }
 
 export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
@@ -38,7 +37,6 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
   config,
   storageAvailable,
   onConfigChange,
-  onMobileTooltipClick,
 }) => {
   const [autoRemovalDryRun, setAutoRemovalDryRun] = useState<{
     loading: boolean;
@@ -229,7 +227,6 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
             <AutoRemovalWatchedControls
               config={config}
               onConfigChange={onConfigChange}
-              onMobileTooltipClick={onMobileTooltipClick}
             />
 
             {storageAvailable !== false && (
@@ -274,7 +271,6 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
                           </FormControl>
                           <InfoTooltip
                             text="Some mount types (network shares, overlays, bind mounts) may report incorrect free space. Before enabling this, verify that the storage display at the top of this page shows accurate values. If the reported storage is incorrect, do not use space-based removal."
-                            onMobileClick={onMobileTooltipClick}
                           />
                         </Box>
                       </Grid>
@@ -289,7 +285,6 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
             <AutoRemovalUsageControls
               config={config}
               onConfigChange={onConfigChange}
-              onMobileTooltipClick={onMobileTooltipClick}
             />
 
             <Grid item xs={12}>
@@ -317,7 +312,6 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
                       />
                       <InfoTooltip
                         text="Protects the newest downloads from every removal rule on this page. For example, with a value of 50, the 50 most recently downloaded videos are always kept, no matter their age or watched state. Protected videos do not count toward this limit. Leave blank or 0 to disable."
-                        onMobileClick={onMobileTooltipClick}
                       />
                     </Box>
                   </Grid>

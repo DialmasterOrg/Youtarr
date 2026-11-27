@@ -12,7 +12,7 @@ import {
   Typography,
 } from '../../ui';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
-import { InfoTooltip } from '../common/InfoTooltip';
+import { InfoTooltip } from '../../shared/InfoTooltip';
 import { OrDivider } from '../common/OrDivider';
 import { StorageSizeInput } from '../common/StorageSizeInput';
 import { ConfigState } from '../types';
@@ -66,7 +66,6 @@ interface StorageLimitsSectionProps {
   config: ConfigState;
   storageAvailable: boolean | null;
   onConfigChange: (updates: Partial<ConfigState>) => void;
-  onMobileTooltipClick?: (text: string) => void;
 }
 
 export const StorageLimitsSection: React.FC<StorageLimitsSectionProps> = ({
@@ -74,7 +73,6 @@ export const StorageLimitsSection: React.FC<StorageLimitsSectionProps> = ({
   config,
   storageAvailable,
   onConfigChange,
-  onMobileTooltipClick,
 }) => {
   const minFreeSpaceLabelId = useId();
   const { data: pauseStatus } = useDownloadPauseStatus(token);
@@ -128,7 +126,6 @@ export const StorageLimitsSection: React.FC<StorageLimitsSectionProps> = ({
                   />
                   <InfoTooltip
                     text="Adds up the size of every video Youtarr has downloaded (video and MP3 files), using the sizes recorded at download time and refreshed by the nightly rescan. Works on network shares and cloud storage, where free space may be reported incorrectly. Thumbnails, subtitles and metadata files are not counted. A download job already running is allowed to finish all of its videos, so the total can go over the limit until that job ends."
-                    onMobileClick={onMobileTooltipClick}
                   />
                 </Box>
               </Grid>
@@ -194,7 +191,6 @@ export const StorageLimitsSection: React.FC<StorageLimitsSectionProps> = ({
                     </FormControl>
                     <InfoTooltip
                       text="Some mount types (network shares, overlays, bind mounts) may report incorrect free space. Before relying on this, check that the storage indicator shows accurate values. If it does not, use the total size limit instead."
-                      onMobileClick={onMobileTooltipClick}
                     />
                   </Box>
                 </Grid>

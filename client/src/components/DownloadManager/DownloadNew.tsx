@@ -17,6 +17,7 @@ import { useConfig } from '../../hooks/useConfig';
 import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
 
 const API_KEYS_SETTINGS_PATH = '/settings/api-keys';
+
 interface DownloadNewProps {
   videoUrls: string;
   setVideoUrls: React.Dispatch<React.SetStateAction<string>>;
