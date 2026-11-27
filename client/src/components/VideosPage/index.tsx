@@ -9,6 +9,8 @@ import { FileX as MarkDeletedIcon } from 'lucide-react';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useConfig } from '../../hooks/useConfig';
 import { useDownloadListingsRefresh } from '../../hooks/useDownloadListingsRefresh';
+import { useInfiniteScrollTrigger } from '../../hooks/useInfiniteScrollTrigger';
+import LoadMoreFailed from '../shared/LoadMoreFailed';
 import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
 import { VideoData } from '../../types/VideoData';
 import AddChannelDialog from '../shared/AddChannelDialog';
@@ -173,8 +175,6 @@ function VideosPage({ token }: VideosPageProps) {
   const { triggerDownloads } = useTriggerDownloads(token);
   const { snapshot } = useVideoActivity();
 
-  const loadMoreRef = useRef<HTMLDivElement | null>(null);
-
   const { deleteVideos, loading: deleteLoading } = useVideoDeletion();
   const { markDeleted, loading: markDeletedLoading } = useMarkDeleted(token);
   const configState = useConfig(token);
@@ -253,23 +253,14 @@ function VideosPage({ token }: VideosPageProps) {
     setPage(1);
   }, [listState.search, orderBy, sortOrder]);
 
-  useEffect(() => {
-    if (!useInfiniteScroll) return;
-    if (!loadMoreRef.current) return;
-    if (loading || page >= totalPages) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const [entry] = entries;
-        if (entry.isIntersecting) {
-          setPage((prev) => (prev < totalPages ? prev + 1 : prev));
-        }
-      },
-      { root: null, rootMargin: '0px 0px 160px 0px', threshold: 0 }
-    );
-    observer.observe(loadMoreRef.current);
-    return () => observer.disconnect();
-  }, [useInfiniteScroll, loading, page, totalPages]);
+  // A failed load leaves the page number on the page that failed, and loading
+  // the one after it would skip its rows.
+  const loadMoreRef = useInfiniteScrollTrigger({
+    enabled: useInfiniteScroll && !loadError,
+    loading,
+    hasNextPage: page < totalPages,
+    onLoadNextPage: () => setPage((prev) => (prev < totalPages ? prev + 1 : prev)),
+  });
 
   const handleImageError = (youtubeId: string) => {
     setImageErrors((prev) => ({ ...prev, [youtubeId]: true }));
@@ -667,7 +658,10 @@ function VideosPage({ token }: VideosPageProps) {
           </Typography>
         </Box>
       )}
-      {!loading && page >= totalPages && videos.length > 0 && (
+      {loadError && videos.length > 0 && (
+        <LoadMoreFailed message="Could not load videos." onRetry={() => void refetch()} />
+      )}
+      {!loading && !loadError && page >= totalPages && videos.length > 0 && (
         <Typography
           variant="caption"
           color="text.secondary"

@@ -38,6 +38,7 @@ import useMediaQuery from '../hooks/useMediaQuery';
 import { useNavigate, useLocation } from 'react-router-dom';
 import WebSocketContext, { Message } from '../contexts/WebSocketContext';
 import { useConfig } from '../hooks/useConfig';
+import { useInfiniteScrollTrigger } from '../hooks/useInfiniteScrollTrigger';
 import { Channel } from '../types/Channel';
 import { useChannelList } from './Subscriptions/hooks/useChannelList';
 import { ChannelLookupResult, useChannelMutations } from './Subscriptions/hooks/useChannelMutations';
@@ -66,6 +67,7 @@ import AddPlaylistDialog from './Subscriptions/components/AddPlaylistDialog';
 import AddChannelSettingsDialog from './Subscriptions/components/AddChannelSettingsDialog';
 import { NewChannelSettings, PendingChannel } from './Subscriptions/newChannelSettings';
 import PlaylistListBlock from './Subscriptions/components/PlaylistListBlock';
+import LoadMoreFailed from './shared/LoadMoreFailed';
 import DownloadPercentInfo from './Subscriptions/components/DownloadPercentInfo';
 import { useActiveImport } from '../hooks/useActiveImport';
 import { usePlaylistList } from '../hooks/usePlaylistList';
@@ -95,7 +97,6 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
   const useInfiniteScroll = config.channelVideosHotLoad ?? false;
   const globalPreferredResolution = config.preferredResolution || '1080';
   const { activeImport } = useActiveImport(token);
-  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const [newSubscriptionUrl, setNewSubscriptionUrl] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -257,34 +258,14 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
     setPage(1);
   }, [useInfiniteScroll]);
 
-  useEffect(() => {
-    if (!useInfiniteScroll) {
-      return;
-    }
-    if (!loadMoreRef.current || loading || !hasNextPage) {
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const [entry] = entries;
-        if (entry.isIntersecting) {
-          setPage((prev) => prev + 1);
-        }
-      },
-      {
-        root: null,
-        rootMargin: '0px 0px 240px 0px',
-        threshold: 0,
-      }
-    );
-
-    observer.observe(loadMoreRef.current);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [loading, hasNextPage, useInfiniteScroll]);
+  // A failed load leaves the page number on the page that failed, and loading
+  // the one after it would skip its channels.
+  const loadMoreRef = useInfiniteScrollTrigger({
+    enabled: useInfiniteScroll && !error,
+    loading,
+    hasNextPage,
+    onLoadNextPage: () => setPage((prev) => prev + 1),
+  });
 
   const handleMessage = useCallback(() => {
     if (!hasPendingChanges) {
@@ -776,6 +757,9 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
                       <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: 12 }}>
                         <CircularProgress size={20} />
                       </div>
+                    )}
+                    {error && displayChannels.length > 0 && (
+                      <LoadMoreFailed message="Could not load channels." onRetry={() => void refetch()} />
                     )}
                   </>
                 ) : (

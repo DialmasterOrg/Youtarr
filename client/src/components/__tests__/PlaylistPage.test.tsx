@@ -765,6 +765,25 @@ describe('PlaylistPage video list notices', () => {
       screen.getByText(/fewer videos here than YouTube reports/i)
     ).toBeInTheDocument();
   });
+
+  test('stops loading more videos after a failed load and offers a retry', async () => {
+    const originalObserver = window.IntersectionObserver;
+    const observerMock = jest.fn(() => ({ observe: jest.fn(), disconnect: jest.fn() }));
+    window.IntersectionObserver = observerMock as unknown as typeof IntersectionObserver;
+    const loadMore = jest.fn();
+    mockDetailOverride.current = { hasMore: true, loadMoreFailed: true, loadMore };
+
+    try {
+      renderWithProviders(<PlaylistPage token="t" />);
+      await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+      expect(loadMore).toHaveBeenCalledTimes(1);
+      expect(observerMock).not.toHaveBeenCalled();
+    } finally {
+      window.IntersectionObserver = originalObserver;
+      mockDetailOverride.current = {};
+    }
+  });
 });
 
 describe('PlaylistPage action errors', () => {

@@ -1695,6 +1695,50 @@ describe('VideosPage Component', () => {
         }
       });
 
+      test('stops at a failed infinite-scroll page and retries that page', async () => {
+        const { useConfig } = require('../../hooks/useConfig');
+        const originalObserver = window.IntersectionObserver;
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+        // Reports the sentinel in range to the observer watching it, if any.
+        let intersect = () => {};
+        window.IntersectionObserver = jest.fn().mockImplementation((callback: IntersectionObserverCallback) => {
+          const observer = {
+            observe: jest.fn(() => {
+              intersect = () => callback([{ isIntersecting: true } as IntersectionObserverEntry], observer);
+            }),
+            disconnect: jest.fn(() => { intersect = () => {}; }),
+            unobserve: jest.fn(), takeRecords: () => [], root: null, rootMargin: '', thresholds: [0],
+          };
+          return observer;
+        });
+        useConfig.mockReturnValue({ config: { channelVideosHotLoad: true } });
+        useTableView();
+        const user = setupUser();
+        axios.get
+          .mockResolvedValueOnce({ data: { ...mockPaginatedResponse([mockVideos[0]]), total: 3, totalPages: 3 } })
+          .mockRejectedValueOnce(new Error('Network Error'))
+          .mockResolvedValueOnce({ data: { ...mockPaginatedResponse([mockVideos[1]]), page: 2, total: 3, totalPages: 3 } });
+
+        const { unmount } = render(<VideosPage token={mockToken} />);
+        try {
+          await screen.findByText('How to Code');
+          act(() => intersect());
+          const retry = await screen.findByRole('button', { name: 'Retry' });
+          act(() => intersect());
+          expect(axios.get).toHaveBeenCalledTimes(2);
+
+          await user.click(retry);
+
+          await screen.findByText('Game Review');
+          expect(axios.get.mock.calls[2][0]).toContain('page=2');
+        } finally {
+          unmount();
+          window.IntersectionObserver = originalObserver;
+          consoleErrorSpy.mockRestore();
+          useConfig.mockReturnValue({ config: { channelVideosHotLoad: false } });
+        }
+      });
+
       test('stays on the current page after deleting in classic pagination', async () => {
         const user = setupUser();
         useTableView();

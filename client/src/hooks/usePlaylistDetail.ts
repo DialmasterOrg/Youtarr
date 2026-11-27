@@ -90,6 +90,8 @@ export const usePlaylistDetail = ({
   const [syncStatus, setSyncStatus] = useState<PlaylistSyncStatus | null>(null);
   const [loading, setLoading] = useState(!!(token && playlistId));
   const [loadingMore, setLoadingMore] = useState(false);
+  // The last loadMore failed; cleared by the next attempt or a reload.
+  const [loadMoreFailed, setLoadMoreFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Tracks the highest video page currently loaded; a request-id guard drops
@@ -140,6 +142,7 @@ export const usePlaylistDetail = ({
     const requestId = ++requestIdRef.current;
     pageRef.current = 1;
     setLoading(true);
+    setLoadMoreFailed(false);
     setError(null);
 
     const headers = authHeaders(token);
@@ -183,6 +186,7 @@ export const usePlaylistDetail = ({
     const requestId = requestIdRef.current;
     const nextPage = pageRef.current + 1;
     setLoadingMore(true);
+    setLoadMoreFailed(false);
 
     try {
       const res = await axios.get<PlaylistVideosResponse>(
@@ -199,6 +203,7 @@ export const usePlaylistDetail = ({
       setVideoTotal(res.data.total || 0);
     } catch {
       // Keep the videos already loaded; a failed "load more" should not wipe them.
+      if (requestId === requestIdRef.current) setLoadMoreFailed(true);
     } finally {
       setLoadingMore(false);
     }
@@ -304,6 +309,7 @@ export const usePlaylistDetail = ({
     syncStatus,
     loading,
     loadingMore,
+    loadMoreFailed,
     hasMore,
     error,
     loadMore,

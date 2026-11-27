@@ -435,6 +435,37 @@ describe('usePlaylistDetail sorting and pagination', () => {
     expect(result.current.hasMore).toBe(false);
   });
 
+  test('reports a failed loadMore until the next attempt', async () => {
+    let nextPageFails = true;
+    axios.get.mockImplementation((url: string, config?: { params?: { page?: number } }) => {
+      if (url.endsWith('/videos')) {
+        if ((config?.params?.page ?? 1) === 1) {
+          return Promise.resolve({ data: { total: 3, videos: [makeVideo(1), makeVideo(2)] } });
+        }
+        return nextPageFails
+          ? Promise.reject(new Error('Network Error'))
+          : Promise.resolve({ data: { total: 3, videos: [makeVideo(3)] } });
+      }
+      return Promise.resolve({ data: { playlist: { playlist_id: 'PL1' } } });
+    });
+    const { result } = renderHook(() =>
+      usePlaylistDetail({ token: 't', playlistId: 'PL1', pageSize: 2 })
+    );
+    await waitFor(() => expect(result.current.videos).toHaveLength(2));
+
+    await act(async () => {
+      await result.current.loadMore();
+    });
+    expect(result.current.loadMoreFailed).toBe(true);
+
+    nextPageFails = false;
+    await act(async () => {
+      await result.current.loadMore();
+    });
+    expect(result.current.loadMoreFailed).toBe(false);
+    expect(result.current.videos).toHaveLength(3);
+  });
+
   test('loadMore carries the active watchedState filter', async () => {
     axios.get.mockImplementation((url: string, config?: { params?: { page?: number } }) => {
       if (url.endsWith('/videos')) {

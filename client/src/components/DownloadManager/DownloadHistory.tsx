@@ -25,6 +25,7 @@ import { Job, FailedVideo } from '../../types/Job';
 import { VideoData } from '../../types/VideoData';
 import { useSwipeable } from 'react-swipeable';
 import { useConfig } from '../../hooks/useConfig';
+import { useInfiniteScrollTrigger } from '../../hooks/useInfiniteScrollTrigger';
 import PageControls from '../shared/PageControls';
 import VideoModal from '../shared/VideoModal';
 import { VideoModalData } from '../shared/VideoModal/types';
@@ -213,7 +214,6 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(12);
   const [visibleCount, setVisibleCount] = useState(12);
-  const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const { config } = useConfig(token);
   const useInfiniteScroll = config.channelVideosHotLoad ?? false;
 
@@ -270,31 +270,12 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
     setVisibleCount(itemsPerPage);
   }, [showNoVideoJobs, hideArrBridgeJobs, itemsPerPage]);
 
-  React.useEffect(() => {
-    if (!useInfiniteScroll) {
-      return;
-    }
-    if (!loadMoreRef.current || !hasMoreHotLoadItems) {
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const [entry] = entries;
-        if (entry.isIntersecting) {
-          setVisibleCount((prev) => Math.min(prev + itemsPerPage, jobsToDisplay.length));
-        }
-      },
-      {
-        root: null,
-        rootMargin: '0px 0px 180px 0px',
-        threshold: 0,
-      }
-    );
-
-    observer.observe(loadMoreRef.current);
-    return () => observer.disconnect();
-  }, [useInfiniteScroll, hasMoreHotLoadItems, itemsPerPage, jobsToDisplay.length]);
+  // No loading flag: revealing more of the jobs already held is immediate.
+  const loadMoreRef = useInfiniteScrollTrigger({
+    enabled: useInfiniteScroll,
+    hasNextPage: hasMoreHotLoadItems,
+    onLoadNextPage: () => setVisibleCount((prev) => Math.min(prev + itemsPerPage, jobsToDisplay.length)),
+  });
 
   const handlers = useSwipeable({
     onSwipedLeft: () => {

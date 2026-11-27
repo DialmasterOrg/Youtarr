@@ -24,6 +24,7 @@ paths:
   - "client/src/components/shared/AddChannelDialog.tsx"
   - "client/src/components/FindChannels/**/*"
   - "client/src/hooks/useYoutubeSearch.ts"
+  - "client/src/hooks/useInfiniteScrollTrigger.ts"
   - "client/src/components/SubscriptionImport/**/*"
   - "client/src/utils/tabDownloadStats.ts"
   - "client/src/utils/channelTabs.ts"
@@ -49,10 +50,13 @@ Channel subscriptions, listings, title filters, per-tab download counts, channel
 - `useChannelVideoOverrides` drops ignore and protection toggles when the list is replaced (new `resetKey`, any page change), except when an infinite list appends a later page. A same-page reload keeps them, because it can answer before a toggle is saved.
 - `useChannelVideos.refetch` on an infinite list past page 1 requests every loaded page at once and replaces the list: merging one reloaded page left earlier rows stale. The page number stays, so toggles and scroll position hold.
 - `useChannelVideos.refetch` always runs the current render's fetch: Load More and delete call it after a long wait, and a captured one would reload the pages loaded back then over a list that has since grown.
-- The channel list pauses `useInfiniteScrollTrigger` while its last load failed and shows a Retry that calls `refetch`: the page number stays on the failed page, so loading the next one would skip its rows.
+- The channel page's list and the Channels page both pause `useInfiniteScrollTrigger` while the last load failed and show a Retry that calls `refetch`: the page number stays on the failed page, so loading the next one would skip its rows.
 - `useChannelVideos.topLoadSeq` changes on every load from the first row. `useNewVideosNotice` withdraws its offer on it, because a reload past page 1 keeps the page number and already brings in the offered videos.
 - `useChannelVideoQuery` returns to page 1 during render, not in an effect: an effect commits the old page with the new filter first, and the list requests that page before page 1.
 - `useInfiniteScrollTrigger` asks for a page whenever the sentinel is in range and nothing loads, and then not again until `loading` turns true: the sentinel can be reported again before the fetch starts, and a second ask would skip a page.
+- A list with no fetch (Download History reveals jobs it already holds) leaves `loading` out of `useInfiniteScrollTrigger`, which then checks the sentinel again after each ask; a constant `loading` would stop it after the first reveal.
+- `useInfiniteScrollTrigger` returns a callback ref and keeps the sentinel in state: a sentinel that mounts later (the Channels tab after Playlists) changes nothing else, and a plain ref left it unwatched.
+- `useInfiniteScrollTrigger` ignores a report that arrives after its effect cleaned up: `disconnect()` keeps already queued reports, and one landing during a reload set the ask-once wait with no load left to end it.
 - `useChannelTabs` uses only the first tabs answer per channel (the first request or a 2-second retry): a later one would reset the tab the user chose, and one from before a channel switch would show the previous channel's tabs.
 - `utils/channelTabs.ts` defines each channel tab (label, media type, auto-download label) for the channel page, its settings and the subscription list. `TabsEditor` keeps its own wording in a map typed by `ChannelTabType`, so a new tab must be added there to compile.
 - A new tab or media type also needs `tabsUtils.js` on the server and the client's media type lists that are not driven by tabs: `RssFeedsSection`, the API key `PolicyEditor`, `utils/videoStatus` and the manual download `VideoChip`.

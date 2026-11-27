@@ -16,6 +16,7 @@ import {
 } from './ui';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useConfig } from '../hooks/useConfig';
+import { useInfiniteScrollTrigger } from '../hooks/useInfiniteScrollTrigger';
 import { usePlaylistDetail, PlaylistSortOrder, PlaylistDownloadState, PlaylistWatchedState } from '../hooks/usePlaylistDetail';
 import { useDownloadListingsRefresh } from '../hooks/useDownloadListingsRefresh';
 import { usePlaylistMutations } from '../hooks/usePlaylistMutations';
@@ -42,6 +43,7 @@ import { usePlaylistVideoDeletion } from './PlaylistPage/hooks/usePlaylistVideoD
 import { usePlaylistVideoIgnore } from './PlaylistPage/hooks/usePlaylistVideoIgnore';
 import { usePlaylistSyncUpdates } from './PlaylistPage/hooks/usePlaylistSyncUpdates';
 import DeleteVideosDialog from './shared/DeleteVideosDialog';
+import LoadMoreFailed from './shared/LoadMoreFailed';
 import DownloadSettingsDialog from './DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from './DownloadManager/ManualDownload/types';
 import { toDownloadOverrideSettings } from '../utils/downloadOverrideSettings';
@@ -82,6 +84,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     syncStatus,
     loading,
     loadingMore,
+    loadMoreFailed,
     hasMore,
     error,
     loadMore,
@@ -187,7 +190,6 @@ function PlaylistPage({ token }: PlaylistPageProps) {
   );
 
   const selectionClearRef = useRef<() => void>(() => {});
-  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   // One selection holds downloaded and not-downloaded videos; each action
   // applies to the selected videos it fits.
@@ -300,21 +302,14 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     selection.clear();
   }, [downloadState, watchedState, selection.clear]);
 
-  useEffect(() => {
-    if (!loadMoreRef.current) return;
-    if (loading || loadingMore || !hasMore) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          void loadMore();
-        }
-      },
-      { root: null, rootMargin: '0px 0px 160px 0px', threshold: 0 }
-    );
-    observer.observe(loadMoreRef.current);
-    return () => observer.disconnect();
-  }, [loading, loadingMore, hasMore, loadMore]);
+  // Paused after a failed load: the sentinel is still in range, so the trigger
+  // would ask again at once, and keep asking for as long as the request fails.
+  const loadMoreRef = useInfiniteScrollTrigger({
+    enabled: !loadMoreFailed,
+    loading: loading || loadingMore,
+    hasNextPage: hasMore,
+    onLoadNextPage: () => void loadMore(),
+  });
 
   const handleToggleSync = useCallback(
     async (server: MediaServerType, enabled: boolean) => {
@@ -509,6 +504,9 @@ function PlaylistPage({ token }: PlaylistPageProps) {
                 </Typography>
               )}
             </div>
+          )}
+          {hasMore && loadMoreFailed && (
+            <LoadMoreFailed message="Could not load more videos." onRetry={() => void loadMore()} />
           )}
         </CardContent>
       </Card>

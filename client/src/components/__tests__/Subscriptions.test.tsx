@@ -301,6 +301,32 @@ describe('Subscriptions Component', () => {
       expect(screen.getByRole('progressbar')).toBeInTheDocument();
     });
 
+    test('stops loading more channels after a failed load and offers a retry', async () => {
+      const originalObserver = window.IntersectionObserver;
+      const observerMock = jest.fn(() => ({ observe: jest.fn(), disconnect: jest.fn() }));
+      window.IntersectionObserver = observerMock as unknown as typeof IntersectionObserver;
+      useConfig.mockReturnValue({ config: { preferredResolution: '1080', channelVideosHotLoad: true } });
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 4,
+        totalPages: 2,
+        loading: false,
+        error: 'Failed to load channels',
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
+
+      try {
+        renderSubscriptions();
+        await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+        expect(mockRefetchChannels).toHaveBeenCalledTimes(1);
+        expect(observerMock).not.toHaveBeenCalled();
+      } finally {
+        window.IntersectionObserver = originalObserver;
+      }
+    });
+
     test('keeps channel list rendered during a refetch when items already loaded', () => {
       useChannelList.mockReturnValue({
         channels: mockChannels,

@@ -126,6 +126,45 @@ describe('useInfiniteScrollTrigger', () => {
     expect(onLoadNextPage).toHaveBeenCalledTimes(1);
   });
 
+  test('checks the sentinel again after each ask when the list has no loading state', () => {
+    renderTrigger({ loading: undefined });
+
+    sentinelIs('in range');
+    // A new observer reports where the sentinel is once the rows are in.
+    expect(observers).toHaveLength(2);
+    sentinelIs('in range');
+
+    expect(onLoadNextPage).toHaveBeenCalledTimes(2);
+  });
+
+  test('watches a sentinel that mounts after the list has loaded', () => {
+    function LateSentinel({ shown }: { shown: boolean }) {
+      const sentinelRef = useInfiniteScrollTrigger(baseProps());
+      return shown ? <div ref={sentinelRef} /> : null;
+    }
+    const { rerender } = render(<LateSentinel shown={false} />);
+
+    rerender(<LateSentinel shown />);
+
+    expect(observers).toHaveLength(1);
+  });
+
+  test('still loads the next page after a report from an observer that stopped watching', () => {
+    const { rerender } = renderTrigger();
+    const stopped = observers[0];
+    const inRange = { isIntersecting: true } as IntersectionObserverEntry;
+
+    // A reload starts, then the browser delivers a report it had already queued.
+    rerender(<Harness {...baseProps()} loading />);
+    act(() => stopped.callback([inRange], stopped as unknown as IntersectionObserver));
+    expect(onLoadNextPage).not.toHaveBeenCalled();
+
+    rerender(<Harness {...baseProps()} />);
+    sentinelIs('in range');
+
+    expect(onLoadNextPage).toHaveBeenCalledTimes(1);
+  });
+
   test('stops watching the sentinel on unmount', () => {
     const { unmount } = renderTrigger();
 

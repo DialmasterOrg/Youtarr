@@ -1,9 +1,10 @@
-import React, { RefObject } from 'react';
-import { Button, Typography } from '../../ui';
+import React, { Ref } from 'react';
+import { Typography } from '../../ui';
+import LoadMoreFailed from '../../shared/LoadMoreFailed';
 
 interface InfiniteScrollSentinelProps {
   // From useInfiniteScrollTrigger: scrolling this element into view loads the next page.
-  sentinelRef: RefObject<HTMLDivElement>;
+  sentinelRef: Ref<HTMLDivElement>;
   loadingMore: boolean;
   // Every page is loaded.
   caughtUp: boolean;
@@ -34,19 +35,7 @@ function InfiniteScrollSentinel({
           </div>
         </div>
       )}
-      {loadFailed && (
-        <div
-          role="alert"
-          style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: '16px 0' }}
-        >
-          <Typography variant="body2" color="text.secondary">
-            Could not load videos.
-          </Typography>
-          <Button onClick={onRetry} variant="outlined" size="small" color="inherit">
-            Retry
-          </Button>
-        </div>
-      )}
+      {loadFailed && <LoadMoreFailed message="Could not load videos." onRetry={onRetry} />}
       {caughtUp && (
         <Typography
           variant="caption"

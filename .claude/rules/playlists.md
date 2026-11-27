@@ -48,6 +48,7 @@ YouTube playlist following, playlist downloads, and the `.m3u` files.
 - The waiting refresh rechecks `enabled` when it starts, because neither `m3uGenerator` nor `mediaServerSync` does, and a playlist removed meanwhile must keep its outputs unchanged.
 - Bulk ignore covers videos the outputs list (a file, or a missing one); the client confirms those first (`isListedInOutputs`), sends at most 1000 ids per request, and the route schedules a refresh only when a row changed.
 - The page's selection holds only loaded rows: a sort change or refetch reloads page one alone, and an action on an id that is no longer loaded was silently skipped.
+- `usePlaylistDetail.loadMoreFailed` pauses the page's scroll trigger until Retry or a reload: after a failed load the sentinel is still in range, so the trigger re-requested at once for as long as the request failed.
 - Explicit-id downloads can override ignored. `following_requested_count` reports eligible outstanding selections in the header without claiming they failed.
 - `playlistDownloadGrouper` resolves per-video settings override -> channel -> playlist -> global and groups videos by the result.
 - `playlistVideoFilters` orders before pagination and resolves `downloadState`/`watchedState` into a youtube_id constraint; models and `watchStatusQueries` are passed at call time so the route keeps its dependency injection.
