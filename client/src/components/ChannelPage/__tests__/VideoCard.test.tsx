@@ -236,6 +236,12 @@ describe('VideoCard Component', () => {
   });
 
   describe('Video Selection (Checkbox)', () => {
+    test('does not render checkbox for youtube removed videos', () => {
+      const removedVideo = { ...mockVideo, youtube_removed: true };
+      renderWithProviders(<VideoCard {...defaultProps} video={removedVideo} />);
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+
     test('renders checkbox for never downloaded videos', () => {
       renderWithProviders(<VideoCard {...defaultProps} />);
       expect(screen.getByRole('checkbox')).toBeInTheDocument();

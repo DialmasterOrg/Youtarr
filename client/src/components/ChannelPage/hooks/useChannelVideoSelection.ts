@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChannelVideo } from '../../../types/ChannelVideo';
-import { getVideoStatus, isRemovedStatus } from '../../../utils/videoStatus';
+import { canSelectForDelete, canSelectForDownload } from '../channelVideoRowState';
 import { useVideoActivity } from '../../../providers/VideoActivityProvider';
 import {
   useVideoSelection,
@@ -40,13 +40,6 @@ export interface ChannelVideoSelection {
   // needs re-downloading allowed.
   missingVideoCount: number;
 }
-
-const canDownload = (video: ChannelVideo): boolean => {
-  const status = getVideoStatus(video);
-  return status === 'never_downloaded' || isRemovedStatus(status) || status === 'ignored';
-};
-
-const canDelete = (video: ChannelVideo): boolean => Boolean(video.added && !video.removed);
 
 const withAdded = (videoIds: string[]) => (previous: string[]): string[] => [
   ...previous,
@@ -105,11 +98,11 @@ export function useChannelVideoSelection({
   }, [filters, search, clearAll]);
 
   const selectAllNotDownloaded = useCallback(() => {
-    setCheckedBoxes(withAdded(videos.filter(canDownload).map((video) => video.youtube_id)));
+    setCheckedBoxes(withAdded(videos.filter(canSelectForDownload).map((video) => video.youtube_id)));
   }, [videos]);
 
   const selectAllDownloaded = useCallback(() => {
-    setSelectedForDeletion(withAdded(videos.filter(canDelete).map((video) => video.youtube_id)));
+    setSelectedForDeletion(withAdded(videos.filter(canSelectForDelete).map((video) => video.youtube_id)));
   }, [videos]);
 
   // Accumulates missing status for every video seen on any loaded page, so
@@ -140,8 +133,8 @@ export function useChannelVideoSelection({
     selectAll: selectionMode === 'delete' ? selectAllDownloaded : selectAllNotDownloaded,
     selectAllNotDownloaded,
     selectAllDownloaded,
-    canSelectNotDownloaded: videos.some(canDownload),
-    canSelectDownloaded: videos.some(canDelete),
+    canSelectNotDownloaded: videos.some(canSelectForDownload),
+    canSelectDownloaded: videos.some(canSelectForDelete),
     clearAll,
     clearChecked,
     clearDeletion,

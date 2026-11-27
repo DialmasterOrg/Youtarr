@@ -215,6 +215,12 @@ describe('VideoListItem Component', () => {
       expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     });
 
+    test('does not render checkbox for youtube removed videos', () => {
+      const removedVideo = { ...mockVideo, youtube_removed: true };
+      renderWithProviders(<VideoListItem {...defaultProps} video={removedVideo} />);
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+
     test('passes onMobileTooltip to StillLiveDot component', () => {
       const onMobileTooltip = jest.fn();
       const liveVideo = { ...mockVideo, live_status: 'is_live' };

@@ -103,6 +103,19 @@ describe('useChannelVideoSelection', () => {
       expect(result.current.selectedForDeletion).toEqual(['have1']);
     });
 
+    test('leaves out videos no row lets you select: removed by YouTube, or still live', () => {
+      const youtubeRemoved = video('removed1', { youtube_removed: true });
+      const liveNow = video('live1', { live_status: 'is_live' });
+      const liveWithFile = video('live2', { added: true, live_status: 'is_live' });
+      const { result } = renderSelection({ videos: [...allVideos, youtubeRemoved, liveNow, liveWithFile] });
+
+      act(() => result.current.selectAllNotDownloaded());
+      act(() => result.current.selectAllDownloaded());
+
+      expect(result.current.checkedBoxes).toEqual(['new1', 'ignored1', 'gone1', 'archived1']);
+      expect(result.current.selectedForDeletion).toEqual(['have1']);
+    });
+
     test('select all follows delete mode', () => {
       const { result } = renderSelection({ videos: [downloaded, video('have2', { added: true })] });
       act(() => result.current.onDeletionChange('have1', true));

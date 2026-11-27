@@ -12,7 +12,7 @@ import { CalendarToday as CalendarTodayIcon, Block as BlockIcon, CheckCircleOutl
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml, formatAddedDateTime } from '../../utils/formatters';
-import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle, isRemovedStatus, isMembersOnlyVideo } from '../../utils/videoStatus';
+import { getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle, isRemovedStatus, isMembersOnlyVideo } from '../../utils/videoStatus';
 import MembersAccessChip from '../shared/MembersAccessChip';
 import RemovalDescription, { REMOVAL_TOOLTIP_CLASS } from '../shared/RemovalDescription';
 import StillLiveDot from './StillLiveDot';
@@ -23,6 +23,7 @@ import ProtectionShieldButton from '../shared/ProtectionShieldButton';
 import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
 import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
 import { getPublishedDateDisplay } from './publishedDateDisplay';
+import { getChannelVideoRowState, toggleRowSelection } from './channelVideoRowState';
 
 interface VideoCardProps {
   video: ChannelVideo;
@@ -57,20 +58,13 @@ function VideoCard({
   isInteractive = false,
   onVideoClick,
 }: VideoCardProps) {
-  const status = getVideoStatus(video);
-  // Check if video is still live (not "was_live" and not null/undefined)
-  const isStillLive = video.live_status && video.live_status !== 'was_live';
-  const isDownloadSelectable = (status === 'never_downloaded' || isRemovedStatus(status) || status === 'ignored') && !isStillLive;
-  const isDeleteSelectable = video.added && !video.removed && !isStillLive;
-  const isDownloadAllowed = selectionMode !== 'delete';
-  const isDeleteAllowed = selectionMode !== 'download';
-  const isChecked = checkedBoxes.includes(video.youtube_id);
-  const isDeleteChecked = selectedForDeletion.includes(video.youtube_id);
+  const row = getChannelVideoRowState(video, selectionMode, checkedBoxes, selectedForDeletion);
+  const { status, isStillLive, canDownload, canDelete, isChecked, isDeleteChecked } = row;
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
   const isIgnored = status === 'ignored';
   const statusLabel = status === 'downloaded' ? 'Available' : getStatusLabel(status);
   const baseTransform = isInteractive ? 'var(--sticker-rest-transform)' : 'translate(0, 0)';
-  const isClickable = (isDownloadSelectable && isDownloadAllowed) || (isDeleteSelectable && isDeleteAllowed);
+  const isClickable = canDownload || canDelete;
 
   return (
     <Fade in timeout={300} key={video.youtube_id}>
@@ -94,15 +88,7 @@ function VideoCard({
           }}
           onMouseEnter={() => onHoverChange(video.youtube_id)}
           onMouseLeave={() => onHoverChange(null)}
-          onClick={() => {
-            if (isDownloadSelectable && isDownloadAllowed) {
-              onCheckChange(video.youtube_id, !isChecked);
-              return;
-            }
-            if (isDeleteSelectable && isDeleteAllowed) {
-              onDeletionChange(video.youtube_id, !isDeleteChecked);
-            }
-          }}
+          onClick={() => toggleRowSelection(video, row, onCheckChange, onDeletionChange)}
         >
           {/* Thumbnail with overlay */}
           <div style={{
@@ -174,7 +160,7 @@ function VideoCard({
             )}
 
             {/* Selection checkbox - rendered for all selectable videos */}
-            {(isDownloadSelectable && isDownloadAllowed) ? (
+            {canDownload ? (
               <Checkbox
                 checked={isChecked}
                 onClick={(e) => e.stopPropagation()}
@@ -189,7 +175,7 @@ function VideoCard({
                   zIndex: 3,
                 }}
               />
-            ) : (isDeleteSelectable && isDeleteAllowed) ? (
+            ) : canDelete ? (
               <Checkbox
                 checked={isDeleteChecked}
                 onClick={(e) => e.stopPropagation()}
@@ -218,7 +204,7 @@ function VideoCard({
               >
                 <StillLiveDot isMobile={isMobile} onMobileClick={onMobileTooltip} />
               </div>
-            ) : isDownloadSelectable && isDownloadAllowed && isChecked && (
+            ) : canDownload && isChecked && (
               <div
                 style={{
                   position: 'absolute',
@@ -233,7 +219,7 @@ function VideoCard({
             )}
 
             {/* Delete highlight overlay for selected videos (delete mode) */}
-            {isDeleteSelectable && isDeleteAllowed && isDeleteChecked && (
+            {canDelete && isDeleteChecked && (
               <div
                 style={{
                   position: 'absolute',
@@ -248,7 +234,7 @@ function VideoCard({
             )}
 
             {/* Visual delete indicator when video is queued for deletion (outside delete mode) */}
-            {isDeleteSelectable && !isDeleteAllowed && isDeleteChecked && (
+            {row.isDeleteHeld && (
               <div
                 style={{
                   position: 'absolute',
