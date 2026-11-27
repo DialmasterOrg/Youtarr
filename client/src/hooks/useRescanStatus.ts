@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
 import axios from 'axios';
+import { serverErrorMessage } from '../utils/requestError';
 import WebSocketContext from '../contexts/WebSocketContext';
 
 export type RescanTrigger = 'manual' | 'scheduled' | 'startup';
@@ -133,8 +134,7 @@ export function useRescanStatus(token: string | null): UseRescanStatusReturn {
       return { started: true };
     } catch (err: unknown) {
       if (axios.isAxiosError(err) && err.response?.status === 409) {
-        const data = err.response.data as { error?: string } | undefined;
-        setError(data?.error ?? 'Rescan already in progress');
+        setError(serverErrorMessage(err, 'Rescan already in progress'));
         return { started: false };
       }
       setRunning(false);

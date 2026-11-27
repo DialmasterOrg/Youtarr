@@ -26,6 +26,8 @@ import { useMarkDeleted } from './hooks/useMarkDeleted';
 import DownloadSettingsDialog from '../DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from '../DownloadManager/ManualDownload/types';
 import { toDownloadOverrideSettings } from '../../utils/downloadOverrideSettings';
+import { youtubeVideoUrl } from '../../utils/youtubeUrls';
+import { serverErrorMessage } from '../../utils/requestError';
 import VideoCard from './components/VideoCard';
 import VideosTable from './components/VideosTable';
 import VideosListMobile from './components/VideosListMobile';
@@ -364,10 +366,7 @@ function VideosPage({ token }: VideosPageProps) {
       refetch();
     } catch (error: unknown) {
       console.error('Failed to update ratings:', error);
-      const message = axios.isAxiosError(error)
-        ? error.response?.data?.error || 'Failed to update content ratings'
-        : 'Failed to update content ratings';
-      setErrorMessage(message);
+      setErrorMessage(serverErrorMessage(error, 'Failed to update content ratings'));
     }
   };
 
@@ -502,7 +501,7 @@ function VideosPage({ token }: VideosPageProps) {
       .filter((meta): meta is VideoSelectionMeta => Boolean(meta && !meta.youtubeRemoved && !snapshot.videos[meta.youtubeId]?.state));
     if (eligible.length === 0) return;
 
-    const urls = eligible.map((meta) => `https://www.youtube.com/watch?v=${meta.youtubeId}`);
+    const urls = eligible.map((meta) => youtubeVideoUrl(meta.youtubeId));
     const videoChannelMap: Record<string, string> = {};
     for (const meta of eligible) {
       if (meta.channelId && YOUTUBE_CHANNEL_ID_PATTERN.test(meta.channelId)) {

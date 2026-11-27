@@ -10,6 +10,22 @@ export const formatFileSize = (bytes: number | null | undefined): string => {
   return `${mb.toFixed(0)}MB`;
 };
 
+const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
+const BYTE_UNIT_DECIMALS = [0, 1, 2, 2, 2];
+
+// "512 B", "1.5 KB", "3.20 GB". `decimals` fixes the precision of every unit
+// above bytes; without it each unit uses its own.
+export const formatBytes = (bytes: number, decimals?: number): string => {
+  if (!bytes || Number.isNaN(bytes) || bytes <= 0) {
+    return '0 B';
+  }
+
+  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), BYTE_UNITS.length - 1);
+  const value = bytes / Math.pow(1024, exponent);
+  const places = exponent === 0 ? 0 : decimals ?? BYTE_UNIT_DECIMALS[exponent];
+  return `${value.toFixed(places)} ${BYTE_UNITS[exponent]}`;
+};
+
 export const decodeHtml = (html: string): string => {
   const txt = document.createElement('textarea');
   txt.innerHTML = html;

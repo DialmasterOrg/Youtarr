@@ -11,3 +11,11 @@ export function describeRequestError(err: unknown): RequestErrorSummary {
   const status = (err as { response?: { status?: unknown } } | null)?.response?.status;
   return typeof status === 'number' ? { message, status } : { message };
 }
+
+// What to show the user for a failed request: the server's `{ error }` text when
+// it sent one, otherwise the fallback. Never the transport's own message
+// ("Request failed with status code 502").
+export function serverErrorMessage(err: unknown, fallback: string): string {
+  const message = (err as { response?: { data?: { error?: unknown } } } | null)?.response?.data?.error;
+  return typeof message === 'string' && message ? message : fallback;
+}

@@ -8,6 +8,7 @@ import {
   LinearProgress,
 } from './ui';
 import axios from 'axios';
+import { serverErrorMessage } from '../utils/requestError';
 import packageJson from '../../package.json';
 import {
   AUTH_CONTAINER_STYLE,
@@ -41,11 +42,7 @@ const getAxiosErrorMessage = (error: unknown) => {
     return 'Invalid username or password';
   }
 
-  if (error.response?.data?.error) {
-    return error.response.data.error;
-  }
-
-  return 'Login failed. Please try again.';
+  return serverErrorMessage(error, 'Login failed. Please try again.');
 };
 
 interface AuthSplashProps {

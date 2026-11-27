@@ -1,7 +1,7 @@
 import React from 'react';
 import { Alert, Box, Typography } from '../../../ui';
 import { AutoRemovalDryRunResult } from '../../types';
-import { formatBytes } from '../../helpers';
+import { formatBytes } from '../../../../utils/formatters';
 
 const MAX_SAMPLE_VIDEOS = 5;
 

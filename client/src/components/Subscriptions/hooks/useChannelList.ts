@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
+import { serverErrorMessage } from '../../../utils/requestError';
 import { Channel } from '../../../types/Channel';
 import { normalizeSubFolderKey } from '../../../utils/channelHelpers';
 
@@ -95,10 +96,9 @@ export const useChannelList = ({
       setSubFolders(
         (payload.subFolders || []).map((value) => normalizeSubFolderKey(value)).filter(Boolean)
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (!isLatest()) return;
-      const message = err?.response?.data?.error || 'Failed to load channels';
-      setError(message);
+      setError(serverErrorMessage(err, 'Failed to load channels'));
     } finally {
       if (isLatest()) {
         setLoading(false);

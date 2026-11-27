@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
+import { serverErrorMessage } from '../../../utils/requestError';
 import { decodeHtml } from '../../../utils/formatters';
 import { SearchResult, PageSize, PAGE_SIZES } from '../types';
 
@@ -104,9 +105,7 @@ export function useVideoSearch(token: string | null, options: UseVideoSearchOpti
       if (axios.isCancel(err)) {
         // user canceled or superseded; do not surface as error
       } else if (controllerRef.current === controller) {
-        const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-          || 'Search failed';
-        setError(message);
+        setError(serverErrorMessage(err, 'Search failed'));
       }
     } finally {
       if (controllerRef.current === controller) {

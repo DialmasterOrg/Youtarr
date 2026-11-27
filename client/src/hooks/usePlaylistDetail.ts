@@ -1,16 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { Playlist, PlaylistSyncStatus, PlaylistVideo } from '../types/playlist';
-
-export interface DownloadOverrideSettings {
-  resolution?: string;
-  allowRedownload?: boolean;
-  subfolder?: string | null;
-  audioFormat?: string | null;
-  rating?: string | null;
-  skipVideoFolder?: boolean;
-  protect?: boolean;
-}
+import { DownloadOverrideSettings } from '../types/downloadOverrideSettings';
+import { serverErrorMessage } from '../utils/requestError';
 
 export type PlaylistSortOrder = 'asc' | 'desc' | 'recent' | 'published' | 'downloaded';
 export type PlaylistDownloadState = 'all' | 'downloaded' | 'not_downloaded';
@@ -172,10 +164,7 @@ export const usePlaylistDetail = ({
       if (status === 404) {
         setError('Playlist not found');
       } else {
-        const message =
-          (axios.isAxiosError(err) && err.response?.data?.error) ||
-          'Failed to load playlist';
-        setError(typeof message === 'string' ? message : 'Failed to load playlist');
+        setError(serverErrorMessage(err, 'Failed to load playlist'));
       }
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);

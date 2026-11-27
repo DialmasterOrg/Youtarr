@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import axios from 'axios';
+import { serverErrorMessage } from '../../../utils/requestError';
 
 // The server accepts this many ids per request; larger selections are sent in batches.
 export const MARK_DELETED_BATCH_SIZE = 1000;
@@ -17,12 +18,6 @@ export interface UseMarkDeletedReturn {
 }
 
 const FALLBACK_ERROR = 'Failed to mark videos as deleted';
-
-function serverMessage(err: unknown): string {
-  // The server answers 400/409/500 with { error }; anything else gets the fallback.
-  const message = (err as { response?: { data?: { error?: unknown } } })?.response?.data?.error;
-  return typeof message === 'string' ? message : FALLBACK_ERROR;
-}
 
 export function useMarkDeleted(token: string | null): UseMarkDeletedReturn {
   const [loading, setLoading] = useState(false);
@@ -42,7 +37,8 @@ export function useMarkDeleted(token: string | null): UseMarkDeletedReturn {
       }
       return { updated, error: null };
     } catch (err: unknown) {
-      return { updated, error: serverMessage(err) };
+      // The server answers 400/409/500 with { error }; anything else gets the fallback.
+      return { updated, error: serverErrorMessage(err, FALLBACK_ERROR) };
     } finally {
       setLoading(false);
     }

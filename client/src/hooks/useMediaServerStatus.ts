@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
+import { serverErrorMessage } from '../utils/requestError';
 import { MediaServerStatus } from '../types/playlist';
 
 const POLL_INTERVAL_MS = 60_000;
@@ -34,10 +35,7 @@ export const useMediaServerStatus = (token: string | null) => {
         emby: !!res.data.emby,
       });
     } catch (err: unknown) {
-      const message =
-        (axios.isAxiosError(err) && err.response?.data?.error) ||
-        'Failed to load media server status';
-      setError(typeof message === 'string' ? message : 'Failed to load media server status');
+      setError(serverErrorMessage(err, 'Failed to load media server status'));
     } finally {
       setLoading(false);
     }

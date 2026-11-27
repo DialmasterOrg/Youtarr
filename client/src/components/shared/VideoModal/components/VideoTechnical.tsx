@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Typography, Skeleton, Tooltip, Chip, Accordion, AccordionSummary, AccordionDetails } from '../../../ui';
-import { formatDate, stripInternalPath } from '../../../../utils/formatters';
+import { formatBytes, formatDate, stripInternalPath } from '../../../../utils/formatters';
 import { tierFromDimensions } from '../../../../utils/videoResolution';
 import { isRemovedStatus } from '../../../../utils/videoStatus';
 import { describeRemoval } from '../../../../utils/videoRemoval';
@@ -11,24 +11,6 @@ interface VideoTechnicalProps {
   metadata: VideoExtendedMetadata | null;
   loading: boolean;
 }
-
-const BYTES_PER_KB = 1024;
-const BYTES_PER_MB = 1024 * 1024;
-const BYTES_PER_GB = 1024 * 1024 * 1024;
-
-function formatFileSize(bytes: number): string {
-  if (bytes >= BYTES_PER_GB) {
-    return `${(bytes / BYTES_PER_GB).toFixed(2)} GB`;
-  }
-  if (bytes >= BYTES_PER_MB) {
-    return `${(bytes / BYTES_PER_MB).toFixed(1)} MB`;
-  }
-  if (bytes >= BYTES_PER_KB) {
-    return `${(bytes / BYTES_PER_KB).toFixed(1)} KB`;
-  }
-  return `${bytes} B`;
-}
-
 
 function getOrientationLabel(ratio: number): string {
   if (ratio > 1) return 'Landscape';
@@ -86,7 +68,7 @@ interface FileRowProps {
 
 function FileRow({ label, filePath, fileSize }: FileRowProps) {
   const displayPath = stripInternalPath(filePath);
-  const sizeLabel = fileSize ? formatFileSize(fileSize) : 'Unknown size';
+  const sizeLabel = fileSize ? formatBytes(fileSize) : 'Unknown size';
 
   return (
     <Box style={{ paddingTop: 6, paddingBottom: 6 }}>

@@ -237,7 +237,7 @@ describe('VideoTechnical', () => {
         filePath: '/file.mp4',
         fileSize: 2 * 1024 * 1024,
       });
-      expect(screen.getByText('2.0 MB')).toBeInTheDocument();
+      expect(screen.getByText('2.00 MB')).toBeInTheDocument();
 
       rerender(
         <VideoTechnical

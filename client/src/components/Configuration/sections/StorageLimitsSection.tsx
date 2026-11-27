@@ -16,7 +16,8 @@ import { InfoTooltip } from '../common/InfoTooltip';
 import { OrDivider } from '../common/OrDivider';
 import { StorageSizeInput } from '../common/StorageSizeInput';
 import { ConfigState } from '../types';
-import { formatBytes, storageSizeToBytes } from '../helpers';
+import { storageSizeToBytes } from '../helpers';
+import { formatBytes } from '../../../utils/formatters';
 import { DownloadPauseAlert } from '../../shared/DownloadPauseAlert';
 import { useDownloadPauseStatus } from '../../../hooks/useDownloadPauseStatus';
 

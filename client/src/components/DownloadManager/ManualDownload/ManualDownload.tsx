@@ -20,6 +20,7 @@ import {
   ListPlus as PlaylistAddIcon
 } from 'lucide-react';
 import axios from 'axios';
+import { serverErrorMessage } from '../../../utils/requestError';
 import UrlInput from './UrlInput';
 import VideoChip from './VideoChip';
 import DownloadSettingsDialog from './DownloadSettingsDialog';
@@ -176,10 +177,8 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
       console.error('Error validating URL:', error);
       if (error.response?.status === 429) {
         setErrorMessage('Too many requests. Please wait a moment and try again.');
-      } else if (error.response?.data?.error) {
-        setErrorMessage(error.response.data.error);
       } else {
-        setErrorMessage('Failed to validate URL. Please try again.');
+        setErrorMessage(serverErrorMessage(error, 'Failed to validate URL. Please try again.'));
       }
       return false;
     } finally {

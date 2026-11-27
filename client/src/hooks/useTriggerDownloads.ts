@@ -1,15 +1,6 @@
 import { useVideoActivity } from '../providers/VideoActivityProvider';
 import { useState, useCallback, useRef } from 'react';
-
-interface DownloadOverrideSettings {
-  resolution?: string;
-  allowRedownload?: boolean;
-  subfolder?: string | null;
-  audioFormat?: string | null;
-  rating?: string | null;
-  skipVideoFolder?: boolean;
-  protect?: boolean;
-}
+import { DownloadOverrideSettings } from '../types/downloadOverrideSettings';
 
 interface TriggerDownloadsParams {
   urls: string[];
@@ -48,15 +39,7 @@ export function useTriggerDownloads(token: string | null): UseTriggerDownloadsRe
         const requestBody: any = { urls };
 
         if (overrideSettings) {
-          requestBody.overrideSettings = {
-            resolution: overrideSettings.resolution,
-            allowRedownload: overrideSettings.allowRedownload,
-            subfolder: overrideSettings.subfolder,
-            audioFormat: overrideSettings.audioFormat,
-            rating: overrideSettings.rating,
-            skipVideoFolder: overrideSettings.skipVideoFolder,
-            protect: overrideSettings.protect
-          };
+          requestBody.overrideSettings = overrideSettings;
         }
 
         if (channelId) {

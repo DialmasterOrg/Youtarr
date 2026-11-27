@@ -12,6 +12,7 @@ import {
   Plus as AddIcon,
 } from '../../../../lib/icons';
 import { formatCompactCount as formatCount, formatDate, formatDateTime } from '../../../../utils/formatters';
+import { formatDurationClock } from '../../../../utils';
 import { VideoModalData, VideoExtendedMetadata } from '../types';
 
 interface VideoMetadataProps {
@@ -24,15 +25,7 @@ interface VideoMetadataProps {
 const DESCRIPTION_PREVIEW_LENGTH = 300;
 const VISIBLE_TAGS_COUNT = 6;
 
-function formatDuration(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-  }
-  return `${minutes}:${String(secs).padStart(2, '0')}`;
-}
+const ZERO_DURATION = '0:00';
 
 function VideoMetadata({ video, metadata, loading, onAddChannel }: VideoMetadataProps) {
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
@@ -123,7 +116,7 @@ function VideoMetadata({ video, metadata, loading, onAddChannel }: VideoMetadata
           <Box style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
             <AccessTimeIcon size={14} color="var(--muted-foreground)" />
             <Typography variant="body2" color="text.secondary">
-              {formatDuration(video.duration)}
+              {formatDurationClock(video.duration) || ZERO_DURATION}
             </Typography>
           </Box>
         )}

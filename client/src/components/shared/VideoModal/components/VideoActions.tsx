@@ -21,7 +21,7 @@ import {
   isRemovedStatus,
 } from '../../../../utils/videoStatus';
 import { SHARED_STATUS_CHIP_STYLE, SHARED_THEMED_CHIP_STYLE } from '../../../shared/chipStyles';
-import { YOUTUBE_URL_BASE } from '../constants';
+import { youtubeVideoUrl } from '../../../../utils/youtubeUrls';
 
 interface VideoActionsProps {
   video: VideoModalData;
@@ -58,7 +58,7 @@ function VideoActions({
   const showMarkDeleted = video.status === 'missing' && video.databaseId !== null;
   const mediaTypeInfo = getMediaTypeInfo(video.mediaType);
   const statusLabel = video.status === 'downloaded' ? 'Available' : getStatusLabel(video.status);
-  const youtubeUrl = `${YOUTUBE_URL_BASE}${video.youtubeId}`;
+  const youtubeUrl = youtubeVideoUrl(video.youtubeId);
   const useIconOnlyActions = isMobile;
   const compactChipStyle = {
     height: 'var(--video-modal-action-control-height, 28px)',

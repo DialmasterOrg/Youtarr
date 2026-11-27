@@ -13,7 +13,7 @@ import {
 } from '../../../../lib/icons';
 import { isRemovedStatus } from '../../../../utils/videoStatus';
 import { VideoModalData } from '../types';
-import { YOUTUBE_URL_BASE } from '../constants';
+import { youtubeVideoUrl } from '../../../../utils/youtubeUrls';
 
 export interface MembersAccessCheckControl {
   onCheck: () => void;
@@ -114,7 +114,7 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile, membersAccessChe
     }
   }, []);
 
-  const youtubeUrl = `${YOUTUBE_URL_BASE}${video.youtubeId}`;
+  const youtubeUrl = youtubeVideoUrl(video.youtubeId);
   const isPlaying = canStream && playbackStarted && streamUrl && !streamError;
   const isPlayingVideo = isPlaying && playbackType === 'video';
   const isPlayingAudio = isPlaying && playbackType === 'audio';

@@ -9,6 +9,7 @@ import { useVideoDeletion } from '../../useVideoDeletion';
 import { useTriggerDownloads } from '../../../../hooks/useTriggerDownloads';
 import { DownloadSettings } from '../../../DownloadManager/ManualDownload/types';
 import { toDownloadOverrideSettings } from '../../../../utils/downloadOverrideSettings';
+import { youtubeVideoUrl } from '../../../../utils/youtubeUrls';
 
 interface SnackbarState {
   open: boolean;
@@ -235,7 +236,7 @@ export function useVideoModalActions({
       return;
     }
 
-    const url = `https://www.youtube.com/watch?v=${localVideo.youtubeId}`;
+    const url = youtubeVideoUrl(localVideo.youtubeId);
     const overrideSettings = toDownloadOverrideSettings(settings);
 
     const success = await triggerDownloads({

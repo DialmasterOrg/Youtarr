@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
+import { serverErrorMessage } from '../../../utils/requestError';
 
 const RUNNING_POLL_INTERVAL_MS = 2_000;
 // Consecutive failed status polls tolerated before the hook stops trusting the
@@ -83,9 +84,7 @@ export const useWatchStatusSync = (token: string | null) => {
       // replaces this with the server's actual state.
       setSyncState((prev) => ({ running: true, lastRun: prev?.lastRun ?? null }));
     } catch (err: unknown) {
-      const message =
-        (axios.isAxiosError(err) && err.response?.data?.error) || 'Failed to start sync';
-      setStartError(typeof message === 'string' ? message : 'Failed to start sync');
+      setStartError(serverErrorMessage(err, 'Failed to start sync'));
       const reason = axios.isAxiosError(err)
         ? (err.response?.data as { reason?: unknown } | undefined)?.reason
         : undefined;

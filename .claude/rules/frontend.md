@@ -29,7 +29,7 @@ Apply these when creating or substantially rewriting client code. Scope Discipli
 ## TypeScript
 
 - No `any`. `catch (err: unknown)` with narrowing; interfaces for props, API payloads and WebSocket messages; React's built-in event types. Existing `any` is legacy; do not add more.
-- Feature-specific types live with the feature; shared types in `client/src/types/`. New config fields go through the `CONFIG_FIELDS` registry in `client/src/config/configSchema.ts`.
+- Feature-specific types live with the feature. API and domain shapes used across features live in `client/src/types/`; a type that only describes one util module's inputs or outputs stays beside it. New config fields go through the `CONFIG_FIELDS` registry in `client/src/config/configSchema.ts`.
 
 ## Components and hooks
 
@@ -49,3 +49,5 @@ Apply these when creating or substantially rewriting client code. Scope Discipli
 - Axios, with `headers: { 'x-access-token': token }`; hooks receive `token` from the calling component. Type requests and responses. Handle specific status codes (403, 404, 503) rather than generic catch-alls.
 - `hooks/useConfig.ts` and other older files use raw `fetch()`; do not copy them.
 - Log a failed axios request through `utils/requestError.describeRequestError`, never the error itself: an axios error carries its request, including the `x-access-token` header.
+- Show a failed request's text through `utils/requestError.serverErrorMessage(err, fallback)`: the server's `{ error }` or the fallback, never axios's own message. Fifteen local copies had drifted apart; hooks that map status codes keep their own mapping.
+- YouTube links come from `utils/youtubeUrls`, byte sizes from `formatters.formatBytes`, and the `overrideSettings` request type from `types/downloadOverrideSettings`; do not rebuild them locally.

@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import axios from 'axios';
+import { serverErrorMessage } from '../utils/requestError';
 import {
   MediaServerType,
   Playlist,
@@ -31,16 +32,6 @@ const SYNC_KEY_BY_SERVER: Record<MediaServerType, keyof Playlist> = {
   emby: 'sync_to_emby',
 };
 
-function extractMessage(err: unknown, fallback: string): string {
-  if (axios.isAxiosError(err)) {
-    const data = err.response?.data;
-    if (data && typeof (data as { error?: unknown }).error === 'string') {
-      return (data as { error: string }).error;
-    }
-  }
-  return fallback;
-}
-
 function authHeaders(token: string | null): Record<string, string> | undefined {
   return token ? { 'x-access-token': token } : undefined;
 }
@@ -62,7 +53,7 @@ export const usePlaylistMutations = ({ token }: UsePlaylistMutationsParams) => {
         );
         return res.data;
       } catch (err: unknown) {
-        setError(extractMessage(err, 'Failed to fetch playlist info'));
+        setError(serverErrorMessage(err, 'Failed to fetch playlist info'));
         return null;
       } finally {
         setPending(false);
@@ -87,7 +78,7 @@ export const usePlaylistMutations = ({ token }: UsePlaylistMutationsParams) => {
         );
         return { playlist: res.data.playlist, restored: Boolean(res.data.restored), ...(res.data.warning && { warning: res.data.warning }) };
       } catch (err: unknown) {
-        setError(extractMessage(err, 'Failed to subscribe to playlist'));
+        setError(serverErrorMessage(err, 'Failed to subscribe to playlist'));
         return null;
       } finally {
         setPending(false);
@@ -105,7 +96,7 @@ export const usePlaylistMutations = ({ token }: UsePlaylistMutationsParams) => {
         await axios.delete(`/api/playlists/${playlistId}`, { headers: authHeaders(token) });
         return true;
       } catch (err: unknown) {
-        setError(extractMessage(err, 'Failed to unsubscribe'));
+        setError(serverErrorMessage(err, 'Failed to unsubscribe'));
         return false;
       } finally {
         setPending(false);
@@ -126,7 +117,7 @@ export const usePlaylistMutations = ({ token }: UsePlaylistMutationsParams) => {
         await axios.put(`/api/playlists/${playlistId}/settings`, settings, { headers: authHeaders(token) });
         return true;
       } catch (err: unknown) {
-        setError(extractMessage(err, 'Failed to update settings'));
+        setError(serverErrorMessage(err, 'Failed to update settings'));
         return false;
       } finally {
         setPending(false);
@@ -151,7 +142,7 @@ export const usePlaylistMutations = ({ token }: UsePlaylistMutationsParams) => {
         );
         return res.data.playlist;
       } catch (err: unknown) {
-        setError(extractMessage(err, 'Failed to update playlist'));
+        setError(serverErrorMessage(err, 'Failed to update playlist'));
         return null;
       } finally {
         setPending(false);
@@ -199,7 +190,7 @@ export const usePlaylistMutations = ({ token }: UsePlaylistMutationsParams) => {
         );
         return true;
       } catch (err: unknown) {
-        setError(extractMessage(err, 'Failed to ignore video'));
+        setError(serverErrorMessage(err, 'Failed to ignore video'));
         return false;
       } finally {
         setPending(false);
@@ -221,7 +212,7 @@ export const usePlaylistMutations = ({ token }: UsePlaylistMutationsParams) => {
         );
         return true;
       } catch (err: unknown) {
-        setError(extractMessage(err, 'Failed to unignore video'));
+        setError(serverErrorMessage(err, 'Failed to unignore video'));
         return false;
       } finally {
         setPending(false);
@@ -245,7 +236,7 @@ export const usePlaylistMutations = ({ token }: UsePlaylistMutationsParams) => {
         );
         return typeof res.data?.ignored === 'number' ? res.data.ignored : ytIds.length;
       } catch (err: unknown) {
-        setError(extractMessage(err, 'Failed to ignore videos'));
+        setError(serverErrorMessage(err, 'Failed to ignore videos'));
         return null;
       } finally {
         setPending(false);

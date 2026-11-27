@@ -1,4 +1,5 @@
 import type { MembersAccessState } from '../../../types/ChannelVideo';
+import type { DownloadOverrideSettings } from '../../../types/downloadOverrideSettings';
 
 export interface VideoInfo {
   youtubeId: string;
@@ -18,16 +19,8 @@ export interface VideoInfo {
   isBulkImport?: boolean;
 }
 
-export interface DownloadSettings {
-  resolution?: string;
+export interface DownloadSettings extends DownloadOverrideSettings {
   videoCount?: number;
-  allowRedownload?: boolean;
-  subfolder?: string | null;
-  audioFormat?: string | null;
-  rating?: string | null;
-  skipVideoFolder?: boolean;
-  // Protect the downloaded videos from automatic removal.
-  protect?: boolean;
 }
 
 export interface ValidationResponse {

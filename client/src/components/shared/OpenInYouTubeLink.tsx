@@ -2,16 +2,6 @@ import React from 'react';
 import { Youtube as YoutubeIcon } from 'lucide-react';
 import { Button, Tooltip } from '../ui';
 
-const YOUTUBE_BASE_URL = 'https://www.youtube.com';
-
-export function youtubeChannelUrl(channelId: string): string {
-  return `${YOUTUBE_BASE_URL}/channel/${encodeURIComponent(channelId)}`;
-}
-
-export function youtubePlaylistUrl(playlistId: string): string {
-  return `${YOUTUBE_BASE_URL}/playlist?list=${encodeURIComponent(playlistId)}`;
-}
-
 interface OpenInYouTubeLinkProps {
   href: string;
   ariaLabel?: string;

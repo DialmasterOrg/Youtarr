@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useMemo, useState } from 'react';
 import axios from 'axios';
+import { serverErrorMessage } from '../../../utils/requestError';
 import {
   Alert, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle,
   FormControl, InputLabel, MenuItem, RadioGroup, RadioGroupItem, Select, TextField,
@@ -66,7 +67,7 @@ export default function PlaylistFollowingDialog({ playlist, token, mode, default
       setSelected(data.selectedIds);
     }).catch((err: unknown) => {
       if (!controller.signal.aborted) {
-        setError(axios.isAxiosError(err) ? err.response?.data?.error || 'Could not load the selection.' : 'Could not load the selection.');
+        setError(serverErrorMessage(err, 'Could not load the selection.'));
       }
     });
     return () => controller.abort();
@@ -101,7 +102,7 @@ export default function PlaylistFollowingDialog({ playlist, token, mode, default
         ? `${data.queued} videos queued.`
         : followingMessage));
     } catch (err: unknown) {
-      setError(axios.isAxiosError(err) ? err.response?.data?.error || 'Could not save this selection. Please retry.' : 'Could not save this selection. Please retry.');
+      setError(serverErrorMessage(err, 'Could not save this selection. Please retry.'));
     } finally {
       setPending(false);
     }

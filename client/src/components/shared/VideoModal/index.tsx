@@ -29,6 +29,7 @@ import DownloadSettingsDialog from '../../DownloadManager/ManualDownload/Downloa
 import { useConfig } from '../../../hooks/useConfig';
 import { uploadDateToIso } from '../../../utils/formatters';
 import { isRemovedStatus, isMembersOnlyBlocked } from '../../../utils/videoStatus';
+import { youtubeChannelUrl } from '../../../utils/youtubeUrls';
 
 const SNACKBAR_AUTO_HIDE_MS = 4000;
 
@@ -380,7 +381,7 @@ function VideoModal({
           open={addChannelOpen}
           onClose={() => setAddChannelOpen(false)}
           channelName={displayVideo.channelName}
-          channelUrl={`https://www.youtube.com/channel/${video.channelId}`}
+          channelUrl={youtubeChannelUrl(video.channelId)}
         />
       )}
 

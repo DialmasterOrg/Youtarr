@@ -1,5 +1,6 @@
 import React, { ChangeEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
 import axios from 'axios';
+import { serverErrorMessage } from '../../../utils/requestError';
 import { Eye, EyeOff, Info } from 'lucide-react';
 import {
   Alert,
@@ -176,10 +177,7 @@ export const MediaServerPlaylistSection: React.FC<MediaServerPlaylistSectionProp
         setUsers(res.data.users || []);
       } catch (err: unknown) {
         if (!silent) {
-          const message =
-            (axios.isAxiosError(err) && err.response?.data?.error) ||
-            'Failed to fetch users';
-          setUsersError(typeof message === 'string' ? message : 'Failed to fetch users');
+          setUsersError(serverErrorMessage(err, 'Failed to fetch users'));
         }
         setUsers([]);
       } finally {

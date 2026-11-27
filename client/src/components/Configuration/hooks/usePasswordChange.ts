@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import axios from 'axios';
+import { serverErrorMessage } from '../../../utils/requestError';
 import { SnackbarState } from '../types';
 
 interface UsePasswordChangeParams {
@@ -68,10 +69,10 @@ export const usePasswordChange = ({
         setNewPassword('');
         setConfirmNewPassword('');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       setSnackbar({
         open: true,
-        message: error.response?.data?.error || 'Failed to update password',
+        message: serverErrorMessage(error, 'Failed to update password'),
         severity: 'error'
       });
     }

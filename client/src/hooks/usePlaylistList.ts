@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
+import { serverErrorMessage } from '../utils/requestError';
 import { Playlist } from '../types/playlist';
 
 interface UsePlaylistListParams {
@@ -42,10 +43,7 @@ export const usePlaylistList = ({
       setPlaylists(response.data.playlists || []);
       setTotal(response.data.total || 0);
     } catch (err: unknown) {
-      const message =
-        (axios.isAxiosError(err) && err.response?.data?.error) ||
-        'Failed to load playlists';
-      setError(typeof message === 'string' ? message : 'Failed to load playlists');
+      setError(serverErrorMessage(err, 'Failed to load playlists'));
     } finally {
       setLoading(false);
     }
