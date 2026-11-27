@@ -53,18 +53,6 @@ jest.mock('./components/VideosPage', () => {
   };
 });
 
-jest.mock('./components/LocalLogin', () => {
-  return function LocalLogin({ setToken }: { setToken: (token: string | null) => void }) {
-    return (
-      <div data-testid="login-page">
-        <button onClick={() => {
-          setToken('mock-token');
-        }}>Mock Login</button>
-      </div>
-    );
-  };
-});
-
 jest.mock('./components/InitialSetup', () => {
   return function InitialSetup({ onSetupComplete }: { onSetupComplete: (token: string) => void }) {
     return (

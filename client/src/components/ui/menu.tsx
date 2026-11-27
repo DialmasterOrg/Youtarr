@@ -3,18 +3,7 @@ import { createPortal } from 'react-dom';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { cn } from '../../lib/cn';
 import { MenuItem } from './select';
-
-function getOverlayInsets() {
-  if (typeof window === 'undefined') {
-    return { top: 12, bottom: 16 };
-  }
-
-  const styles = window.getComputedStyle(document.documentElement);
-  const topInset = Number.parseFloat(styles.getPropertyValue('--app-shell-overlay-top-offset-px')) || 0;
-  const bottomInset = Number.parseFloat(styles.getPropertyValue('--mobile-nav-total-offset-px')) || 0;
-
-  return { top: topInset + 12, bottom: bottomInset + 16 };
-}
+import { clamp, getOverlayInsets } from './overlayInsets';
 
 type OverlayOrigin = {
   vertical: 'top' | 'bottom' | 'center';
@@ -84,10 +73,6 @@ function getMenuSize(menuElement: HTMLElement | null): MenuSize {
   const height = menuElement.scrollHeight || Number.parseFloat(computedStyle.height) || rect.height || 0;
 
   return { width, height };
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
 }
 
 function buildPlacement(

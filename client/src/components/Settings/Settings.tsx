@@ -13,8 +13,7 @@ import ConfigurationSkeleton from '../Configuration/common/ConfigurationSkeleton
 import { CoreSettingsSection } from '../Configuration/sections/CoreSettingsSection';
 import AppearanceSettingsSection from '../Configuration/sections/AppearanceSettingsSection';
 import { PlexIntegrationSection } from '../Configuration/sections/PlexIntegrationSection';
-import JellyfinSection from '../Configuration/sections/JellyfinSection';
-import EmbySection from '../Configuration/sections/EmbySection';
+import MediaServerPlaylistSection from '../Configuration/sections/MediaServerPlaylistSection';
 import WatchStatusSection from '../Configuration/sections/WatchStatusSection';
 import { SponsorBlockSection } from '../Configuration/sections/SponsorBlockSection';
 import { CookieConfigSection } from '../Configuration/sections/CookieConfigSection';
@@ -364,10 +363,15 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
               />
             }
           />
+          {/* Both pages render the same component, so each needs its own key:
+              without one React keeps a single instance across the two routes,
+              and the revealed API key, test result and user list carry over. */}
           <Route
             path="jellyfin"
             element={
-              <JellyfinSection
+              <MediaServerPlaylistSection
+                key="jellyfin"
+                kind="jellyfin"
                 config={config}
                 token={token}
                 onConfigChange={handleConfigChange}
@@ -377,7 +381,9 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
           <Route
             path="emby"
             element={
-              <EmbySection
+              <MediaServerPlaylistSection
+                key="emby"
+                kind="emby"
                 config={config}
                 token={token}
                 onConfigChange={handleConfigChange}

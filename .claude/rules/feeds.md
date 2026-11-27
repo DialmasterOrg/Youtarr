@@ -4,6 +4,7 @@ paths:
   - "server/routes/feeds.js"
   - "client/src/components/Configuration/sections/RssFeedsSection.tsx"
   - "client/src/components/Configuration/hooks/useDownloadsFeedToken.ts"
+  - "client/src/components/Configuration/hooks/useServerOwnedSecret.ts"
 ---
 
 # RSS feeds

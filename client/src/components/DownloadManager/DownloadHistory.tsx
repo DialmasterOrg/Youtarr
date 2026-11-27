@@ -79,6 +79,91 @@ function getDiagnosisTitles(job: Job): string[] {
   return (job.data?.diagnoses || []).map((diagnosis) => diagnosis.title);
 }
 
+// The short source name for a job row; cleanJobTypeLabel gives the fuller one.
+function shortJobTypeLabel(jobType: string): string {
+  if (jobType.startsWith('Auto-retry')) return 'Auto-retry';
+  if (jobType.startsWith('Playlist Retry: ')) return 'Playlist retries';
+  if (jobType.includes('Channel Downloads')) return 'Channels';
+  if (isArrBridgeJob(jobType)) return ARR_BRIDGE_HISTORY_LABEL;
+  if (jobType.includes('Manually Added Urls')) {
+    const apiKeyMatch = jobType.match(/\(via API: (.+)\)/);
+    return apiKeyMatch ? `API: ${apiKeyMatch[1]}` : 'Manual Videos';
+  }
+  if (jobType === 'Playlist Downloads' || jobType.startsWith('Playlist: ')) return 'Playlists';
+  return '';
+}
+
+// "MM-DD h:mm AM"
+function formatJobTimeCreated(value: Job['timeCreated']): string {
+  const timeCreated = new Date(value);
+  const month = String(timeCreated.getMonth() + 1).padStart(2, '0');
+  const day = String(timeCreated.getDate()).padStart(2, '0');
+  const minutes = String(timeCreated.getMinutes()).padStart(2, '0');
+  const period = timeCreated.getHours() >= 12 ? 'PM' : 'AM';
+  const hours = timeCreated.getHours() % 12 || 12;
+  return `${month}-${day} ${hours}:${minutes} ${period}`;
+}
+
+// The status text of a finished job, or how long a running one has taken.
+function describeJobDuration(job: Job, videoCount: number, currentTime: Date): string {
+  if (job.status !== 'In Progress') {
+    return videoCount === 0 ? `${job.status} - no new videos` : job.status;
+  }
+  const duration = new Date(currentTime.getTime() - new Date(job.timeInitiated).getTime());
+  const mm = String(duration.getUTCMinutes()).padStart(2, '0');
+  const ss = String(duration.getUTCSeconds()).padStart(2, '0');
+  return `${mm}m${ss}s`;
+}
+
+// What the phone cards and the desktop table both show for one job.
+function describeJobRow(job: Job, currentTime: Date) {
+  const videos: VideoData[] = job.data?.videos || [];
+  return {
+    videos,
+    durationString: describeJobDuration(job, videos.length, currentTime),
+    formattedTimeCreated: formatJobTimeCreated(job.timeCreated),
+    formattedJobType: shortJobTypeLabel(job.jobType),
+    failedForJob: getDisplayableFailedVideos(job),
+  };
+}
+
+interface JobSummaryChipsProps {
+  job: Job;
+  failedCount: number;
+  // Whether to count the job's missing and deleted videos.
+  showAvailability: boolean;
+}
+
+const JobSummaryChips: React.FC<JobSummaryChipsProps> = ({ job, failedCount, showAvailability }) => {
+  const videos: VideoData[] = job.data?.videos || [];
+  const countIn = (state: 'missing' | 'deleted') =>
+    showAvailability ? videos.filter((v) => getRemovalState(v.removed, v.removed_reason) === state).length : 0;
+  const missingCount = countIn('missing');
+  const deletedCount = countIn('deleted');
+
+  return (
+    <>
+      {missingCount > 0 && (
+        <AvailabilityChip
+          state="missing"
+          label={`${missingCount} missing`}
+          tooltip={`${missingCount} of ${videos.length} video files not found on disk`}
+        />
+      )}
+      {deletedCount > 0 && (
+        <AvailabilityChip
+          state="deleted"
+          label={`${deletedCount} deleted`}
+          tooltip={`${deletedCount} of ${videos.length} videos ${deletedCount === 1 ? 'was' : 'were'} deleted by Youtarr or marked as deleted`}
+        />
+      )}
+      {failedCount > 0 && (
+        <FailedVideoChip count={failedCount} diagnosisTitles={getDiagnosisTitles(job)} />
+      )}
+    </>
+  );
+};
+
 function jobVideoToModalData(video: VideoData): VideoModalData {
   const isDownloaded = Boolean(video.filePath || video.audioFilePath) && !video.removed;
   const status: VideoModalData['status'] = video.removed
@@ -263,50 +348,14 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                   {currentJobs.map((job) => {
                     const isExpanded = !!expanded[job.id];
 
-                    const videos = job.data?.videos || [];
-                    const isCompletedWithNoVideos = videos.length === 0 && job.status !== 'In Progress';
-
-                    let durationString = '';
-                    if (job.status !== 'In Progress') {
-                      durationString = isCompletedWithNoVideos ? `${job.status} - no new videos` : job.status;
-                    } else {
-                      const jobStartTime = new Date(job.timeInitiated).getTime();
-                      const duration = new Date(currentTime.getTime() - jobStartTime);
-                      const mm = String(duration.getUTCMinutes()).padStart(2, '0');
-                      const ss = String(duration.getUTCSeconds()).padStart(2, '0');
-                      durationString = `${mm}m${ss}s`;
-                    }
-
-                    const timeCreated = new Date(job.timeCreated);
-                    const month = String(timeCreated.getMonth() + 1).padStart(2, '0');
-                    const day = String(timeCreated.getDate()).padStart(2, '0');
-                    const minutes = String(timeCreated.getMinutes()).padStart(2, '0');
-                    let hours = timeCreated.getHours();
-                    const period = hours >= 12 ? 'PM' : 'AM';
-
-                    let formattedJobType = '';
-                    if (job.jobType.startsWith('Auto-retry')) formattedJobType = 'Auto-retry';
-                    else if (job.jobType.startsWith('Playlist Retry: ')) formattedJobType = 'Playlist retries';
-                    else if (job.jobType.includes('Channel Downloads')) formattedJobType = 'Channels';
-                    else if (isArrBridgeJob(job.jobType)) formattedJobType = ARR_BRIDGE_HISTORY_LABEL;
-                    else if (job.jobType.includes('Manually Added Urls')) {
-                      const apiKeyMatch = job.jobType.match(/\(via API: (.+)\)/);
-                      formattedJobType = apiKeyMatch ? `API: ${apiKeyMatch[1]}` : 'Manual Videos';
-                    }
-                    else if (job.jobType === 'Playlist Downloads' || job.jobType.startsWith('Playlist: ')) formattedJobType = 'Playlists';
-
-                    hours = hours % 12;
-                    hours = hours ? hours : 12;
-                    const formattedTimeCreated = `${month}-${day} ${hours}:${minutes} ${period}`;
+                    const { videos, durationString, formattedTimeCreated, formattedJobType, failedForJob } =
+                      describeJobRow(job, currentTime);
 
                     const singleVideo = videos[0];
                     const hasMultiple = videos.length > 1;
                     const titleText = singleVideo?.youTubeVideoName || (hasMultiple ? `Multiple (${videos.length})` : cleanJobTypeLabel(job.jobType));
                     const channelText = !hasMultiple ? singleVideo?.youTubeChannelName : undefined;
                     const showThumbnail = !hasMultiple && !!singleVideo;
-                    const missingCount = videos.filter((v: VideoData) => getRemovalState(v.removed, v.removed_reason) === 'missing').length;
-                    const deletedCount = videos.filter((v: VideoData) => getRemovalState(v.removed, v.removed_reason) === 'deleted').length;
-                    const failedForJob = getDisplayableFailedVideos(job);
                     const hasExpandable = hasMultiple || failedForJob.length > 0;
 
                     return (
@@ -334,26 +383,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                                 titleText
                               )}
                             </Typography>
-                            {hasMultiple && missingCount > 0 && (
-                              <AvailabilityChip
-                                state="missing"
-                                label={`${missingCount} missing`}
-                                tooltip={`${missingCount} of ${videos.length} video files not found on disk`}
-                              />
-                            )}
-                            {hasMultiple && deletedCount > 0 && (
-                              <AvailabilityChip
-                                state="deleted"
-                                label={`${deletedCount} deleted`}
-                                tooltip={`${deletedCount} of ${videos.length} videos ${deletedCount === 1 ? 'was' : 'were'} deleted by Youtarr or marked as deleted`}
-                              />
-                            )}
-                            {failedForJob.length > 0 && (
-                              <FailedVideoChip
-                                count={failedForJob.length}
-                                diagnosisTitles={getDiagnosisTitles(job)}
-                              />
-                            )}
+                            <JobSummaryChips job={job} failedCount={failedForJob.length} showAvailability={hasMultiple} />
                           </Box>
                           {hasExpandable && (
                             <IconButton size="small" onClick={() => handleExpandCell(job.id)}>
@@ -504,47 +534,10 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                   {currentJobs.map((job) => {
                     const isExpanded = !!expanded[job.id];
 
-                    const videos = job.data?.videos || [];
-                    const isCompletedWithNoVideos = videos.length === 0 && job.status !== 'In Progress';
-
-                    let durationString = '';
-                    if (job.status !== 'In Progress') {
-                      durationString = isCompletedWithNoVideos ? `${job.status} - no new videos` : job.status;
-                    } else {
-                      const jobStartTime = new Date(job.timeInitiated).getTime();
-                      const duration = new Date(currentTime.getTime() - jobStartTime);
-                      const mm = String(duration.getUTCMinutes()).padStart(2, '0');
-                      const ss = String(duration.getUTCSeconds()).padStart(2, '0');
-                      durationString = `${mm}m${ss}s`;
-                    }
-
-                    const timeCreated = new Date(job.timeCreated);
-                    const month = String(timeCreated.getMonth() + 1).padStart(2, '0');
-                    const day = String(timeCreated.getDate()).padStart(2, '0');
-                    const minutes = String(timeCreated.getMinutes()).padStart(2, '0');
-                    let hours = timeCreated.getHours();
-                    const period = hours >= 12 ? 'PM' : 'AM';
-
-                    let formattedJobType = '';
-                    if (job.jobType.startsWith('Auto-retry')) formattedJobType = 'Auto-retry';
-                    else if (job.jobType.startsWith('Playlist Retry: ')) formattedJobType = 'Playlist retries';
-                    else if (job.jobType.includes('Channel Downloads')) formattedJobType = 'Channels';
-                    else if (isArrBridgeJob(job.jobType)) formattedJobType = ARR_BRIDGE_HISTORY_LABEL;
-                    else if (job.jobType.includes('Manually Added Urls')) {
-                      const apiKeyMatch = job.jobType.match(/\(via API: (.+)\)/);
-                      formattedJobType = apiKeyMatch ? `API: ${apiKeyMatch[1]}` : 'Manual Videos';
-                    }
-                    else if (job.jobType === 'Playlist Downloads' || job.jobType.startsWith('Playlist: ')) formattedJobType = 'Playlists';
-
-                    hours = hours % 12;
-                    hours = hours ? hours : 12;
-                    const formattedTimeCreated = `${month}-${day} ${hours}:${minutes} ${period}`;
-
-                    const failedForJob = getDisplayableFailedVideos(job);
+                    const { videos, durationString, formattedTimeCreated, formattedJobType, failedForJob } =
+                      describeJobRow(job, currentTime);
 
                     if (videos.length > 1 || failedForJob.length > 0) {
-                      const missingCount = videos.filter((v: VideoData) => getRemovalState(v.removed, v.removed_reason) === 'missing').length;
-                      const deletedCount = videos.filter((v: VideoData) => getRemovalState(v.removed, v.removed_reason) === 'deleted').length;
                       const summaryLabel = videos.length > 1
                         ? `Multiple (${videos.length})`
                         : videos[0]?.youTubeVideoName || cleanJobTypeLabel(job.jobType);
@@ -555,26 +548,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                             <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>
                               <Box className="flex items-center gap-2 flex-wrap">
                                 <span>{summaryLabel}</span>
-                                {missingCount > 0 && (
-                                  <AvailabilityChip
-                                    state="missing"
-                                    label={`${missingCount} missing`}
-                                    tooltip={`${missingCount} of ${videos.length} video files not found on disk`}
-                                  />
-                                )}
-                                {deletedCount > 0 && (
-                                  <AvailabilityChip
-                                    state="deleted"
-                                    label={`${deletedCount} deleted`}
-                                    tooltip={`${deletedCount} of ${videos.length} videos ${deletedCount === 1 ? 'was' : 'were'} deleted by Youtarr or marked as deleted`}
-                                  />
-                                )}
-                                {failedForJob.length > 0 && (
-                                  <FailedVideoChip
-                                    count={failedForJob.length}
-                                    diagnosisTitles={getDiagnosisTitles(job)}
-                                  />
-                                )}
+                                <JobSummaryChips job={job} failedCount={failedForJob.length} showAvailability />
                               </Box>
                             </TableCell>
                             <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{formattedJobType}</TableCell>

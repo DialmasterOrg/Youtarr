@@ -25,9 +25,12 @@ import type { MembersAccessState } from '../types/ChannelVideo';
 import PlaylistHeader from './PlaylistPage/components/PlaylistHeader';
 import NoMediaServerWarning from './PlaylistPage/components/NoMediaServerWarning';
 import PlaylistVideoList from './PlaylistPage/components/PlaylistVideoList';
-import PlaylistSortControl from './PlaylistPage/components/PlaylistSortControl';
-import PlaylistDownloadFilterControl from './PlaylistPage/components/PlaylistDownloadFilterControl';
-import PlaylistWatchedFilterControl from './PlaylistPage/components/PlaylistWatchedFilterControl';
+import PlaylistSelectControl, {
+  DOWNLOAD_FILTER_OPTIONS,
+  SORT_OPTIONS,
+  WATCHED_FILTER_MIN_WIDTH,
+  WATCHED_FILTER_OPTIONS,
+} from './PlaylistPage/components/PlaylistSelectControl';
 import { useVideoSelection } from './shared/VideoList/hooks/useVideoSelection';
 import VideoListSelectionPill from './shared/VideoList/VideoListSelectionPill';
 import { SelectionAction } from './shared/VideoList/types';
@@ -455,18 +458,25 @@ function PlaylistPage({ token }: PlaylistPageProps) {
               Videos
             </Typography>
             <Box className="flex items-center gap-2 flex-wrap">
-              <PlaylistDownloadFilterControl
+              <PlaylistSelectControl
+                label="Show"
                 value={downloadState}
+                options={DOWNLOAD_FILTER_OPTIONS}
                 onChange={setDownloadState}
                 disabled={loading && videos.length === 0}
               />
-              <PlaylistWatchedFilterControl
+              <PlaylistSelectControl
+                label="Watched"
                 value={watchedState}
+                options={WATCHED_FILTER_OPTIONS}
                 onChange={setWatchedState}
                 disabled={loading && videos.length === 0}
+                minWidth={WATCHED_FILTER_MIN_WIDTH}
               />
-              <PlaylistSortControl
+              <PlaylistSelectControl
+                label="Sort"
                 value={sortOrder}
+                options={SORT_OPTIONS}
                 onChange={setSortOrder}
                 disabled={loading && videos.length === 0}
               />

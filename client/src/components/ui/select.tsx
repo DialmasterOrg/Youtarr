@@ -2,23 +2,7 @@ import React, { useId } from 'react';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import { ChevronDown, Check } from 'lucide-react';
 import { cn } from '../../lib/cn';
-
-function getOverlayInsets() {
-  if (typeof window === 'undefined') {
-    return { top: 12, right: 12, bottom: 16, left: 12 };
-  }
-
-  const styles = window.getComputedStyle(document.documentElement);
-  const topInset = Number.parseFloat(styles.getPropertyValue('--app-shell-overlay-top-offset-px')) || 0;
-  const bottomInset = Number.parseFloat(styles.getPropertyValue('--mobile-nav-total-offset-px')) || 0;
-
-  return {
-    top: topInset + 12,
-    right: 12,
-    bottom: bottomInset + 16,
-    left: 12,
-  };
-}
+import { getOverlayInsets } from './overlayInsets';
 
 export type SelectChangeEvent<T = string> = { target: { value: T; name?: string } };
 const EMPTY_SELECT_VALUE = '__EMPTY_SELECT_VALUE__';

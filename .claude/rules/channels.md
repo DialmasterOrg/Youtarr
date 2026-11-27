@@ -23,6 +23,7 @@ paths:
   - "client/src/components/Subscriptions/**/*"
   - "client/src/components/shared/AddChannelDialog.tsx"
   - "client/src/components/FindChannels/**/*"
+  - "client/src/hooks/useYoutubeSearch.ts"
   - "client/src/components/SubscriptionImport/**/*"
   - "client/src/utils/tabDownloadStats.ts"
   - "client/src/utils/channelTabs.ts"

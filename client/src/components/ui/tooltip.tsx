@@ -2,6 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { cn } from '../../lib/cn';
+import { clamp, getOverlayInsets } from './overlayInsets';
 
 const TooltipProvider = TooltipPrimitive.Provider;
 
@@ -272,26 +273,5 @@ const Tooltip: React.FC<TooltipProps> = ({
     </TooltipProvider>
   );
 };
-
-function getOverlayInsets() {
-  if (typeof window === 'undefined') {
-    return { top: 12, bottom: 16, left: 12, right: 12 };
-  }
-
-  const styles = window.getComputedStyle(document.documentElement);
-  const topInset = Number.parseFloat(styles.getPropertyValue('--app-shell-overlay-top-offset-px')) || 0;
-  const bottomInset = Number.parseFloat(styles.getPropertyValue('--mobile-nav-total-offset-px')) || 0;
-
-  return {
-    top: topInset + 12,
-    bottom: bottomInset + 16,
-    left: 12,
-    right: 12,
-  };
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
-}
 
 export { Tooltip, TooltipProvider };
