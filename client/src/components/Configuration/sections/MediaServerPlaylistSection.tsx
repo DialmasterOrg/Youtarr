@@ -152,10 +152,7 @@ export const MediaServerPlaylistSection: React.FC<MediaServerPlaylistSectionProp
       }
     } catch (err: unknown) {
       setTestStatus('error');
-      const message =
-        (axios.isAxiosError(err) && err.response?.data?.error) ||
-        (err instanceof Error ? err.message : 'Connection failed');
-      setTestMessage(typeof message === 'string' ? message : 'Connection failed');
+      setTestMessage(serverErrorMessage(err, 'Connection failed'));
     } finally {
       setTesting(false);
     }

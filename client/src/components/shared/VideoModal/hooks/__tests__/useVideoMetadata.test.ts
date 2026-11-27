@@ -119,4 +119,18 @@ describe('useVideoMetadata', () => {
     expect(result.current.metadata).toBeNull();
     expect(result.current.error).toBe('Video not found');
   });
+
+  test('shows the fallback, not the transport message, when the server sent no error text', async () => {
+    axios.get.mockRejectedValueOnce(new Error('Request failed with status code 502'));
+
+    const { result } = renderHook(() =>
+      useVideoMetadata('badId', 'test-token')
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.error).toBe('Failed to fetch video metadata');
+  });
 });

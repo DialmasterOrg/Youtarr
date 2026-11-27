@@ -87,6 +87,18 @@ describe('useVideoProtection', () => {
     expect(returnedState).toBeUndefined();
   });
 
+  test('shows the fallback, not the transport message, when the server sent no error text', async () => {
+    axios.patch.mockRejectedValueOnce(new Error('Request failed with status code 502'));
+
+    const { result } = renderHook(() => useVideoProtection('test-token'));
+
+    await act(async () => {
+      await result.current.toggleProtection(999, false);
+    });
+
+    expect(result.current.error).toBe('Failed to update protection status');
+  });
+
   test('clearMessages resets successMessage and error', async () => {
     axios.patch.mockResolvedValueOnce({ data: { id: 1, protected: true } });
 

@@ -369,6 +369,21 @@ describe('MediaServerPlaylistSection', () => {
     expect(await screen.findByText('Connection Failed')).toBeInTheDocument();
   });
 
+  test('explains a failed test without the transport message when the server sent no error text', async () => {
+    axios.post.mockRejectedValueOnce(new Error('Request failed with status code 502'));
+    renderWithProviders(
+      <MediaServerPlaylistSection
+        kind="emby"
+        config={baseConfig()}
+        token="tok"
+        onConfigChange={jest.fn()}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: /test connection/i }));
+    expect(await screen.findByText('Connection failed')).toBeInTheDocument();
+    expect(screen.queryByText('Request failed with status code 502')).not.toBeInTheDocument();
+  });
+
   test('warns when the saved user ID does not look like a server user ID', async () => {
     // A non-empty saved userId triggers the mount-time eager fetch; resolve it so the
     // effect settles inside the test instead of leaking a state update past teardown.

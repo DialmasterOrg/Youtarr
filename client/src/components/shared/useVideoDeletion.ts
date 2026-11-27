@@ -1,5 +1,10 @@
 import { useState } from 'react';
 import axios from 'axios';
+import { serverErrorMessage } from '../../utils/requestError';
+
+// Callers show this after their own "Failed to delete videos:", so it reads as
+// the reason, not as a second statement of the failure.
+const DELETE_ERROR = 'The request failed. Please try again.';
 
 interface DeletionResult {
   success: boolean;
@@ -37,8 +42,8 @@ export const useVideoDeletion = (): UseVideoDeletionReturn => {
 
       setLoading(false);
       return response.data;
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.error || err.message || 'Failed to delete videos';
+    } catch (err: unknown) {
+      const errorMessage = serverErrorMessage(err, DELETE_ERROR);
       setError(errorMessage);
       setLoading(false);
 
@@ -70,8 +75,8 @@ export const useVideoDeletion = (): UseVideoDeletionReturn => {
 
       setLoading(false);
       return response.data;
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.error || err.message || 'Failed to delete videos';
+    } catch (err: unknown) {
+      const errorMessage = serverErrorMessage(err, DELETE_ERROR);
       setError(errorMessage);
       setLoading(false);
 

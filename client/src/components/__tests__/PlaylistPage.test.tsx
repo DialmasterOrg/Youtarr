@@ -285,7 +285,7 @@ describe('PlaylistPage selected-download selection lifecycle', () => {
     await user.click(screen.getByTestId('selection-action-download'));
     await user.click(await screen.findByTestId('mock-confirm-download'));
 
-    expect(await screen.findByText('download blew up')).toBeInTheDocument();
+    expect(await screen.findByText('Download failed')).toBeInTheDocument();
     expect(mockTriggerDownload).toHaveBeenCalledWith(['vidA'], undefined);
     expect(mockNavigate).not.toHaveBeenCalled();
     expect(screen.getByText('1 selected')).toBeInTheDocument();
@@ -785,14 +785,15 @@ describe('PlaylistPage action errors', () => {
     expect(await screen.findByText('YouTube says this playlist does not exist.')).toBeInTheDocument();
   });
 
-  test('falls back to the error message when the server sent no explanation', async () => {
+  test('names the failed action, not the transport message, when the server sent no explanation', async () => {
     const user = userEvent.setup();
     mockRefresh.mockRejectedValue(Object.assign(new Error('Network Error'), { isAxiosError: true }));
 
     renderWithProviders(<PlaylistPage token="t" />);
     await user.click(screen.getByRole('button', { name: 'Refresh from YouTube' }));
 
-    expect(await screen.findByText('Network Error')).toBeInTheDocument();
+    expect(await screen.findByText('Refresh failed')).toBeInTheDocument();
+    expect(screen.queryByText('Network Error')).not.toBeInTheDocument();
   });
 });
 

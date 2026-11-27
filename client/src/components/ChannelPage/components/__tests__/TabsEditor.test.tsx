@@ -138,6 +138,21 @@ describe('TabsEditor', () => {
     });
   });
 
+  test('shows the fallback, not the transport message, when the server sent no error text', async () => {
+    const user = userEvent.setup();
+    axios.isAxiosError.mockReturnValue(true);
+    axios.post.mockRejectedValueOnce(
+      Object.assign(new Error('Request failed with status code 502'), { response: { status: 502, data: {} } })
+    );
+
+    renderWithProviders(<TabsEditor {...defaultProps} />);
+
+    await user.click(screen.getByTestId('tabs-editor-refresh'));
+
+    expect(await screen.findByText('Failed to refresh tabs')).toBeInTheDocument();
+    expect(screen.queryByText('Request failed with status code 502')).not.toBeInTheDocument();
+  });
+
   test('disables checkboxes and refresh button while disabled prop is true', () => {
     renderWithProviders(<TabsEditor {...defaultProps} disabled />);
 

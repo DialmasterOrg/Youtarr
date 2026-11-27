@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import axios from 'axios';
 import { useVideoActivity } from '../providers/VideoActivityProvider';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -43,6 +42,7 @@ import DeleteVideosDialog from './shared/DeleteVideosDialog';
 import DownloadSettingsDialog from './DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from './DownloadManager/ManualDownload/types';
 import { toDownloadOverrideSettings } from '../utils/downloadOverrideSettings';
+import { serverErrorMessage } from '../utils/requestError';
 import SubscriptionsBackButton from './shared/SubscriptionsBackButton';
 import VideoModal from './shared/VideoModal';
 import { VideoModalData } from './shared/VideoModal/types';
@@ -174,9 +174,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         showSnackbar(successMessage ?? `${label} succeeded`);
         return true;
       } catch (err: unknown) {
-        const serverMessage: unknown = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
-        const fallback = err instanceof Error ? err.message : `${label} failed`;
-        showSnackbar(typeof serverMessage === 'string' && serverMessage ? serverMessage : fallback, 'error');
+        showSnackbar(serverErrorMessage(err, `${label} failed`), 'error');
         return false;
       } finally {
         setRunningAction(null);

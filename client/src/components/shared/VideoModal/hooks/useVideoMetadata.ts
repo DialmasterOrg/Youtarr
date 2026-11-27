@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { serverErrorMessage } from '../../../../utils/requestError';
 import { VideoExtendedMetadata } from '../types';
 
 interface UseVideoMetadataReturn {
@@ -46,10 +47,7 @@ export const useVideoMetadata = (
         }
       } catch (err: unknown) {
         if (!cancelled) {
-          const errorMessage =
-            (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-            (err instanceof Error ? err.message : 'Failed to fetch video metadata');
-          setError(errorMessage);
+          setError(serverErrorMessage(err, 'Failed to fetch video metadata'));
         }
       } finally {
         if (!cancelled) {
