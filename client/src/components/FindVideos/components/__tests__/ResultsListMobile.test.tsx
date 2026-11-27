@@ -62,11 +62,11 @@ describe('ResultsListMobile', () => {
     expect(onResultClick).not.toHaveBeenCalled();
   });
 
-  test('renders clock-style duration overlay when duration is set', () => {
+  test('renders the duration overlay when duration is set', () => {
     const results = [makeResult({ youtubeId: 'a', title: 'Alpha', duration: 3723 })];
     render(<ResultsListMobile results={results} onResultClick={() => {}} />);
     const card = screen.getByRole('button', { name: /open alpha/i });
-    expect(within(card).getByText('1:02:03')).toBeInTheDocument();
+    expect(within(card).getByText('1h2m')).toBeInTheDocument();
   });
 
   test('omits duration overlay when duration is null', () => {

@@ -1,20 +1,25 @@
 import { formatDuration, formatYTDate } from '../utils';
 
 describe('formatDuration', () => {
-  it('returns Unknown when duration is null', () => {
-    expect(formatDuration(null)).toBe('Unknown');
+  it.each([
+    [17, '17s'],
+    [305, '5m5s'],
+    [3900, '1h5m'],
+    [27254, '7h34m'],
+  ])('shows %s seconds as its two largest units: %s', (seconds, expected) => {
+    expect(formatDuration(seconds)).toBe(expected);
   });
 
-  it('returns Unknown when duration is zero', () => {
-    expect(formatDuration(0)).toBe('Unknown');
+  it.each([
+    [600, '10m'],
+    [3600, '1h'],
+    [3630, '1h'],
+  ])('leaves a zero smaller unit out of %s seconds: %s', (seconds, expected) => {
+    expect(formatDuration(seconds)).toBe(expected);
   });
 
-  it('formats durations shorter than an hour as minutes', () => {
-    expect(formatDuration(1800)).toBe('30m');
-  });
-
-  it('formats durations longer than an hour with hours and minutes', () => {
-    expect(formatDuration(3723)).toBe('1h2m');
+  it.each([[null], [0]])('returns nothing for %s', (seconds) => {
+    expect(formatDuration(seconds)).toBe('');
   });
 });
 

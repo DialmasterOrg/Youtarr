@@ -1,24 +1,21 @@
 import React from 'react';
-import {
-  Checkbox,
-  Typography,
-  Chip,
-  Tooltip,
-} from '../ui';
+import { Checkbox, Typography } from '../ui';
 import { ArrowUpward as ArrowUpwardIcon, ArrowDownward as ArrowDownwardIcon, Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon, Delete as DeleteIcon } from '../../lib/icons';
 import ProtectionShieldButton from '../shared/ProtectionShieldButton';
 import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml, formatAddedDateParts } from '../../utils/formatters';
-import { getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle, isRemovedStatus, isMembersOnlyVideo } from '../../utils/videoStatus';
+import { isMembersOnlyVideo } from '../../utils/videoStatus';
 import MembersAccessChip from '../shared/MembersAccessChip';
-import RemovalDescription, { REMOVAL_TOOLTIP_CLASS } from '../shared/RemovalDescription';
+import MediaTypeChip from '../shared/MediaTypeChip';
+import VideoStatusChip from '../shared/VideoStatusChip';
+import { YoutubeRemovedBanner } from '../shared/thumbnailOverlays';
 import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 import WatchedChip from '../shared/WatchedChip';
-import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
+import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../shared/chipStyles';
 import { getPublishedDateDisplay } from './publishedDateDisplay';
 import { canSelectForDelete, canSelectForDownload, getChannelVideoRowState, toggleRowSelection } from './channelVideoRowState';
 
@@ -126,8 +123,6 @@ function VideoTableView({
           {videos.map((video) => {
             const row = getChannelVideoRowState(video, selectionMode, checkedBoxes, selectedForDeletion);
             const { status, isStillLive, canDownload, canDelete, isChecked, isDeleteChecked } = row;
-            const statusLabel = status === 'downloaded' ? 'Available' : getStatusLabel(status);
-            const mediaTypeInfo = getMediaTypeInfo(video.media_type);
             const isClickable = canDownload || canDelete;
 
             return (
@@ -235,26 +230,7 @@ function VideoTableView({
                         }}
                       />
                     )}
-                    {video.youtube_removed && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          backgroundColor: 'var(--media-overlay-danger-background)',
-                          color: 'var(--media-overlay-foreground)',
-                          padding: '2px 4px',
-                          fontSize: '0.65rem',
-                          fontWeight: 'bold',
-                          textAlign: 'center',
-                          borderTopLeftRadius: 'var(--radius-thumb)',
-                          borderTopRightRadius: 'var(--radius-thumb)',
-                        }}
-                      >
-                        Removed From YouTube
-                      </div>
-                    )}
+                    {video.youtube_removed && <YoutubeRemovedBanner compact />}
                   </div>
                 </td>
                 <td style={{ width: '30%', padding: '8px 4px' }}>
@@ -301,7 +277,7 @@ function VideoTableView({
                   })()}
                 </td>
                 <td style={{ whiteSpace: 'nowrap', padding: '8px 4px' }}>
-                  {video.media_type === 'short' ? 'N/A' : formatDuration(video.duration)}
+                  {video.media_type === 'short' ? 'N/A' : formatDuration(video.duration) || 'Unknown'}
                 </td>
                 <td style={{ width: 90, whiteSpace: 'nowrap', padding: '8px 4px' }}>
                   <RatingBadge
@@ -326,35 +302,13 @@ function VideoTableView({
                 </td>
                 <td style={{ whiteSpace: 'nowrap', padding: '8px 4px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    {mediaTypeInfo && (
-                      <Chip
-                        size="small"
-                        icon={mediaTypeInfo.icon}
-                        label={mediaTypeInfo.label}
-                        color={mediaTypeInfo.color}
-                        variant="outlined"
-                        style={{ ...SHARED_STATUS_CHIP_SMALL_STYLE }}
-                      />
-                    )}
+                    <MediaTypeChip mediaType={video.media_type} />
                     {/* The status chip already reads Members Only when no cookies are set. */}
                     {!video.added && isMembersOnlyVideo(video) && video.members_access && video.members_access !== 'no_cookies' && (
                       <MembersAccessChip access={video.members_access} />
                     )}
                     <WatchedChip watchedBy={video.watchedBy || []} />
-                    <Tooltip
-                      title={isRemovedStatus(status) ? <RemovalDescription row={video} /> : ''}
-                      enterTouchDelay={0}
-                      className={REMOVAL_TOOLTIP_CLASS}
-                    >
-                      <Chip
-                        icon={getStatusIcon(status)}
-                        label={statusLabel}
-                        size="small"
-                        color={getStatusColor(status)}
-                        variant={getStatusChipVariant(status)}
-                        style={{ ...SHARED_THEMED_CHIP_SMALL_STYLE, ...getStatusChipStyle(status) }}
-                      />
-                    </Tooltip>
+                    <VideoStatusChip status={status} downloadedLabel="Available" removalRow={video} />
                   </div>
                 </td>
               </tr>

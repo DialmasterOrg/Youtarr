@@ -28,10 +28,10 @@ import { useConfig } from '../../hooks/useConfig';
 import { useInfiniteScrollTrigger } from '../../hooks/useInfiniteScrollTrigger';
 import PageControls from '../shared/PageControls';
 import VideoModal from '../shared/VideoModal';
-import { VideoModalData } from '../shared/VideoModal/types';
-import VideoThumbnail from './VideoThumbnail';
+import VideoThumbnail from '../shared/VideoThumbnail';
+import { videoDataToModalData } from '../shared/VideoModal/videoDataToModalData';
 import AvailabilityChip from '../shared/AvailabilityChip';
-import { getRemovalState, removalFromRow, removedState } from '../../utils/videoRemoval';
+import { getRemovalState, removedState } from '../../utils/videoRemoval';
 import RemovalDescription from '../shared/RemovalDescription';
 import FailedVideoChip from './FailedVideoChip';
 import FailedDownloadsDetail from './FailedDownloadsDetail';
@@ -165,38 +165,6 @@ const JobSummaryChips: React.FC<JobSummaryChipsProps> = ({ job, failedCount, sho
   );
 };
 
-function jobVideoToModalData(video: VideoData): VideoModalData {
-  const isDownloaded = Boolean(video.filePath || video.audioFilePath) && !video.removed;
-  const status: VideoModalData['status'] = video.removed
-    ? removedState(video.removed_reason)
-    : isDownloaded
-    ? 'downloaded'
-    : 'never_downloaded';
-  return {
-    removal: removalFromRow(video),
-    youtubeId: video.youtubeId,
-    title: video.youTubeVideoName,
-    channelName: video.youTubeChannelName,
-    thumbnailUrl: `/images/videothumb-${video.youtubeId}.jpg`,
-    duration: video.duration,
-    publishedAt: video.originalDate || null,
-    addedAt: video.timeCreated || null,
-    mediaType: video.media_type || 'video',
-    status,
-    isDownloaded,
-    filePath: video.filePath || null,
-    fileSize: video.fileSize ? Number(video.fileSize) : null,
-    audioFilePath: video.audioFilePath || null,
-    audioFileSize: video.audioFileSize ? Number(video.audioFileSize) : null,
-    isProtected: video.protected || false,
-    isIgnored: false,
-    normalizedRating: video.normalized_rating || null,
-    ratingSource: video.rating_source || null,
-    databaseId: video.id,
-    channelId: video.channel_id || null,
-  };
-}
-
 const DownloadHistory: React.FC<DownloadHistoryProps> = ({
   jobs,
   currentTime,
@@ -209,17 +177,12 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
   const [modalVideo, setModalVideo] = useState<VideoData | null>(null);
   const [showNoVideoJobs, setShowNoVideoJobs] = useState(false);
   const [hideArrBridgeJobs, setHideArrBridgeJobs] = useState(readHideArrBridgeJobs);
-  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(12);
   const [visibleCount, setVisibleCount] = useState(12);
   const { config } = useConfig(token);
   const useInfiniteScroll = config.channelVideosHotLoad ?? false;
-
-  const handleImageError = (youtubeId: string) => {
-    setImageErrors((prev) => ({ ...prev, [youtubeId]: true }));
-  };
 
   // Offered only where there is something to hide, and remembered per browser.
   const hasArrBridgeJobs = jobs.some((job) => isArrBridgeJob(job.jobType));
@@ -291,7 +254,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
       <VideoModal
         open
         onClose={() => setModalVideo(null)}
-        video={jobVideoToModalData(modalVideo)}
+        video={videoDataToModalData(modalVideo, { requireFile: true })}
         token={token}
         onVideoDeleted={() => {
           setModalVideo(null);
@@ -386,8 +349,6 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                               width={96}
                               height={72}
                               onClick={() => setModalVideo(singleVideo)}
-                              hasError={!!imageErrors[singleVideo.youtubeId]}
-                              onError={() => handleImageError(singleVideo.youtubeId)}
                               iconSize={24}
                             />
                           )}
@@ -599,8 +560,6 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                                 width={128}
                                 height={72}
                                 onClick={() => setModalVideo(singleVideo)}
-                                hasError={!!imageErrors[singleVideo.youtubeId]}
-                                onError={() => handleImageError(singleVideo.youtubeId)}
                                 iconSize={32}
                               />
                               <Box className="min-w-0 flex-1">

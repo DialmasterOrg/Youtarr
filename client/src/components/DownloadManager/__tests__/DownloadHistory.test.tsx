@@ -12,15 +12,6 @@ jest.mock('react-swipeable', () => ({
   useSwipeable: jest.fn(() => ({})),
 }));
 
-// Mock formatDuration utility
-jest.mock('../../../utils', () => ({
-  formatDuration: jest.fn((duration: number) => {
-    const minutes = Math.floor(duration / 60);
-    const seconds = duration % 60;
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  }),
-}));
-
 jest.mock('../../../hooks/useConfig', () => ({
   useConfig: jest.fn(),
 }));

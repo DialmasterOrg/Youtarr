@@ -8,6 +8,13 @@ import {
 import { SHARED_THEMED_CHIP_SMALL_STYLE, SHARED_COMPACT_CHIP_OVERRIDES } from './chipStyles';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import type { RemovalState } from '../../utils/videoRemoval';
+import {
+  getStatusChipStyle,
+  getStatusChipVariant,
+  getStatusColor,
+  getStatusLabel,
+  VideoStatus,
+} from '../../utils/videoStatus';
 import { REMOVAL_TOOLTIP_CLASS } from './RemovalDescription';
 
 export interface AvailabilityChipProps {
@@ -21,57 +28,28 @@ export interface AvailabilityChipProps {
   compact?: boolean;
 }
 
-interface Variant {
-  label: string;
-  tooltip: string;
-  color: 'success' | 'error' | 'default';
-  variant: 'filled' | 'outlined';
-  icon: React.ReactNode;
-  style: React.CSSProperties;
-}
+// The video status each state is colored and labelled as; only "Available"
+// differs from the status's own label.
+const STATUS: Record<RemovalState, VideoStatus> = {
+  present: 'downloaded',
+  missing: 'missing',
+  deleted: 'deleted',
+};
 
-const VARIANTS: Record<RemovalState, Variant> = {
-  present: {
-    label: 'Available',
-    tooltip: 'Video file exists on disk',
-    color: 'success',
-    variant: 'filled',
-    icon: <CheckCircleIcon size={12} />,
-    style: {
-      ...SHARED_THEMED_CHIP_SMALL_STYLE,
-      backgroundColor: 'var(--success)',
-      color: 'var(--success-foreground)',
-    },
-  },
-  missing: {
-    label: 'Missing',
-    tooltip: 'Video file not found on disk',
-    color: 'error',
-    variant: 'filled',
-    icon: <MissingIcon size={12} data-testid="CloudOffIcon" />,
-    style: {
-      ...SHARED_THEMED_CHIP_SMALL_STYLE,
-      backgroundColor: 'var(--destructive)',
-      color: 'var(--destructive-foreground)',
-    },
-  },
-  deleted: {
-    label: 'Deleted',
-    tooltip: 'Video file was deleted',
-    color: 'default',
-    variant: 'outlined',
-    icon: <DeletedIcon size={12} data-testid="DeletedChipIcon" />,
-    style: {
-      ...SHARED_THEMED_CHIP_SMALL_STYLE,
-      backgroundColor: 'transparent',
-      color: 'var(--muted-foreground)',
-    },
-  },
+const VARIANTS: Record<RemovalState, { label?: string; tooltip: string; icon: React.ReactNode }> = {
+  present: { label: 'Available', tooltip: 'Video file exists on disk', icon: <CheckCircleIcon size={12} /> },
+  missing: { tooltip: 'Video file not found on disk', icon: <MissingIcon size={12} data-testid="CloudOffIcon" /> },
+  deleted: { tooltip: 'Video file was deleted', icon: <DeletedIcon size={12} data-testid="DeletedChipIcon" /> },
 };
 
 function AvailabilityChip({ state, tooltip, label, compact = false }: AvailabilityChipProps) {
   const variant = VARIANTS[state];
-  const style = compact ? { ...variant.style, ...SHARED_COMPACT_CHIP_OVERRIDES } : variant.style;
+  const status = STATUS[state];
+  const style = {
+    ...SHARED_THEMED_CHIP_SMALL_STYLE,
+    ...getStatusChipStyle(status),
+    ...(compact ? SHARED_COMPACT_CHIP_OVERRIDES : undefined),
+  };
   // On a touch device a tap opens the tooltip (the only way to read the reason
   // on a phone), so it must not also select or expand the row underneath.
   // Mouse clicks still pass through, as rows that expand on click expect, and
@@ -91,9 +69,9 @@ function AvailabilityChip({ state, tooltip, label, compact = false }: Availabili
         <Chip
           size="small"
           icon={variant.icon}
-          label={label ?? variant.label}
-          color={variant.color}
-          variant={variant.variant}
+          label={label ?? variant.label ?? getStatusLabel(status)}
+          color={getStatusColor(status)}
+          variant={getStatusChipVariant(status)}
           style={style}
         />
       </span>

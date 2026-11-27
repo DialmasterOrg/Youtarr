@@ -2,7 +2,8 @@ import React from 'react';
 import { Box, Typography, Alert, Button, Skeleton } from '../../ui';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import { ResultSort, SortKey } from '../sortResults';
-import { ResultSelection, SearchResult, PageSize, ViewMode, THUMB_WIDTH, THUMB_HEIGHT } from '../types';
+import { ResultSelection, SearchResult, PageSize, ViewMode } from '../types';
+import { REMOTE_THUMB_HEIGHT, REMOTE_THUMB_WIDTH } from '../../shared/RemoteThumbnail';
 import ResultCard from './ResultCard';
 import ResultsTable from './ResultsTable';
 import ResultsListMobile from './ResultsListMobile';
@@ -48,7 +49,7 @@ function RowSkeleton({ count, wide, testId }: { count: number; wide: boolean; te
     <Box data-testid={testId} className="flex flex-col">
       {Array.from({ length: count }).map((_, i) => (
         <Box key={i} className="flex items-center gap-3 py-2 px-1 border-b border-border">
-          <Skeleton className="shrink-0 rounded-[var(--radius-thumb)]" style={{ width: THUMB_WIDTH, height: THUMB_HEIGHT }} />
+          <Skeleton className="shrink-0 rounded-[var(--radius-thumb)]" style={{ width: REMOTE_THUMB_WIDTH, height: REMOTE_THUMB_HEIGHT }} />
           <Box className="flex-1 min-w-0 space-y-2">
             <Skeleton className="h-4 w-3/4" />
             <Skeleton className="h-3 w-1/3" />

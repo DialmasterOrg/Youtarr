@@ -50,4 +50,5 @@ Apply these when creating or substantially rewriting client code. Scope Discipli
 - `hooks/useConfig.ts` and other older files use raw `fetch()`; do not copy them.
 - Log a failed axios request through `utils/requestError.describeRequestError`, never the error itself: an axios error carries its request, including the `x-access-token` header.
 - Show a failed request's text through `utils/requestError.serverErrorMessage(err, fallback)`: the server's `{ error }` or the fallback, never axios's own message. Fifteen local copies had drifted apart; hooks that map status codes keep their own mapping.
+- Video row pieces live in `components/shared/`: `VideoThumbnail` (library), `RemoteThumbnail`, `thumbnailOverlays` (removed banner, duration badge), `VideoStatusChip`, `MediaTypeChip`, `VideoModal/videoDataToModalData`. Durations are `utils.formatDuration` ("1h5m") everywhere. Do not rebuild these per page.
 - YouTube links come from `utils/youtubeUrls`, byte sizes from `formatters.formatBytes`, and the `overrideSettings` request type from `types/downloadOverrideSettings`; do not rebuild them locally.

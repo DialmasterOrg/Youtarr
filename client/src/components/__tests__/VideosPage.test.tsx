@@ -18,10 +18,7 @@ jest.mock('react-swipeable', () => ({
 }));
 
 jest.mock('../../utils', () => ({
-  formatDuration: (duration: number | null) => {
-    if (!duration) return 'Unknown';
-    return `${Math.floor(duration / 60)}m`;
-  },
+  formatDuration: jest.requireActual('../../utils').formatDuration,
   formatYTDate: (date: string | null) => {
     if (!date) return 'Unknown';
     return '1/15/2024';
@@ -645,7 +642,7 @@ describe('VideosPage Component', () => {
         expect(screen.getByText('How to Code')).toBeInTheDocument();
       });
 
-      await user.click(screen.getByAltText('thumbnail'));
+      await user.click(screen.getByAltText('How to Code'));
 
       expect(screen.getByTestId('video-modal')).toHaveAttribute('data-video-title', 'How to Code');
     });
@@ -1003,7 +1000,7 @@ describe('VideosPage Component', () => {
         expect(screen.getByText('How to Code')).toBeInTheDocument();
       });
 
-      const image = screen.getByAltText('thumbnail') as HTMLImageElement;
+      const image = screen.getByAltText('How to Code') as HTMLImageElement;
 
       fireEvent.error(image);
 
@@ -1021,8 +1018,8 @@ describe('VideosPage Component', () => {
         expect(screen.getByText('How to Code')).toBeInTheDocument();
       });
 
-      // Grid card renders the formatted duration (mocked as "10m") in the metadata row.
-      expect(screen.getByText(/10m/)).toBeInTheDocument();
+      // Grid card renders the 600-second duration in the metadata row.
+      expect(screen.getByText('10m')).toBeInTheDocument();
     });
 
     test('displays "Unknown" for missing duration', async () => {

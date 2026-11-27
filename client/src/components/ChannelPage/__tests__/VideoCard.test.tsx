@@ -68,8 +68,7 @@ describe('VideoCard Component', () => {
     test('renders duration chip for regular videos', () => {
       renderWithProviders(<VideoCard {...defaultProps} />);
       // Duration is 600 seconds = 10 minutes
-      const durationChip = screen.getByText(/10/);
-      expect(durationChip).toBeInTheDocument();
+      expect(screen.getByText('10m')).toBeInTheDocument();
     });
 
     test('does not render duration chip for shorts', () => {

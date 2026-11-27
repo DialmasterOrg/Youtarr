@@ -64,9 +64,6 @@ export function isShort(duration: number | null): boolean {
   return duration !== null && duration <= SHORT_MAX_SECONDS;
 }
 
-export const THUMB_WIDTH = 120;
-export const THUMB_HEIGHT = 67;
-
 export interface ResultSelection {
   isChecked: (id: string) => boolean;
   toggle: (id: string) => void;

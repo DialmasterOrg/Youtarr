@@ -11,20 +11,14 @@ import {
   TableSortLabel,
   Typography,
   Checkbox,
-  Chip,
   Tooltip,
   IconButton,
   Box,
   Stack,
 } from '../../ui';
-import {
-  AlertCircle as ErrorOutlineIcon,
-  Trash2 as DeletedIcon,
-  Trash2 as DeleteIcon,
-} from 'lucide-react';
+import { Trash2 as DeleteIcon } from 'lucide-react';
 import { formatDuration, formatYTDate } from '../../../utils';
 import { formatAddedDateTime, formatFileSize } from '../../../utils/formatters';
-import { getMediaTypeInfo } from '../../../utils/videoStatus';
 import { getEnabledChannelId } from '../../../utils/enabledChannels';
 import { VideoData, EnabledChannel } from '../../../types/VideoData';
 import RatingBadge from '../../shared/RatingBadge';
@@ -32,8 +26,10 @@ import DownloadFormatIndicator from '../../shared/DownloadFormatIndicator';
 import ProtectionShieldButton from '../../shared/ProtectionShieldButton';
 import ThumbnailClickOverlay from '../../shared/ThumbnailClickOverlay';
 import AvailabilityChip from '../../shared/AvailabilityChip';
-import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../../shared/chipStyles';
-import { DELETED_OVERLAY_BACKGROUND, getRemovalState } from '../../../utils/videoRemoval';
+import MediaTypeChip from '../../shared/MediaTypeChip';
+import VideoThumbnail from '../../shared/VideoThumbnail';
+import { YoutubeRemovedBanner } from '../../shared/thumbnailOverlays';
+import { getRemovalState } from '../../../utils/videoRemoval';
 import RemovalDescription from '../../shared/RemovalDescription';
 import ChannelNameDisplay from '../../shared/ChannelNameDisplay';
 import WatchedChip from '../../shared/WatchedChip';
@@ -42,7 +38,6 @@ export interface VideosTableProps {
   videos: VideoData[];
   selectedVideos: number[];
   enabledChannels: EnabledChannel[];
-  imageErrors: Record<string, boolean>;
   orderBy: 'published' | 'added';
   sortOrder: 'asc' | 'desc';
   deleteDisabled: boolean;
@@ -52,7 +47,6 @@ export interface VideosTableProps {
   onOpenModal: (video: VideoData) => void;
   onToggleProtection: (videoId: number) => void;
   onDeleteSingle: (videoId: number) => void;
-  onImageError: (youtubeId: string) => void;
   onAddChannel: (channelName: string, channelUrl: string) => void;
 }
 
@@ -60,7 +54,6 @@ function VideosTable({
   videos,
   selectedVideos,
   enabledChannels,
-  imageErrors,
   orderBy,
   sortOrder,
   deleteDisabled,
@@ -70,7 +63,6 @@ function VideosTable({
   onOpenModal,
   onToggleProtection,
   onDeleteSingle,
-  onImageError,
   onAddChannel,
 }: VideosTableProps) {
   const allIds = videos.map((v) => v.id);
@@ -128,7 +120,6 @@ function VideosTable({
                 video.channel_id,
                 enabledChannels
               );
-              const mediaTypeInfo = getMediaTypeInfo(video.media_type);
               const fileSizeNumber = video.fileSize
                 ? typeof video.fileSize === 'string'
                   ? parseInt(video.fileSize, 10)
@@ -155,97 +146,21 @@ function VideosTable({
                     />
                   </TableCell>
                   <TableCell>
-                    <Box
-                      style={{
-                        position: 'relative',
-                        width: 144,
-                        height: 81,
-                        overflow: 'hidden',
-                        backgroundColor: 'var(--media-placeholder-background)',
-                        borderRadius: 'var(--radius-thumb)',
-                      }}
+                    <VideoThumbnail
+                      video={video}
+                      width={144}
+                      height={81}
+                      iconSize={24}
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {imageErrors[video.youtubeId] ? (
-                        <Typography
-                          variant="caption"
-                          style={{
-                            position: 'absolute',
-                            top: '50%',
-                            left: '50%',
-                            transform: 'translate(-50%, -50%)',
-                            filter: video.removed ? 'grayscale(100%) brightness(0.6)' : 'none',
-                          }}
-                        >
-                          No thumbnail
-                        </Typography>
-                      ) : (
-                        <img
-                          src={`/images/videothumb-${video.youtubeId}.jpg`}
-                          alt="thumbnail"
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: video.media_type === 'short' ? 'contain' : 'cover',
-                            filter: video.removed ? 'grayscale(100%) brightness(0.6)' : 'none',
-                          }}
-                          onError={() => onImageError(video.youtubeId)}
-                        />
-                      )}
                       <ThumbnailClickOverlay
                         onClick={(e: React.MouseEvent) => {
                           e.stopPropagation();
                           onOpenModal(video);
                         }}
                       />
-                      {video.youtube_removed && (
-                        <Box
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            backgroundColor: 'var(--media-overlay-danger-background)',
-                            color: 'var(--media-overlay-foreground)',
-                            padding: '2px 4px',
-                            fontSize: '0.6rem',
-                            fontWeight: 'bold',
-                            textAlign: 'center',
-                            zIndex: 2,
-                          }}
-                        >
-                          Removed
-                        </Box>
-                      )}
-                      {video.removed && (
-                        <Box
-                          style={{
-                            position: 'absolute',
-                            inset: 0,
-                            backgroundColor: getRemovalState(video.removed, video.removed_reason) === 'missing'
-                              ? 'rgba(244, 67, 54, 0.3)'
-                              : DELETED_OVERLAY_BACKGROUND,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            zIndex: 1,
-                            pointerEvents: 'none',
-                          }}
-                        >
-                          {getRemovalState(video.removed, video.removed_reason) === 'missing' ? (
-                            <ErrorOutlineIcon
-                              className="text-destructive"
-                              style={{ fontSize: '1.5rem' }}
-                            />
-                          ) : (
-                            <DeletedIcon
-                              className="text-muted-foreground"
-                              style={{ fontSize: '1.5rem' }}
-                            />
-                          )}
-                        </Box>
-                      )}
-                    </Box>
+                      {video.youtube_removed && <YoutubeRemovedBanner compact />}
+                    </VideoThumbnail>
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <Typography
@@ -288,7 +203,7 @@ function VideosTable({
                     {formatAddedDateTime(video.timeCreated)}
                   </TableCell>
                   <TableCell style={{ whiteSpace: 'nowrap' }}>
-                    {video.duration ? formatDuration(video.duration) : '-'}
+                    {formatDuration(video.duration) || '-'}
                   </TableCell>
                   <TableCell style={{ whiteSpace: 'nowrap' }}>
                     {fileSizeNumber ? formatFileSize(fileSizeNumber) : '-'}
@@ -313,16 +228,7 @@ function VideosTable({
                           videoResolution={video.video_resolution}
                         />
                       )}
-                      {mediaTypeInfo && (
-                        <Chip
-                          size="small"
-                          icon={mediaTypeInfo.icon}
-                          label={mediaTypeInfo.label}
-                          color={mediaTypeInfo.color}
-                          variant="outlined"
-                          style={SHARED_STATUS_CHIP_SMALL_STYLE}
-                        />
-                      )}
+                      <MediaTypeChip mediaType={video.media_type} />
                       {video.removed ? (
                         <AvailabilityChip state={getRemovalState(video.removed, video.removed_reason)} tooltip={<RemovalDescription row={video} />} />
                       ) : video.fileSize ? (

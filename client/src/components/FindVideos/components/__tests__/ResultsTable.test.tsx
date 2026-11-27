@@ -116,7 +116,7 @@ describe('ResultsTable', () => {
     expect(within(screen.getByRole('row', { name: /open tiny/i })).getByText('Short')).toBeInTheDocument();
   });
 
-  test('formats duration as m:ss when under an hour and h:mm:ss otherwise', () => {
+  test('shows each duration as its two largest units', () => {
     const results = [
       makeResult({ youtubeId: 'short', title: 'Short', duration: 125 }),
       makeResult({ youtubeId: 'long', title: 'Long', duration: 3723 }),
@@ -124,8 +124,8 @@ describe('ResultsTable', () => {
     render(<ResultsTable results={results} onResultClick={() => {}} />);
     const shortRow = screen.getByRole('row', { name: /open short/i });
     const longRow = screen.getByRole('row', { name: /open long/i });
-    expect(within(shortRow).getByText('2:05')).toBeInTheDocument();
-    expect(within(longRow).getByText('1:02:03')).toBeInTheDocument();
+    expect(within(shortRow).getByText('2m5s')).toBeInTheDocument();
+    expect(within(longRow).getByText('1h2m')).toBeInTheDocument();
   });
 });
 

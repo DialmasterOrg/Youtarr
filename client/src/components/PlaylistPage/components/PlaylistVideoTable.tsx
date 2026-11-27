@@ -13,16 +13,14 @@ import {
   Typography,
 } from '../../ui';
 import { PlaylistVideo } from '../../../types/playlist';
-import { formatDurationClock } from '../../../utils';
+import { formatDuration } from '../../../utils';
 import { Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon } from '../../../lib/icons';
 import { isListedInOutputs, isSelectable, statusLabel, PlaylistVideoDates, toDownloadFileProps, showsMembersAccess } from './playlistVideoHelpers';
 import MembersAccessChip from '../../shared/MembersAccessChip';
 import DownloadFormatIndicator from '../../shared/DownloadFormatIndicator';
 import WatchedChip from '../../shared/WatchedChip';
+import RemoteThumbnail from '../../shared/RemoteThumbnail';
 import { REMOVAL_TOOLTIP_CLASS } from '../../shared/RemovalDescription';
-
-const THUMB_WIDTH = 120;
-const THUMB_HEIGHT = 67;
 
 interface PlaylistVideoTableProps {
   sortOrder?: PlaylistSortOrder;
@@ -134,20 +132,7 @@ const PlaylistVideoTable: React.FC<PlaylistVideoTableProps> = ({
               </TableCell>
               <TableCell>{v.position}</TableCell>
               <TableCell>
-                <div
-                  className="relative inline-block overflow-hidden bg-[var(--media-placeholder-background)] rounded-[var(--radius-thumb)]"
-                  style={{ width: THUMB_WIDTH, height: THUMB_HEIGHT }}
-                >
-                  {v.thumbnail && (
-                    <img
-                      src={v.thumbnail}
-                      alt=""
-                      className="block object-cover rounded-[var(--radius-thumb)]"
-                      style={{ width: THUMB_WIDTH, height: THUMB_HEIGHT }}
-                      loading="lazy"
-                    />
-                  )}
-                </div>
+                <RemoteThumbnail src={v.thumbnail} />
               </TableCell>
               <TableCell>
                 <Typography variant="body2" className="line-clamp-2 whitespace-normal">
@@ -161,7 +146,7 @@ const PlaylistVideoTable: React.FC<PlaylistVideoTableProps> = ({
                 <PlaylistVideoDates video={v} sortOrder={sortOrder} />
               </TableCell>
               <TableCell className="whitespace-nowrap">
-                {formatDurationClock(v.duration) || '-'}
+                {formatDuration(v.duration) || '-'}
               </TableCell>
               <TableCell>
                 <div className="flex flex-col items-start gap-1">

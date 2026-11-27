@@ -1,27 +1,17 @@
 import React from 'react';
-import {
-  Card,
-  Typography,
-  Chip,
-  Grid,
-  Fade,
-  Tooltip,
-  Checkbox,
-} from '../ui';
-import { CalendarToday as CalendarTodayIcon, Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon, Delete as DeleteIcon, Download as DownloadIcon } from '../../lib/icons';
-import { formatDuration } from '../../utils';
+import { Card, Typography, Grid, Fade } from '../ui';
+import { CalendarToday as CalendarTodayIcon, Download as DownloadIcon } from '../../lib/icons';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml, formatAddedDateTime } from '../../utils/formatters';
-import { getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle, isRemovedStatus, isMembersOnlyVideo } from '../../utils/videoStatus';
+import { isMembersOnlyVideo } from '../../utils/videoStatus';
 import MembersAccessChip from '../shared/MembersAccessChip';
-import RemovalDescription, { REMOVAL_TOOLTIP_CLASS } from '../shared/RemovalDescription';
-import StillLiveDot from './StillLiveDot';
+import MediaTypeChip from '../shared/MediaTypeChip';
+import VideoStatusChip from '../shared/VideoStatusChip';
 import RatingBadge from '../shared/RatingBadge';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 import WatchedChip from '../shared/WatchedChip';
-import ProtectionShieldButton from '../shared/ProtectionShieldButton';
-import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
-import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
+import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../shared/chipStyles';
+import ChannelVideoThumbnail from './components/ChannelVideoThumbnail';
 import { getPublishedDateDisplay } from './publishedDateDisplay';
 import { getChannelVideoRowState, toggleRowSelection } from './channelVideoRowState';
 
@@ -59,10 +49,8 @@ function VideoCard({
   onVideoClick,
 }: VideoCardProps) {
   const row = getChannelVideoRowState(video, selectionMode, checkedBoxes, selectedForDeletion);
-  const { status, isStillLive, canDownload, canDelete, isChecked, isDeleteChecked } = row;
-  const mediaTypeInfo = getMediaTypeInfo(video.media_type);
+  const { status, canDownload, canDelete, isChecked, isDeleteChecked } = row;
   const isIgnored = status === 'ignored';
-  const statusLabel = status === 'downloaded' ? 'Available' : getStatusLabel(status);
   const baseTransform = isInteractive ? 'var(--sticker-rest-transform)' : 'translate(0, 0)';
   const isClickable = canDownload || canDelete;
 
@@ -90,213 +78,18 @@ function VideoCard({
           onMouseLeave={() => onHoverChange(null)}
           onClick={() => toggleRowSelection(video, row, onCheckChange, onDeletionChange)}
         >
-          {/* Thumbnail with overlay */}
-          <div style={{
-            position: 'relative',
-            paddingTop: isMobile ? '52%' : '56.25%',
-            backgroundColor: 'var(--media-placeholder-background)',
-            borderRadius: 'var(--radius-ui)',
-            overflow: 'hidden',
-          }}>
-            <img
-              src={video.thumbnail}
-              alt={decodeHtml(video.title)}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                // Shorts use contain to show full portrait thumbnail with black bars
-                objectFit: video.media_type === 'short' ? 'contain' : 'cover',
-                borderRadius: 'var(--radius-ui)',
-              }}
-              loading="lazy"
-            />
-            {onVideoClick && (
-              <ThumbnailClickOverlay
-                onClick={(e: React.MouseEvent) => {
-                  e.stopPropagation();
-                  onVideoClick(video);
-                }}
-              />
-            )}
-            {/* YouTube Removed Banner */}
-            {video.youtube_removed ? (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  backgroundColor: 'var(--media-overlay-danger-background)',
-                  color: 'var(--media-overlay-foreground)',
-                  padding: '4px 8px',
-                  fontSize: '0.75rem',
-                  fontWeight: 'bold',
-                  textAlign: 'center',
-                  zIndex: 2,
-                }}
-              >
-                Removed From YouTube
-              </div>
-            ) : null}
-
-            {/* Duration overlay - hide for shorts since duration isn't available from flat-playlist */}
-            {video.media_type !== 'short' && (
-              <Chip
-                label={formatDuration(video.duration)}
-                size="small"
-                style={{
-                  position: 'absolute',
-                  bottom: 8,
-                  right: 8,
-                  backgroundColor: 'var(--media-overlay-background-strong)',
-                  color: 'var(--media-overlay-foreground)',
-                  fontSize: '0.75rem',
-                  height: 22,
-                }}
-              />
-            )}
-
-            {/* Selection checkbox - rendered for all selectable videos */}
-            {canDownload ? (
-              <Checkbox
-                checked={isChecked}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => onCheckChange(video.youtube_id, e.target.checked)}
-                style={{
-                  position: 'absolute',
-                  top: 4,
-                  left: 4,
-                  backgroundColor: 'var(--media-overlay-background)',
-                  color: 'var(--media-overlay-foreground)',
-                  transition: 'all 0.2s',
-                  zIndex: 3,
-                }}
-              />
-            ) : canDelete ? (
-              <Checkbox
-                checked={isDeleteChecked}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => onDeletionChange(video.youtube_id, e.target.checked)}
-                style={{
-                  position: 'absolute',
-                  top: 4,
-                  left: 4,
-                  backgroundColor: 'var(--media-overlay-background)',
-                  color: 'var(--media-overlay-foreground)',
-                  transition: 'all 0.2s',
-                  zIndex: 3,
-                }}
-              />
-            ) : null}
-
-            {/* Still Live indicator or Selection overlay for download */}
-            {isStillLive ? (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 8,
-                  left: 8,
-                  zIndex: 2,
-                }}
-              >
-                <StillLiveDot isMobile={isMobile} onMobileClick={onMobileTooltip} />
-              </div>
-            ) : canDownload && isChecked && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: 'var(--media-overlay-selection-background)',
-                  pointerEvents: 'none',
-                }}
-              />
-            )}
-
-            {/* Delete highlight overlay for selected videos (delete mode) */}
-            {canDelete && isDeleteChecked && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: 'var(--media-overlay-delete-selection-background)',
-                  pointerEvents: 'none',
-                }}
-              />
-            )}
-
-            {/* Visual delete indicator when video is queued for deletion (outside delete mode) */}
-            {row.isDeleteHeld && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 8,
-                  left: 8,
-                  color: 'var(--media-overlay-foreground)',
-                  backgroundColor: 'var(--media-overlay-delete-indicator-background)',
-                  padding: 4,
-                  borderRadius: 4,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                }}
-              >
-                <DeleteIcon size={16} data-testid="DeleteIcon" />
-              </div>
-            )}
-
-            {/* Ignore/Unignore button - for videos not currently on disk (never downloaded or missing) */}
-            {!isStillLive && (!video.added || video.removed) && (
-              <Tooltip
-                title={isIgnored ? "Click to unignore (allow auto-downloads)" : "Click to ignore (prevent auto-downloads)"}
-                arrow
-                placement="top"
-              >
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleIgnore(video.youtube_id);
-                  }}
-                  style={{
-                    position: 'absolute',
-                    top: 8,
-                    right: 8,
-                    background: isIgnored ? 'var(--warning)' : 'var(--media-overlay-ignore-button-background)',
-                    color: 'var(--media-overlay-foreground)',
-                    border: 'none',
-                    cursor: 'pointer',
-                    padding: 4,
-                    borderRadius: 4,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    transition: 'all 0.2s',
-                    zIndex: 3,
-                  }}
-                >
-                  {isIgnored ? <CheckCircleOutlineIcon size={16} data-testid="CheckCircleOutlineIcon" /> : <BlockIcon size={16} data-testid="BlockIcon" />}
-                </button>
-              </Tooltip>
-            )}
-
-            {/* Protection shield for downloaded videos */}
-            {video.added && !video.removed && (
-              <ProtectionShieldButton
-                isProtected={video.protected || false}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleProtection(video.youtube_id);
-                }}
-                style={{ position: 'absolute', bottom: 6, left: 6, zIndex: 2 }}
-              />
-            )}
-          </div>
+          <ChannelVideoThumbnail
+            video={video}
+            row={row}
+            size="card"
+            isMobile={isMobile}
+            onCheckChange={onCheckChange}
+            onDeletionChange={onDeletionChange}
+            onToggleIgnore={onToggleIgnore}
+            onToggleProtection={onToggleProtection}
+            onMobileTooltip={onMobileTooltip}
+            onVideoClick={onVideoClick}
+          />
 
           {/* Card content */}
           <div style={{ padding: isMobile ? 12 : 16, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
@@ -357,19 +150,7 @@ function VideoCard({
 
               {/* Media type, rating, and status chips on same line */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                {mediaTypeInfo && (
-                  <Chip
-                    size="small"
-                    icon={mediaTypeInfo.icon}
-                    label={mediaTypeInfo.label}
-                    color={mediaTypeInfo.color}
-                    variant="outlined"
-                    style={{
-                      minWidth: 'fit-content',
-                      ...SHARED_STATUS_CHIP_SMALL_STYLE,
-                    }}
-                  />
-                )}
+                <MediaTypeChip mediaType={video.media_type} style={{ minWidth: 'fit-content' }} />
                 {/* The status chip already reads Members Only when no cookies are set. */}
                 {!video.added && isMembersOnlyVideo(video) && video.members_access && video.members_access !== 'no_cookies' && (
                   <MembersAccessChip access={video.members_access} />
@@ -382,25 +163,12 @@ function VideoCard({
                   style={{ ...SHARED_STATUS_CHIP_SMALL_STYLE, flexShrink: 0 }}
                 />
                 <WatchedChip watchedBy={video.watchedBy || []} />
-                <Tooltip
-                  title={isRemovedStatus(status) ? <RemovalDescription row={video} /> : ''}
-                  enterTouchDelay={0}
-                  className={REMOVAL_TOOLTIP_CLASS}
-                >
-                  <Chip
-                    icon={getStatusIcon(status)}
-                    label={statusLabel}
-                    size="small"
-                    color={getStatusColor(status)}
-                    variant={getStatusChipVariant(status)}
-                    style={{
-                      flex: '0 0 auto',
-                      minWidth: 'fit-content',
-                      ...SHARED_THEMED_CHIP_SMALL_STYLE,
-                      ...getStatusChipStyle(status),
-                    }}
-                  />
-                </Tooltip>
+                <VideoStatusChip
+                  status={status}
+                  downloadedLabel="Available"
+                  removalRow={video}
+                  style={{ flex: '0 0 auto', minWidth: 'fit-content' }}
+                />
               </div>
             </div>
           </div>

@@ -88,14 +88,9 @@ describe('VideoMetadata', () => {
     expect(screen.getByText('Test Channel')).toBeInTheDocument();
   });
 
-  test('formats duration with hours when over an hour (905s -> 15:05)', () => {
-    renderMetadata({ duration: 905 });
-    expect(screen.getByText('15:05')).toBeInTheDocument();
-  });
-
-  test('formats duration with hours segment when >= 3600s', () => {
+  test('shows the duration', () => {
     renderMetadata({ duration: 3725 });
-    expect(screen.getByText('1:02:05')).toBeInTheDocument();
+    expect(screen.getByText('1h2m')).toBeInTheDocument();
   });
 
   test('omits duration row when video.duration is null', () => {

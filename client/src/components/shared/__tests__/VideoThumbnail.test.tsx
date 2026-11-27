@@ -18,7 +18,6 @@ const baseVideo: VideoData = {
 
 function renderThumbnail(overrides: Partial<React.ComponentProps<typeof VideoThumbnail>> = {}) {
   const onClick = jest.fn();
-  const onError = jest.fn();
 
   const utils = render(
     <VideoThumbnail
@@ -26,15 +25,15 @@ function renderThumbnail(overrides: Partial<React.ComponentProps<typeof VideoThu
       width={128}
       height={72}
       onClick={onClick}
-      hasError={false}
-      onError={onError}
       iconSize={32}
       {...overrides}
     />
   );
 
-  return { ...utils, onClick, onError };
+  return { ...utils, onClick };
 }
+
+const failImage = () => fireEvent.error(screen.getByRole('img', { name: 'Test Video' }));
 
 describe('VideoThumbnail', () => {
   test('renders the image with the local thumbnail URL and alt from video title', () => {
@@ -53,19 +52,28 @@ describe('VideoThumbnail', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
-  test('calls onError when the image fails to load', () => {
-    const { onError } = renderThumbnail();
+  test('shows "No thumbnail" in place of an image that fails to load', () => {
+    renderThumbnail();
 
-    fireEvent.error(screen.getByRole('img', { name: 'Test Video' }));
-
-    expect(onError).toHaveBeenCalledTimes(1);
-  });
-
-  test('renders "No thumbnail" fallback when hasError is true', () => {
-    renderThumbnail({ hasError: true });
+    failImage();
 
     expect(screen.getByText('No thumbnail')).toBeInTheDocument();
     expect(screen.queryByRole('img', { name: 'Test Video' })).not.toBeInTheDocument();
+  });
+
+  test('tries the image again for a different video', () => {
+    const { rerender } = renderThumbnail();
+    failImage();
+
+    rerender(<VideoThumbnail video={{ ...baseVideo, youtubeId: 'other1' }} iconSize={32} />);
+
+    expect(screen.getByRole('img', { name: 'Test Video' })).toHaveAttribute('src', '/images/videothumb-other1.jpg');
+  });
+
+  test('draws its children over the image', () => {
+    renderThumbnail({ children: <span>12:34</span> });
+
+    expect(screen.getByText('12:34')).toBeInTheDocument();
   });
 
   test('does not render the missing overlay for a non-removed video', () => {
@@ -95,37 +103,19 @@ describe('VideoThumbnail', () => {
   });
 
   test('shows missing overlay on top of the "No thumbnail" fallback for a removed video', () => {
-    renderThumbnail({ hasError: true, video: { ...baseVideo, removed: true, removed_reason: 'not_found' } });
+    renderThumbnail({ video: { ...baseVideo, removed: true, removed_reason: 'not_found' } });
+
+    failImage();
 
     expect(screen.getByText('No thumbnail')).toBeInTheDocument();
     expect(screen.getByTestId('video-thumbnail-missing-overlay')).toBeInTheDocument();
   });
 
   test('uses objectFit: contain for shorts and objectFit: cover for regular videos', () => {
-    const { rerender } = render(
-      <VideoThumbnail
-        video={{ ...baseVideo, media_type: 'short' }}
-        width={128}
-        height={72}
-        onClick={jest.fn()}
-        hasError={false}
-        onError={jest.fn()}
-        iconSize={32}
-      />
-    );
+    const { rerender } = renderThumbnail({ video: { ...baseVideo, media_type: 'short' } });
     expect(screen.getByRole('img', { name: 'Test Video' })).toHaveStyle({ objectFit: 'contain' });
 
-    rerender(
-      <VideoThumbnail
-        video={{ ...baseVideo, media_type: 'video' }}
-        width={128}
-        height={72}
-        onClick={jest.fn()}
-        hasError={false}
-        onError={jest.fn()}
-        iconSize={32}
-      />
-    );
+    rerender(<VideoThumbnail video={{ ...baseVideo, media_type: 'video' }} iconSize={32} />);
     expect(screen.getByRole('img', { name: 'Test Video' })).toHaveStyle({ objectFit: 'cover' });
   });
 });

@@ -19,8 +19,8 @@ import { useVideoDeletion } from '../shared/useVideoDeletion';
 import ChangeRatingDialog from '../shared/ChangeRatingDialog';
 import { useVideoProtection } from '../shared/useVideoProtection';
 import VideoModal from '../shared/VideoModal';
-import { VideoModalData } from '../shared/VideoModal/types';
-import { getRemovalState, removalFromRow, removedState, type RemovalState } from '../../utils/videoRemoval';
+import { videoDataToModalData } from '../shared/VideoModal/videoDataToModalData';
+import { getRemovalState, type RemovalState } from '../../utils/videoRemoval';
 import MarkDeletedDialog from './components/MarkDeletedDialog';
 import LibraryCleanupHints from './components/LibraryCleanupHints';
 import HiddenDeletedNote from './components/HiddenDeletedNote';
@@ -73,32 +73,6 @@ interface VideoSelectionMeta {
   youtubeRemoved: boolean;
 }
 
-function videoDataToModalData(video: VideoData): VideoModalData {
-  return {
-    youtubeId: video.youtubeId,
-    title: video.youTubeVideoName,
-    channelName: video.youTubeChannelName,
-    thumbnailUrl: `/images/videothumb-${video.youtubeId}.jpg`,
-    duration: video.duration,
-    publishedAt: video.originalDate || null,
-    addedAt: video.timeCreated || null,
-    mediaType: video.media_type || 'video',
-    status: video.removed ? removedState(video.removed_reason) : 'downloaded',
-    removal: removalFromRow(video),
-    isDownloaded: !video.removed,
-    filePath: video.filePath || null,
-    fileSize: video.fileSize ? Number(video.fileSize) : null,
-    audioFilePath: video.audioFilePath || null,
-    audioFileSize: video.audioFileSize ? Number(video.audioFileSize) : null,
-    isProtected: video.protected || false,
-    isIgnored: false,
-    normalizedRating: video.normalized_rating || null,
-    ratingSource: video.rating_source || null,
-    databaseId: video.id,
-    channelId: video.channel_id || null,
-  };
-}
-
 function VideosPage({ token }: VideosPageProps) {
   const isMobile = useMediaQuery('(max-width: 767px)');
 
@@ -119,7 +93,6 @@ function VideosPage({ token }: VideosPageProps) {
   const [deletedFilter, setDeletedFilter] = usePersistedChipFilter(DELETED_FILTER_STORAGE_KEY, 'exclude');
   const [watchedFilter, setWatchedFilter] = useState<ChipFilterMode>('off');
 
-  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [markDeletedDialogOpen, setMarkDeletedDialogOpen] = useState(false);
   // The message the user closed; a different one, or the same one after the
@@ -261,10 +234,6 @@ function VideosPage({ token }: VideosPageProps) {
     hasNextPage: page < totalPages,
     onLoadNextPage: () => setPage((prev) => (prev < totalPages ? prev + 1 : prev)),
   });
-
-  const handleImageError = (youtubeId: string) => {
-    setImageErrors((prev) => ({ ...prev, [youtubeId]: true }));
-  };
 
   const handleSortChange = (newOrderBy: 'published' | 'added') => {
     if (orderBy === newOrderBy) {
@@ -684,13 +653,11 @@ function VideosPage({ token }: VideosPageProps) {
                 video={video}
                 selected={selection.isSelected(video.id)}
                 enabledChannels={enabledChannels}
-                imageErrored={Boolean(imageErrors[video.youtubeId])}
                 deleteDisabled={deleteLoading}
                 onToggleSelect={handleToggleSelect}
                 onOpenModal={handleOpenModal}
                 onToggleProtection={handleToggleProtection}
                 onDeleteSingle={handleDeleteSingleVideo}
-                onImageError={handleImageError}
                 onAddChannel={handleAddChannel}
               />
             </Grid>
@@ -704,11 +671,9 @@ function VideosPage({ token }: VideosPageProps) {
           videos={videos}
           selectedVideos={selection.selectedIds}
           enabledChannels={enabledChannels}
-          imageErrors={imageErrors}
           onToggleSelect={handleToggleSelect}
           onOpenModal={handleOpenModal}
           onToggleProtection={handleToggleProtection}
-          onImageError={handleImageError}
           onAddChannel={handleAddChannel}
         />
       );
@@ -718,7 +683,6 @@ function VideosPage({ token }: VideosPageProps) {
         videos={videos}
         selectedVideos={selection.selectedIds}
         enabledChannels={enabledChannels}
-        imageErrors={imageErrors}
         orderBy={orderBy}
         sortOrder={sortOrder}
         deleteDisabled={deleteLoading}
@@ -728,7 +692,6 @@ function VideosPage({ token }: VideosPageProps) {
         onOpenModal={handleOpenModal}
         onToggleProtection={handleToggleProtection}
         onDeleteSingle={handleDeleteSingleVideo}
-        onImageError={handleImageError}
         onAddChannel={handleAddChannel}
       />
     );

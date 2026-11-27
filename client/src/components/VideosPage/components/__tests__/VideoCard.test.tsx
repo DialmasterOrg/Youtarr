@@ -48,7 +48,6 @@ const renderCard = (overrides: Partial<React.ComponentProps<typeof VideoCard>> =
     onOpenModal: jest.fn(),
     onToggleProtection: jest.fn(),
     onDeleteSingle: jest.fn(),
-    onImageError: jest.fn(),
     onAddChannel: jest.fn(),
   };
   render(
@@ -57,7 +56,6 @@ const renderCard = (overrides: Partial<React.ComponentProps<typeof VideoCard>> =
         video={baseVideo}
         selected={false}
         enabledChannels={enabledChannels}
-        imageErrored={false}
         deleteDisabled={false}
         {...handlers}
         {...overrides}
@@ -125,13 +123,11 @@ describe('VideoCard', () => {
           video={baseVideo}
           selected={false}
           enabledChannels={enabledChannels}
-          imageErrored={false}
           deleteDisabled={false}
           onToggleSelect={jest.fn()}
           onOpenModal={jest.fn()}
           onToggleProtection={jest.fn()}
           onDeleteSingle={jest.fn()}
-          onImageError={jest.fn()}
           onAddChannel={jest.fn()}
         />
       </MemoryRouter>

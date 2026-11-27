@@ -1,6 +1,6 @@
 import React from 'react';
-import { Box, Card, CardActionArea, Checkbox, Typography, Chip } from '../../ui';
-import { formatDurationClock } from '../../../utils';
+import { Box, Card, CardActionArea, Checkbox, Typography } from '../../ui';
+import { DurationBadge } from '../../shared/thumbnailOverlays';
 import { isSelectableForDownload, ResultSelection, SearchResult } from '../types';
 import {
   AddChannelHandler,
@@ -30,7 +30,6 @@ const THUMB_OVERLAY_STYLE: React.CSSProperties = {
 };
 
 export default function ResultCard({ result, onClick, selection, onAddChannel, onDownloadOne }: ResultCardProps) {
-  const durationLabel = formatDurationClock(result.duration);
   const selectable = Boolean(selection) && isSelectableForDownload(result.status);
   const checked = selectable && selection!.isChecked(result.youtubeId);
 
@@ -64,21 +63,7 @@ export default function ResultCard({ result, onClick, selection, onAddChannel, o
               />
             </Box>
           )}
-          {durationLabel && (
-            <Chip
-              label={durationLabel}
-              size="small"
-              style={{
-                position: 'absolute',
-                bottom: 8,
-                right: 8,
-                backgroundColor: 'var(--media-overlay-background-strong)',
-                color: 'var(--media-overlay-foreground)',
-                fontSize: '0.75rem',
-                height: 22,
-              }}
-            />
-          )}
+          <DurationBadge duration={result.duration} />
         </Box>
         <Box className="p-2 flex flex-col gap-2">
           <Typography variant="body2" className="font-semibold line-clamp-2">{result.title}</Typography>
