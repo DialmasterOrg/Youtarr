@@ -6,9 +6,36 @@ import {
   formatAddedDateTime,
   formatAddedDateParts,
   formatCompactCount,
+  formatFileSize,
   formatRelativeDate,
   uploadDateToIso,
 } from '../formatters';
+
+describe('formatFileSize', () => {
+  test.each([
+    [3.2 * 1024 ** 3, '3.2GB'],
+    [250 * 1024 ** 2, '250MB'],
+    [1024 ** 2, '1MB'],
+  ])('shows %s bytes in the largest unit it fills: %s', (bytes, expected) => {
+    expect(formatFileSize(bytes)).toBe(expected);
+  });
+
+  test.each([
+    [193605, '189KB'],
+    [1024, '1KB'],
+    [300, '<1KB'],
+  ])('shows %s bytes, under a megabyte, in whole kilobytes: %s', (bytes, expected) => {
+    expect(formatFileSize(bytes)).toBe(expected);
+  });
+
+  test('rounds a size a hair under a megabyte up to 1MB, never to 1024KB', () => {
+    expect(formatFileSize(1024 ** 2 - 1)).toBe('1MB');
+  });
+
+  test.each([[null], [undefined], [0]])('shows nothing for %s', (bytes) => {
+    expect(formatFileSize(bytes)).toBe('');
+  });
+});
 
 describe('formatCompactCount', () => {
   test('shows small counts in full with locale grouping', () => {

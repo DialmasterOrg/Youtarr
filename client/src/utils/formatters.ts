@@ -1,13 +1,22 @@
+const KB = 1024;
+const MB = KB * 1024;
+const GB = MB * 1024;
+
+// The compact size on chips and table cells: "3.2GB", "250MB", "189KB".
 export const formatFileSize = (bytes: number | null | undefined): string => {
   if (!bytes) {
     return '';
   }
-  const gb = bytes / (1024 * 1024 * 1024);
-  if (gb >= 1) {
-    return `${gb.toFixed(1)}GB`;
+  if (bytes >= GB) {
+    return `${(bytes / GB).toFixed(1)}GB`;
   }
-  const mb = bytes / (1024 * 1024);
-  return `${mb.toFixed(0)}MB`;
+  // Under a megabyte, megabytes round to "0MB". The unit follows the rounded
+  // kilobytes, so a size a hair under a megabyte reads "1MB", not "1024KB".
+  const kb = Math.round(bytes / KB);
+  if (kb >= KB) {
+    return `${(bytes / MB).toFixed(0)}MB`;
+  }
+  return kb >= 1 ? `${kb}KB` : '<1KB';
 };
 
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
