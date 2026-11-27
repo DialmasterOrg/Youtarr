@@ -52,7 +52,7 @@ The cron schedules, the scheduled task manager, the run history, and the Schedul
 - `scheduledTaskRuns` keeps 20 rows per task in `scheduled_task_runs`, never pruning a running row or the newest row of each outcome (so "last installed" survives any number of later checks).
 - `getLatestRun(key, { withDetails: true })` returns the newest run that recorded details, for a task whose state lives there (`cookieHealth`): rows the manager writes itself (an overlap skip, a thrown error) have none.
 - The recorder is best-effort, so a DB problem never reaches the task; `markInterruptedRuns()` at startup flags rows a crashed process left running.
-- Startup passes (rescan, library repair, channel-count refresh) record themselves; every scheduled and manual run is recorded by the manager through `runNow`. `jobModule.runStartupBackfill` records one finished row because it starts before `markInterruptedRuns()`.
+- Startup passes (rescan, library repair, channel-count refresh) record themselves; every scheduled and manual run is recorded by the manager through `runNow`. `job/jobBackfill.runStartupBackfill` records one finished row because it starts before `markInterruptedRuns()`.
 - Last-run displays (Maintenance page, YT-DLP page via `/api/ytdlp/latest-version`) read the history, falling back to the legacy `rescanLastRun` / `ytdlpLast*` config keys, which are no longer written, until a run has been recorded.
 
 ## Scheduling page
