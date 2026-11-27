@@ -56,7 +56,7 @@ const results = [
 describe('useResultDownload', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockTriggerDownloads.mockResolvedValue(true);
+    mockTriggerDownloads.mockResolvedValue({ ok: true });
   });
 
   test('opening for one video targets just that video', () => {
@@ -137,14 +137,14 @@ describe('useResultDownload', () => {
   });
 
   test('a failed queue keeps the selection and reports an error', async () => {
-    mockTriggerDownloads.mockResolvedValueOnce(false);
+    mockTriggerDownloads.mockResolvedValueOnce({ ok: false, message: 'Downloads are paused' });
     const selection = makeSelection(['aaaaaaaaaaa']);
     const { result } = renderHook(() => useResultDownload({ token: 't', results, selection, activeVideos: {} }));
 
     act(() => { result.current.openForSelection(); });
     await act(async () => { await result.current.confirm(null); });
 
-    expect(result.current.error).toMatch(/failed to queue/i);
+    expect(result.current.error).toBe('Downloads are paused');
     expect(selection.clear).not.toHaveBeenCalled();
     expect(mockNavigate).not.toHaveBeenCalled();
 

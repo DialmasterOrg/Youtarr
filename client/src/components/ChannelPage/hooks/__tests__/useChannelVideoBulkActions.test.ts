@@ -67,7 +67,7 @@ describe('useChannelVideoBulkActions', () => {
     mockSnapshot = { instanceId: '', revision: 0, videos: {} };
     (useTriggerDownloads as jest.Mock).mockReturnValue({ triggerDownloads });
     (useVideoDeletion as jest.Mock).mockReturnValue({ deleteVideosByYoutubeIds, loading: false });
-    triggerDownloads.mockResolvedValue(true);
+    triggerDownloads.mockResolvedValue({ ok: true });
     props = {
       channelId: 'UC123',
       token: 'test-token',
@@ -159,12 +159,12 @@ describe('useChannelVideoBulkActions', () => {
     });
 
     test('reports a failure and keeps the selection', async () => {
-      triggerDownloads.mockResolvedValue(false);
+      triggerDownloads.mockResolvedValue({ ok: false, message: 'Downloads are paused' });
       const { result } = renderActions({ checkedBoxes: ['one'] });
 
       await act(() => result.current.confirmDownload(null));
 
-      expect(props.notify).toHaveBeenCalledWith('Failed to queue downloads', 'error');
+      expect(props.notify).toHaveBeenCalledWith('Downloads are paused', 'error');
       expect(props.selection.clearChecked).not.toHaveBeenCalled();
       expect(mockNavigate).not.toHaveBeenCalled();
     });

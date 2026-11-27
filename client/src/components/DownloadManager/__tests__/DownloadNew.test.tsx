@@ -482,7 +482,7 @@ describe('DownloadNew', () => {
 
     await waitFor(() => {
       expect(mockOnManualDownloadFailure).toHaveBeenCalledWith(
-        expect.objectContaining({ message: 'Could not start downloads.' })
+        expect.objectContaining({ message: 'Failed to queue downloads. Please try again.' })
       );
     });
   });
@@ -497,7 +497,7 @@ describe('DownloadNew', () => {
 
     await waitFor(() => {
       expect(mockOnManualDownloadFailure).toHaveBeenCalledWith(
-        expect.objectContaining({ message: 'Could not start downloads.' })
+        expect.objectContaining({ message: 'Failed to queue downloads. Please try again.' })
       );
     });
   });
@@ -560,6 +560,21 @@ describe('DownloadNew', () => {
     await waitFor(() => expect(mockOnManualDownloadFailure).toHaveBeenCalled());
 
     expect(mockDownloadInitiatedRef.current).toBe(false);
+  });
+
+  test('sends a manual download submitted while another is still being sent', async () => {
+    const user = userEvent.setup({ delay: null });
+    mockFetch.mockReturnValueOnce(new Promise(() => {}));
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: jest.fn().mockResolvedValueOnce({}) });
+
+    render(<DownloadNew {...defaultProps} />);
+
+    await user.click(screen.getByTestId('trigger-manual-download'));
+    await user.click(screen.getByTestId('trigger-manual-with-channel-map'));
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/downloads/activity'));
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockOnManualDownloadFailure).not.toHaveBeenCalled();
   });
 
   test('strips URLs with ampersands in manual download', async () => {

@@ -9,28 +9,39 @@ interface TriggerDownloadsParams {
   videoChannelMap?: Record<string, string>;
 }
 
+// A failure carries the text to show: the server's reason, or the fallback.
+export type TriggerDownloadsResult = { ok: true } | { ok: false; message: string };
+
 interface UseTriggerDownloadsResult {
   // null means a concurrent submission was ignored; callers should leave their UI alone.
-  triggerDownloads: (params: TriggerDownloadsParams) => Promise<boolean | null>;
+  triggerDownloads: (params: TriggerDownloadsParams) => Promise<TriggerDownloadsResult | null>;
   loading: boolean;
   error: Error | null;
 }
 
-export function useTriggerDownloads(token: string | null): UseTriggerDownloadsResult {
+const QUEUE_FAILED_MESSAGE = 'Failed to queue downloads. Please try again.';
+
+// allowOverlap is for a caller that guards its own double submit and must not
+// have a second submission dropped.
+export function useTriggerDownloads(
+  token: string | null,
+  { allowOverlap = false }: { allowOverlap?: boolean } = {}
+): UseTriggerDownloadsResult {
   const { refresh } = useVideoActivity();
   const submitting = useRef(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
 
   const triggerDownloads = useCallback(
-    async ({ urls, overrideSettings, channelId, videoChannelMap }: TriggerDownloadsParams): Promise<boolean | null> => {
+    async ({ urls, overrideSettings, channelId, videoChannelMap }: TriggerDownloadsParams): Promise<TriggerDownloadsResult | null> => {
+      const failed: TriggerDownloadsResult = { ok: false, message: QUEUE_FAILED_MESSAGE };
       if (!token) {
         setError(new Error('No authentication token provided'));
-        return false;
+        return failed;
       }
 
-      if (submitting.current) return null;
-      if (!urls.length) return false;
+      if (submitting.current && !allowOverlap) return null;
+      if (!urls.length) return failed;
       submitting.current = true;
       setLoading(true);
       setError(null);
@@ -60,21 +71,24 @@ export function useTriggerDownloads(token: string | null): UseTriggerDownloadsRe
         });
 
         if (!response.ok) {
-          throw new Error(`Failed to trigger downloads: ${response.statusText}`);
+          const data: { error?: unknown } = await response.json().catch(() => ({}));
+          const message = typeof data?.error === 'string' && data.error ? data.error : QUEUE_FAILED_MESSAGE;
+          setError(new Error(message));
+          return { ok: false, message };
         }
 
         refresh();
-        return true;
+        return { ok: true };
       } catch (err) {
         console.error('Error triggering downloads:', err);
         setError(err instanceof Error ? err : new Error('Unknown error'));
-        return false;
+        return failed;
       } finally {
         submitting.current = false;
         setLoading(false);
       }
     },
-    [token, refresh]
+    [token, refresh, allowOverlap]
   );
 
   return {

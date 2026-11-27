@@ -39,7 +39,7 @@ jest.mock('../../../hooks/useConfig', () => ({
   useConfig: () => ({ config: mockConfig }),
 }));
 
-const mockTriggerDownloads = jest.fn().mockResolvedValue(true);
+const mockTriggerDownloads = jest.fn().mockResolvedValue({ ok: true });
 jest.mock('../../../hooks/useTriggerDownloads', () => ({
   useTriggerDownloads: () => ({ triggerDownloads: mockTriggerDownloads, loading: false, error: null }),
 }));
@@ -127,7 +127,7 @@ const rowTitles = () =>
 describe('FindVideos page', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockTriggerDownloads.mockResolvedValue(true);
+    mockTriggerDownloads.mockResolvedValue({ ok: true });
     mockLocalStatus.mockReturnValue({});
     mockMatchMedia(false);
     window.localStorage.clear();
@@ -354,7 +354,7 @@ describe('FindVideos page', () => {
   });
 
   test('failed download queue keeps selection and shows an error', async () => {
-    mockTriggerDownloads.mockResolvedValueOnce(false);
+    mockTriggerDownloads.mockResolvedValueOnce({ ok: false, message: 'Downloads are paused' });
     renderWithRouter(<FindVideos token="t" />);
     await searchFor('q', [result({ youtubeId: 'never000001', title: 'Never', duration: 600 })]);
 
@@ -363,7 +363,7 @@ describe('FindVideos page', () => {
     fireEvent.click(await screen.findByTestId('selection-menu-download'));
     fireEvent.click(await screen.findByTestId('dialog-confirm'));
 
-    expect(await screen.findByText(/failed to queue selected videos/i)).toBeInTheDocument();
+    expect(await screen.findByText('Downloads are paused')).toBeInTheDocument();
     expect(screen.getByTestId('video-list-selection-pill')).toBeInTheDocument();
   });
 

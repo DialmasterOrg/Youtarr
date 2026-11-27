@@ -439,7 +439,7 @@ describe('VideosPage Component', () => {
       error: null
     });
 
-    mockTriggerDownloads.mockResolvedValue(true);
+    mockTriggerDownloads.mockResolvedValue({ ok: true });
   });
 
   // Helper: force a particular view mode before rendering.
@@ -2416,7 +2416,7 @@ describe('VideosPage Component', () => {
 
     test('shows an error and keeps selection when the trigger fails', async () => {
       const user = setupUser();
-      mockTriggerDownloads.mockResolvedValue(false);
+      mockTriggerDownloads.mockResolvedValue({ ok: false, message: 'Downloads are paused' });
       await renderWithDownloadVideos();
 
       await selectByName(user, 'Missing Video');
@@ -2424,9 +2424,7 @@ describe('VideosPage Component', () => {
       await user.click(screen.getByTestId('download-dialog-confirm'));
 
       await waitFor(() => {
-        expect(
-          screen.getByText('Failed to queue selected videos for download. Please try again.')
-        ).toBeInTheDocument();
+        expect(screen.getByText('Downloads are paused')).toBeInTheDocument();
       });
       expect(mockNavigate).not.toHaveBeenCalled();
       expect(screen.getByText(/1 video selected/)).toBeInTheDocument();

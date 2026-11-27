@@ -229,19 +229,19 @@ export function useVideoModalActions({
     const url = youtubeVideoUrl(localVideo.youtubeId);
     const overrideSettings = toDownloadOverrideSettings(settings);
 
-    const success = await triggerDownloads({
+    const result = await triggerDownloads({
       urls: [url],
       overrideSettings,
       channelId: localVideo.channelId,
     });
 
-    if (success === null) return;
-    if (success) {
+    if (!result) return;
+    if (result.ok) {
       onDownloadQueued?.(localVideo.youtubeId);
       onClose();
       navigate('/downloads/activity');
     } else {
-      showSnackbar('Failed to queue download', 'error');
+      showSnackbar(result.message, 'error');
     }
   }, [localVideo.youtubeId, localVideo.channelId, triggerDownloads, showSnackbar, onDownloadQueued, onClose, navigate, snapshot]);
 

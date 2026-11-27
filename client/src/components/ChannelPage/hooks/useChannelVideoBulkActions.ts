@@ -69,14 +69,14 @@ export function useChannelVideoBulkActions({
     const eligibleIds = checkedBoxes.filter((id) => !snapshot.videos[id]?.state);
     if (!eligibleIds.length) return;
     const urls = eligibleIds.map(youtubeVideoUrl);
-    const success = await triggerDownloads({
+    const result = await triggerDownloads({
       urls,
       overrideSettings: toDownloadOverrideSettings(settings),
       channelId,
     });
-    if (success === null) return;
-    if (!success) {
-      notify('Failed to queue downloads', 'error');
+    if (!result) return;
+    if (!result.ok) {
+      notify(result.message, 'error');
       return;
     }
     clearChecked();

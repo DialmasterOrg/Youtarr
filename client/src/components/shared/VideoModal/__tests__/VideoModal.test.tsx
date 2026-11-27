@@ -255,7 +255,7 @@ describe('VideoModal', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     protectionReturn.error = null;
-    mockTriggerDownloads.mockResolvedValue(true);
+    mockTriggerDownloads.mockResolvedValue({ ok: true });
     // Reset shared metadata mock so tests don't bleed
     videoMetadataReturn.metadata = null;
     videoMetadataReturn.loading = false;

@@ -470,10 +470,10 @@ function VideosPage({ token }: VideosPageProps) {
     }
     const overrideSettings = toDownloadOverrideSettings(settings);
 
-    const success = await triggerDownloads({ urls, overrideSettings, videoChannelMap });
-    if (success === null) return;
-    if (!success) {
-      setErrorMessage('Failed to queue selected videos for download. Please try again.');
+    const result = await triggerDownloads({ urls, overrideSettings, videoChannelMap });
+    if (!result) return;
+    if (!result.ok) {
+      setErrorMessage(result.message);
       return;
     }
     selection.clear();
