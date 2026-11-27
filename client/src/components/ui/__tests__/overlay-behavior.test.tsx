@@ -166,6 +166,85 @@ describe('overlay positioning guards', () => {
     expect(within(screen.getByTestId('transformed-card')).queryByText('Popover body')).not.toBeInTheDocument();
   });
 
+  test('popover opens below its anchor when the content fits there', async () => {
+    anchor = document.createElement('button');
+    document.body.appendChild(anchor);
+    anchor.getBoundingClientRect = jest.fn(() => mockAnchorRect({ top: 200, left: 40, right: 80, bottom: 240, width: 40, height: 40 }));
+
+    render(<Popover open anchorEl={anchor} onClose={jest.fn()}>Popover body</Popover>);
+
+    const popover = screen.getByText('Popover body');
+    Object.defineProperty(popover, 'scrollHeight', { configurable: true, value: 200 });
+    fireEvent.scroll(window);
+
+    await waitFor(() => expect(popover).toHaveStyle({ top: '244px', maxHeight: '528px' }));
+  });
+
+  // Near the bottom of the screen the space below is a few pixels tall, and the
+  // content scrolled inside it.
+  test('popover opens above its anchor when the content does not fit below', async () => {
+    anchor = document.createElement('button');
+    document.body.appendChild(anchor);
+    anchor.getBoundingClientRect = jest.fn(() => mockAnchorRect({ top: 700, left: 40, right: 80, bottom: 740, width: 40, height: 40 }));
+
+    render(<Popover open anchorEl={anchor} onClose={jest.fn()}>Popover body</Popover>);
+
+    const popover = screen.getByText('Popover body');
+    Object.defineProperty(popover, 'scrollHeight', { configurable: true, value: 200 });
+    fireEvent.scroll(window);
+
+    await waitFor(() => expect(popover).toHaveStyle({ top: '496px', maxHeight: '624px' }));
+  });
+
+  // window.innerWidth includes a classic scrollbar, which a fixed element cannot
+  // use. Placed against it, the popover was squeezed a few pixels, and each new
+  // measurement moved it right and squeezed it again until it was a strip.
+  test('popover shifted left stays inside the width the page can use', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 400 });
+    Object.defineProperty(document.documentElement, 'clientWidth', { configurable: true, value: 385 });
+    anchor = document.createElement('button');
+    document.body.appendChild(anchor);
+    anchor.getBoundingClientRect = jest.fn(() => mockAnchorRect({ top: 200, left: 350, right: 380, bottom: 240, width: 30, height: 40 }));
+
+    render(<Popover open anchorEl={anchor} onClose={jest.fn()}>Popover body</Popover>);
+    const popover = screen.getByText('Popover body');
+    popover.getBoundingClientRect = jest.fn(() => mockAnchorRect({ width: 200 }));
+    fireEvent.scroll(window);
+
+    await waitFor(() => expect(popover).toHaveStyle({ left: '173px' }));
+    Object.defineProperty(document.documentElement, 'clientWidth', { configurable: true, value: 0 });
+  });
+
+  // Opened above, its top edge came from the height it had then; content that
+  // arrived later grew down over the button.
+  test('popover placed above its anchor moves up when its content grows', async () => {
+    const originalResizeObserver = window.ResizeObserver;
+    let contentResized: () => void = () => {};
+    window.ResizeObserver = class {
+      constructor(callback: ResizeObserverCallback) {
+        contentResized = () => callback([], this);
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+    anchor = document.createElement('button');
+    document.body.appendChild(anchor);
+    anchor.getBoundingClientRect = jest.fn(() => mockAnchorRect({ top: 700, left: 40, right: 80, bottom: 740, width: 40, height: 40 }));
+
+    render(<Popover open anchorEl={anchor} onClose={jest.fn()}>Popover body</Popover>);
+    const popover = screen.getByText('Popover body');
+    Object.defineProperty(popover, 'scrollHeight', { configurable: true, value: 200 });
+    act(() => contentResized());
+    expect(popover).toHaveStyle({ top: '496px' });
+
+    Object.defineProperty(popover, 'scrollHeight', { configurable: true, value: 300 });
+    act(() => contentResized());
+
+    expect(popover).toHaveStyle({ top: '396px' });
+    window.ResizeObserver = originalResizeObserver;
+  });
+
   test('portaled menu still closes when its backdrop is clicked', async () => {
     const user = userEvent.setup();
     const onClose = jest.fn();

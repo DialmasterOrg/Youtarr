@@ -341,7 +341,7 @@ export interface PopoverProps {
 }
 
 const Popover: React.FC<PopoverProps> = ({ open, anchorEl, onClose, children, className, PaperProps }) => {
-  const [pos, setPos] = React.useState<{ top: number; left: number } | null>(null);
+  const [pos, setPos] = React.useState<MenuPlacement | null>(null);
   const popoverRef = React.useRef<HTMLDivElement | null>(null);
   const overlayInsets = getOverlayInsets();
 
@@ -352,15 +352,31 @@ const Popover: React.FC<PopoverProps> = ({ open, anchorEl, onClose, children, cl
     const popoverWidth =
       popoverEl.getBoundingClientRect().width || popoverEl.scrollWidth || 0;
 
-    const top = rect.bottom + 4;
+    // Opens below the anchor, or above it when the content does not fit below
+    // and there is more room above: near the bottom of the screen the space
+    // below is a strip too short to read in. Uses the content's natural height
+    // for the reason given in getMenuSize.
+    const insets = getOverlayInsets();
+    const borders = popoverEl.offsetHeight - popoverEl.clientHeight;
+    const height = getMenuSize(popoverEl).height + borders;
+    const spaceBelow = window.innerHeight - insets.bottom - (rect.bottom + MENU_GAP);
+    const spaceAbove = rect.top - MENU_GAP - insets.top;
+    const above = height > spaceBelow && spaceAbove > spaceBelow;
+    const maxHeight = Math.max(above ? spaceAbove : spaceBelow, 0);
+    const top = above ? rect.top - MENU_GAP - Math.min(height, maxHeight) : rect.bottom + MENU_GAP;
+
+    // The width a fixed element can use leaves out a classic scrollbar, which
+    // window.innerWidth includes. Placed against innerWidth the popover is
+    // squeezed, and each re-measure then moves it right and squeezes it more.
+    const usableWidth = document.documentElement.clientWidth || window.innerWidth;
     const viewportLeft = VIEWPORT_GUTTER;
-    const viewportRight = window.innerWidth - VIEWPORT_GUTTER;
+    const viewportRight = usableWidth - VIEWPORT_GUTTER;
     const maxLeft = Math.max(viewportRight - popoverWidth, viewportLeft);
     const left = clamp(rect.left, viewportLeft, maxLeft);
 
     setPos((current) => {
-      if (current && current.top === top && current.left === left) return current;
-      return { top, left };
+      if (current && current.top === top && current.left === left && current.maxHeight === maxHeight) return current;
+      return { top, left, maxHeight };
     });
   }, [open, anchorEl]);
 
@@ -369,9 +385,17 @@ const Popover: React.FC<PopoverProps> = ({ open, anchorEl, onClose, children, cl
     updatePosition();
     window.addEventListener('resize', updatePosition);
     window.addEventListener('scroll', updatePosition, true);
+    // Content that arrives while it is open changes its height: placed above
+    // the anchor, it would otherwise grow down over it.
+    let resizeObserver: ResizeObserver | undefined;
+    if (popoverRef.current && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(updatePosition);
+      resizeObserver.observe(popoverRef.current);
+    }
     return () => {
       window.removeEventListener('resize', updatePosition);
       window.removeEventListener('scroll', updatePosition, true);
+      resizeObserver?.disconnect();
     };
   }, [open, updatePosition]);
 
@@ -389,9 +413,7 @@ const Popover: React.FC<PopoverProps> = ({ open, anchorEl, onClose, children, cl
           top: pos?.top ?? 0,
           left: pos?.left ?? 0,
           zIndex: 1300,
-          maxHeight: pos
-            ? window.innerHeight - pos.top - overlayInsets.bottom
-            : window.innerHeight - overlayInsets.bottom,
+          maxHeight: pos ? pos.maxHeight : window.innerHeight - overlayInsets.bottom,
           maxWidth: 'min(28rem, calc(100vw - 24px))',
           overflowY: 'auto',
           visibility: pos ? 'visible' : 'hidden',
