@@ -3,8 +3,10 @@ paths:
   - "server/modules/download/**/*"
   - "server/modules/downloadModule.js"
   - "server/modules/jobModule.js"
+  - "server/modules/job/**/*"
   - "server/modules/jobAuxData.js"
   - "server/modules/constants/jobOutputPrefixes.js"
+  - "server/modules/constants/jobStatuses.js"
   - "server/modules/ytdlpModule.js"
   - "server/modules/ytdlpProcess.js"
   - "server/modules/ytDlpRunner.js"
@@ -56,7 +58,13 @@ yt-dlp runs, the job queue, the download archive, storage limits, and the activi
 - `manualDownloadGrouper` buckets pasted URLs by resolved per-channel resolution and audio format. Attribution prefers the channelId captured at URL validation (server cache over the client echo), then `videos.channel_id`, then channelvideos listers, gated to tracked, enabled channels.
 - Multi-bucket pastes share one `downloadRunTracker` run labeled 'Manual downloads'. `youtubeUrlParser` is the one YouTube URL to video-id parser, shared with `videoValidationModule`.
 - `jobModule.onJobEnded` fires for every final status and `onJobAbandoned` for `failUnstartedJob`; server.js wires both to the run tracker, so jobModule never requires it.
-- `jobModule.backfillFromCompleteList` (library repair) follows the rescan rules in `.claude/rules/videos.md`: read the row first, write file details and `removed: false` only for a file actually found, and recreate unmatched rows as missing even after a partial walk.
+- `job/jobRegistry` alone holds the in-memory jobs map and `job/jobPersistence` the save lock. Other modules read `jobRegistry.jobs` at each use, never a kept reference: `loadJobsFromDB` replaces the map.
+- `jobPersistence._writeJobRow` copies the job after its lookup returns, never before: bulk and final saves overlap, and an earlier copy would write an older status over a newer one.
+- A non-final row write is a conditional `Job.update` (`status` not already final), so a delayed In Progress update cannot replace a final status another connection committed first.
+- Row writes are not queued per job: the finalizer awaits `saveJobOnly`, so one hung query would stall the download queue.
+- `loadJobsFromDB` attaches videos a batch at a time, so a failed read costs that batch only, not every job's list.
+- `jobPersistence.saveJobOnly` never rejects (the finalizer awaits it bare). `saveCompletedJob`, used by `updateJob` for every status in `constants/jobStatuses`, retries a failed write 3 times, the job row only: replaying video rows could undo a user's change.
+- `job/jobBackfill.backfillFromCompleteList` (library repair) follows the rescan rules in `.claude/rules/videos.md`: read the row first, write file details and `removed: false` only for a file actually found, and recreate unmatched rows as missing even after a partial walk.
 
 ## Executor and yt-dlp output
 

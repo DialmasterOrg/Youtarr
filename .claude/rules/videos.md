@@ -2,6 +2,7 @@
 paths:
   - "server/modules/filesystem/**/*"
   - "server/modules/videosModule.js"
+  - "server/modules/job/jobBackfill.js"
   - "server/modules/videoMetadataModule.js"
   - "server/modules/videoDownloadPostProcessFiles.js"
   - "server/modules/nfoGenerator.js"
@@ -51,7 +52,7 @@ Listing, the filesystem rescan, library repair, deleted vs. missing videos, the 
 - The gate and the probe below count a gone video only when its channel folder (`rowChannelFolder`) is gone too: a media server or the user deletes files and leaves that folder, a wrong mount has none (#1079).
 - The completion `rescanStatus` broadcast is built through the same `rescanRunSummary` record as the run history, so the live Maintenance view matches it.
 - Progress (`getRescanProgress`, also on `GET rescan-status`) is broadcast at most once a second, each emit in try/catch so a missing WebSocket never stops the scan; `messageEmitter` never replays it.
-- Library repair (`jobModule.backfillFromCompleteList`) uses the same guard: it reads the row before searching the disk and writes file details and `removed: false` only for a file it actually found.
+- Library repair (`job/jobBackfill.backfillFromCompleteList`) uses the same guard: it reads the row before searching the disk and writes file details and `removed: false` only for a file it actually found.
 - A lost row's files are looked up by YouTube id with one `videosModule.scanForVideoFiles` walk per run (only when a lost row exists; video and audio, any folder layout), recreating it as missing when the walk finds nothing.
 - The walk skips and counts (`unreadable`) folders and files it cannot read rather than stopping, logging unreadable files once per folder.
 - Repair still recreates unmatched rows as missing after a partial walk, because deferring would block recovery wherever a folder is never readable (lost+found, NAS recycle bins); the next rescan restores a row whose file it finds.

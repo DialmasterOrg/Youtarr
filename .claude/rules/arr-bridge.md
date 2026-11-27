@@ -111,7 +111,7 @@ The opt-in `/arr` namespace (issue #760): a Newznab indexer and a SABnzbd downlo
 - Only `blocked_at` is stored; the next try time, the memory of the block and requested tries are in memory. A grab whose video is in the library by then is staged even while the block holds.
 - A repeat try carries `quietBlockedFailure`, as do jobs already queued when the block was found, so one block notifies once. A try made when no blocked grab waits and the hour is over is not quiet.
 - `recentlyFailedIds` leaves out a video that has a library file: a grab of it stages without a download, which is the user's way around a failed grab.
-- `endedBeforeTrying` matches a job's `Error` output against `constants/jobOutputPrefixes.js`, which `downloadExecutor` and `jobModule` also write from; a new failure before yt-dlp runs needs a prefix there. Any other `Error` job counts as tried, so a finalization error never re-downloads.
+- `endedBeforeTrying` matches a job's `Error` output against `constants/jobOutputPrefixes.js`, which `downloadExecutor` and `job/jobQueue` also write from; a new failure before yt-dlp runs needs a prefix there. Any other `Error` job counts as tried, so a finalization error never re-downloads.
 - `grabService.grabState` derives what Settings shows. A removed grab that completed is `handed-off`, never "imported": the app sends the same history delete after an import and after a removal there.
 - A category's name cannot be edited in Settings, only removed and added: existing grabs carry the name and their staging folder is named after it.
 - `ARR_BRIDGE_JOB_LABEL` contains the manual download label on purpose, so job detection, per-video structure and members-only handling treat a grab as a manual download.
