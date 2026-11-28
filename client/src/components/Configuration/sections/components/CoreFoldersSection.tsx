@@ -9,7 +9,7 @@ import { AddSubfolderDialog } from '../../../shared/AddSubfolderDialog';
 import { ManageSubfoldersDialog } from '../../../shared/ManageSubfoldersDialog';
 import { SettingsSection } from '../../common/SettingsSection';
 import { SettingRow, settingDescriptionId } from '../../common/SettingRow';
-import { DefaultSubfolderDialog } from './DefaultSubfolderDialog';
+import { DefaultSubfolderDialog } from './AffectedChannelsDialog';
 import type { ConfigState, DeploymentEnvironment } from '../../types';
 
 const PHONE_QUERY = '(max-width: 767px)';

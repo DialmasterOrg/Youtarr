@@ -9,7 +9,7 @@ import { SettingsSection } from '../common/SettingsSection';
 import { SettingRow, settingDescriptionId } from '../common/SettingRow';
 import { SettingNote } from '../common/SettingNote';
 import { CoreFoldersSection } from './components/CoreFoldersSection';
-import { FlatStructureDialog } from './components/FlatStructureDialog';
+import { FlatStructureDialog } from './components/AffectedChannelsDialog';
 import { ScheduleSummary } from './components/ScheduleSummary';
 import { VideoFilenameTemplate } from './components/VideoFilenameTemplate';
 import { getChannelFilesOptions } from '../helpers';
