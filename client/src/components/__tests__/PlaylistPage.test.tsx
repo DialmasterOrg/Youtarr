@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import PlaylistPage from '../PlaylistPage';
-import { createMockWebSocketContext, renderWithProviders } from '../../test-utils';
+import { createMockWebSocketContext, deliverSocketMessage, renderWithProviders } from '../../test-utils';
 import { PlaylistVideo } from '../../types/playlist';
 
 const mockTriggerDownload = jest.fn();
@@ -855,10 +855,11 @@ describe('PlaylistPage media server sync updates', () => {
     const websocketValue = createMockWebSocketContext();
     renderWithProviders(<PlaylistPage token="t" />, { websocketValue });
 
-    const syncUpdated = { destination: 'broadcast', type: 'playlistSyncUpdated', payload: { playlistDbId: 42 } };
-    const listeners = websocketValue.subscribe.mock.calls.filter(([filter]) => filter(syncUpdated));
-    expect(listeners).toHaveLength(1);
-    listeners[0][1](syncUpdated);
+    deliverSocketMessage(websocketValue, {
+      destination: 'broadcast',
+      type: 'playlistSyncUpdated',
+      payload: { playlistDbId: 42 },
+    });
 
     expect(mockRefetchMeta).toHaveBeenCalledTimes(1);
   });

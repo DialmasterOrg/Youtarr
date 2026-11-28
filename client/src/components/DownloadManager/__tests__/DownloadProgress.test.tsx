@@ -86,26 +86,6 @@ describe('DownloadProgress', () => {
     expect(screen.getByText('Downloads will appear here when started')).toBeInTheDocument();
   });
 
-  test('subscribes to WebSocket on mount and unsubscribes on unmount', () => {
-    const { unmount } = renderWithContext(
-      <DownloadProgress
-        downloadProgressRef={mockDownloadProgressRef}
-        downloadInitiatedRef={mockDownloadInitiatedRef}
-        jobs={[]}
-        token="test-token"
-      />
-    );
-
-    expect(mockSubscribe).toHaveBeenCalledWith(
-      expect.any(Function),
-      expect.any(Function)
-    );
-
-    unmount();
-
-    expect(mockUnsubscribe).toHaveBeenCalledWith(expect.any(Function));
-  });
-
   test('displays download progress when structured progress is received', async () => {
     renderWithContext(
       <DownloadProgress

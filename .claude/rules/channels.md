@@ -76,6 +76,9 @@ Channel subscriptions, listings, title filters, per-tab download counts, channel
 - Both cached channel thumbnail writers (`channelThumbnails.resizeChannelThumbnail` and the post-processor's fallback) cap the longest side at 512 px without upscaling, via `constants/channelThumbnail.js`: avatar sources run from under 200 px to over 4000, so a percentage fits neither.
 - The channel list calls `backfillChannelImagesInBackground`, never awaited, which skips channels checked in the last 15 minutes; a poster or backdrop setting change forgets every check, so newly enabled images appear on the next load.
 - The Channels page's add input is also the list search (`/getchannels?search=`, debounced). Enter adds only `isExplicitChannelReference` input, because a bare word may be a search; the search is held while a lookup runs so the list does not empty behind it.
+- `useChannelList.refetch` on an infinite list past page 1 requests every loaded row (one request up to the server's 128-row limit) and replaces the list: merging one reloaded page kept each channel's older copy and any removed channel.
+- That `refetch` is stable and runs the current render's fetch: a save holds it across an await, and one captured earlier replaced the list with fewer pages than the page counter said were loaded.
+- The Channels page debounces socket-triggered reloads by a second, because adding channels sends a burst of `channelsUpdated`; Save and Retry reload at once.
 - `useChannelList` applies only its newest request's response, because search-as-you-type overlaps requests. An unmatched name goes to Find Channels as `?q=`, run once on open: a YouTube search costs 100 quota units or seconds of yt-dlp, so never as-you-type.
 
 ## Per-tab download counts (issue #865)

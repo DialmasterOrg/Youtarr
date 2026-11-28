@@ -3,6 +3,10 @@ import axios from 'axios';
 import { serverErrorMessage } from '../../../utils/requestError';
 import { Channel } from '../../../types/Channel';
 import { normalizeSubFolderKey } from '../../../utils/channelHelpers';
+import { ALLOWED_PAGE_SIZES } from '../../shared/VideoList/pageSizes';
+
+// The largest page /getchannels serves (MAX_CHANNEL_PAGE_SIZE in channelCatalog.js).
+const RELOAD_PAGE_SIZE = Math.max(...ALLOWED_PAGE_SIZES);
 
 interface UseChannelListParams {
   token: string | null;
@@ -42,7 +46,7 @@ export const useChannelList = ({
   // overlapping requests, and an older one can answer last.
   const latestRequestRef = useRef(0);
 
-  const fetchChannels = useCallback(async () => {
+  const fetchChannels = useCallback(async (reloadLoadedPages = false) => {
     const requestId = ++latestRequestRef.current;
     const isLatest = () => latestRequestRef.current === requestId;
 
@@ -57,30 +61,49 @@ export const useChannelList = ({
     setLoading(true);
     setError(null);
 
+    // A reload of an appended list requests every loaded row, in as few
+    // requests as the server's page limit allows, and replaces the list:
+    // merging one reloaded page kept each row's older copy.
+    const replaceLoaded = reloadLoadedPages && append && page > 1;
+    const loadedCount = page * pageSize;
+    const reloadPageSize = Math.min(loadedCount, RELOAD_PAGE_SIZE);
+    const requests = replaceLoaded
+      ? Array.from({ length: Math.ceil(loadedCount / reloadPageSize) }, (_, index) => ({
+        page: index + 1,
+        pageSize: reloadPageSize,
+      }))
+      : [{ page, pageSize }];
+
     try {
-      const response = await axios.get<ChannelListResponse>('/getchannels', {
-        headers: {
-          'x-access-token': token,
-        },
-        params: {
-          page,
-          pageSize,
-          search: searchTerm || undefined,
-          sortOrder,
-          subFolder: subFolder || undefined,
-        },
-      });
+      const responses = await Promise.all(
+        requests.map((request) =>
+          axios.get<ChannelListResponse>('/getchannels', {
+            headers: {
+              'x-access-token': token,
+            },
+            params: {
+              ...request,
+              search: searchTerm || undefined,
+              sortOrder,
+              subFolder: subFolder || undefined,
+            },
+          })
+        )
+      );
 
       if (!isLatest()) return;
 
-      const payload = response.data;
-      const incomingChannels = payload.channels || [];
+      const payload = responses[responses.length - 1].data;
+      const received = responses.flatMap((response) => response.data.channels || []);
+      // Exactly the rows that were loaded, so the next page continues after
+      // them; only the last request of a list over the limit returns extra.
+      const incomingChannels = replaceLoaded ? received.slice(0, loadedCount) : received;
       setChannels((prev) => {
         if (!append || page <= 1) {
           return incomingChannels;
         }
 
-        const merged = [...prev, ...incomingChannels];
+        const merged = replaceLoaded ? incomingChannels : [...prev, ...incomingChannels];
         const seen = new Set<string>();
         return merged.filter((channel) => {
           const key = channel.channel_id || channel.url;
@@ -92,7 +115,9 @@ export const useChannelList = ({
         });
       });
       setTotal(payload.total || 0);
-      setTotalPages(payload.totalPages || 0);
+      setTotalPages(
+        replaceLoaded ? Math.ceil((payload.total || 0) / pageSize) : payload.totalPages || 0
+      );
       setSubFolders(
         (payload.subFolders || []).map((value) => normalizeSubFolderKey(value)).filter(Boolean)
       );
@@ -110,13 +135,20 @@ export const useChannelList = ({
     fetchChannels();
   }, [fetchChannels]);
 
+  // Callers hold refetch across an await (a save), so it runs the current
+  // render's fetch: one captured earlier would reload the pages loaded back
+  // then over a list that has since grown.
+  const fetchRef = useRef(fetchChannels);
+  fetchRef.current = fetchChannels;
+  const refetch = useCallback(() => fetchRef.current(true), []);
+
   return {
     channels,
     total,
     totalPages,
     loading,
     error,
-    refetch: fetchChannels,
+    refetch,
     subFolders,
   };
 };

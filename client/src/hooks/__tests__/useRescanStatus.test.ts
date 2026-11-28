@@ -46,6 +46,36 @@ function makeWrapper(subscribers: Subscriber[]) {
   return Wrapper;
 }
 
+const finishedRun: RescanLastRun = {
+  startedAt: '2026-05-04T15:00:00.000Z',
+  completedAt: '2026-05-04T15:01:00.000Z',
+  trigger: 'scheduled',
+  status: 'completed',
+  videosUpdated: 0,
+  videosMarkedMissing: 0,
+  videosScanned: 10,
+  filesFoundOnDisk: 10,
+  errorMessage: null
+};
+
+// Renders the hook with a status request left pending (the first one, or the
+// reload after `loaded` answered the first). `respond` answers it; `deliver`
+// sends a socket message the way WebSocketProvider does.
+function renderWithPendingStatus(loaded?: unknown) {
+  let resolve: (value: { data: unknown }) => void = () => {};
+  if (loaded) mockedAxios.get.mockResolvedValueOnce({ data: loaded });
+  mockedAxios.get.mockReturnValueOnce(new Promise((resolver) => { resolve = resolver; }));
+  const subscribers: Subscriber[] = [];
+  const view = renderHook(() => useRescanStatus('tok'), { wrapper: makeWrapper(subscribers) });
+  return {
+    ...view,
+    deliver: (type: string, payload: unknown = {}) => act(() => {
+      subscribers.forEach((s) => s.filter({ type, payload }) && s.callback(payload));
+    }),
+    respond: (data: unknown) => act(async () => { resolve({ data }); }),
+  };
+}
+
 describe('useRescanStatus', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -266,5 +296,71 @@ describe('useRescanStatus', () => {
     });
 
     expect(result.current.error).toBeNull();
+  });
+
+  test('loads the status again when the connection is restored', async () => {
+    const { result, deliver, respond } = renderWithPendingStatus({ running: true, lastRun: null });
+    await waitFor(() => expect(result.current.running).toBe(true));
+
+    // The rescan ended while disconnected, so no message reported it.
+    deliver('connectionRestored');
+    await respond({ running: false, lastRun: finishedRun });
+
+    expect(result.current.running).toBe(false);
+    expect(result.current.lastRun).toEqual(finishedRun);
+  });
+
+  test('keeps a live message that arrived while the status was loading', async () => {
+    const { result, deliver, respond } = renderWithPendingStatus();
+
+    deliver('rescanStatus', { running: false, lastRun: finishedRun });
+    // The response was read before the rescan ended.
+    await respond({ running: true, lastRun: null });
+
+    expect(result.current.running).toBe(false);
+    expect(result.current.lastRun).toEqual(finishedRun);
+  });
+
+  test('takes the last run from a response that live progress overtook', async () => {
+    const older: RescanProgress = {
+      phase: 'walk', foldersScanned: 10, filesFound: 9, videosProcessed: 0, videosTotal: 0, startedAt: '2026-11-21T14:34:00.000Z',
+    };
+    const live: RescanProgress = { ...older, phase: 'rows', videosProcessed: 50, videosTotal: 100 };
+    const { result, deliver, respond } = renderWithPendingStatus();
+
+    deliver('rescanStatus', { running: true, progress: live });
+    await respond({ running: true, progress: older, lastRun: finishedRun });
+
+    expect(result.current.progress).toEqual(live);
+    expect(result.current.lastRun).toEqual(finishedRun);
+  });
+
+  test('a reload in flight does not turn off a rescan that was just started', async () => {
+    mockedAxios.post.mockResolvedValueOnce({ status: 202, data: { status: 'started' } });
+    const { result, deliver, respond } = renderWithPendingStatus({ running: false, lastRun: null });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    deliver('connectionRestored');
+    await act(async () => {
+      await result.current.triggerRescan();
+    });
+    await respond({ running: false, lastRun: finishedRun });
+
+    expect(result.current.running).toBe(true);
+    expect(result.current.lastRun).toEqual(finishedRun);
+  });
+
+  test('a reload does not clear the error of a rescan that failed to start', async () => {
+    mockedAxios.post.mockRejectedValueOnce(new Error('Network Error'));
+    const { result, deliver, respond } = renderWithPendingStatus({ running: false, lastRun: null });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    deliver('connectionRestored');
+    await act(async () => {
+      await result.current.triggerRescan();
+    });
+    await respond({ running: false, lastRun: null });
+
+    expect(result.current.error).toBe('Network Error');
   });
 });

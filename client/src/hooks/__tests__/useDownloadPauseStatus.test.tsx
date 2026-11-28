@@ -150,13 +150,4 @@ describe('useDownloadPauseStatus', () => {
 
     await waitFor(() => expect(axios.get).toHaveBeenCalledTimes(2));
   });
-
-  test('unsubscribes on unmount', async () => {
-    const { result, unmount } = renderHook(() => useDownloadPauseStatus('token-1'), { wrapper });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    unmount();
-
-    expect(subscriptions).toHaveLength(0);
-  });
 });

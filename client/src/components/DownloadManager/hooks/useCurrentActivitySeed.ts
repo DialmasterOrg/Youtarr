@@ -1,6 +1,5 @@
-import { useCallback, useContext, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import axios from 'axios';
-import WebSocketContext from '../../../contexts/WebSocketContext';
 import { DownloadProgressPayload, StructuredProgress } from '../types';
 
 // A non-terminal snapshot older than this is treated as unreliable: the job
@@ -32,18 +31,15 @@ interface UseCurrentActivitySeedArgs {
 /**
  * Seeds the activity page with the server's current download snapshot so it
  * renders immediately on mount, instead of waiting for the next WebSocket
- * broadcast. Re-probes when the connection is restored or the tab becomes
- * visible again.
+ * broadcast. Re-probes when the tab becomes visible again, and returns the
+ * probe so the caller can run it when the connection is restored.
  */
 export function useCurrentActivitySeed({
   token,
   liveMessageGenerationRef,
   applyPayload,
   resetActivityState,
-}: UseCurrentActivitySeedArgs): void {
-  const wsContext = useContext(WebSocketContext);
-  const subscribe = wsContext?.subscribe;
-  const unsubscribe = wsContext?.unsubscribe;
+}: UseCurrentActivitySeedArgs): () => Promise<void> {
   const probeGenerationRef = useRef(0);
 
   const probe = useCallback(async () => {
@@ -90,21 +86,6 @@ export function useCurrentActivitySeed({
   }, [probe]);
 
   useEffect(() => {
-    if (!subscribe || !unsubscribe) {
-      return;
-    }
-    const filter = (message: { type?: string }) =>
-      message.type === 'connectionRestored';
-    const callback = () => {
-      probe();
-    };
-    subscribe(filter, callback);
-    return () => {
-      unsubscribe(callback);
-    };
-  }, [subscribe, unsubscribe, probe]);
-
-  useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         probe();
@@ -115,4 +96,6 @@ export function useCurrentActivitySeed({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [probe]);
+
+  return probe;
 }

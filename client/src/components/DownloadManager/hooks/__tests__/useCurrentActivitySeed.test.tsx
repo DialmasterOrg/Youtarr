@@ -1,7 +1,5 @@
-import React from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { useCurrentActivitySeed } from '../useCurrentActivitySeed';
-import WebSocketContext from '../../../../contexts/WebSocketContext';
 
 jest.mock('axios', () => ({
   get: jest.fn(),
@@ -9,49 +7,21 @@ jest.mock('axios', () => ({
 
 const axios = require('axios');
 
-type Filter = (message: { destination?: string; type?: string }) => boolean;
-type Callback = (data: unknown) => void;
-
 describe('useCurrentActivitySeed', () => {
   const mockToken = 'test-token-123';
 
-  let subscriptions: Array<{ filter: Filter; callback: Callback }>;
-  let subscribe: jest.Mock;
-  let unsubscribe: jest.Mock;
   let applyPayload: jest.Mock;
   let resetActivityState: jest.Mock;
   let liveMessageGenerationRef: { current: number };
 
-  const emitMessage = (message: {
-    destination?: string;
-    type?: string;
-    payload?: unknown;
-  }) => {
-    act(() => {
-      subscriptions.forEach((sub) => {
-        if (sub.filter(message)) {
-          sub.callback(message.payload);
-        }
-      });
-    });
-  };
-
-  const wrapper = ({ children }: { children: React.ReactNode }) => (
-    <WebSocketContext.Provider value={{ socket: null, subscribe, unsubscribe }}>
-      {children}
-    </WebSocketContext.Provider>
-  );
-
   const renderSeedHook = (token: string | null = mockToken) =>
-    renderHook(
-      () =>
-        useCurrentActivitySeed({
-          token,
-          liveMessageGenerationRef,
-          applyPayload,
-          resetActivityState,
-        }),
-      { wrapper }
+    renderHook(() =>
+      useCurrentActivitySeed({
+        token,
+        liveMessageGenerationRef,
+        applyPayload,
+        resetActivityState,
+      })
     );
 
   const freshSnapshot = {
@@ -64,13 +34,6 @@ describe('useCurrentActivitySeed', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    subscriptions = [];
-    subscribe = jest.fn((filter: Filter, callback: Callback) => {
-      subscriptions.push({ filter, callback });
-    });
-    unsubscribe = jest.fn((callback: Callback) => {
-      subscriptions = subscriptions.filter((sub) => sub.callback !== callback);
-    });
     applyPayload = jest.fn();
     resetActivityState = jest.fn();
     liveMessageGenerationRef = { current: 0 };
@@ -234,10 +197,10 @@ describe('useCurrentActivitySeed', () => {
     });
   });
 
-  test('re-probes on connectionRestored and applies despite earlier live messages', async () => {
+  test('the returned probe re-seeds and applies despite earlier live messages', async () => {
     axios.get.mockResolvedValue({ data: freshSnapshot });
 
-    renderSeedHook();
+    const { result } = renderSeedHook();
 
     await waitFor(() => {
       expect(axios.get).toHaveBeenCalledTimes(1);
@@ -246,7 +209,9 @@ describe('useCurrentActivitySeed', () => {
 
     // Messages received before the reconnect must not veto the fresh probe
     liveMessageGenerationRef.current = 3;
-    emitMessage({ destination: 'local', type: 'connectionRestored', payload: {} });
+    await act(async () => {
+      await result.current();
+    });
 
     await waitFor(() => {
       expect(axios.get).toHaveBeenCalledTimes(2);
@@ -290,8 +255,6 @@ describe('useCurrentActivitySeed', () => {
     });
 
     unmount();
-
-    expect(unsubscribe).toHaveBeenCalled();
 
     Object.defineProperty(document, 'visibilityState', {
       value: 'visible',

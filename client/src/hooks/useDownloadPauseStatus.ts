@@ -1,12 +1,7 @@
-import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import WebSocketContext from '../contexts/WebSocketContext';
 import { DownloadPauseStatus } from '../types/downloadPause';
-
-interface BroadcastMessage {
-  destination?: string;
-  type?: string;
-}
+import { useSocketEvents } from './useSocketEvents';
 
 interface UseDownloadPauseStatusResult {
   data: DownloadPauseStatus | null;
@@ -15,21 +10,13 @@ interface UseDownloadPauseStatusResult {
   refresh: () => Promise<void>;
 }
 
-const isPauseMessage = (message: BroadcastMessage) =>
-  message.destination === 'broadcast' && message.type === 'downloadPauseChanged';
-
-// Missed broadcasts while disconnected are recovered by refetching.
-const isReconnectMessage = (message: BroadcastMessage) => message.type === 'connectionRestored';
+const PAUSE_MESSAGE_TYPES = ['downloadPauseChanged'];
 
 /**
  * Whether downloads are paused because a storage limit was reached. Seeded
  * over REST and kept current by downloadPauseChanged broadcasts.
  */
 export function useDownloadPauseStatus(token: string | null): UseDownloadPauseStatusResult {
-  const wsContext = useContext(WebSocketContext);
-  const subscribe = wsContext?.subscribe;
-  const unsubscribe = wsContext?.unsubscribe;
-
   const [data, setData] = useState<DownloadPauseStatus | null>(null);
   const [loading, setLoading] = useState(Boolean(token));
   const [error, setError] = useState<string | null>(null);
@@ -64,33 +51,20 @@ export function useDownloadPauseStatus(token: string | null): UseDownloadPauseSt
     refresh();
   }, [refresh]);
 
-  useEffect(() => {
-    if (!subscribe || !unsubscribe || !token) {
-      return undefined;
-    }
-
-    const onPauseChanged = (payload: DownloadPauseStatus) => {
-      updateVersionRef.current += 1;
-      // Broadcasts skip measuring the downloaded total when no usage limit
-      // needs it (null), so keep the last known value for display.
-      setData((previous) => {
-        const previousBytes = previous?.usage.downloadedBytes ?? null;
-        if (payload.usage.downloadedBytes !== null || previousBytes === null) return payload;
-        return { ...payload, usage: { ...payload.usage, downloadedBytes: previousBytes } };
-      });
-      setError(null);
-    };
-    const onReconnect = () => {
-      refresh();
-    };
-
-    subscribe(isPauseMessage, onPauseChanged);
-    subscribe(isReconnectMessage, onReconnect);
-    return () => {
-      unsubscribe(onPauseChanged);
-      unsubscribe(onReconnect);
-    };
-  }, [subscribe, unsubscribe, token, refresh]);
+  const onPauseChanged = (payload: DownloadPauseStatus) => {
+    if (!token) return;
+    updateVersionRef.current += 1;
+    // Broadcasts skip measuring the downloaded total when no usage limit
+    // needs it (null), so keep the last known value for display.
+    setData((previous) => {
+      const previousBytes = previous?.usage.downloadedBytes ?? null;
+      if (payload.usage.downloadedBytes !== null || previousBytes === null) return payload;
+      return { ...payload, usage: { ...payload.usage, downloadedBytes: previousBytes } };
+    });
+    setError(null);
+  };
+  // Missed broadcasts while disconnected are recovered by refetching.
+  useSocketEvents(PAUSE_MESSAGE_TYPES, onPauseChanged, refresh);
 
   return { data, loading, error, refresh };
 }

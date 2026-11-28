@@ -35,9 +35,11 @@ import { Undo2 as UndoIcon, FolderOpen as FolderSpecialIcon } from 'lucide-react
 import { MOBILE_NAV_SAFE_GAP } from './layout/navLayoutConstants';
 import useMediaQuery from '../hooks/useMediaQuery';
 import { useNavigate, useLocation } from 'react-router-dom';
-import WebSocketContext, { Message } from '../contexts/WebSocketContext';
+import WebSocketContext from '../contexts/WebSocketContext';
 import { useConfig } from '../hooks/useConfig';
+import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import { useInfiniteScrollTrigger } from '../hooks/useInfiniteScrollTrigger';
+import { useSocketEvents } from '../hooks/useSocketEvents';
 import { Channel } from '../types/Channel';
 import { useChannelList } from './Subscriptions/hooks/useChannelList';
 import { ChannelLookupResult, useChannelMutations } from './Subscriptions/hooks/useChannelMutations';
@@ -79,6 +81,8 @@ type SortOrder = 'asc' | 'desc';
 
 const AUTO_DOWNLOADS_COLUMN_LABEL = 'Auto downloads';
 const CHANNEL_SEARCH_DEBOUNCE_MS = 300;
+const CHANNEL_LIST_MESSAGE_TYPES = ['channelsUpdated'];
+const CHANNEL_REFRESH_DEBOUNCE_MS = 1000;
 
 interface SubscriptionsProps {
   token: string | null;
@@ -267,26 +271,13 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
     onLoadNextPage: () => setPage((prev) => prev + 1),
   });
 
-  const handleMessage = useCallback(() => {
+  // Adding channels sends a burst of updates; one reload covers a burst.
+  const scheduleRefetch = useDebouncedCallback(() => {
     if (!hasPendingChanges) {
       refetch();
     }
-  }, [hasPendingChanges, refetch]);
-
-  const messageFilter = useCallback((message: Message) => {
-    return (
-      message.destination === 'broadcast' &&
-      message.source === 'channel' &&
-      message.type === 'channelsUpdated'
-    );
-  }, []);
-
-  useEffect(() => {
-    websocketContext.subscribe(messageFilter, handleMessage);
-    return () => {
-      websocketContext.unsubscribe(handleMessage);
-    };
-  }, [websocketContext, messageFilter, handleMessage]);
+  }, CHANNEL_REFRESH_DEBOUNCE_MS);
+  useSocketEvents(CHANNEL_LIST_MESSAGE_TYPES, scheduleRefetch, scheduleRefetch);
 
   // Shows the lookup outcome: the settings dialog for a found channel (or the
   // pending entry it matches), otherwise a message. Returns false on failure.

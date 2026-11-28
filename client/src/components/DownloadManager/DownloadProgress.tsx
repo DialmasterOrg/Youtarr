@@ -1,6 +1,5 @@
 import React, {
   useContext,
-  useEffect,
   useState,
   useCallback,
   useMemo,
@@ -28,6 +27,7 @@ import { groupFailuresByDiagnosis } from './failureGrouping';
 import { jobTypeLabel } from '../../utils/jobTypeLabel';
 import { formatBytes } from '../../utils/formatters';
 import { useCurrentActivitySeed } from './hooks/useCurrentActivitySeed';
+import { useSocketEvents } from '../../hooks/useSocketEvents';
 import {
   DownloadProgressPayload,
   FinalSummary,
@@ -38,6 +38,7 @@ import TerminateJobDialog from './TerminateJobDialog';
 import FailedVideoLineList from './FailedVideoLineList';
 
 const PROGRESS_BYTE_DECIMALS = 1;
+const PROGRESS_MESSAGE_TYPES = ['downloadProgress'];
 
 interface DownloadProgressProps {
   downloadProgressRef: React.MutableRefObject<{
@@ -95,7 +96,6 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
   if (!wsContext) {
     throw new Error('WebSocketContext not found');
   }
-  const { subscribe, unsubscribe } = wsContext;
 
   const pendingJobs = useMemo(
     () => jobs.filter((job) => job.status === 'Pending'),
@@ -242,12 +242,6 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     }
   };
 
-  const filter = useCallback((message: any) => {
-    return (
-      message.destination === 'broadcast' && message.type === 'downloadProgress'
-    );
-  }, []);
-
   const applyPayload = useCallback(
     (payload: DownloadProgressPayload) => {
       // Clear previous summary if explicitly requested
@@ -387,14 +381,8 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     setFinalSummary(null);
   }, []);
 
-  useCurrentActivitySeed({ token, liveMessageGenerationRef, applyPayload, resetActivityState });
-
-  useEffect(() => {
-    subscribe(filter, processMessagesCallback);
-    return () => {
-      unsubscribe(processMessagesCallback);
-    };
-  }, [subscribe, unsubscribe, filter, processMessagesCallback]);
+  const reseed = useCurrentActivitySeed({ token, liveMessageGenerationRef, applyPayload, resetActivityState });
+  useSocketEvents(PROGRESS_MESSAGE_TYPES, processMessagesCallback, reseed);
 
   // Determine if terminate button should be shown
   const showTerminateButton = currentProgress &&
