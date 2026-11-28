@@ -374,6 +374,18 @@ describe('mobile tooltip interactions', () => {
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
 
+  test('adds no element around its trigger, so the trigger keeps its own positioning', () => {
+    render(
+      <div data-testid="host">
+        <Tooltip title="Tooltip body">
+          <button type="button">Info</button>
+        </Tooltip>
+      </div>
+    );
+
+    expect(screen.getByTestId('host').innerHTML).toBe('<button type="button">Info</button>');
+  });
+
   test('closes when focus moves elsewhere, as it does when the tapped button opens a dialog', async () => {
     const user = userEvent.setup();
 
