@@ -4,6 +4,7 @@
 // rejected URL, so only a fresh yt-dlp run (fresh extraction) can recover.
 // The finalizer consults this planner after partitioning results and
 // enqueues a follow-up URL-list job for the retryable subset. No I/O here.
+const { buildWatchUrl } = require('../constants/youtube');
 
 // Hard ceiling on retry attempts regardless of configuration, so a blocked IP
 // isn't retried endlessly.
@@ -112,7 +113,7 @@ function planAutoRetry({
       youtubeId: video.youtubeId,
       // Channel-sweep failures never enter the archive diff, so their url is
       // usually null; reconstruct it from the youtube id.
-      url: video.url || `https://www.youtube.com/watch?v=${video.youtubeId}`,
+      url: video.url || buildWatchUrl(video.youtubeId),
       anonymousRetry,
     }));
 

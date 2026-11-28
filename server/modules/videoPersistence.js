@@ -4,6 +4,7 @@ const JobVideo = require('../models/jobvideo');
 const ChannelVideo = require('../models/channelvideo');
 const channelVideoReanchor = require('./channelVideoReanchor');
 const { PUBLISHED_AT_SOURCE } = require('./constants/publishedAtSource');
+const { buildVideoThumbnailUrl } = require('./constants/youtube');
 const VideoMetadataProcessor = require('./download/videoMetadataProcessor');
 const { REMOVAL_COLUMNS, presentColumns } = require('./videoRemovalState');
 const logger = require('../logger');
@@ -156,7 +157,7 @@ class VideoPersistence {
     const publishedAt = info.upload_date ? this.uploadDateToIso(info.upload_date) : null;
     const availability = info.availability || null;
     const media_type = info.media_type || 'video';
-    const thumbnail = `https://i.ytimg.com/vi/${youtube_id}/mqdefault.jpg`;
+    const thumbnail = buildVideoThumbnailUrl(youtube_id, 'mqdefault');
     const content_rating = info.content_rating || null;
     const age_limit = info.age_limit ?? null;
     const normalized_rating = info.normalized_rating || null;

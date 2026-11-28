@@ -2,6 +2,7 @@
  * Pure YouTube URL parsing helpers. No side effects and no heavy
  * dependencies, so it is safe to require from any module or test.
  */
+const { VIDEO_ID_PATTERN, buildWatchUrl } = require('./constants/youtube');
 
 /**
  * Normalize a YouTube URL to extract video ID and canonical URL
@@ -36,22 +37,20 @@ function normalizeUrlToVideoId(url) {
     hostname === 'music.youtube.com'
   );
 
-  const idPattern = /^[a-zA-Z0-9_-]{11}$/;
-
   if (hostname === 'youtu.be') {
     const candidate = pathSegments[0];
-    if (candidate && idPattern.test(candidate)) {
+    if (candidate && VIDEO_ID_PATTERN.test(candidate)) {
       videoId = candidate;
     }
   } else if (isYoutubeDomain) {
     if (pathSegments[0] === 'watch') {
       const candidate = parsedUrl.searchParams.get('v');
-      if (candidate && idPattern.test(candidate)) {
+      if (candidate && VIDEO_ID_PATTERN.test(candidate)) {
         videoId = candidate;
       }
     } else if (pathSegments[0] === 'shorts' || pathSegments[0] === 'embed' || pathSegments[0] === 'live') {
       const candidate = pathSegments[1];
-      if (candidate && idPattern.test(candidate)) {
+      if (candidate && VIDEO_ID_PATTERN.test(candidate)) {
         videoId = candidate;
       }
     }
@@ -63,7 +62,7 @@ function normalizeUrlToVideoId(url) {
 
   return {
     id: videoId,
-    canonicalUrl: `https://www.youtube.com/watch?v=${videoId}`
+    canonicalUrl: buildWatchUrl(videoId)
   };
 }
 

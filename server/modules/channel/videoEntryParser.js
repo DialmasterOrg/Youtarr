@@ -1,5 +1,6 @@
 const logger = require('../../logger');
 const ratingMapper = require('../ratingMapper');
+const { buildVideoThumbnailUrl } = require('../constants/youtube');
 
 class VideoEntryParser {
   /**
@@ -37,7 +38,7 @@ class VideoEntryParser {
       return mediumThumb ? mediumThumb.url : entry.thumbnails[entry.thumbnails.length - 1].url;
     }
     if (entry.id) {
-      return `https://i.ytimg.com/vi/${entry.id}/mqdefault.jpg`;
+      return buildVideoThumbnailUrl(entry.id, 'mqdefault');
     }
     return '';
   }

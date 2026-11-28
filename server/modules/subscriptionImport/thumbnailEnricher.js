@@ -4,6 +4,7 @@ const https = require('https');
 const logger = require('../../logger');
 const createLimiter = require('./concurrencyLimiter');
 const { THUMBNAIL_CONCURRENCY, THUMBNAIL_FETCH_TIMEOUT_MS, THUMBNAIL_MAX_BYTES } = require('./constants');
+const { buildChannelUrl } = require('../constants/youtube');
 
 const OG_IMAGE_RE = /<meta\s+property="og:image"\s+content="([^"]+)"/i;
 
@@ -157,7 +158,7 @@ async function enrichWithThumbnails(channels) {
     channels.map((ch) =>
       limit(async () => {
         try {
-          const channelUrl = `https://www.youtube.com/channel/${ch.channelId}`;
+          const channelUrl = buildChannelUrl(ch.channelId);
           const thumbnailUrl = await fetchOgImage(ch.channelId, channelUrl);
           if (thumbnailUrl) {
             successCount += 1;

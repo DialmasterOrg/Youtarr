@@ -1,5 +1,6 @@
 const express = require('express');
 const { MAX_PLAYLIST_VIDEOS, MAX_SELECTED_DOWNLOAD_IDS, DEFAULT_PREVIEW_COUNT, FETCH_IN_PROGRESS_MESSAGE } = require('../modules/playlistConstants');
+const { buildVideoThumbnailUrl } = require('../modules/constants/youtube');
 const { createOverrideSettingsValidator } = require('./overrideSettingsValidator');
 const { createSubscribeSettingsValidator } = require('./playlistSubscribeSettings');
 
@@ -627,7 +628,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
         const previouslyDownloaded = !!dl && !isDownloaded;
         const youtubeRemoved = Boolean(dl?.youtube_removed);
         const localThumb = `/images/videothumb-${youtubeId}.jpg`;
-        const flatThumb = row.thumbnail || `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg`;
+        const flatThumb = row.thumbnail || buildVideoThumbnailUrl(youtubeId);
         return {
           id: row.id,
           playlist_id: row.playlist_id,

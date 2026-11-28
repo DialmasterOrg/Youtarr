@@ -6,6 +6,7 @@ const logger = require('../../logger');
 const { buildVideoLink, escapeHtml, formatDuration } = require('../notifications/utils');
 const { normalizeItemLimit, normalizeMediaTypes } = require('./feedSettings');
 const { renderRss } = require('./rssWriter');
+const { buildVideoThumbnailUrl } = require('../constants/youtube');
 
 const TOKEN_BYTES = 32;
 const DESCRIPTION_MAX_LENGTH = 300;
@@ -30,7 +31,7 @@ function buildThumbnailUrl(row, origin) {
   // own copy is only for a video YouTube no longer has.
   return row.youtube_removed
     ? `${origin}/images/videothumb-${row.youtubeId}.jpg`
-    : `https://i.ytimg.com/vi/${row.youtubeId}/hqdefault.jpg`;
+    : buildVideoThumbnailUrl(row.youtubeId);
 }
 
 function formatUploadDate(originalDate) {

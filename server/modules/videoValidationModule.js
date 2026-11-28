@@ -5,6 +5,7 @@ const ChannelVideo = require('../models/channelvideo');
 const youtubeUrlParser = require('./youtubeUrlParser');
 const membersAccess = require('./membersAccess');
 const { BOT_CHECK_CODE } = require('./ytdlpBotCheck');
+const { buildWatchUrl } = require('./constants/youtube');
 
 // yt-dlp words it "Video unavailable" or "This video is unavailable".
 const VIDEO_UNAVAILABLE_PATTERN = /video (is )?unavailable/i;
@@ -104,7 +105,7 @@ class VideoValidationModule {
       membersAccess: membersState,
       metadata: {
         youtubeId: videoId,
-        url: `https://www.youtube.com/watch?v=${videoId}`,
+        url: buildWatchUrl(videoId),
         channelName: metadata.channel || metadata.uploader || 'Unknown',
         channelId: metadata.channel_id || null,
         videoTitle: metadata.title || 'Unknown',
@@ -279,7 +280,7 @@ class VideoValidationModule {
           membersAccess: membersState,
           metadata: {
             youtubeId: extractedVideoId,
-            url: `https://www.youtube.com/watch?v=${extractedVideoId}`,
+            url: buildWatchUrl(extractedVideoId),
             channelName: 'Unknown',
             channelId: null,
             videoTitle: 'Members-only video',

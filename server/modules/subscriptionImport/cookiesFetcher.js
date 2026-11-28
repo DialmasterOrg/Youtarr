@@ -7,6 +7,7 @@ const { execFile } = require('child_process');
 const logger = require('../../logger');
 const { classifyYtdlpError, ERROR_CODES, USER_MESSAGES } = require('./errorClassifier');
 const { COOKIES_FETCH_TIMEOUT_MS } = require('./constants');
+const { buildChannelUrl } = require('../constants/youtube');
 
 const NETSCAPE_HEADER_PREFIX = '# Netscape HTTP Cookie File';
 const TEMP_DIR_PREFIX = 'youtarr-subsimport-';
@@ -108,7 +109,7 @@ function parseChannelEntries(stdout) {
     results.push({
       channelId,
       title: entry.title || '',
-      url: entry.url || `https://www.youtube.com/channel/${channelId}`,
+      url: entry.url || buildChannelUrl(channelId),
     });
   }
 

@@ -1,7 +1,11 @@
 const express = require('express');
 const { createRateLimiter } = require('../middleware/rateLimiter');
 const { ROOT_SENTINEL, GLOBAL_DEFAULT_SENTINEL } = require('../modules/filesystem/constants');
+const { VIDEO_ID_PATTERN } = require('../modules/constants/youtube');
+const { DOWNLOAD_RESOLUTIONS } = require('../modules/constants/downloadOptions');
 const { sendRunBlocked } = require('./runNowResponse');
+
+const INVALID_RESOLUTION_ERROR = `Invalid resolution. Valid values: ${DOWNLOAD_RESOLUTIONS.join(', ')}`;
 
 // Video validation rate limiter
 const videoValidationLimiter = createRateLimiter({
@@ -103,7 +107,7 @@ module.exports = function createVideoRoutes({
    */
   router.post('/api/videos/local-status', verifyToken, async (req, res) => {
     const ids = req.body?.youtubeIds;
-    if (!Array.isArray(ids) || ids.length > 500 || !ids.every(id => typeof id === 'string' && /^[a-zA-Z0-9_-]{11}$/.test(id))) {
+    if (!Array.isArray(ids) || ids.length > 500 || !ids.every(id => typeof id === 'string' && VIDEO_ID_PATTERN.test(id))) {
       return res.status(400).json({ error: 'youtubeIds must contain at most 500 valid video IDs' });
     }
     try {
@@ -821,11 +825,10 @@ module.exports = function createVideoRoutes({
     }
 
     // Validate resolution if provided
-    const validResolutions = ['360', '480', '720', '1080', '1440', '2160'];
-    if (resolution && !validResolutions.includes(resolution)) {
+    if (resolution && !DOWNLOAD_RESOLUTIONS.includes(resolution)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid resolution. Valid values: 360, 480, 720, 1080, 1440, 2160'
+        error: INVALID_RESOLUTION_ERROR
       });
     }
 
@@ -980,10 +983,9 @@ module.exports = function createVideoRoutes({
     const { overrideSettings } = req.body;
     if (overrideSettings) {
       if (overrideSettings.resolution) {
-        const validResolutions = ['360', '480', '720', '1080', '1440', '2160'];
-        if (!validResolutions.includes(overrideSettings.resolution)) {
+        if (!DOWNLOAD_RESOLUTIONS.includes(overrideSettings.resolution)) {
           return res.status(400).json({
-            error: 'Invalid resolution. Valid values: 360, 480, 720, 1080, 1440, 2160'
+            error: INVALID_RESOLUTION_ERROR
           });
         }
       }
@@ -1051,14 +1053,13 @@ module.exports = function createVideoRoutes({
     // shape is still validated here at the boundary.
     const { videoChannelMap } = req.body;
     if (videoChannelMap !== undefined && videoChannelMap !== null) {
-      const YOUTUBE_ID_PATTERN = /^[a-zA-Z0-9_-]{11}$/;
       const YOUTUBE_CHANNEL_ID_PATTERN = /^UC[a-zA-Z0-9_-]{22}$/;
       const isValidMap =
         typeof videoChannelMap === 'object' &&
         !Array.isArray(videoChannelMap) &&
         Object.entries(videoChannelMap).every(
           ([videoId, channelId]) =>
-            YOUTUBE_ID_PATTERN.test(videoId) &&
+            VIDEO_ID_PATTERN.test(videoId) &&
             typeof channelId === 'string' &&
             YOUTUBE_CHANNEL_ID_PATTERN.test(channelId)
         );
@@ -1151,10 +1152,9 @@ module.exports = function createVideoRoutes({
     const { overrideSettings } = req.body;
     if (overrideSettings) {
       if (overrideSettings.resolution) {
-        const validResolutions = ['360', '480', '720', '1080', '1440', '2160'];
-        if (!validResolutions.includes(overrideSettings.resolution)) {
+        if (!DOWNLOAD_RESOLUTIONS.includes(overrideSettings.resolution)) {
           return res.status(400).json({
-            error: 'Invalid resolution. Valid values: 360, 480, 720, 1080, 1440, 2160'
+            error: INVALID_RESOLUTION_ERROR
           });
         }
       }

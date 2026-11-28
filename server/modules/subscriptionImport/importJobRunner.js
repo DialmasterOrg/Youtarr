@@ -3,6 +3,7 @@
 const logger = require('../../logger');
 const createLimiter = require('./concurrencyLimiter');
 const { IMPORT_CONCURRENCY, WS_SOURCE } = require('./constants');
+const { buildChannelUrl } = require('../constants/youtube');
 
 /**
  * Broadcast a WebSocket message for the subscription import feature.
@@ -84,7 +85,7 @@ async function processOneChannel(deps, activeJob, ch) {
   // Main import via getChannelInfo
   try {
     const url =
-      ch.url || `https://www.youtube.com/channel/${ch.channelId}`;
+      ch.url || buildChannelUrl(ch.channelId);
 
     // Map frontend camelCase settings to backend snake_case column names
     const frontendSettings = ch.settings || {};

@@ -43,4 +43,5 @@ Apply these when creating or substantially rewriting server code. Scope Discipli
 - No circular dependencies, and no late-binding `require()` inside methods as a workaround: restructure, extract shared logic, use events, or pass dependencies at call time. `cronJobs.js` and others still do this; do not copy or refactor it during unrelated work.
 - Sub-module aggregator pattern for complex features: `server/modules/filesystem/` and `server/modules/notifications/` are the examples to follow.
 - Never call an async function without awaiting it or attaching error handling. Named constants go at the top of the file or in a shared constants module.
+- Build YouTube watch, channel and thumbnail URLs and test video ids with `modules/constants/youtube.js`; the download resolution and audio format lists are in `modules/constants/downloadOptions.js`. Add no inline copies.
 - Sequelize model methods over raw SQL unless there is a specific performance reason. Multi-step writes that must be atomic run in a transaction.

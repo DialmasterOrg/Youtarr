@@ -1,4 +1,5 @@
 const Channel = require('../../models/channel');
+const { buildChannelUrl } = require('../constants/youtube');
 
 class ChannelIdentity {
   /**
@@ -42,7 +43,7 @@ class ChannelIdentity {
     const normalizedId = channelId.startsWith('UU')
       ? `UC${channelId.substring(2)}`
       : channelId;
-    return `https://www.youtube.com/channel/${normalizedId}`;
+    return buildChannelUrl(normalizedId);
   }
 }
 

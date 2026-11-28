@@ -2,6 +2,7 @@ const { Op } = require('sequelize');
 const { EXTERNAL_REQUEST_JOB_LABEL, AUTO_RETRY_LABEL_PREFIX } = require('../download/jobTypes');
 const { requireCurrentAutoApproval } = require('./externalRequestPrimitives');
 const { createExternalRequestReconciliation } = require('./externalRequestReconciliation');
+const { buildWatchUrl } = require('../constants/youtube');
 
 // The sweep is the fallback that retries held requests, recovers work a
 // restart interrupted, and closes downloads whose job-ended event was missed.
@@ -97,7 +98,7 @@ function createExternalRequestExecutor({
     let jobId;
     try {
       jobId = await downloader({
-        urls: [`https://www.youtube.com/watch?v=${record.youtube_id}`],
+        urls: [buildWatchUrl(record.youtube_id)],
         channelId: target.channel.channel_id,
         ownerChannelMap: { [record.youtube_id]: target.channel.channel_id },
         initiatedBy: { type: 'api_key', name: key.name },

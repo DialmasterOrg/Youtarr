@@ -13,6 +13,7 @@ const { validateSubFolderName } = require('./filesystem/subfolderValidation');
 const subfolderModule = require('./subfolderModule');
 const m3uGenerator = require('./m3uGenerator');
 const titleRegex = require('./titleFilterRegex');
+const { DOWNLOAD_RESOLUTIONS, AUDIO_FORMATS } = require('./constants/downloadOptions');
 const {
   GLOBAL_DEFAULT_SENTINEL,
   buildChannelPath,
@@ -60,9 +61,8 @@ class ChannelSettingsModule {
       return { valid: true };
     }
 
-    const validQualities = ['360', '480', '720', '1080', '1440', '2160'];
-    if (!validQualities.includes(quality)) {
-      return { valid: false, error: 'Invalid video quality. Valid values: 360, 480, 720, 1080, 1440, 2160, or null for global setting' };
+    if (!DOWNLOAD_RESOLUTIONS.includes(quality)) {
+      return { valid: false, error: `Invalid video quality. Valid values: ${DOWNLOAD_RESOLUTIONS.join(', ')}, or null for global setting` };
     }
 
     return { valid: true };
@@ -229,11 +229,10 @@ class ChannelSettingsModule {
       return { valid: true };
     }
 
-    const validFormats = ['video_mp3', 'mp3_only'];
-    if (!validFormats.includes(audioFormat)) {
+    if (!AUDIO_FORMATS.includes(audioFormat)) {
       return {
         valid: false,
-        error: 'Invalid audio format. Valid values: video_mp3, mp3_only, or null for video only',
+        error: `Invalid audio format. Valid values: ${AUDIO_FORMATS.join(', ')}, or null for video only`,
       };
     }
 

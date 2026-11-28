@@ -7,6 +7,7 @@
 const { escapeXml } = require('../feeds/rssWriter');
 const { KINDS } = require('./arrBridgeConfig');
 const { isValidReleaseTitle } = require('./releaseNaming');
+const { VIDEO_ID_PATTERN } = require('../constants/youtube');
 
 const MAX_NZB_BYTES = 64 * 1024;
 // The id of the item that keeps the no-query feed non-empty. Never a video.
@@ -14,7 +15,6 @@ const PLACEHOLDER_ID = 'placeholder';
 const NZB_SUFFIX = '.nzb';
 const META_PREFIX = 'youtarr-';
 
-const YOUTUBE_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
 const SIZE_PATTERN = /^\d{1,13}$/;
 const META_PATTERN = /<meta type="youtarr-(id|kind|title|date|size)">([^<]*)<\/meta>/g;
@@ -27,7 +27,7 @@ const META_PATTERN = /<meta type="youtarr-(id|kind|title|date|size)">([^<]*)<\/m
 function validateGrabFields(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const { id, kind, title, date, size } = raw;
-  if (typeof id !== 'string' || !YOUTUBE_ID_PATTERN.test(id) || id === PLACEHOLDER_ID) return null;
+  if (typeof id !== 'string' || !VIDEO_ID_PATTERN.test(id) || id === PLACEHOLDER_ID) return null;
   if (!KINDS.includes(kind) || !isValidReleaseTitle(title)) return null;
   if (typeof date !== 'string' || !ISO_DATE_PATTERN.test(date)) return null;
   const uploadDate = new Date(date);

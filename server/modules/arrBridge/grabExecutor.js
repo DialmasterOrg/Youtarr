@@ -18,6 +18,7 @@ const {
 const { isYoutubeBlock } = require('../download/failureAdvisor');
 const { createBlockWait, BLOCK_GIVE_UP_MS } = require('./blockWait');
 const { LIBRARY_COPY } = require('./libraryCopyRemover');
+const { buildWatchUrl } = require('../constants/youtube');
 
 const SWEEP_INTERVAL_MS = 60 * 1000;
 const SWEEP_BATCH_SIZE = 20;
@@ -291,7 +292,7 @@ function createGrabExecutor({
     let admitted;
     try {
       admitted = await downloader({
-        urls: [`https://www.youtube.com/watch?v=${grab.youtube_id}`],
+        urls: [buildWatchUrl(grab.youtube_id)],
         jobLabel: ARR_BRIDGE_JOB_LABEL,
         overrideSettings,
         // See downloadJobFinalizer: no second notification for the same block.

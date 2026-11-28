@@ -7,7 +7,7 @@ const REQUEST_STATUSES = [
   'rejected', 'failed', 'cancelled',
 ];
 const ACTIVE_STATUSES = ['pending', 'approved', 'processing'];
-const VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
+const { VIDEO_ID_PATTERN } = require('../constants/youtube');
 const paginationHelpers = require('./externalPagination');
 
 class RequestError extends Error {

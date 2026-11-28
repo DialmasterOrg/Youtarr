@@ -18,6 +18,7 @@ const logger = require('../logger');
 const playlistDownloadModule = require('./playlistDownloadModule');
 const storageGuard = require('./storageGuard');
 const membersAccess = require('./membersAccess');
+const { buildWatchUrl } = require('./constants/youtube');
 
 const DEFAULT_FILES_TO_DOWNLOAD = 5;
 // Statuses that end a grouped channel download before its remaining groups run.
@@ -1284,7 +1285,7 @@ class DownloadModule {
 
     let queued = 0;
     for (const group of groups) {
-      const urls = group.youtubeIds.map((id) => `https://www.youtube.com/watch?v=${id}`);
+      const urls = group.youtubeIds.map((id) => buildWatchUrl(id));
       const groupOverride = {
         resolution: group.resolution,
         audioFormat: group.audioFormat,

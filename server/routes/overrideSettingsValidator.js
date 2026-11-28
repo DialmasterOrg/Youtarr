@@ -1,5 +1,4 @@
-const ALLOWED_RESOLUTIONS = ['360', '480', '720', '1080', '1440', '2160'];
-const ALLOWED_AUDIO_FORMATS = ['video_mp3', 'mp3_only'];
+const { DOWNLOAD_RESOLUTIONS, AUDIO_FORMATS } = require('../modules/constants/downloadOptions');
 
 /**
  * Builds a download override-settings validator for route input. Shared by
@@ -16,7 +15,7 @@ function createOverrideSettingsValidator({ channelSettingsModule, ratingMapper }
     if (typeof input !== 'object' || input === null || Array.isArray(input)) return { ok: false };
     const out = {};
     if ('resolution' in input) {
-      if (!ALLOWED_RESOLUTIONS.includes(String(input.resolution))) return { ok: false };
+      if (!DOWNLOAD_RESOLUTIONS.includes(String(input.resolution))) return { ok: false };
       out.resolution = String(input.resolution);
     }
     if ('allowRedownload' in input) {
@@ -39,7 +38,7 @@ function createOverrideSettingsValidator({ channelSettingsModule, ratingMapper }
       out.subfolder = input.subfolder;
     }
     if ('audioFormat' in input) {
-      if (input.audioFormat !== null && !ALLOWED_AUDIO_FORMATS.includes(input.audioFormat)) return { ok: false };
+      if (input.audioFormat !== null && !AUDIO_FORMATS.includes(input.audioFormat)) return { ok: false };
       out.audioFormat = input.audioFormat;
     }
     if ('rating' in input) {

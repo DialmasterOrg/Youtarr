@@ -8,6 +8,7 @@ const configModule = require('../configModule');
 const { Channel, ApiKeyChannelGrant } = require('../../models');
 const { normalizePolicy, ratingPolicy } = require('./externalEligibility');
 const { publicVideoThumbnail } = require('./externalThumbnailProxy');
+const { VIDEO_ID_PATTERN, buildVideoThumbnailUrl } = require('../constants/youtube');
 const {
   CatalogError,
   parseInteger,
@@ -586,7 +587,7 @@ async function listVideos(key, query = {}) {
 
 async function getVideoDetail(key, youtubeId, metadataService = null) {
   const policy = normalizePolicy(key);
-  if (typeof youtubeId !== 'string' || !/^[A-Za-z0-9_-]{11}$/.test(youtubeId)) {
+  if (typeof youtubeId !== 'string' || !VIDEO_ID_PATTERN.test(youtubeId)) {
     throw new CatalogError('Video not found', 404);
   }
   const effectiveRating =
@@ -681,7 +682,7 @@ async function getChannelThumbnail(key, channelDatabaseId) {
 
 async function getVideoThumbnail(key, youtubeId) {
   const policy = normalizePolicy(key);
-  if (typeof youtubeId !== 'string' || !/^[A-Za-z0-9_-]{11}$/.test(youtubeId)) {
+  if (typeof youtubeId !== 'string' || !VIDEO_ID_PATTERN.test(youtubeId)) {
     throw new CatalogError('Thumbnail not found', 404);
   }
   const effectiveRating =
@@ -722,7 +723,7 @@ async function getVideoThumbnail(key, youtubeId) {
     return { source: 'local', absolutePath };
   } catch (_error) {
     const upstreamUrl = publicVideoThumbnail(rows[0].thumbnail) ||
-      `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg`;
+      buildVideoThumbnailUrl(youtubeId);
     return { source: 'upstream', url: upstreamUrl };
   }
 }

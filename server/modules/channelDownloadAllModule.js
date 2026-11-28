@@ -7,8 +7,7 @@ const logger = require('../logger');
 const videoActivity = require('./download/videoActivity');
 const { findArchiveOnlyIds } = require('./archiveOnlyIds');
 const membersAccess = require('./membersAccess');
-
-const WATCH_URL_PREFIX = 'https://www.youtube.com/watch?v=';
+const { buildWatchUrl } = require('./constants/youtube');
 
 // "Download all videos for a channel" (one tab at a time). Assumes the caller
 // already ran the fetch-all ("Load More") flow, so channelvideos is complete.
@@ -95,7 +94,7 @@ class ChannelDownloadAllModule {
     const settings = { ...overrideSettings };
     delete settings.allowRedownload;
 
-    const urls = videos.map((video) => `${WATCH_URL_PREFIX}${video.youtube_id}`);
+    const urls = videos.map((video) => buildWatchUrl(video.youtube_id));
     const admission = await downloadModule.doSpecificDownloads({
       body: {
         urls,
