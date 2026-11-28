@@ -65,6 +65,25 @@ interface ChannelSettings {
   auto_removal_keep_recent_count: number | null;
 }
 
+const EMPTY_SETTINGS: ChannelSettings = {
+  sub_folder: null,
+  video_quality: null,
+  min_duration: null,
+  max_duration: null,
+  title_filter_regex: null,
+  additional_tags: null,
+  default_rating: null,
+  audio_format: null,
+  auto_download_enabled_tabs: null,
+  skip_video_folder: null,
+  hidden_tabs: [],
+  m3u_enabled: false,
+  m3u_sort_order: 'oldest_first',
+  auto_removal_protected: false,
+  auto_removal_keep_recent_count: null,
+};
+const SETTING_KEYS = Object.keys(EMPTY_SETTINGS) as Array<keyof ChannelSettings>;
+
 interface ChannelTabsState {
   detectedTabs: string[];
   availableTabs: string[];
@@ -120,40 +139,8 @@ function ChannelSettingsDialog({
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [activeSection, setActiveSection] = useState('general');
 
-  const [settings, setSettings] = useState<ChannelSettings>({
-    sub_folder: null,
-    video_quality: null,
-    min_duration: null,
-    max_duration: null,
-    title_filter_regex: null,
-    additional_tags: null,
-    default_rating: null,
-    audio_format: null,
-    auto_download_enabled_tabs: null,
-    skip_video_folder: null,
-    hidden_tabs: [],
-    m3u_enabled: false,
-    m3u_sort_order: 'oldest_first',
-    auto_removal_protected: false,
-    auto_removal_keep_recent_count: null,
-  });
-  const [originalSettings, setOriginalSettings] = useState<ChannelSettings>({
-    sub_folder: null,
-    video_quality: null,
-    min_duration: null,
-    max_duration: null,
-    title_filter_regex: null,
-    additional_tags: null,
-    default_rating: null,
-    audio_format: null,
-    auto_download_enabled_tabs: null,
-    skip_video_folder: null,
-    hidden_tabs: [],
-    m3u_enabled: false,
-    m3u_sort_order: 'oldest_first',
-    auto_removal_protected: false,
-    auto_removal_keep_recent_count: null,
-  });
+  const [settings, setSettings] = useState<ChannelSettings>(EMPTY_SETTINGS);
+  const [originalSettings, setOriginalSettings] = useState<ChannelSettings>(EMPTY_SETTINGS);
   const [detectedTabs, setDetectedTabs] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -281,6 +268,26 @@ function ChannelSettingsDialog({
     setError(null);
     setSuccess(false);
 
+    // Typed as the settings, so a new setting cannot be left out or given
+    // another setting's value.
+    const body: ChannelSettings = {
+      sub_folder: settings.sub_folder || null,
+      video_quality: settings.video_quality || null,
+      min_duration: settings.min_duration,
+      max_duration: settings.max_duration,
+      title_filter_regex: settings.title_filter_regex || null,
+      additional_tags: settings.additional_tags || null,
+      default_rating: settings.default_rating || null,
+      audio_format: settings.audio_format || null,
+      auto_download_enabled_tabs: settings.auto_download_enabled_tabs,
+      skip_video_folder: settings.skip_video_folder,
+      hidden_tabs: settings.hidden_tabs,
+      m3u_enabled: settings.m3u_enabled,
+      m3u_sort_order: settings.m3u_sort_order,
+      auto_removal_protected: settings.auto_removal_protected,
+      auto_removal_keep_recent_count: settings.auto_removal_keep_recent_count
+    };
+
     try {
       const response = await fetch(`/api/channels/${channelId}/settings`, {
         method: 'PUT',
@@ -288,23 +295,7 @@ function ChannelSettingsDialog({
           'Content-Type': 'application/json',
           'x-access-token': token || ''
         },
-        body: JSON.stringify({
-          sub_folder: settings.sub_folder || null,
-          video_quality: settings.video_quality || null,
-          min_duration: settings.min_duration,
-          max_duration: settings.max_duration,
-          title_filter_regex: settings.title_filter_regex || null,
-          additional_tags: settings.additional_tags || null,
-          default_rating: settings.default_rating || null,
-          audio_format: settings.audio_format || null,
-          auto_download_enabled_tabs: settings.auto_download_enabled_tabs,
-          skip_video_folder: settings.skip_video_folder,
-          hidden_tabs: settings.hidden_tabs,
-          m3u_enabled: settings.m3u_enabled,
-          m3u_sort_order: settings.m3u_sort_order,
-          auto_removal_protected: settings.auto_removal_protected,
-          auto_removal_keep_recent_count: settings.auto_removal_keep_recent_count
-        })
+        body: JSON.stringify(body)
       });
 
       if (!response.ok) {
@@ -398,21 +389,9 @@ function ChannelSettingsDialog({
     const tabsChanged =
       settings.hidden_tabs.length !== originalSettings.hidden_tabs.length ||
       settings.hidden_tabs.some((tab) => !originalSettings.hidden_tabs.includes(tab));
-    return settings.sub_folder !== originalSettings.sub_folder ||
-           settings.video_quality !== originalSettings.video_quality ||
-           settings.min_duration !== originalSettings.min_duration ||
-           settings.max_duration !== originalSettings.max_duration ||
-           settings.title_filter_regex !== originalSettings.title_filter_regex ||
-           settings.additional_tags !== originalSettings.additional_tags ||
-           settings.audio_format !== originalSettings.audio_format ||
-           settings.default_rating !== originalSettings.default_rating ||
-           settings.auto_download_enabled_tabs !== originalSettings.auto_download_enabled_tabs ||
-           settings.skip_video_folder !== originalSettings.skip_video_folder ||
-           settings.m3u_enabled !== originalSettings.m3u_enabled ||
-           settings.m3u_sort_order !== originalSettings.m3u_sort_order ||
-           settings.auto_removal_protected !== originalSettings.auto_removal_protected ||
-           settings.auto_removal_keep_recent_count !== originalSettings.auto_removal_keep_recent_count ||
-           tabsChanged;
+    return tabsChanged || SETTING_KEYS.some(
+      (key) => key !== 'hidden_tabs' && settings[key] !== originalSettings[key]
+    );
   };
 
   const allTabsHidden = detectedTabs.length > 0 &&
