@@ -621,6 +621,21 @@ describe('Apprise Sender', () => {
       await expect(sendPromise).resolves.toBeUndefined();
     });
   });
+
+  it.each([
+    ['sendMarkdown', 'markdown'],
+    ['sendHtml', 'html'],
+  ])('%s tells apprise the body is %s', async (method, inputFormat) => {
+    const sendPromise = appriseSender[method]('Title', 'Body', ['ntfy://test']);
+    setImmediate(() => mockProcess.emit('close', 0));
+    await sendPromise;
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      'apprise',
+      ['-vv', '-i', inputFormat, '-t', 'Title', '-b', 'Body', 'ntfy://test'],
+      expect.objectContaining({ timeout: 30000 })
+    );
+  });
 });
 
 describe('Discord Sender', () => {

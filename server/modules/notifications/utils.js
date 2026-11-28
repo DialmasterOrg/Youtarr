@@ -374,6 +374,50 @@ function groupVideosByChannel(sampleVideos, maxVideos = 5, totalCount = null) {
   return { groups, truncatedCount };
 }
 
+/**
+ * @param {number} count
+ * @returns {string} "1 video" or "<count> videos"
+ */
+function videoCountLabel(count) {
+  return `${count} ${count === 1 ? 'video' : 'videos'}`;
+}
+
+const AUTO_REMOVAL_SAMPLE_LIMIT = 5;
+
+// One entry per auto-removal strategy, in the order the cleanup runs them.
+const AUTO_REMOVAL_STRATEGIES = [
+  { planKey: 'ageStrategy', countKey: 'deletedByAge', icon: '🕐',
+    describe: (strategy) => `Removed by age (exceeded ${strategy.thresholdDays}-day limit)` },
+  { planKey: 'watchedStrategy', countKey: 'deletedByWatched', icon: '👁️',
+    describe: () => 'Removed after being watched' },
+  { planKey: 'spaceStrategy', countKey: 'deletedBySpace', icon: '💾',
+    describe: (strategy) => `Removed for storage (below ${strategy.threshold} threshold)` },
+  { planKey: 'usageStrategy', countKey: 'deletedByUsage', icon: '💾',
+    describe: (strategy) => `Removed to stay under the ${strategy.limit} total size limit` },
+];
+
+/**
+ * The strategies that removed videos in a cleanup, ready for a formatter to
+ * mark up. The label is unescaped text.
+ * @param {Object} cleanupResult - Result object from performAutomaticCleanup()
+ * @returns {Array<{icon: string, label: string, count: number, groups: Array, truncatedCount: number}>}
+ */
+function getAutoRemovalSections(cleanupResult) {
+  const { plan = {} } = cleanupResult;
+  return AUTO_REMOVAL_STRATEGIES
+    .filter(({ countKey }) => cleanupResult[countKey] > 0)
+    .map(({ planKey, countKey, icon, describe }) => {
+      const strategy = plan[planKey] || {};
+      const count = cleanupResult[countKey];
+      return {
+        icon,
+        label: describe(strategy),
+        count,
+        ...groupVideosByChannel(strategy.sampleVideos, AUTO_REMOVAL_SAMPLE_LIMIT, count),
+      };
+    });
+}
+
 // Which kinds of trigger a list of storageGuard reasons holds: the downloads
 // folder ('library') and/or a storage limit (every other type).
 function pauseCauses(reasons) {
@@ -486,6 +530,8 @@ module.exports = {
   buildAutoRemovalTitle,
   formatBytes,
   groupVideosByChannel,
+  videoCountLabel,
+  getAutoRemovalSections,
   getTerminatedCount,
   buildTerminatedCountLabel,
   formatTerminatedChannelLine,
