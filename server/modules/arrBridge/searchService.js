@@ -12,6 +12,7 @@ const {
   DEFAULT_GROUP, groupToken, labelFor, buildTvTitle, buildDailyTitle, buildMovieTitle,
 } = require('./releaseNaming');
 const { LOOKUP_BUDGET_MS } = require('./videoResolution');
+const { buildWatchUrl } = require('../constants/youtube');
 
 const { REJECTION } = candidateFilter;
 
@@ -309,7 +310,7 @@ function createSearchService({
           uploadDate: pubDate,
           estimatedBytes: estimateBytes(candidate.duration, resolution),
         }, settings.apiKey),
-        comments: `https://www.youtube.com/watch?v=${candidate.youtubeId}`,
+        comments: buildWatchUrl(candidate.youtubeId),
         pubDate,
         kind: request.kind,
         youtubeId: candidate.youtubeId,

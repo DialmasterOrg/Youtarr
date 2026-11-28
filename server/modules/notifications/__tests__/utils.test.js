@@ -14,7 +14,44 @@ const {
   formatStoppedGroupLine,
   formatJobIssueLine,
   getStoppedLines,
+  getAutoRemovalSections,
 } = require('../utils');
+
+describe('getAutoRemovalSections', () => {
+  test('lists only the strategies that removed videos, in run order', () => {
+    const sections = getAutoRemovalSections({
+      deletedByAge: 7,
+      deletedBySpace: 0,
+      deletedByUsage: 1,
+      plan: {
+        ageStrategy: { thresholdDays: 30, sampleVideos: [{ channel: 'A', title: 'One' }] },
+        spaceStrategy: { threshold: '50GB' },
+        usageStrategy: { limit: '500GB' },
+      },
+    });
+
+    expect(sections).toEqual([
+      {
+        icon: '🕐',
+        label: 'Removed by age (exceeded 30-day limit)',
+        count: 7,
+        groups: [{ channel: 'A', titles: ['One'], count: 1 }],
+        truncatedCount: 6,
+      },
+      {
+        icon: '💾',
+        label: 'Removed to stay under the 500GB total size limit',
+        count: 1,
+        groups: [],
+        truncatedCount: 0,
+      },
+    ]);
+  });
+
+  test('returns nothing for a cleanup without a plan or counts', () => {
+    expect(getAutoRemovalSections({ totalDeleted: 0 })).toEqual([]);
+  });
+});
 
 describe('notification utils - terminated channel helpers', () => {
   describe('buildTitle', () => {

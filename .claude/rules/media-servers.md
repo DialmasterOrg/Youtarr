@@ -18,6 +18,7 @@ Plex, Jellyfin and Emby: library refresh, native playlist sync, and watch status
 - Jellyfin 12.1 and Emby 4.10.1 (tested 2026-10-03) leave a library empty when its folder sits inside another library's folder, so a root library breaks per-subfolder ones. Jellyfin logs `Found duplicate path`; Plex shows the files in both.
 - `libraryRefresh.refreshAfterDownload` scans Jellyfin and Emby once per job that downloaded videos: the `*VideoLibraryIds` libraries when set, else all. It never rejects, and requires `serverRegistry` directly, since downloadModule's tests cannot load the models index.
 - `serverRegistry` + `adapters/` (`plexAdapter`, `jellyfinAdapter`, `embyAdapter`, `baseAdapter`) wrap each server's REST API; `mediaServerSync` decides which adapters apply to a playlist and updates `playlist_sync_state`.
+- `jellyfinAdapter` and `embyAdapter` extend `mediaBrowserAdapter`, which holds everything the two servers share. A subclass keeps only its settings, auth header, `createPlaylist` and query hooks, so a fix for both servers goes in the shared class.
 
 ## Playlist sync
 

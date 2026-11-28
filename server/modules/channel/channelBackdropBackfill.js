@@ -5,6 +5,7 @@ const configModule = require('../configModule');
 const Channel = require('../../models/channel');
 const channelMetadataFetcher = require('./channelMetadataFetcher');
 const channelThumbnails = require('./channelThumbnails');
+const { buildChannelUrl } = require('../constants/youtube');
 
 // Space out banner fetches so a sweep over a large channel list doesn't hammer YouTube.
 const SWEEP_DELAY_BETWEEN_FETCHES_MS = 1000;
@@ -52,7 +53,7 @@ class ChannelBackdropBackfill {
         if (fs.existsSync(bannerCachePath)) continue;
 
         try {
-          const channelUrl = channel.url || `https://www.youtube.com/channel/${channel.channel_id}`;
+          const channelUrl = channel.url || buildChannelUrl(channel.channel_id);
           const channelData = await channelMetadataFetcher.fetchChannelMetadata(channelUrl);
           await channelThumbnails.processChannelBanner(channelData, channel.channel_id);
         } catch (err) {

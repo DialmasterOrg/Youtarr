@@ -1,5 +1,6 @@
 const { normalizeUrlToVideoId } = require('../youtubeUrlParser');
 const MessageEmitter = require('../messageEmitter');
+const { VIDEO_ID_PATTERN } = require('../constants/youtube');
 
 // Transient queue ownership. Jobs cannot resume after a server restart, so
 // activity must not outlive this process or be persisted as file availability.
@@ -63,7 +64,7 @@ class VideoActivity {
   }
 
   start(jobId, youtubeId) {
-    if (!/^[a-zA-Z0-9_-]{11}$/.test(youtubeId)) return;
+    if (!VIDEO_ID_PATTERN.test(youtubeId)) return;
     let changed = false;
     // A new extraction ends the previous attempt, even if its stderr only
     // contained recoverable errors. Other jobs' queue ownership survives.

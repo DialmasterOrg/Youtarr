@@ -15,7 +15,8 @@ const {
   buildDownloadPauseContent,
   buildCookiesInvalidContent,
   formatBytes,
-  groupVideosByChannel,
+  videoCountLabel,
+  getAutoRemovalSections,
   getTerminatedCount,
   buildTerminatedCountLabel,
   formatTerminatedChannelLine,
@@ -259,85 +260,23 @@ function buildAutoRemovalEmailHtml(title, subtitle, content) {
  * @returns {Object} Object with title and HTML body strings
  */
 function formatAutoRemovalMessage(cleanupResult) {
-  const { totalDeleted, deletedByAge, deletedByWatched = 0, deletedBySpace, deletedByUsage = 0, freedBytes, plan = {} } = cleanupResult;
-  const ageStrategy = plan.ageStrategy || {};
-  const watchedStrategy = plan.watchedStrategy || {};
-  const spaceStrategy = plan.spaceStrategy || {};
-  const usageStrategy = plan.usageStrategy || {};
-
-  const title = buildAutoRemovalTitle(totalDeleted);
-  const subtitle = `Freed ${formatBytes(freedBytes)} of storage`;
+  const title = buildAutoRemovalTitle(cleanupResult.totalDeleted);
+  const subtitle = `Freed ${formatBytes(cleanupResult.freedBytes)} of storage`;
 
   let content = '';
 
-  if (deletedByAge > 0) {
-    const threshold = escapeHtml(String(ageStrategy.thresholdDays));
-    content += `<h3 style="color: #e65100; margin-top: 20px;">🕐 Removed by age (exceeded ${threshold}-day limit): ${deletedByAge} ${deletedByAge === 1 ? 'video' : 'videos'}</h3>`;
+  for (const section of getAutoRemovalSections(cleanupResult)) {
+    content += `<h3 style="color: #e65100; margin-top: 20px;">${section.icon} ${escapeHtml(section.label)}: ${videoCountLabel(section.count)}</h3>`;
 
-    const { groups, truncatedCount } = groupVideosByChannel(ageStrategy.sampleVideos, 5, deletedByAge);
-    for (const group of groups) {
-      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
+    for (const group of section.groups) {
       content += `
       <div class="video-card" style="border-left-color: #f57c00;">
-        <div class="channel-name">📺 ${escapeHtml(group.channel)} (${videoLabel})</div>
+        <div class="channel-name">📺 ${escapeHtml(group.channel)} (${videoCountLabel(group.count)})</div>
         <div class="video-title">${group.titles.map(t => escapeHtml(t)).join(', ')}</div>
       </div>`;
     }
-    if (truncatedCount > 0) {
-      content += `<p class="more-videos">...and ${truncatedCount} more videos</p>`;
-    }
-  }
-
-  if (deletedByWatched > 0) {
-    content += `<h3 style="color: #e65100; margin-top: 20px;">👁️ Removed after being watched: ${deletedByWatched} ${deletedByWatched === 1 ? 'video' : 'videos'}</h3>`;
-
-    const { groups, truncatedCount } = groupVideosByChannel(watchedStrategy.sampleVideos, 5, deletedByWatched);
-    for (const group of groups) {
-      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
-      content += `
-      <div class="video-card" style="border-left-color: #f57c00;">
-        <div class="channel-name">📺 ${escapeHtml(group.channel)} (${videoLabel})</div>
-        <div class="video-title">${group.titles.map(t => escapeHtml(t)).join(', ')}</div>
-      </div>`;
-    }
-    if (truncatedCount > 0) {
-      content += `<p class="more-videos">...and ${truncatedCount} more videos</p>`;
-    }
-  }
-
-  if (deletedBySpace > 0) {
-    const threshold = escapeHtml(String(spaceStrategy.threshold));
-    content += `<h3 style="color: #e65100; margin-top: 20px;">💾 Removed for storage (below ${threshold} threshold): ${deletedBySpace} ${deletedBySpace === 1 ? 'video' : 'videos'}</h3>`;
-
-    const { groups, truncatedCount } = groupVideosByChannel(spaceStrategy.sampleVideos, 5, deletedBySpace);
-    for (const group of groups) {
-      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
-      content += `
-      <div class="video-card" style="border-left-color: #f57c00;">
-        <div class="channel-name">📺 ${escapeHtml(group.channel)} (${videoLabel})</div>
-        <div class="video-title">${group.titles.map(t => escapeHtml(t)).join(', ')}</div>
-      </div>`;
-    }
-    if (truncatedCount > 0) {
-      content += `<p class="more-videos">...and ${truncatedCount} more videos</p>`;
-    }
-  }
-
-  if (deletedByUsage > 0) {
-    const threshold = escapeHtml(String(usageStrategy.limit));
-    content += `<h3 style="color: #e65100; margin-top: 20px;">💾 Removed to stay under the ${threshold} total size limit: ${deletedByUsage} ${deletedByUsage === 1 ? 'video' : 'videos'}</h3>`;
-
-    const { groups, truncatedCount } = groupVideosByChannel(usageStrategy.sampleVideos, 5, deletedByUsage);
-    for (const group of groups) {
-      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
-      content += `
-      <div class="video-card" style="border-left-color: #f57c00;">
-        <div class="channel-name">📺 ${escapeHtml(group.channel)} (${videoLabel})</div>
-        <div class="video-title">${group.titles.map(t => escapeHtml(t)).join(', ')}</div>
-      </div>`;
-    }
-    if (truncatedCount > 0) {
-      content += `<p class="more-videos">...and ${truncatedCount} more videos</p>`;
+    if (section.truncatedCount > 0) {
+      content += `<p class="more-videos">...and ${section.truncatedCount} more videos</p>`;
     }
   }
 

@@ -14,7 +14,8 @@ const {
   buildDownloadPauseContent,
   buildCookiesInvalidContent,
   formatBytes,
-  groupVideosByChannel,
+  videoCountLabel,
+  getAutoRemovalSections,
   getTerminatedCount,
   buildTerminatedCountLabel,
   formatTerminatedChannelLine,
@@ -212,99 +213,26 @@ function formatPlainMessage(title, body) {
  * @returns {Object} Discord webhook message payload with embeds
  */
 function formatAutoRemovalMessage(cleanupResult) {
-  const { totalDeleted, deletedByAge, deletedByWatched = 0, deletedBySpace, deletedByUsage = 0, freedBytes, plan = {} } = cleanupResult;
-  const ageStrategy = plan.ageStrategy || {};
-  const watchedStrategy = plan.watchedStrategy || {};
-  const spaceStrategy = plan.spaceStrategy || {};
-  const usageStrategy = plan.usageStrategy || {};
+  const title = buildAutoRemovalTitle(cleanupResult.totalDeleted);
+  const description = `Freed **${formatBytes(cleanupResult.freedBytes)}** of storage`;
 
-  const title = buildAutoRemovalTitle(totalDeleted);
-  const description = `Freed **${formatBytes(freedBytes)}** of storage`;
+  const fields = getAutoRemovalSections(cleanupResult).map((section) => {
+    let value = section.groups.map(group =>
+      `📺 **${group.channel}** (${videoCountLabel(group.count)})\n${group.titles.join(', ')}`
+    ).join('\n\n');
 
-  const fields = [];
-
-  if (deletedByAge > 0) {
-    const threshold = ageStrategy.thresholdDays;
-    const { groups, truncatedCount } = groupVideosByChannel(ageStrategy.sampleVideos, 5, deletedByAge);
-    let value = groups.map(group => {
-      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
-      return `📺 **${group.channel}** (${videoLabel})\n${group.titles.join(', ')}`;
-    }).join('\n\n');
-
-    if (truncatedCount > 0) {
-      value += `\n\n...and ${truncatedCount} more videos`;
+    if (section.truncatedCount > 0) {
+      value += `\n\n...and ${section.truncatedCount} more videos`;
     }
 
-    if (!value) value = `${deletedByAge} ${deletedByAge === 1 ? 'video' : 'videos'}`;
+    if (!value) value = videoCountLabel(section.count);
 
-    fields.push({
-      name: `🕐 Removed by age (exceeded ${threshold}-day limit): ${deletedByAge}`,
+    return {
+      name: `${section.icon} ${section.label}: ${section.count}`,
       value,
       inline: false
-    });
-  }
-
-  if (deletedByWatched > 0) {
-    const { groups, truncatedCount } = groupVideosByChannel(watchedStrategy.sampleVideos, 5, deletedByWatched);
-    let value = groups.map(group => {
-      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
-      return `📺 **${group.channel}** (${videoLabel})\n${group.titles.join(', ')}`;
-    }).join('\n\n');
-
-    if (truncatedCount > 0) {
-      value += `\n\n...and ${truncatedCount} more videos`;
-    }
-
-    if (!value) value = `${deletedByWatched} ${deletedByWatched === 1 ? 'video' : 'videos'}`;
-
-    fields.push({
-      name: `👁️ Removed after being watched: ${deletedByWatched}`,
-      value,
-      inline: false
-    });
-  }
-
-  if (deletedBySpace > 0) {
-    const threshold = spaceStrategy.threshold;
-    const { groups, truncatedCount } = groupVideosByChannel(spaceStrategy.sampleVideos, 5, deletedBySpace);
-    let value = groups.map(group => {
-      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
-      return `📺 **${group.channel}** (${videoLabel})\n${group.titles.join(', ')}`;
-    }).join('\n\n');
-
-    if (truncatedCount > 0) {
-      value += `\n\n...and ${truncatedCount} more videos`;
-    }
-
-    if (!value) value = `${deletedBySpace} ${deletedBySpace === 1 ? 'video' : 'videos'}`;
-
-    fields.push({
-      name: `💾 Removed for storage (below ${threshold} threshold): ${deletedBySpace}`,
-      value,
-      inline: false
-    });
-  }
-
-  if (deletedByUsage > 0) {
-    const threshold = usageStrategy.limit;
-    const { groups, truncatedCount } = groupVideosByChannel(usageStrategy.sampleVideos, 5, deletedByUsage);
-    let value = groups.map(group => {
-      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
-      return `📺 **${group.channel}** (${videoLabel})\n${group.titles.join(', ')}`;
-    }).join('\n\n');
-
-    if (truncatedCount > 0) {
-      value += `\n\n...and ${truncatedCount} more videos`;
-    }
-
-    if (!value) value = `${deletedByUsage} ${deletedByUsage === 1 ? 'video' : 'videos'}`;
-
-    fields.push({
-      name: `💾 Removed to stay under the ${threshold} total size limit: ${deletedByUsage}`,
-      value,
-      inline: false
-    });
-  }
+    };
+  });
 
   return {
     embeds: [{

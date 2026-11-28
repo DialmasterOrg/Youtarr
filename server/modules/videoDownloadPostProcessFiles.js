@@ -16,6 +16,7 @@ const videoPersistence = require('./videoPersistence');
 const { channelFolderCreationBlock } = require('./libraryRootCheck');
 const { VIDEO_PERSISTED_MARKER } = require('./constants/outputMarkers');
 const { CHANNEL_THUMBNAIL_SCALE_FILTER } = require('./constants/channelThumbnail');
+const { buildChannelUrl } = require('./constants/youtube');
 const logger = require('../logger');
 const logLevelSync = require('./logLevelSync');
 const { buildChannelPath, isFileForVideo, cleanupEmptyParents, moveWithRetries, ensureDirWithRetries, copySyncWithFallback } = require('./filesystem');
@@ -203,7 +204,7 @@ async function downloadChannelThumbnailIfMissing(channelId) {
     try {
 
       // Build the channel URL from the channel ID
-      const channelUrl = `https://www.youtube.com/channel/${channelId}`;
+      const channelUrl = buildChannelUrl(channelId);
 
       // Build yt-dlp command using centralized helper so proxy/sleep/cookies are respected
       const ytdlpArgs = YtdlpCommandBuilder.buildThumbnailDownloadArgs(channelUrl, channelThumbPath);

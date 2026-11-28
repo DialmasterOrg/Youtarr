@@ -2,6 +2,7 @@ const https = require('https');
 const configModule = require('../configModule');
 const youtubeExistenceCheck = require('../youtubeExistenceCheck');
 const { CHANNEL_ID_PATTERN } = require('../youtubeApi/constants');
+const { VIDEO_ID_PATTERN } = require('../constants/youtube');
 
 const FEED_HOST = 'www.youtube.com';
 const FEED_PATH = '/feeds/videos.xml';
@@ -15,7 +16,6 @@ const CHANNEL_ID_PREFIX_LENGTH = 2;
 // The auto playlist of a channel's members-only uploads: this prefix plus
 // the channel id without its UC.
 const MEMBERS_PLAYLIST_PREFIX = 'UUMO';
-const VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
 const FEED_CHANNEL_ID_PATTERN = /<yt:channelId>([^<]*)<\/yt:channelId>/;
 const ENTRY_VIDEO_ID_PATTERN = /<yt:videoId>([^<]*)<\/yt:videoId>/;
 const ENTRY_OPEN_TAG = '<entry>';

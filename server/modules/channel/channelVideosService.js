@@ -15,6 +15,7 @@ const archiveModule = require('../archiveModule');
 const youtubeExistenceCheck = require('../youtubeExistenceCheck');
 const membersAccess = require('../membersAccess');
 const { toYoutubeUrl } = require('../youtubeUrlParser');
+const { buildChannelUrl } = require('../constants/youtube');
 
 const { EXISTENCE } = youtubeExistenceCheck;
 const { REFRESH_NEED } = tabState;
@@ -58,7 +59,7 @@ function channelUrlFromEntries(entries) {
   if (entry.playlist_uploader_id) {
     return `https://www.youtube.com/${entry.playlist_uploader_id}`;
   }
-  return `https://www.youtube.com/channel/${entry.playlist_channel_id}`;
+  return buildChannelUrl(entry.playlist_channel_id);
 }
 
 class ChannelVideosService {

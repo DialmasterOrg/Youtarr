@@ -262,6 +262,12 @@ describe('EmbyAdapter', () => {
     expect(axios.get.mock.calls[0][1].params.includeItemTypes).toBe('Video,Movie,Episode');
   });
 
+  test('resolveItemIdByFilepath leaves out the Jellyfin-only collapseBoxSetItems option', async () => {
+    axios.get.mockResolvedValueOnce({ data: { Items: [] } });
+    await new EmbyAdapter(cfg).resolveItemIdByFilepath('/youtube/ChanA/Video [v1].mp4');
+    expect(axios.get.mock.calls[0][1].params).not.toHaveProperty('collapseBoxSetItems');
+  });
+
   test('createPlaylist with mediaType audio sends MediaType Audio', async () => {
     axios.post.mockResolvedValueOnce({ data: { Id: 'pl1' } });
     const adapter = new EmbyAdapter(cfg);
@@ -423,6 +429,12 @@ describe('EmbyAdapter', () => {
           }),
         })
       );
+    });
+
+    test('leaves the Jellyfin-only collapseBoxSetItems option out of both listings', async () => {
+      serveItems();
+      await new EmbyAdapter(singleUserCfg).fetchWatchStates();
+      expect(itemsCalls().map(([, { params }]) => 'collapseBoxSetItems' in params)).toEqual([false, false]);
     });
 
     test('lists every user when all-users is enabled (the default)', async () => {

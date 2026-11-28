@@ -1,19 +1,15 @@
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const { createRateLimiter } = require('../middleware/rateLimiter');
 const { STATUS_SUMMARY_PATH } = require('../modules/constants/apiKeyRoles');
 
 const STATUS_KEY_REQUESTS_PER_MINUTE = 60;
 
 // Applies to status API keys only; a browser session is not limited.
-const statusKeyLimiter = rateLimit({
-  windowMs: 60 * 1000,
+const statusKeyLimiter = createRateLimiter({
   max: STATUS_KEY_REQUESTS_PER_MINUTE,
   keyGenerator: (req) => `status-apikey:${req.apiKeyId || 'unknown'}`,
   skip: (req) => req.authType !== 'api_key',
-  message: { error: 'Rate limit exceeded. Try again later.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-  validate: { trustProxy: false, ip: false },
+  error: 'Rate limit exceeded. Try again later.',
 });
 
 /**

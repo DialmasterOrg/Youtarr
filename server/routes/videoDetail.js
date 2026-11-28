@@ -1,39 +1,27 @@
 const express = require('express');
 const fs = require('fs');
-const rateLimit = require('express-rate-limit');
+const { createRateLimiter } = require('../middleware/rateLimiter');
 
 // Metadata endpoint rate limiter. The endpoint may spawn yt-dlp on cache miss
 // (up to 60s per call), so we cap concurrent abuse. The limit is generous
 // enough for a user rapidly clicking through a video list.
-const metadataLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
+const metadataLimiter = createRateLimiter({
   max: 60, // 60 requests per minute per IP
-  message: { error: 'Too many metadata requests, please try again shortly' },
-  standardHeaders: true,
-  legacyHeaders: false,
-  validate: { trustProxy: false },
+  error: 'Too many metadata requests, please try again shortly',
 });
 
 // Single video lookup rate limiter. A lookup can start a YouTube existence
 // check and a file check, so we cap the calls per IP.
-const videoLookupLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
+const videoLookupLimiter = createRateLimiter({
   max: 60, // 60 requests per minute per IP
-  message: { error: 'Too many video requests, please try again shortly' },
-  standardHeaders: true,
-  legacyHeaders: false,
-  validate: { trustProxy: false },
+  error: 'Too many video requests, please try again shortly',
 });
 
 // Members-only access check limiter. Each check is one signed-in YouTube
 // request on the user's account, so it is capped well below the metadata route.
-const membersAccessCheckLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
+const membersAccessCheckLimiter = createRateLimiter({
   max: 10, // 10 checks per minute per IP
-  message: { error: 'Too many access checks, please try again shortly' },
-  standardHeaders: true,
-  legacyHeaders: false,
-  validate: { trustProxy: false },
+  error: 'Too many access checks, please try again shortly',
 });
 
 /**

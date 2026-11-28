@@ -3,6 +3,7 @@ const ytdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const logger = require('../logger');
 const { Channel } = require('../models');
 const youtubeApi = require('./youtubeApi');
+const { buildChannelUrl } = require('./constants/youtube');
 
 const SEARCH_TIMEOUT_MS = 60_000;
 const ALLOWED_COUNTS = [10, 25, 50, 100];
@@ -57,7 +58,7 @@ class ChannelSearchModule {
     // apply to channels.
     const withUrls = results.map((r) => ({
       ...r,
-      url: `https://www.youtube.com/channel/${r.channelId}`,
+      url: buildChannelUrl(r.channelId),
     }));
     await this._applySubscriptionStatus(withUrls);
     logger.info({ query, count, resultCount: withUrls.length, source }, 'channel search complete');

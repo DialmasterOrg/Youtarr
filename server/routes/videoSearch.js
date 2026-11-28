@@ -1,5 +1,5 @@
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const { createRateLimiter } = require('../middleware/rateLimiter');
 const { BOT_CHECK_CODE } = require('../modules/ytdlpBotCheck');
 
 const MAX_QUERY_LENGTH = 200;
@@ -7,13 +7,9 @@ const DEFAULT_COUNT = 25;
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHAR_REGEX = /[\u0000-\u001F\u007F]/;
 
-const searchLimiter = rateLimit({
-  windowMs: 60_000,
+const searchLimiter = createRateLimiter({
   max: 10,
-  message: { error: 'Too many search requests, please try again later' },
-  standardHeaders: true,
-  legacyHeaders: false,
-  validate: { trustProxy: false },
+  error: 'Too many search requests, please try again later',
 });
 
 function validate(body, ALLOWED_COUNTS) {

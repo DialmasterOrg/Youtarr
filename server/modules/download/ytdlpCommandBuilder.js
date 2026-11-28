@@ -25,7 +25,7 @@ const { parseSubtitleLanguages, isExpandableLanguageCode } = require('./subtitle
 // target code (en, pt, zh-Hans) and are matched like before; the post-download
 // pruning in subtitleSidecarPruner.js keeps the preferred track(s) per language.
 // Checked against yt-dlp's own matcher (orderedSet_from_options with
-// use_regex=True); Node 20 cannot evaluate the (?-i:...) groups.
+// use_regex=True); Node 22 cannot evaluate the (?-i:...) groups.
 const LANGUAGE_VARIANT_SUFFIX = '(-(?-i:[A-Z][a-z]{3}))?(-(?-i:[A-Z]{2}|[0-9]{3}))?';
 
 // The match filter clause that keeps members-only videos out of a run. Used
@@ -600,6 +600,43 @@ class YtdlpCommandBuilder {
     skipVideoFolder = false,
     { membersFilter = MEMBERS_ONLY_EXCLUDED_FILTER } = {}
   ) {
+    return this._buildDownloadArgs({
+      resolution, allowRedownload, subFolder, filterConfig, audioFormat, skipVideoFolder,
+      cookiesEnabled: true, membersFilter,
+    });
+  }
+
+  /**
+   * Build yt-dlp command args array for manual downloads - no duration filter
+   * Note: Subfolder routing is handled post-download in videoDownloadPostProcessFiles.js
+   * @param {string} resolution - Video resolution
+   * @param {boolean} allowRedownload - Allow re-downloading previously fetched videos
+   * @param {string|null} audioFormat - Audio format ('video_mp3', 'mp3_only', or null for video only)
+   * @param {boolean} skipVideoFolder - If true, skip the video subfolder level (flat structure)
+   * @param {Object} [options]
+   * @param {boolean} [options.cookiesEnabled] - pass the configured cookies to yt-dlp
+   * @param {string|null} [options.membersFilter] - members-only match filter clause (membersAccess.buildDownloadFilter)
+   * @returns {string[]} - Array of yt-dlp command arguments
+   */
+  static getBaseCommandArgsForManualDownload(
+    resolution,
+    allowRedownload = false,
+    audioFormat = null,
+    skipVideoFolder = false,
+    options = {}
+  ) {
+    const { cookiesEnabled = true, membersFilter = MEMBERS_ONLY_EXCLUDED_FILTER } = options;
+    return this._buildDownloadArgs({
+      resolution, allowRedownload, subFolder: null, filterConfig: null, audioFormat, skipVideoFolder,
+      cookiesEnabled, membersFilter,
+    });
+  }
+
+  // Shared body of the two builders above; callers supply every field.
+  static _buildDownloadArgs({
+    resolution, allowRedownload, subFolder, filterConfig, audioFormat, skipVideoFolder,
+    cookiesEnabled, membersFilter,
+  }) {
     const config = configModule.getConfig();
     const res = resolution || config.preferredResolution || '1080';
     const videoCodec = config.videoCodec || 'default';
@@ -609,7 +646,7 @@ class YtdlpCommandBuilder {
 
     // Start with common args (includes -4, proxy, sleep-requests, cookies)
     const args = [
-      ...this.buildCommonArgs(config),
+      ...this.buildCommonArgs(config, { cookiesEnabled }),
       '--windows-filenames',  // Sanitize filenames for Windows/Plex compatibility
       '--ffmpeg-location', configModule.ffmpegPath,
       '--socket-timeout', String(config.downloadSocketTimeoutSeconds || 30),
@@ -670,100 +707,7 @@ class YtdlpCommandBuilder {
 
     // Custom user args MUST be appended last so yt-dlp's last-wins semantics
     // let users override managed defaults like --retries / --fragment-retries.
-    // The URL list (-a tempChannelsFile) is appended later by downloadModule.
-    args.push(...this.buildVideoExtractionCustomArgs(config));
-
-    return args;
-  }
-
-  /**
-   * Build yt-dlp command args array for manual downloads - no duration filter
-   * Note: Subfolder routing is handled post-download in videoDownloadPostProcessFiles.js
-   * @param {string} resolution - Video resolution
-   * @param {boolean} allowRedownload - Allow re-downloading previously fetched videos
-   * @param {string|null} audioFormat - Audio format ('video_mp3', 'mp3_only', or null for video only)
-   * @param {boolean} skipVideoFolder - If true, skip the video subfolder level (flat structure)
-   * @param {Object} [options]
-   * @param {boolean} [options.cookiesEnabled] - pass the configured cookies to yt-dlp
-   * @param {string|null} [options.membersFilter] - members-only match filter clause (membersAccess.buildDownloadFilter)
-   * @returns {string[]} - Array of yt-dlp command arguments
-   */
-  static getBaseCommandArgsForManualDownload(
-    resolution,
-    allowRedownload = false,
-    audioFormat = null,
-    skipVideoFolder = false,
-    options = {}
-  ) {
-    const config = configModule.getConfig();
-    const { cookiesEnabled = true, membersFilter = MEMBERS_ONLY_EXCLUDED_FILTER } = options;
-    const res = resolution || config.preferredResolution || '1080';
-    const videoCodec = config.videoCodec || 'default';
-
-    const outputPath = this.buildOutputPath(null, skipVideoFolder);
-    const thumbnailPath = this.buildThumbnailPath(null, skipVideoFolder);
-
-    // Start with common args (includes -4, proxy, sleep-requests, cookies)
-    const args = [
-      ...this.buildCommonArgs(config, { cookiesEnabled }),
-      '--windows-filenames',  // Sanitize filenames for Windows/Plex compatibility
-      '--ffmpeg-location', configModule.ffmpegPath,
-      '--socket-timeout', String(config.downloadSocketTimeoutSeconds || 30),
-      '--throttled-rate', config.downloadThrottledRate || '100K',
-      '--retries', String(config.downloadRetryCount || 2),
-      '--fragment-retries', String(config.downloadRetryCount || 2),
-      '--extractor-retries', '3',  // Retry subtitle/metadata extraction (helps with 429 errors)
-      '--retry-sleep', 'http:5',   // Sleep 5s on HTTP errors like 429 before retrying
-      '--newline',
-      '--progress',
-      '--progress-template',
-      '{"percent":"%(progress._percent_str)s","downloaded":"%(progress.downloaded_bytes|0)s","total":"%(progress.total_bytes|0)s","speed":"%(progress.speed|0)s","eta":"%(progress.eta|0)s"}',
-      '--output-na-placeholder', 'Unknown Channel',
-      // Clean @ prefix from uploader_id when it's used as fallback
-      '--replace-in-metadata', 'uploader_id', '^@', '',
-      '-f', this.buildFormatString(res, videoCodec, audioFormat),
-      ...(audioFormat === 'mp3_only' ? [] : this.buildFormatSortArgs()),
-      // Only force MP4 remux when sources might be webm (1440p+).
-      // At <=1080p the format selector already picks MP4 sources.
-      ...(this.resolutionRequiresNonMp4Source(res) ? ['--merge-output-format', 'mp4'] : []),
-      '--write-thumbnail',
-      '--convert-thumbnails', 'jpg',
-    ];
-
-    // Add audio extraction args if configured
-    const audioArgs = this.buildAudioArgs(audioFormat);
-    args.push(...audioArgs);
-
-    // Add subtitle args if configured
-    const subtitleArgs = this.buildSubtitleArgs(config);
-    args.push(...subtitleArgs);
-
-    // Only use download archive if NOT allowing re-downloads
-    if (!allowRedownload) {
-      args.push('--download-archive', archiveModule.getArchivePath());
-    }
-
-    args.push(
-      '--ignore-errors',
-      '--embed-metadata',
-      '--write-info-json',
-      '--no-write-playlist-metafiles',
-      '--extractor-args', 'youtubetab:tab=videos;sort=dd',
-      '--match-filter', this.buildMatchFilters(null, membersFilter),
-      '-o', outputPath,
-      '--datebefore', 'now',
-      '-o', `thumbnail:${thumbnailPath}`,
-      '-o', 'pl_thumbnail:',
-      '--exec', `node ${path.resolve(__dirname, '../videoDownloadPostProcessFiles.js')} {}`
-    );
-
-    // Add Sponsorblock args if configured
-    const sponsorblockArgs = this.buildSponsorblockArgs(config);
-    args.push(...sponsorblockArgs);
-
-    // Custom user args MUST be appended last so yt-dlp's last-wins semantics
-    // let users override managed defaults like --retries / --fragment-retries.
-    // URL operands are appended later by downloadModule.
+    // The URL list or URL operands are appended later by downloadModule.
     args.push(...this.buildVideoExtractionCustomArgs(config, { cookiesEnabled }));
 
     return args;

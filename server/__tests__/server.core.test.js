@@ -562,12 +562,7 @@ describe('server initialization', () => {
     });
     expect(key).toBe('5.6.7.8:alice');
 
-    const res = {};
-    res.status = jest.fn(() => res);
-    res.json = jest.fn(() => res);
-    loginOptions.handler({}, res);
-    expect(res.status).toHaveBeenCalledWith(429);
-    expect(res.json).toHaveBeenCalledWith({
+    expect(loginOptions.message).toEqual({
       error: 'Too many failed login attempts. Please wait 15 minutes before trying again.'
     });
   });

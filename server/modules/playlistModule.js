@@ -8,6 +8,7 @@ const storageGuard = require('./storageGuard');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const { spawnYtDlp } = require('./ytdlpProcess');
 const { toYoutubeUrl } = require('./youtubeUrlParser');
+const { buildChannelUrl, buildVideoThumbnailUrl } = require('./constants/youtube');
 
 // A bare playlist id, which yt-dlp accepts in place of a URL.
 const PLAYLIST_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
@@ -229,7 +230,7 @@ class PlaylistModule {
         const last = e.thumbnails[e.thumbnails.length - 1];
         if (last && typeof last.url === 'string') return last.url;
       }
-      return e.id ? `https://i.ytimg.com/vi/${e.id}/hqdefault.jpg` : null;
+      return e.id ? buildVideoThumbnailUrl(e.id) : null;
     };
 
     const rows = available.map((e, idx) => ({
@@ -296,7 +297,7 @@ class PlaylistModule {
     // YouTube itself renders as the playlist cover.
     const update = { lastFetched: new Date(), video_count: totalTracked };
     if (!playlist.thumbnail && available[0]?.id) {
-      update.thumbnail = `https://i.ytimg.com/vi/${available[0].id}/hqdefault.jpg`;
+      update.thumbnail = buildVideoThumbnailUrl(available[0].id);
     }
     if (startFollowing) {
       // The fetch guard remains held while capturing the last known entry.
@@ -535,7 +536,7 @@ class PlaylistModule {
     // nameless; they are refined when the user activates or refreshes the channel.
     const channelId = uploaderInfo.id || uploaderInfo.channel_id;
     const name = uploaderInfo.uploader || null;
-    const url = uploaderInfo.url || (channelId ? `https://www.youtube.com/channel/${channelId}` : null);
+    const url = uploaderInfo.url || (channelId ? buildChannelUrl(channelId) : null);
     return channelModule.upsertChannel(
       { id: channelId, title: name, uploader: name, url },
       false,

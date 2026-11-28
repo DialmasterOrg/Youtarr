@@ -5,25 +5,30 @@
 const { spawn } = require('child_process');
 const logger = require('../../../logger');
 
+const APPRISE_TIMEOUT_MS = 30000;
+
 /**
- * Send a notification using Apprise CLI
+ * Run the Apprise CLI for one message
  * @param {string} title - The notification title
  * @param {string} body - The notification body
  * @param {Array<string>} urls - Array of Apprise-compatible URLs
+ * @param {string|null} [input] - Apprise input format (-i): 'markdown' or 'html'; plain text when null
  * @returns {Promise<void>}
  */
-async function send(title, body, urls) {
+async function runApprise(title, body, urls, input = null) {
   if (!urls || urls.length === 0) {
     throw new Error('No notification URLs provided');
   }
+
+  const inputFormat = input ?? 'text';
 
   return new Promise((resolve, reject) => {
     // Use -vv for verbose output to get more error details
-    const args = ['-vv', '-t', title, '-b', body, ...urls];
+    const args = ['-vv', ...(input ? ['-i', input] : []), '-t', title, '-b', body, ...urls];
 
-    logger.debug({ urlCount: urls.length }, 'Sending Apprise notification');
+    logger.debug({ urlCount: urls.length, inputFormat }, 'Sending Apprise notification');
 
-    const proc = spawn('apprise', args, { timeout: 30000 });
+    const proc = spawn('apprise', args, { timeout: APPRISE_TIMEOUT_MS });
 
     let stdout = '';
     let stderr = '';
@@ -33,11 +38,11 @@ async function send(title, body, urls) {
 
     proc.on('close', (code) => {
       if (code === 0) {
-        logger.debug({ stdout: stdout.trim() }, 'Apprise notification sent successfully');
+        logger.debug({ stdout: stdout.trim(), inputFormat }, 'Apprise notification sent successfully');
         resolve();
       } else {
         const errorMsg = parseError(code, stdout, stderr);
-        logger.error({ code, stderr: stderr.trim(), stdout: stdout.trim() }, 'Apprise notification failed');
+        logger.error({ code, stderr: stderr.trim(), stdout: stdout.trim(), inputFormat }, 'Apprise notification failed');
         reject(new Error(errorMsg));
       }
     });
@@ -53,101 +58,19 @@ async function send(title, body, urls) {
   });
 }
 
-/**
- * Send a notification using Apprise CLI with Markdown body format
- * Used for Discord and other services that support markdown
- * @param {string} title - The notification title
- * @param {string} body - The notification body (Markdown)
- * @param {Array<string>} urls - Array of Apprise-compatible URLs
- * @returns {Promise<void>}
- */
-async function sendMarkdown(title, body, urls) {
-  if (!urls || urls.length === 0) {
-    throw new Error('No notification URLs provided');
-  }
-
-  return new Promise((resolve, reject) => {
-    // Use -vv for verbose, -i markdown for Markdown input format
-    const args = ['-vv', '-i', 'markdown', '-t', title, '-b', body, ...urls];
-
-    logger.debug({ urlCount: urls.length }, 'Sending Apprise Markdown notification');
-
-    const proc = spawn('apprise', args, { timeout: 30000 });
-
-    let stdout = '';
-    let stderr = '';
-
-    proc.stdout.on('data', (data) => { stdout += data.toString(); });
-    proc.stderr.on('data', (data) => { stderr += data.toString(); });
-
-    proc.on('close', (code) => {
-      if (code === 0) {
-        logger.debug({ stdout: stdout.trim() }, 'Apprise Markdown notification sent successfully');
-        resolve();
-      } else {
-        const errorMsg = parseError(code, stdout, stderr);
-        logger.error({ code, stderr: stderr.trim(), stdout: stdout.trim() }, 'Apprise Markdown notification failed');
-        reject(new Error(errorMsg));
-      }
-    });
-
-    proc.on('error', (error) => {
-      logger.error({ err: error }, 'Failed to spawn Apprise process');
-      if (error.code === 'ENOENT') {
-        reject(new Error('Apprise is not installed or not in PATH'));
-      } else {
-        reject(new Error(`Failed to run Apprise: ${error.message}`));
-      }
-    });
-  });
+/** Send a plain text notification. Arguments as in runApprise. */
+function send(title, body, urls) {
+  return runApprise(title, body, urls);
 }
 
-/**
- * Send a notification using Apprise CLI with HTML body format
- * @param {string} title - The notification title
- * @param {string} body - The notification body (HTML)
- * @param {Array<string>} urls - Array of Apprise-compatible URLs
- * @returns {Promise<void>}
- */
-async function sendHtml(title, body, urls) {
-  if (!urls || urls.length === 0) {
-    throw new Error('No notification URLs provided');
-  }
+/** Send a notification with a Markdown body. */
+function sendMarkdown(title, body, urls) {
+  return runApprise(title, body, urls, 'markdown');
+}
 
-  return new Promise((resolve, reject) => {
-    // Use -vv for verbose, -i html for HTML input format
-    const args = ['-vv', '-i', 'html', '-t', title, '-b', body, ...urls];
-
-    logger.debug({ urlCount: urls.length }, 'Sending Apprise HTML notification');
-
-    const proc = spawn('apprise', args, { timeout: 30000 });
-
-    let stdout = '';
-    let stderr = '';
-
-    proc.stdout.on('data', (data) => { stdout += data.toString(); });
-    proc.stderr.on('data', (data) => { stderr += data.toString(); });
-
-    proc.on('close', (code) => {
-      if (code === 0) {
-        logger.debug({ stdout: stdout.trim() }, 'Apprise HTML notification sent successfully');
-        resolve();
-      } else {
-        const errorMsg = parseError(code, stdout, stderr);
-        logger.error({ code, stderr: stderr.trim(), stdout: stdout.trim() }, 'Apprise HTML notification failed');
-        reject(new Error(errorMsg));
-      }
-    });
-
-    proc.on('error', (error) => {
-      logger.error({ err: error }, 'Failed to spawn Apprise process');
-      if (error.code === 'ENOENT') {
-        reject(new Error('Apprise is not installed or not in PATH'));
-      } else {
-        reject(new Error(`Failed to run Apprise: ${error.message}`));
-      }
-    });
-  });
+/** Send a notification with an HTML body. */
+function sendHtml(title, body, urls) {
+  return runApprise(title, body, urls, 'html');
 }
 
 /**

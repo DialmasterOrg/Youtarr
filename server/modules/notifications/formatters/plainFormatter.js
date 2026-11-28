@@ -13,7 +13,8 @@ const {
   buildDownloadPauseContent,
   buildCookiesInvalidContent,
   formatBytes,
-  groupVideosByChannel,
+  videoCountLabel,
+  getAutoRemovalSections,
   getTerminatedCount,
   buildTerminatedCountLabel,
   formatTerminatedChannelLine,
@@ -126,67 +127,16 @@ function formatTestMessage(name) {
  * @returns {Object} Object with title and body strings
  */
 function formatAutoRemovalMessage(cleanupResult) {
-  const { totalDeleted, deletedByAge, deletedByWatched = 0, deletedBySpace, deletedByUsage = 0, freedBytes, plan = {} } = cleanupResult;
-  const ageStrategy = plan.ageStrategy || {};
-  const watchedStrategy = plan.watchedStrategy || {};
-  const spaceStrategy = plan.spaceStrategy || {};
-  const usageStrategy = plan.usageStrategy || {};
+  const title = buildAutoRemovalTitle(cleanupResult.totalDeleted);
+  let body = `Freed ${formatBytes(cleanupResult.freedBytes)} of storage\n`;
 
-  const title = buildAutoRemovalTitle(totalDeleted);
-  let body = `Freed ${formatBytes(freedBytes)} of storage\n`;
-
-  if (deletedByAge > 0) {
-    const threshold = ageStrategy.thresholdDays;
-    body += `\nRemoved by age (exceeded ${threshold}-day limit): ${deletedByAge} ${deletedByAge === 1 ? 'video' : 'videos'}`;
-
-    const { groups, truncatedCount } = groupVideosByChannel(ageStrategy.sampleVideos, 5, deletedByAge);
-    for (const group of groups) {
-      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
-      body += `\n  ${group.channel} (${videoLabel}): ${group.titles.join(', ')}`;
+  for (const section of getAutoRemovalSections(cleanupResult)) {
+    body += `\n${section.label}: ${videoCountLabel(section.count)}`;
+    for (const group of section.groups) {
+      body += `\n  ${group.channel} (${videoCountLabel(group.count)}): ${group.titles.join(', ')}`;
     }
-    if (truncatedCount > 0) {
-      body += `\n  ...and ${truncatedCount} more videos`;
-    }
-  }
-
-  if (deletedByWatched > 0) {
-    body += `\nRemoved after being watched: ${deletedByWatched} ${deletedByWatched === 1 ? 'video' : 'videos'}`;
-
-    const { groups, truncatedCount } = groupVideosByChannel(watchedStrategy.sampleVideos, 5, deletedByWatched);
-    for (const group of groups) {
-      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
-      body += `\n  ${group.channel} (${videoLabel}): ${group.titles.join(', ')}`;
-    }
-    if (truncatedCount > 0) {
-      body += `\n  ...and ${truncatedCount} more videos`;
-    }
-  }
-
-  if (deletedBySpace > 0) {
-    const threshold = spaceStrategy.threshold;
-    body += `\nRemoved for storage (below ${threshold} threshold): ${deletedBySpace} ${deletedBySpace === 1 ? 'video' : 'videos'}`;
-
-    const { groups, truncatedCount } = groupVideosByChannel(spaceStrategy.sampleVideos, 5, deletedBySpace);
-    for (const group of groups) {
-      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
-      body += `\n  ${group.channel} (${videoLabel}): ${group.titles.join(', ')}`;
-    }
-    if (truncatedCount > 0) {
-      body += `\n  ...and ${truncatedCount} more videos`;
-    }
-  }
-
-  if (deletedByUsage > 0) {
-    const threshold = usageStrategy.limit;
-    body += `\nRemoved to stay under the ${threshold} total size limit: ${deletedByUsage} ${deletedByUsage === 1 ? 'video' : 'videos'}`;
-
-    const { groups, truncatedCount } = groupVideosByChannel(usageStrategy.sampleVideos, 5, deletedByUsage);
-    for (const group of groups) {
-      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
-      body += `\n  ${group.channel} (${videoLabel}): ${group.titles.join(', ')}`;
-    }
-    if (truncatedCount > 0) {
-      body += `\n  ...and ${truncatedCount} more videos`;
+    if (section.truncatedCount > 0) {
+      body += `\n  ...and ${section.truncatedCount} more videos`;
     }
   }
 

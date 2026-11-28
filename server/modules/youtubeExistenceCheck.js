@@ -1,6 +1,7 @@
 const dns = require('dns');
 const https = require('https');
 const logger = require('../logger');
+const { buildWatchUrl } = require('./constants/youtube');
 
 const EXISTENCE = Object.freeze({
   EXISTS: 'exists',
@@ -137,7 +138,7 @@ class YoutubeExistenceCheck {
       const req = https.request(
         {
           host: OEMBED_HOST,
-          path: `/oembed?url=https://www.youtube.com/watch?v=${youtubeId}&format=json`,
+          path: `/oembed?url=${buildWatchUrl(youtubeId)}&format=json`,
           method: 'HEAD',
           lookup: this.lookup,
           timeout: REQUEST_TIMEOUT_MS,

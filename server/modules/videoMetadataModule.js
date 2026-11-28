@@ -12,6 +12,7 @@ const { parseTierFromFormatNote, selectionTierForHeight } = require('./resolutio
 const { isFileForVideo } = require('./filesystem/pathBuilder');
 const { slimInfoJson } = require('./infoJsonSlimmer');
 const membersAccess = require('./membersAccess');
+const { buildWatchUrl } = require('./constants/youtube');
 
 const NULL_METADATA = {
   description: null,
@@ -117,7 +118,7 @@ class VideoMetadataModule {
         logger.debug({ youtubeId }, 'No cached .info.json, fetching via yt-dlp');
         try {
           rawData = slimInfoJson(await ytDlpRunner.fetchMetadata(
-            `https://www.youtube.com/watch?v=${youtubeId}`,
+            buildWatchUrl(youtubeId),
             YTDLP_FETCH_TIMEOUT_MS
           ));
           fetchedMembersState = await membersAccess.recordFetchOutcome(youtubeId, { availability: rawData?.availability ?? null });
@@ -258,7 +259,7 @@ class VideoMetadataModule {
   async checkMembersAccess(youtubeId) {
     try {
       const rawData = await ytDlpRunner.fetchMetadata(
-        `https://www.youtube.com/watch?v=${youtubeId}`,
+        buildWatchUrl(youtubeId),
         YTDLP_FETCH_TIMEOUT_MS
       );
       const state = await membersAccess.recordFetchOutcome(youtubeId, { availability: rawData?.availability ?? null });
@@ -290,7 +291,7 @@ class VideoMetadataModule {
   async probeAvailableResolutions(youtubeId, { timeoutMs = PROBE_FETCH_TIMEOUT_MS } = {}) {
     try {
       const args = ytdlpCommandBuilder.buildMetadataFetchArgs(
-        `https://www.youtube.com/watch?v=${youtubeId}`,
+        buildWatchUrl(youtubeId),
         { skipSleepRequests: true, cookiesEnabled: false }
       );
       const rawData = JSON.parse(await ytDlpRunner.run(args, { timeoutMs }));
@@ -413,7 +414,7 @@ class VideoMetadataModule {
         uploadDate: apiResult.uploadDate,
         availability: apiResult.availability,
         isLive: apiResult.liveBroadcastContent === 'live',
-        webpageUrl: `https://www.youtube.com/watch?v=${youtubeId}`,
+        webpageUrl: buildWatchUrl(youtubeId),
         relatedFiles,
       };
     } catch (apiErr) {

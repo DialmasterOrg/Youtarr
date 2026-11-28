@@ -3,6 +3,7 @@ const watchStatusQueries = require('../mediaServers/watchStatusQueries');
 const fileCheckModule = require('../fileCheckModule');
 const ratingMapper = require('../ratingMapper');
 const { PUBLISHED_AT_SOURCE } = require('../constants/publishedAtSource');
+const { buildVideoThumbnailUrl } = require('../constants/youtube');
 const { REMOVAL_STATES, removalState } = require('../videoRemovalState');
 
 class ChannelVideoQuery {
@@ -150,7 +151,7 @@ class ChannelVideoQuery {
 
       // Replace thumbnail with template format (unless video is removed from YouTube)
       if (!plainVideoObject.youtube_removed) {
-        plainVideoObject.thumbnail = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+        plainVideoObject.thumbnail = buildVideoThumbnailUrl(videoId);
       }
 
       return plainVideoObject;

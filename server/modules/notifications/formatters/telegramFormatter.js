@@ -15,7 +15,8 @@ const {
   buildDownloadPauseContent,
   buildCookiesInvalidContent,
   formatBytes,
-  groupVideosByChannel,
+  videoCountLabel,
+  getAutoRemovalSections,
   getTerminatedCount,
   buildTerminatedCountLabel,
   formatTerminatedChannelLine,
@@ -133,67 +134,16 @@ function formatTestMessage(name) {
  * @returns {Object} Object with title and HTML body strings
  */
 function formatAutoRemovalMessage(cleanupResult) {
-  const { totalDeleted, deletedByAge, deletedByWatched = 0, deletedBySpace, deletedByUsage = 0, freedBytes, plan = {} } = cleanupResult;
-  const ageStrategy = plan.ageStrategy || {};
-  const watchedStrategy = plan.watchedStrategy || {};
-  const spaceStrategy = plan.spaceStrategy || {};
-  const usageStrategy = plan.usageStrategy || {};
+  const title = buildAutoRemovalTitle(cleanupResult.totalDeleted);
+  let body = `Freed <b>${formatBytes(cleanupResult.freedBytes)}</b> of storage\n`;
 
-  const title = buildAutoRemovalTitle(totalDeleted);
-  let body = `Freed <b>${formatBytes(freedBytes)}</b> of storage\n`;
-
-  if (deletedByAge > 0) {
-    const threshold = escapeHtml(String(ageStrategy.thresholdDays));
-    body += `\n<b>Removed by age (exceeded ${threshold}-day limit): ${deletedByAge} ${deletedByAge === 1 ? 'video' : 'videos'}</b>\n`;
-
-    const { groups, truncatedCount } = groupVideosByChannel(ageStrategy.sampleVideos, 5, deletedByAge);
-    for (const group of groups) {
-      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
-      body += `📺 <b>${escapeHtml(group.channel)}</b> (${videoLabel}): ${group.titles.map(t => escapeHtml(t)).join(', ')}\n`;
+  for (const section of getAutoRemovalSections(cleanupResult)) {
+    body += `\n<b>${escapeHtml(section.label)}: ${videoCountLabel(section.count)}</b>\n`;
+    for (const group of section.groups) {
+      body += `📺 <b>${escapeHtml(group.channel)}</b> (${videoCountLabel(group.count)}): ${group.titles.map(t => escapeHtml(t)).join(', ')}\n`;
     }
-    if (truncatedCount > 0) {
-      body += `<i>...and ${truncatedCount} more videos</i>\n`;
-    }
-  }
-
-  if (deletedByWatched > 0) {
-    body += `\n<b>Removed after being watched: ${deletedByWatched} ${deletedByWatched === 1 ? 'video' : 'videos'}</b>\n`;
-
-    const { groups, truncatedCount } = groupVideosByChannel(watchedStrategy.sampleVideos, 5, deletedByWatched);
-    for (const group of groups) {
-      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
-      body += `📺 <b>${escapeHtml(group.channel)}</b> (${videoLabel}): ${group.titles.map(t => escapeHtml(t)).join(', ')}\n`;
-    }
-    if (truncatedCount > 0) {
-      body += `<i>...and ${truncatedCount} more videos</i>\n`;
-    }
-  }
-
-  if (deletedBySpace > 0) {
-    const threshold = escapeHtml(String(spaceStrategy.threshold));
-    body += `\n<b>Removed for storage (below ${threshold} threshold): ${deletedBySpace} ${deletedBySpace === 1 ? 'video' : 'videos'}</b>\n`;
-
-    const { groups, truncatedCount } = groupVideosByChannel(spaceStrategy.sampleVideos, 5, deletedBySpace);
-    for (const group of groups) {
-      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
-      body += `📺 <b>${escapeHtml(group.channel)}</b> (${videoLabel}): ${group.titles.map(t => escapeHtml(t)).join(', ')}\n`;
-    }
-    if (truncatedCount > 0) {
-      body += `<i>...and ${truncatedCount} more videos</i>\n`;
-    }
-  }
-
-  if (deletedByUsage > 0) {
-    const threshold = escapeHtml(String(usageStrategy.limit));
-    body += `\n<b>Removed to stay under the ${threshold} total size limit: ${deletedByUsage} ${deletedByUsage === 1 ? 'video' : 'videos'}</b>\n`;
-
-    const { groups, truncatedCount } = groupVideosByChannel(usageStrategy.sampleVideos, 5, deletedByUsage);
-    for (const group of groups) {
-      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
-      body += `📺 <b>${escapeHtml(group.channel)}</b> (${videoLabel}): ${group.titles.map(t => escapeHtml(t)).join(', ')}\n`;
-    }
-    if (truncatedCount > 0) {
-      body += `<i>...and ${truncatedCount} more videos</i>\n`;
+    if (section.truncatedCount > 0) {
+      body += `<i>...and ${section.truncatedCount} more videos</i>\n`;
     }
   }
 

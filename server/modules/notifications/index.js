@@ -68,6 +68,21 @@ async function sendNotification(url, message, sendMethod) {
 }
 
 /**
+ * Format a message for one configured service, rich or plain as the entry
+ * asks and the service allows, and send it.
+ * @param {Object} entry - normalized appriseUrls entry
+ * @param {Function} buildMessage - (formatter) => the message for that service
+ */
+async function sendToEntry(entry, buildMessage) {
+  const service = getServiceForUrl(entry.url);
+  const useRichFormatting = entry.richFormatting && service.supportsRichFormatting;
+  const formatter = useRichFormatting ? getFormatter(service) : plainFormatter;
+  const sendMethod = useRichFormatting ? service.sendMethod : 'apprise-plain';
+
+  await sendNotification(entry.url, buildMessage(formatter), sendMethod);
+}
+
+/**
  * Format one message per configured service and send each on its own, so one
  * failing service does not stop the others.
  * @param {Array<Object>} urls - normalized appriseUrls entries
@@ -78,12 +93,7 @@ async function sendNotification(url, message, sendMethod) {
 async function deliverToEach(urls, buildMessage, failureMessage) {
   const results = await Promise.all(urls.map(async (entry) => {
     try {
-      const service = getServiceForUrl(entry.url);
-      const useRichFormatting = entry.richFormatting && service.supportsRichFormatting;
-      const formatter = useRichFormatting ? getFormatter(service) : plainFormatter;
-      const sendMethod = useRichFormatting ? service.sendMethod : 'apprise-plain';
-
-      await sendNotification(entry.url, buildMessage(formatter), sendMethod);
+      await sendToEntry(entry, buildMessage);
       return true;
     } catch (err) {
       logger.error({ err, name: entry.name }, failureMessage);
@@ -151,29 +161,13 @@ class NotificationModule {
       }
 
       const urls = this.getUrlsFromConfig(config);
-
-      // Send notifications individually to use appropriate formatting per service
-      const results = await Promise.all(urls.map(async (entry) => {
-        try {
-          const service = getServiceForUrl(entry.url);
-          const useRichFormatting = entry.richFormatting && service.supportsRichFormatting;
-
-          // Get formatter based on rich formatting preference
-          const formatter = useRichFormatting ? getFormatter(service) : plainFormatter;
-          const sendMethod = useRichFormatting ? service.sendMethod : 'apprise-plain';
-
-          const message = formatter.formatDownloadMessage(finalSummary, videoData, {
-            linkTemplate: config.notificationLinkTemplate
-          });
-          await sendNotification(entry.url, message, sendMethod);
-          return true;
-        } catch (err) {
-          logger.error({ err, name: entry.name }, 'Failed to send notification');
-          return false;
-        }
-      }));
-
-      const successCount = results.filter(Boolean).length;
+      const successCount = await deliverToEach(
+        urls,
+        (formatter) => formatter.formatDownloadMessage(finalSummary, videoData, {
+          linkTemplate: config.notificationLinkTemplate
+        }),
+        'Failed to send notification'
+      );
       if (successCount > 0) {
         logger.info({ downloadCount: finalSummary.totalDownloaded, successCount, totalCount: urls.length }, 'Download notification sent successfully');
       }
@@ -198,27 +192,12 @@ class NotificationModule {
     }
 
     try {
-      const config = this.configModule.getConfig();
-      const urls = this.getUrlsFromConfig(config);
-
-      const results = await Promise.all(urls.map(async (entry) => {
-        try {
-          const service = getServiceForUrl(entry.url);
-          const useRichFormatting = entry.richFormatting && service.supportsRichFormatting;
-
-          const formatter = useRichFormatting ? getFormatter(service) : plainFormatter;
-          const sendMethod = useRichFormatting ? service.sendMethod : 'apprise-plain';
-
-          const message = formatter.formatAutoRemovalMessage(cleanupResult);
-          await sendNotification(entry.url, message, sendMethod);
-          return true;
-        } catch (err) {
-          logger.error({ err, name: entry.name }, 'Failed to send auto-removal notification');
-          return false;
-        }
-      }));
-
-      const successCount = results.filter(Boolean).length;
+      const urls = this.getUrlsFromConfig(this.configModule.getConfig());
+      const successCount = await deliverToEach(
+        urls,
+        (formatter) => formatter.formatAutoRemovalMessage(cleanupResult),
+        'Failed to send auto-removal notification'
+      );
       if (successCount > 0) {
         logger.info({ totalDeleted: cleanupResult.totalDeleted, successCount, totalCount: urls.length }, 'Auto-removal notification sent successfully');
       }
@@ -239,27 +218,12 @@ class NotificationModule {
     }
 
     try {
-      const config = this.configModule.getConfig();
-      const urls = this.getUrlsFromConfig(config);
-
-      const results = await Promise.all(urls.map(async (entry) => {
-        try {
-          const service = getServiceForUrl(entry.url);
-          const useRichFormatting = entry.richFormatting && service.supportsRichFormatting;
-
-          const formatter = useRichFormatting ? getFormatter(service) : plainFormatter;
-          const sendMethod = useRichFormatting ? service.sendMethod : 'apprise-plain';
-
-          const message = formatter.formatDownloadPauseMessage(status);
-          await sendNotification(entry.url, message, sendMethod);
-          return true;
-        } catch (err) {
-          logger.error({ err, name: entry.name }, 'Failed to send download pause notification');
-          return false;
-        }
-      }));
-
-      const successCount = results.filter(Boolean).length;
+      const urls = this.getUrlsFromConfig(this.configModule.getConfig());
+      const successCount = await deliverToEach(
+        urls,
+        (formatter) => formatter.formatDownloadPauseMessage(status),
+        'Failed to send download pause notification'
+      );
       if (successCount > 0) {
         logger.info({ paused: Boolean(status && status.paused), successCount, totalCount: urls.length }, 'Download pause notification sent successfully');
       }
@@ -313,14 +277,7 @@ class NotificationModule {
 
     await Promise.all(urls.map(async (entry) => {
       try {
-        const service = getServiceForUrl(entry.url);
-        const useRichFormatting = entry.richFormatting && service.supportsRichFormatting;
-
-        const formatter = useRichFormatting ? getFormatter(service) : plainFormatter;
-        const sendMethod = useRichFormatting ? service.sendMethod : 'apprise-plain';
-
-        const message = formatter.formatTestMessage(entry.name);
-        await sendNotification(entry.url, message, sendMethod);
+        await sendToEntry(entry, (formatter) => formatter.formatTestMessage(entry.name));
       } catch (err) {
         errors.push(`${entry.name}: ${err.message}`);
       }
@@ -335,20 +292,11 @@ class NotificationModule {
    * Send a test notification to a single webhook URL
    */
   async sendTestNotificationToSingle(entry) {
-    const { url, name, richFormatting } = entry;
-
-    if (!url || url.trim().length === 0) {
+    if (!entry.url || entry.url.trim().length === 0) {
       throw new Error('Notification URL is required');
     }
 
-    const service = getServiceForUrl(url);
-    const useRichFormatting = richFormatting && service.supportsRichFormatting;
-
-    const formatter = useRichFormatting ? getFormatter(service) : plainFormatter;
-    const sendMethod = useRichFormatting ? service.sendMethod : 'apprise-plain';
-
-    const message = formatter.formatTestMessage(name);
-    await sendNotification(url, message, sendMethod);
+    await sendToEntry(entry, (formatter) => formatter.formatTestMessage(entry.name));
   }
 }
 

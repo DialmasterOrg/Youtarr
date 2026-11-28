@@ -3,6 +3,7 @@
 const https = require('https');
 const logger = require('../logger');
 const createConcurrencyLimiter = require('./subscriptionImport/concurrencyLimiter');
+const { VIDEO_ID_PATTERN } = require('./constants/youtube');
 
 // Rate limiting: at most OEMBED_RPS outbound oEmbed requests per second.
 // This protects the user's IP from YouTube throttling / temporary bans.
@@ -12,7 +13,6 @@ const OEMBED_TIMEOUT_MS = 5000;
 const OEMBED_HARD_DEADLINE_MS = OEMBED_TIMEOUT_MS + 2000;
 const OEMBED_MAX_IDS_PER_REQUEST = 100;
 const OEMBED_MAX_BYTES = 64 * 1024;
-const VIDEO_ID_PATTERN = /^[a-zA-Z0-9_-]{11}$/;
 
 /**
  * Creates a rate limiter that ensures at most `rps` fires per second.

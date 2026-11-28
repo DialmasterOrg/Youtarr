@@ -1,6 +1,7 @@
 // Members-only access states and the pure checks on them. Kept apart from
 // membersAccess, which loads models at require time, so test mocks of
 // membersAccess can share the real implementations.
+const { VIDEO_ID_PATTERN } = require('./constants/youtube');
 
 const ACCESS = Object.freeze({
   CONFIRMED: 'confirmed',
@@ -17,7 +18,9 @@ const STATE = Object.freeze({
 
 // Ids reach membersAccess from yt-dlp output, where an uploader controls the
 // title text, and go into a yt-dlp regex; anything else is dropped.
-const VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
+function isVideoId(id) {
+  return typeof id === 'string' && VIDEO_ID_PATTERN.test(id);
+}
 
 // yt-dlp prints this when YouTube rejected the cookies. YouTube then answers a
 // members-only video with the same "Join this channel" error a non-member gets,
@@ -34,10 +37,6 @@ function isCookiesRejected(output = '') {
 
 function isBlockedState(state) {
   return state === STATE.NO_COOKIES || state === STATE.DENIED;
-}
-
-function isVideoId(id) {
-  return typeof id === 'string' && VIDEO_ID_PATTERN.test(id);
 }
 
 module.exports = { ACCESS, STATE, isCookiesRejected, isBlockedState, isVideoId };

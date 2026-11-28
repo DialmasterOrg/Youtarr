@@ -4,6 +4,7 @@ const { sanitizeNameLikeYtDlp } = require('../filesystem');
 const youtubeApi = require('../youtubeApi');
 const channelYtdlpExecutor = require('./channelYtdlpExecutor');
 const { logApiFallback } = require('./apiFallbackLogger');
+const { buildChannelUrl } = require('../constants/youtube');
 
 class ChannelMetadataFetcher {
   /**
@@ -96,7 +97,7 @@ class ChannelMetadataFetcher {
     }
 
     // Slow path: call yt-dlp to get authoritative folder name
-    const channelUrl = `https://www.youtube.com/channel/${channel.channel_id}`;
+    const channelUrl = buildChannelUrl(channel.channel_id);
     let channelData;
     try {
       channelData = await this.fetchChannelMetadata(channelUrl);
