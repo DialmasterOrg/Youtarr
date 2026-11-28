@@ -18,10 +18,7 @@ jest.mock('react-swipeable', () => ({
 }));
 
 jest.mock('../../utils', () => ({
-  formatDuration: (duration: number | null) => {
-    if (!duration) return 'Unknown';
-    return `${Math.floor(duration / 60)}m`;
-  },
+  formatDuration: jest.requireActual('../../utils').formatDuration,
   formatYTDate: (date: string | null) => {
     if (!date) return 'Unknown';
     return '1/15/2024';
@@ -442,7 +439,7 @@ describe('VideosPage Component', () => {
       error: null
     });
 
-    mockTriggerDownloads.mockResolvedValue(true);
+    mockTriggerDownloads.mockResolvedValue({ ok: true });
   });
 
   // Helper: force a particular view mode before rendering.
@@ -645,7 +642,7 @@ describe('VideosPage Component', () => {
         expect(screen.getByText('How to Code')).toBeInTheDocument();
       });
 
-      await user.click(screen.getByAltText('thumbnail'));
+      await user.click(screen.getByAltText('How to Code'));
 
       expect(screen.getByTestId('video-modal')).toHaveAttribute('data-video-title', 'How to Code');
     });
@@ -1003,7 +1000,7 @@ describe('VideosPage Component', () => {
         expect(screen.getByText('How to Code')).toBeInTheDocument();
       });
 
-      const image = screen.getByAltText('thumbnail') as HTMLImageElement;
+      const image = screen.getByAltText('How to Code') as HTMLImageElement;
 
       fireEvent.error(image);
 
@@ -1021,8 +1018,8 @@ describe('VideosPage Component', () => {
         expect(screen.getByText('How to Code')).toBeInTheDocument();
       });
 
-      // Grid card renders the formatted duration (mocked as "10m") in the metadata row.
-      expect(screen.getByText(/10m/)).toBeInTheDocument();
+      // Grid card renders the 600-second duration in the metadata row.
+      expect(screen.getByText('10m')).toBeInTheDocument();
     });
 
     test('displays "Unknown" for missing duration', async () => {
@@ -1691,6 +1688,50 @@ describe('VideosPage Component', () => {
         } finally {
           unmount();
           window.IntersectionObserver = originalObserver;
+          useConfig.mockReturnValue({ config: { channelVideosHotLoad: false } });
+        }
+      });
+
+      test('stops at a failed infinite-scroll page and retries that page', async () => {
+        const { useConfig } = require('../../hooks/useConfig');
+        const originalObserver = window.IntersectionObserver;
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+        // Reports the sentinel in range to the observer watching it, if any.
+        let intersect = () => {};
+        window.IntersectionObserver = jest.fn().mockImplementation((callback: IntersectionObserverCallback) => {
+          const observer = {
+            observe: jest.fn(() => {
+              intersect = () => callback([{ isIntersecting: true } as IntersectionObserverEntry], observer);
+            }),
+            disconnect: jest.fn(() => { intersect = () => {}; }),
+            unobserve: jest.fn(), takeRecords: () => [], root: null, rootMargin: '', thresholds: [0],
+          };
+          return observer;
+        });
+        useConfig.mockReturnValue({ config: { channelVideosHotLoad: true } });
+        useTableView();
+        const user = setupUser();
+        axios.get
+          .mockResolvedValueOnce({ data: { ...mockPaginatedResponse([mockVideos[0]]), total: 3, totalPages: 3 } })
+          .mockRejectedValueOnce(new Error('Network Error'))
+          .mockResolvedValueOnce({ data: { ...mockPaginatedResponse([mockVideos[1]]), page: 2, total: 3, totalPages: 3 } });
+
+        const { unmount } = render(<VideosPage token={mockToken} />);
+        try {
+          await screen.findByText('How to Code');
+          act(() => intersect());
+          const retry = await screen.findByRole('button', { name: 'Retry' });
+          act(() => intersect());
+          expect(axios.get).toHaveBeenCalledTimes(2);
+
+          await user.click(retry);
+
+          await screen.findByText('Game Review');
+          expect(axios.get.mock.calls[2][0]).toContain('page=2');
+        } finally {
+          unmount();
+          window.IntersectionObserver = originalObserver;
+          consoleErrorSpy.mockRestore();
           useConfig.mockReturnValue({ config: { channelVideosHotLoad: false } });
         }
       });
@@ -2375,7 +2416,7 @@ describe('VideosPage Component', () => {
 
     test('shows an error and keeps selection when the trigger fails', async () => {
       const user = setupUser();
-      mockTriggerDownloads.mockResolvedValue(false);
+      mockTriggerDownloads.mockResolvedValue({ ok: false, message: 'Downloads are paused' });
       await renderWithDownloadVideos();
 
       await selectByName(user, 'Missing Video');
@@ -2383,9 +2424,7 @@ describe('VideosPage Component', () => {
       await user.click(screen.getByTestId('download-dialog-confirm'));
 
       await waitFor(() => {
-        expect(
-          screen.getByText('Failed to queue selected videos for download. Please try again.')
-        ).toBeInTheDocument();
+        expect(screen.getByText('Downloads are paused')).toBeInTheDocument();
       });
       expect(mockNavigate).not.toHaveBeenCalled();
       expect(screen.getByText(/1 video selected/)).toBeInTheDocument();

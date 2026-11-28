@@ -1,6 +1,29 @@
 import React from 'react';
 import { cn } from '../../lib/cn';
 
+// Keeps a transition's child mounted while it animates out. `visible` turns on
+// one frame after mounting so the CSS transition fires.
+function useTransitionMount(inProp: boolean, duration: number, unmountOnExit: boolean, initiallyMounted: boolean) {
+  const [mounted, setMounted] = React.useState(initiallyMounted);
+  const [visible, setVisible] = React.useState(inProp);
+
+  React.useEffect(() => {
+    if (inProp) {
+      setMounted(true);
+      const id = requestAnimationFrame(() => setVisible(true));
+      return () => cancelAnimationFrame(id);
+    } else {
+      setVisible(false);
+      if (unmountOnExit) {
+        const id = setTimeout(() => setMounted(false), duration);
+        return () => clearTimeout(id);
+      }
+    }
+  }, [inProp, unmountOnExit, duration]);
+
+  return { mounted, visible };
+}
+
 /* ─── Grow ─────────────────────────────────────────────
   Scale + fade transition implemented with CSS transitions.
 ──────────────────────────────────────────────────────── */
@@ -22,23 +45,7 @@ const Grow: React.FC<GrowProps> = ({
   style,
 }) => {
   const duration = typeof timeout === 'number' ? timeout : (timeout.enter ?? 300);
-  const [mounted, setMounted] = React.useState(!mountOnEnter || inProp);
-  const [visible, setVisible] = React.useState(inProp);
-
-  React.useEffect(() => {
-    if (inProp) {
-      setMounted(true);
-      // Defer to next frame so CSS transition fires
-      const id = requestAnimationFrame(() => setVisible(true));
-      return () => cancelAnimationFrame(id);
-    } else {
-      setVisible(false);
-      if (unmountOnExit) {
-        const id = setTimeout(() => setMounted(false), duration);
-        return () => clearTimeout(id);
-      }
-    }
-  }, [inProp, unmountOnExit, duration]);
+  const { mounted, visible } = useTransitionMount(inProp, duration, unmountOnExit, !mountOnEnter || inProp);
 
   if (!mounted) return null;
 
@@ -81,22 +88,7 @@ const Slide: React.FC<SlideProps> = ({
   mountOnEnter = false,
 }) => {
   const duration = typeof timeout === 'number' ? timeout : (timeout.enter ?? 300);
-  const [mounted, setMounted] = React.useState(!mountOnEnter || inProp);
-  const [visible, setVisible] = React.useState(inProp);
-
-  React.useEffect(() => {
-    if (inProp) {
-      setMounted(true);
-      const id = requestAnimationFrame(() => setVisible(true));
-      return () => cancelAnimationFrame(id);
-    } else {
-      setVisible(false);
-      if (unmountOnExit) {
-        const id = setTimeout(() => setMounted(false), duration);
-        return () => clearTimeout(id);
-      }
-    }
-  }, [inProp, unmountOnExit, duration]);
+  const { mounted, visible } = useTransitionMount(inProp, duration, unmountOnExit, !mountOnEnter || inProp);
 
   if (!mounted) return null;
 
@@ -124,22 +116,7 @@ const Fade: React.FC<FadeProps> = ({
   timeout = 300,
   unmountOnExit = false,
 }) => {
-  const [mounted, setMounted] = React.useState(inProp);
-  const [visible, setVisible] = React.useState(inProp);
-
-  React.useEffect(() => {
-    if (inProp) {
-      setMounted(true);
-      const id = requestAnimationFrame(() => setVisible(true));
-      return () => cancelAnimationFrame(id);
-    } else {
-      setVisible(false);
-      if (unmountOnExit) {
-        const id = setTimeout(() => setMounted(false), timeout);
-        return () => clearTimeout(id);
-      }
-    }
-  }, [inProp, unmountOnExit, timeout]);
+  const { mounted, visible } = useTransitionMount(inProp, timeout, unmountOnExit, inProp);
 
   if (!mounted) return null;
 

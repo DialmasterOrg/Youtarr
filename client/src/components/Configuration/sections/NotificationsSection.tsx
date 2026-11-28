@@ -13,11 +13,7 @@ import {
   Checkbox,
   Tooltip,
   CircularProgress,
-  Dialog,
-  DialogTitle,
-  DialogContent,
   DialogContentText,
-  DialogActions,
 } from '../../ui';
 import {
   Trash2 as DeleteIcon,
@@ -29,8 +25,9 @@ import {
   CheckCircle2 as CheckCircleIcon,
   AlertCircle as ErrorIcon,
 } from 'lucide-react';
+import ConfirmDialog from '../../shared/ConfirmDialog';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
-import { InfoTooltip } from '../common/InfoTooltip';
+import { InfoTooltip } from '../../shared/InfoTooltip';
 import { ConfigState, SnackbarState } from '../types';
 import {
   getDefaultNameForUrl,
@@ -54,7 +51,6 @@ interface NotificationsSectionProps {
   token: string | null;
   config: ConfigState;
   onConfigChange: (updates: Partial<ConfigState>) => void;
-  onMobileTooltipClick?: (text: string) => void;
   setSnackbar: (snackbar: SnackbarState) => void;
 }
 
@@ -62,7 +58,6 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
   token,
   config,
   onConfigChange,
-  onMobileTooltipClick,
   setSnackbar,
 }) => {
   const [newUrl, setNewUrl] = useState('');
@@ -331,7 +326,6 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
             {' '}— supports 100+ services including Discord, Telegram, Slack, and email.
             <InfoTooltip
               text="Receive notifications when new videos are downloaded successfully."
-              onMobileClick={onMobileTooltipClick}
             />
           </Typography>
         </Grid>
@@ -636,28 +630,19 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
       </Grid>
 
       {/* Delete confirmation dialog */}
-      <Dialog
+      <ConfirmDialog
         open={deleteDialogOpen}
-        onClose={handleDeleteCancel}
-        aria-labelledby="delete-dialog-title"
-        aria-describedby="delete-dialog-description"
+        tone="danger"
+        title="Remove Notification Service?"
+        confirmLabel="Remove"
+        onCancel={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
       >
-        <DialogTitle id="delete-dialog-title">
-          Remove Notification Service?
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText id="delete-dialog-description">
-            Are you sure you want to remove{' '}
-            <strong>{deleteIndex !== null ? appriseUrls[deleteIndex]?.name : ''}</strong>?
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleDeleteCancel}>Cancel</Button>
-          <Button onClick={handleDeleteConfirm} color="error" variant="contained">
-            Remove
-          </Button>
-        </DialogActions>
-      </Dialog>
+        <DialogContentText>
+          Are you sure you want to remove{' '}
+          <strong>{deleteIndex !== null ? appriseUrls[deleteIndex]?.name : ''}</strong>?
+        </DialogContentText>
+      </ConfirmDialog>
     </ConfigurationAccordion>
   );
 };

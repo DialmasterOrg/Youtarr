@@ -68,8 +68,7 @@ describe('VideoCard Component', () => {
     test('renders duration chip for regular videos', () => {
       renderWithProviders(<VideoCard {...defaultProps} />);
       // Duration is 600 seconds = 10 minutes
-      const durationChip = screen.getByText(/10/);
-      expect(durationChip).toBeInTheDocument();
+      expect(screen.getByText('10m')).toBeInTheDocument();
     });
 
     test('does not render duration chip for shorts', () => {
@@ -236,6 +235,12 @@ describe('VideoCard Component', () => {
   });
 
   describe('Video Selection (Checkbox)', () => {
+    test('does not render checkbox for youtube removed videos', () => {
+      const removedVideo = { ...mockVideo, youtube_removed: true };
+      renderWithProviders(<VideoCard {...defaultProps} video={removedVideo} />);
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+
     test('renders checkbox for never downloaded videos', () => {
       renderWithProviders(<VideoCard {...defaultProps} />);
       expect(screen.getByRole('checkbox')).toBeInTheDocument();

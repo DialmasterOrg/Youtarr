@@ -120,6 +120,24 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const Comp = asChild ? Slot : 'button';
     const normalizedSize = size === 'small' ? 'sm' : size === 'medium' ? 'md' : size === 'large' ? 'lg' : size;
     
+    const classes = cn(
+      buttonVariants({ variant, size: normalizedSize, color, fullWidth, className }),
+      variant === 'contained' && 'btn-contained',
+      variant === 'outlined' && 'btn-outlined',
+      variant === 'text' && 'btn-text',
+      variant === 'contained' && color === 'primary' && 'btn-contained-primary',
+      variant === 'contained' && color === 'secondary' && 'btn-contained-secondary',
+      variant === 'contained' && color === 'error' && 'btn-contained-error',
+      variant === 'contained' && color === 'warning' && 'btn-contained-warning',
+      variant === 'outlined' && color === 'primary' && 'btn-outlined-primary',
+      variant === 'outlined' && color === 'secondary' && 'btn-outlined-secondary',
+      variant === 'outlined' && color === 'error' && 'btn-outlined-error',
+      variant === 'outlined' && color === 'warning' && 'btn-outlined-warning',
+      normalizedSize === 'sm' && 'btn-sm',
+      normalizedSize === 'md' && 'btn-md',
+      normalizedSize === 'lg' && 'btn-lg'
+    );
+
     // When asChild={true}, just pass children through to Slot
     // Don't render extra elements as Slot expects a single element child
     if (asChild) {
@@ -128,23 +146,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           ref={ref}
           disabled={disabled || loading}
           data-btn
-          className={cn(
-            buttonVariants({ variant, size: normalizedSize, color, fullWidth, className }),
-            variant === 'contained' && 'btn-contained',
-            variant === 'outlined' && 'btn-outlined',
-            variant === 'text' && 'btn-text',
-            variant === 'contained' && color === 'primary' && 'btn-contained-primary',
-            variant === 'contained' && color === 'secondary' && 'btn-contained-secondary',
-            variant === 'contained' && color === 'error' && 'btn-contained-error',
-            variant === 'contained' && color === 'warning' && 'btn-contained-warning',
-            variant === 'outlined' && color === 'primary' && 'btn-outlined-primary',
-            variant === 'outlined' && color === 'secondary' && 'btn-outlined-secondary',
-            variant === 'outlined' && color === 'error' && 'btn-outlined-error',
-            variant === 'outlined' && color === 'warning' && 'btn-outlined-warning',
-            normalizedSize === 'sm' && 'btn-sm',
-            normalizedSize === 'md' && 'btn-md',
-            normalizedSize === 'lg' && 'btn-lg'
-          )}
+          className={classes}
           style={{ ...sx, ...style }}
           {...props}
         >
@@ -152,29 +154,13 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         </Comp>
       );
     }
-    
+
     return (
       <Comp
         ref={ref}
         disabled={disabled || loading}
         data-btn
-        className={cn(
-            buttonVariants({ variant, size: normalizedSize, color, fullWidth, className }),
-          variant === 'contained' && 'btn-contained',
-          variant === 'outlined' && 'btn-outlined',
-          variant === 'text' && 'btn-text',
-          variant === 'contained' && color === 'primary' && 'btn-contained-primary',
-          variant === 'contained' && color === 'secondary' && 'btn-contained-secondary',
-          variant === 'contained' && color === 'error' && 'btn-contained-error',
-          variant === 'contained' && color === 'warning' && 'btn-contained-warning',
-          variant === 'outlined' && color === 'primary' && 'btn-outlined-primary',
-          variant === 'outlined' && color === 'secondary' && 'btn-outlined-secondary',
-          variant === 'outlined' && color === 'error' && 'btn-outlined-error',
-          variant === 'outlined' && color === 'warning' && 'btn-outlined-warning',
-          normalizedSize === 'sm' && 'btn-sm',
-          normalizedSize === 'md' && 'btn-md',
-          normalizedSize === 'lg' && 'btn-lg'
-        )}
+        className={classes}
         style={{ ...sx, ...style }}
         {...props}
       >

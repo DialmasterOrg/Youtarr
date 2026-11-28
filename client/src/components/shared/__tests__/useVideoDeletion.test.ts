@@ -120,10 +120,10 @@ describe('useVideoDeletion', () => {
       });
     });
 
-    test('handles API error with error message property', async () => {
-      const errorMessage = 'Network error';
+    test('shows the fallback, not the transport message, when the server sent no error text', async () => {
+      const errorMessage = 'The request failed. Please try again.';
       axios.delete.mockRejectedValueOnce({
-        message: errorMessage,
+        message: 'Network error',
       });
 
       const { result } = renderHook(() => useVideoDeletion());
@@ -152,14 +152,14 @@ describe('useVideoDeletion', () => {
       const response = await result.current.deleteVideos(videoIds, 'token');
 
       await waitFor(() => {
-        expect(result.current.error).toBe('Failed to delete videos');
+        expect(result.current.error).toBe('The request failed. Please try again.');
       });
       expect(result.current.loading).toBe(false);
 
       expect(response).toEqual({
         success: false,
         deleted: [],
-        failed: [{ videoId: 10, error: 'Failed to delete videos' }],
+        failed: [{ videoId: 10, error: 'The request failed. Please try again.' }],
       });
     });
 
@@ -222,7 +222,7 @@ describe('useVideoDeletion', () => {
       await result.current.deleteVideos([1], 'token');
 
       await waitFor(() => {
-        expect(result.current.error).toBe('First error');
+        expect(result.current.error).toBe('The request failed. Please try again.');
       });
 
       // Second request succeeds
@@ -337,10 +337,10 @@ describe('useVideoDeletion', () => {
       });
     });
 
-    test('handles API error with error message property', async () => {
-      const errorMessage = 'Connection timeout';
+    test('shows the fallback, not the transport message, when the server sent no error text', async () => {
+      const errorMessage = 'The request failed. Please try again.';
       axios.delete.mockRejectedValueOnce({
-        message: errorMessage,
+        message: 'Connection timeout',
       });
 
       const { result } = renderHook(() => useVideoDeletion());
@@ -368,13 +368,13 @@ describe('useVideoDeletion', () => {
       const response = await result.current.deleteVideosByYoutubeIds(youtubeIds, 'token');
 
       await waitFor(() => {
-        expect(result.current.error).toBe('Failed to delete videos');
+        expect(result.current.error).toBe('The request failed. Please try again.');
       });
 
       expect(response).toEqual({
         success: false,
         deleted: [],
-        failed: [{ youtubeId: 'generic', error: 'Failed to delete videos' }],
+        failed: [{ youtubeId: 'generic', error: 'The request failed. Please try again.' }],
       });
     });
 
@@ -437,7 +437,7 @@ describe('useVideoDeletion', () => {
       await result.current.deleteVideosByYoutubeIds(['abc123'], 'token');
 
       await waitFor(() => {
-        expect(result.current.error).toBe('Initial error');
+        expect(result.current.error).toBe('The request failed. Please try again.');
       });
 
       // Second request succeeds

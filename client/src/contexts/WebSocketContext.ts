@@ -9,6 +9,9 @@ type WebSocketContextType = {
 
 const WebSocketContext = React.createContext<WebSocketContextType | null>(null);
 
+// Type of the local message WebSocketProvider dispatches after a reconnect.
+export const CONNECTION_RESTORED = 'connectionRestored';
+
 export interface Message {
   destination: string;
   source: string;

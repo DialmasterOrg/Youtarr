@@ -9,7 +9,7 @@ import { SettingsSection } from '../common/SettingsSection';
 import { SettingRow, settingDescriptionId } from '../common/SettingRow';
 import { SettingNote } from '../common/SettingNote';
 import { CoreFoldersSection } from './components/CoreFoldersSection';
-import { FlatStructureDialog } from './components/FlatStructureDialog';
+import { FlatStructureDialog } from './components/AffectedChannelsDialog';
 import { ScheduleSummary } from './components/ScheduleSummary';
 import { VideoFilenameTemplate } from './components/VideoFilenameTemplate';
 import { getChannelFilesOptions } from '../helpers';
@@ -20,7 +20,6 @@ interface CoreSettingsSectionProps {
   deploymentEnvironment: DeploymentEnvironment;
   isPlatformManaged: PlatformManagedState;
   onConfigChange: (updates: Partial<ConfigState>) => void;
-  onMobileTooltipClick?: (text: string) => void;
   token: string | null;
   filenameTemplateSaveRequirement?: string | null;
   onFilenameTemplatePreviewSuccess?: (prefix: string) => void;
@@ -40,7 +39,7 @@ const MEDIA_FILES: Array<{ key: 'writeVideoNfoFiles' | 'writeChannelPosters' | '
 
 /** Settings > Core: folders, downloads, media server files, naming, interface, advanced. */
 export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
-  config, deploymentEnvironment, isPlatformManaged, onConfigChange, onMobileTooltipClick, token,
+  config, deploymentEnvironment, isPlatformManaged, onConfigChange, token,
   filenameTemplateSaveRequirement, onFilenameTemplatePreviewSuccess,
 }) => {
   const { hash } = useLocation();
@@ -102,7 +101,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
           </SettingRow>
           <SettingRow controlId="videoCodec" label="Preferred video codec" controlSize="select" stackControlOnPhone
             description="Used when YouTube has it; otherwise Youtarr falls back."
-            tooltip="Default lets YouTube pick the best codec (typically VP9 or AV1 at 1440p and above)." onMobileTooltipClick={onMobileTooltipClick}
+            tooltip="Default lets YouTube pick the best codec (typically VP9 or AV1 at 1440p and above)."
             control={(
               <Select id="videoCodec" size="small" inputProps={describedBy('videoCodec')}
                 value={config.videoCodec}
@@ -157,7 +156,6 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
           <SettingRow controlId="prefixChannelNameInTitle" label="Channel name in embedded title"
             description={'Write the MP4 title as "Channel - Title"; Plex shows it as the video title. New downloads only.'}
             tooltip="Turn it off for a Plex TV Shows library, where the channel is already the show name."
-            onMobileTooltipClick={onMobileTooltipClick}
             control={switchFor('prefixChannelNameInTitle')} />
           <SettingRow controlId="videoFilenamePrefix" label="Video filename template"
             description={(
@@ -189,7 +187,6 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
             tooltip={isPlatformManaged.useTmpForDownloads
               ? 'This setting is managed by your platform deployment and cannot be changed.'
               : 'Both options hide unfinished downloads from media servers. Off is faster on local or SSD storage.'}
-            onMobileTooltipClick={onMobileTooltipClick}
             badge={isPlatformManaged.useTmpForDownloads ? <Chip label={elfhosted ? 'Managed by Elfhosted' : 'Platform Managed'} size="small" /> : undefined}
             control={switchFor('useTmpForDownloads', { disabled: isPlatformManaged.useTmpForDownloads })} />
         </SettingsSection>

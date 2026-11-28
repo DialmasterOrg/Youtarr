@@ -5,7 +5,6 @@ import {
   Snackbar,
   Typography,
 } from '../ui';
-import { Info as InfoIcon } from '../../lib/icons';
 import { Link as RouterLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import PlexLibrarySelector from '../PlexLibrarySelector';
 import PlexAuthDialog from '../PlexAuthDialog';
@@ -13,8 +12,7 @@ import ConfigurationSkeleton from '../Configuration/common/ConfigurationSkeleton
 import { CoreSettingsSection } from '../Configuration/sections/CoreSettingsSection';
 import AppearanceSettingsSection from '../Configuration/sections/AppearanceSettingsSection';
 import { PlexIntegrationSection } from '../Configuration/sections/PlexIntegrationSection';
-import JellyfinSection from '../Configuration/sections/JellyfinSection';
-import EmbySection from '../Configuration/sections/EmbySection';
+import MediaServerPlaylistSection from '../Configuration/sections/MediaServerPlaylistSection';
 import WatchStatusSection from '../Configuration/sections/WatchStatusSection';
 import { SponsorBlockSection } from '../Configuration/sections/SponsorBlockSection';
 import { CookieConfigSection } from '../Configuration/sections/CookieConfigSection';
@@ -83,7 +81,6 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
     message: '',
     severity: 'success',
   });
-  const [mobileTooltip, setMobileTooltip] = useState<string | null>(null);
   const [filenamePreviewedPrefix, setFilenamePreviewedPrefix] = useState<string | null>(null);
   const [channelApplyTarget, setChannelApplyTarget] = useState<'stable' | 'nightly' | null>(null);
 
@@ -325,7 +322,6 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
                 deploymentEnvironment={deploymentEnvironment}
                 isPlatformManaged={isPlatformManaged}
                 onConfigChange={handleConfigChange}
-                onMobileTooltipClick={setMobileTooltip}
                 token={token}
                 filenameTemplateSaveRequirement={filenameTemplateSaveRequirement}
                 onFilenameTemplatePreviewSuccess={handleFilenameTemplatePreviewSuccess}
@@ -344,7 +340,7 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
               token={token}
             />}
           />
-          <Route path="appearance" element={<AppearanceSettingsSection onMobileTooltipClick={setMobileTooltip} />} />
+          <Route path="appearance" element={<AppearanceSettingsSection />} />
           <Route
             path="plex"
             element={
@@ -359,15 +355,19 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
                 onTestConnection={testPlexConnection}
                 onOpenLibrarySelector={openLibrarySelector}
                 onOpenPlexAuthDialog={() => setOpenPlexAuthDialog(true)}
-                onMobileTooltipClick={setMobileTooltip}
                 token={token}
               />
             }
           />
+          {/* Both pages render the same component, so each needs its own key:
+              without one React keeps a single instance across the two routes,
+              and the revealed API key, test result and user list carry over. */}
           <Route
             path="jellyfin"
             element={
-              <JellyfinSection
+              <MediaServerPlaylistSection
+                key="jellyfin"
+                kind="jellyfin"
                 config={config}
                 token={token}
                 onConfigChange={handleConfigChange}
@@ -377,7 +377,9 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
           <Route
             path="emby"
             element={
-              <EmbySection
+              <MediaServerPlaylistSection
+                key="emby"
+                kind="emby"
                 config={config}
                 token={token}
                 onConfigChange={handleConfigChange}
@@ -400,7 +402,6 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
               <SponsorBlockSection
                 config={config}
                 onConfigChange={handleConfigChange}
-                onMobileTooltipClick={setMobileTooltip}
               />
             }
           />
@@ -413,7 +414,6 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
                 setConfig={setConfig}
                 onConfigChange={handleConfigChange}
                 setSnackbar={setSnackbar}
-                onMobileTooltipClick={setMobileTooltip}
               />
             }
           />
@@ -424,7 +424,6 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
                 token={token}
                 config={config}
                 onConfigChange={handleConfigChange}
-                onMobileTooltipClick={setMobileTooltip}
                 setSnackbar={setSnackbar}
               />
             }
@@ -462,7 +461,6 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
                   deploymentEnvironment={deploymentEnvironment}
                   isPlatformManaged={isPlatformManaged}
                   onConfigChange={handleConfigChange}
-                  onMobileTooltipClick={setMobileTooltip}
                   ytDlpVersionInfo={ytDlpVersionInfo}
                   ytDlpUpdateStatus={ytDlpUpdateStatus}
                   onYtDlpUpdate={performYtDlpUpdate}
@@ -470,12 +468,10 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
                 <DownloadPerformanceSection
                   config={config}
                   onConfigChange={handleConfigChange}
-                  onMobileTooltipClick={setMobileTooltip}
                 />
                 <YtdlpOptionsSection
                   config={config}
                   onConfigChange={handleConfigChange}
-                  onMobileTooltipClick={setMobileTooltip}
                   token={token}
                   savedCustomArgsCheck={customArgsCheck}
                 />
@@ -492,7 +488,6 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
                 config={config}
                 storageAvailable={storageAvailable}
                 onConfigChange={handleConfigChange}
-                onMobileTooltipClick={setMobileTooltip}
               />
             }
           />
@@ -504,7 +499,6 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
                 config={config}
                 storageAvailable={storageAvailable}
                 onConfigChange={handleConfigChange}
-                onMobileTooltipClick={setMobileTooltip}
               />
             }
           />
@@ -592,16 +586,6 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
       >
         <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
           {snackbar.message}
-        </Alert>
-      </Snackbar>
-
-      <Snackbar
-        open={mobileTooltip !== null}
-        onClose={() => setMobileTooltip(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setMobileTooltip(null)} severity="info" icon={<InfoIcon />}>
-          {mobileTooltip}
         </Alert>
       </Snackbar>
     </div>

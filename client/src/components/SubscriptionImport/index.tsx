@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react';
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { Button, Card, CardContent, CircularProgress, Typography } from '../ui';
@@ -19,6 +19,7 @@ import RecentImportsSection from './components/RecentImportsSection';
 import { ImportSource } from '../../types/subscriptionImport';
 import { useSubfolders } from '../../hooks/useSubfolders';
 import { useConfig } from '../../hooks/useConfig';
+import { serverErrorMessage } from '../../utils/requestError';
 
 interface ImportSubscriptionsPageProps {
   token: string;
@@ -88,10 +89,7 @@ const ImportSubscriptionsPage: React.FC<ImportSubscriptionsPageProps> = ({ token
       );
       dispatch({ type: 'START_IMPORT', payload: res.data.jobId });
     } catch (err: unknown) {
-      const message = err instanceof AxiosError
-        ? err.response?.data?.error || err.message
-        : 'Failed to start import';
-      dispatch({ type: 'PREVIEW_ERROR', payload: message });
+      dispatch({ type: 'PREVIEW_ERROR', payload: serverErrorMessage(err, 'Failed to start import') });
     }
   }, [state.channels, state.rowStates, token, dispatch]);
 

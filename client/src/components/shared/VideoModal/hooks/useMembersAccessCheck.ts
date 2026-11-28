@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import axios from 'axios';
+import { serverErrorMessage } from '../../../../utils/requestError';
 import type { MembersAccessState } from '../../../../types/ChannelVideo';
 
 interface MembersAccessCheckResponse {
@@ -17,9 +18,9 @@ interface UseMembersAccessCheckReturn {
 const FALLBACK_ERROR = 'Could not check access. Try again later.';
 
 function errorMessage(err: unknown): string {
-  const response = (err as { response?: { status?: number; data?: { error?: string } } })?.response;
+  const response = (err as { response?: { status?: number } })?.response;
   if (response?.status === 429) return 'Too many checks. Wait a minute and try again.';
-  return response?.data?.error || FALLBACK_ERROR;
+  return serverErrorMessage(err, FALLBACK_ERROR);
 }
 
 // Asks the server to check, with the configured cookies, whether a members-only

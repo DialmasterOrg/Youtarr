@@ -296,8 +296,9 @@ describe('ChannelVideosDialogs Component', () => {
         />
       );
 
-      expect(screen.getByRole('dialog')).toHaveAttribute('aria-labelledby', 'refresh-dialog-title');
-      expect(screen.getByRole('dialog')).toHaveAttribute('aria-describedby', 'refresh-dialog-description');
+      expect(screen.getByRole('dialog', { name: /Load More/ })).toHaveAccessibleDescription(
+        expect.stringContaining('This can take quite some time')
+      );
     });
   });
 

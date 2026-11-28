@@ -62,7 +62,6 @@ const renderTable = (overrides: Partial<React.ComponentProps<typeof VideosTable>
     onOpenModal: jest.fn(),
     onToggleProtection: jest.fn(),
     onDeleteSingle: jest.fn(),
-    onImageError: jest.fn(),
     onAddChannel: jest.fn(),
   };
   render(
@@ -71,7 +70,6 @@ const renderTable = (overrides: Partial<React.ComponentProps<typeof VideosTable>
         videos={sampleVideos}
         selectedVideos={[]}
         enabledChannels={enabledChannels}
-        imageErrors={{}}
         orderBy="added"
         sortOrder="desc"
         deleteDisabled={false}

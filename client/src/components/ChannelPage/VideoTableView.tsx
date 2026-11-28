@@ -1,25 +1,23 @@
 import React from 'react';
-import {
-  Checkbox,
-  Typography,
-  Chip,
-  Tooltip,
-} from '../ui';
+import { Checkbox, Typography } from '../ui';
 import { ArrowUpward as ArrowUpwardIcon, ArrowDownward as ArrowDownwardIcon, Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon, Delete as DeleteIcon } from '../../lib/icons';
 import ProtectionShieldButton from '../shared/ProtectionShieldButton';
 import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml, formatAddedDateParts } from '../../utils/formatters';
-import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle, isRemovedStatus, isMembersOnlyVideo } from '../../utils/videoStatus';
+import { isMembersOnlyVideo } from '../../utils/videoStatus';
 import MembersAccessChip from '../shared/MembersAccessChip';
-import RemovalDescription, { REMOVAL_TOOLTIP_CLASS } from '../shared/RemovalDescription';
+import MediaTypeChip from '../shared/MediaTypeChip';
+import VideoStatusChip from '../shared/VideoStatusChip';
+import { YoutubeRemovedBanner } from '../shared/thumbnailOverlays';
 import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 import WatchedChip from '../shared/WatchedChip';
-import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
+import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../shared/chipStyles';
 import { getPublishedDateDisplay } from './publishedDateDisplay';
+import { canSelectForDelete, canSelectForDownload, getChannelVideoRowState, toggleRowSelection } from './channelVideoRowState';
 
 type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
@@ -61,14 +59,9 @@ function VideoTableView({
 }: VideoTableViewProps) {
   const isDeleteMode = selectionMode === 'delete';
   const effectiveSelection = isDeleteMode ? selectedForDeletion : checkedBoxes;
-  const selectableVideos = videos.filter((video) => {
-    const status = getVideoStatus(video);
-    const isStillLive = video.live_status && video.live_status !== 'was_live';
-    if (isDeleteMode) {
-      return video.added && !video.removed && !isStillLive;
-    }
-    return (status === 'never_downloaded' || isRemovedStatus(status) || status === 'ignored') && !video.youtube_removed && !isStillLive;
-  });
+  const selectableVideos = videos.filter(isDeleteMode ? canSelectForDelete : canSelectForDownload);
+  // Counted by membership: the selection also holds videos from other pages.
+  const selectedOnPage = selectableVideos.filter((video) => effectiveSelection.includes(video.youtube_id)).length;
 
   return (
     <div style={{ overflowX: 'auto' }}>
@@ -77,8 +70,8 @@ function VideoTableView({
           <tr style={{ borderBottom: '2px solid var(--border)' }}>
             <th style={{ width: 48, maxWidth: 48, padding: '8px 4px' }}>
               <Checkbox
-                indeterminate={effectiveSelection.length > 0 && effectiveSelection.length < selectableVideos.length}
-                checked={selectableVideos.length > 0 && effectiveSelection.length === selectableVideos.length}
+                indeterminate={selectedOnPage > 0 && selectedOnPage < selectableVideos.length}
+                checked={selectableVideos.length > 0 && selectedOnPage === selectableVideos.length}
                 onChange={(e) => {
                   if (e.target.checked) {
                     onSelectAll();
@@ -128,17 +121,9 @@ function VideoTableView({
         </thead>
         <tbody>
           {videos.map((video) => {
-            const status = getVideoStatus(video);
-            const statusLabel = status === 'downloaded' ? 'Available' : getStatusLabel(status);
-            const isStillLive = video.live_status && video.live_status !== 'was_live';
-            const isDownloadSelectable = (status === 'never_downloaded' || isRemovedStatus(status) || status === 'ignored') && !video.youtube_removed && !isStillLive;
-            const isDeleteSelectable = video.added && !video.removed && !isStillLive;
-            const isDownloadAllowed = selectionMode !== 'delete';
-            const isDeleteAllowed = selectionMode !== 'download';
-            const isChecked = checkedBoxes.includes(video.youtube_id);
-            const isDeleteChecked = selectedForDeletion.includes(video.youtube_id);
-            const mediaTypeInfo = getMediaTypeInfo(video.media_type);
-            const isClickable = (isDownloadSelectable && isDownloadAllowed) || (isDeleteSelectable && isDeleteAllowed);
+            const row = getChannelVideoRowState(video, selectionMode, checkedBoxes, selectedForDeletion);
+            const { status, isStillLive, canDownload, canDelete, isChecked, isDeleteChecked } = row;
+            const isClickable = canDownload || canDelete;
 
             return (
               <tr
@@ -148,28 +133,20 @@ function VideoTableView({
                   cursor: isClickable ? 'pointer' : 'default',
                   borderBottom: '1px solid var(--border)',
                 }}
-                onClick={() => {
-                  if (isDownloadSelectable && isDownloadAllowed) {
-                    onCheckChange(video.youtube_id, !isChecked);
-                    return;
-                  }
-                  if (isDeleteSelectable && isDeleteAllowed) {
-                    onDeletionChange(video.youtube_id, !isDeleteChecked);
-                  }
-                }}
+                onClick={() => toggleRowSelection(video, row, onCheckChange, onDeletionChange)}
               >
                 <td style={{ width: 48, maxWidth: 48, padding: '8px 4px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                     {isStillLive ? (
                       <StillLiveDot isMobile={false} onMobileClick={onMobileTooltip} />
-                    ) : isDownloadSelectable && isDownloadAllowed && (
+                    ) : canDownload && (
                       <Checkbox
                         checked={isChecked}
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) => onCheckChange(video.youtube_id, e.target.checked)}
                       />
                     )}
-                    {isDeleteSelectable && isDeleteAllowed && (
+                    {canDelete && (
                       isDeleteMode ? (
                         <Checkbox
                           checked={isDeleteChecked}
@@ -253,26 +230,7 @@ function VideoTableView({
                         }}
                       />
                     )}
-                    {video.youtube_removed && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          backgroundColor: 'var(--media-overlay-danger-background)',
-                          color: 'var(--media-overlay-foreground)',
-                          padding: '2px 4px',
-                          fontSize: '0.65rem',
-                          fontWeight: 'bold',
-                          textAlign: 'center',
-                          borderTopLeftRadius: 'var(--radius-thumb)',
-                          borderTopRightRadius: 'var(--radius-thumb)',
-                        }}
-                      >
-                        Removed From YouTube
-                      </div>
-                    )}
+                    {video.youtube_removed && <YoutubeRemovedBanner compact />}
                   </div>
                 </td>
                 <td style={{ width: '30%', padding: '8px 4px' }}>
@@ -319,7 +277,7 @@ function VideoTableView({
                   })()}
                 </td>
                 <td style={{ whiteSpace: 'nowrap', padding: '8px 4px' }}>
-                  {video.media_type === 'short' ? 'N/A' : formatDuration(video.duration)}
+                  {video.media_type === 'short' ? 'N/A' : formatDuration(video.duration) || 'Unknown'}
                 </td>
                 <td style={{ width: 90, whiteSpace: 'nowrap', padding: '8px 4px' }}>
                   <RatingBadge
@@ -344,35 +302,13 @@ function VideoTableView({
                 </td>
                 <td style={{ whiteSpace: 'nowrap', padding: '8px 4px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    {mediaTypeInfo && (
-                      <Chip
-                        size="small"
-                        icon={mediaTypeInfo.icon}
-                        label={mediaTypeInfo.label}
-                        color={mediaTypeInfo.color}
-                        variant="outlined"
-                        style={{ ...SHARED_STATUS_CHIP_SMALL_STYLE }}
-                      />
-                    )}
+                    <MediaTypeChip mediaType={video.media_type} />
                     {/* The status chip already reads Members Only when no cookies are set. */}
                     {!video.added && isMembersOnlyVideo(video) && video.members_access && video.members_access !== 'no_cookies' && (
                       <MembersAccessChip access={video.members_access} />
                     )}
                     <WatchedChip watchedBy={video.watchedBy || []} />
-                    <Tooltip
-                      title={isRemovedStatus(status) ? <RemovalDescription row={video} /> : ''}
-                      enterTouchDelay={0}
-                      className={REMOVAL_TOOLTIP_CLASS}
-                    >
-                      <Chip
-                        icon={getStatusIcon(status)}
-                        label={statusLabel}
-                        size="small"
-                        color={getStatusColor(status)}
-                        variant={getStatusChipVariant(status)}
-                        style={{ ...SHARED_THEMED_CHIP_SMALL_STYLE, ...getStatusChipStyle(status) }}
-                      />
-                    </Tooltip>
+                    <VideoStatusChip status={status} downloadedLabel="Available" removalRow={video} />
                   </div>
                 </td>
               </tr>

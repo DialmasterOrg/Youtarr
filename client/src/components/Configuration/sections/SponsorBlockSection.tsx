@@ -13,13 +13,11 @@ import {
   Typography,
 } from '../../ui';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
-import { InfoTooltip } from '../common/InfoTooltip';
 import { ConfigState, SponsorBlockCategories } from '../types';
 
 interface SponsorBlockSectionProps {
   config: ConfigState;
   onConfigChange: (updates: Partial<ConfigState>) => void;
-  onMobileTooltipClick?: (text: string) => void;
 }
 
 const CATEGORY_OPTIONS = [
@@ -36,7 +34,6 @@ const CATEGORY_OPTIONS = [
 export const SponsorBlockSection: React.FC<SponsorBlockSectionProps> = ({
   config,
   onConfigChange,
-  onMobileTooltipClick,
 }) => {
   const handleCategoryChange = (key: keyof SponsorBlockCategories, checked: boolean) => {
     onConfigChange({

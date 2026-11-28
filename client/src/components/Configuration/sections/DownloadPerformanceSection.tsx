@@ -15,19 +15,16 @@ import {
   Typography,
 } from '../../ui';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
-import { InfoTooltip } from '../common/InfoTooltip';
 import { ConfigState } from '../types';
 
 interface DownloadPerformanceSectionProps {
   config: ConfigState;
   onConfigChange: (updates: Partial<ConfigState>) => void;
-  onMobileTooltipClick?: (text: string) => void;
 }
 
 export const DownloadPerformanceSection: React.FC<DownloadPerformanceSectionProps> = ({
   config,
   onConfigChange,
-  onMobileTooltipClick,
 }) => {
   return (
     <ConfigurationAccordion

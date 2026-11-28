@@ -2,6 +2,11 @@ import React from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Chip, Stack, Tooltip } from '../../ui';
 import { MediaServerStatus, MediaServerType, Playlist } from '../../../types/playlist';
+import {
+  MEDIA_SERVERS as SERVERS,
+  MEDIA_SERVER_LABEL as SERVER_LABEL,
+  MEDIA_SERVER_SYNC_KEY as SYNC_KEY,
+} from '../playlistConstants';
 
 interface PlaylistSyncChipsProps {
   playlist: Playlist;
@@ -9,20 +14,6 @@ interface PlaylistSyncChipsProps {
   onToggle: (server: MediaServerType, enabled: boolean) => void;
   disabled?: boolean;
 }
-
-const SERVER_LABEL: Record<MediaServerType, string> = {
-  plex: 'Plex',
-  jellyfin: 'Jellyfin',
-  emby: 'Emby',
-};
-
-const SYNC_KEY: Record<MediaServerType, keyof Playlist> = {
-  plex: 'sync_to_plex',
-  jellyfin: 'sync_to_jellyfin',
-  emby: 'sync_to_emby',
-};
-
-const SERVERS: MediaServerType[] = ['plex', 'jellyfin', 'emby'];
 
 const PlaylistSyncChips: React.FC<PlaylistSyncChipsProps> = ({
   playlist,

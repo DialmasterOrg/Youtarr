@@ -47,7 +47,6 @@ const createSectionProps = (
   setConfig: jest.fn() as React.Dispatch<React.SetStateAction<ConfigState>>,
   onConfigChange: jest.fn(),
   setSnackbar: jest.fn() as React.Dispatch<React.SetStateAction<SnackbarState>>,
-  onMobileTooltipClick: jest.fn(),
   ...overrides,
 });
 

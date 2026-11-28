@@ -83,6 +83,7 @@ Listing, the filesystem rescan, library repair, deleted vs. missing videos, the 
 - Job recovery likewise leaves the removal columns alone when it cannot find the file.
 - Deletes remove a folder recursively only at the exact per-video position under the downloads root. Elsewhere they unlink the video's own files, then remove the folder only if it is named for that video and empty (#941).
 - `/getVideos` filters: `missingFilter` is strictly missing; `deletedFilter` (default `off`; the Videos page sends `exclude`, remembered in localStorage) hides or isolates deleted rows and returns `hiddenDeletedCount` while excluding. The channel listing takes the same `deletedFilter`.
+- With infinite scroll the Videos page pauses `useInfiniteScrollTrigger` while `loadError` is set and shows a Retry that reloads that page: the page number stays on the failed page, so loading the next would skip its rows.
 
 ## Trash (`videoTrashModule`)
 

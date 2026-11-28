@@ -11,12 +11,35 @@ type WebSocketValue = {
   unsubscribe: jest.Mock;
 } | null;
 
+type SocketSubscription = [filter: (message: unknown) => boolean, callback: (payload: unknown) => void];
+
+// Subscriptions still active on each mock context, so a delivered message
+// never reaches a callback that was unsubscribed.
+const activeSubscriptions = new WeakMap<object, SocketSubscription[]>();
+
 export function createMockWebSocketContext(): NonNullable<WebSocketValue> {
-  return {
+  const context = {
     socket: null,
-    subscribe: jest.fn(),
-    unsubscribe: jest.fn(),
+    subscribe: jest.fn((...subscription: SocketSubscription) => {
+      activeSubscriptions.get(context)?.push(subscription);
+    }),
+    unsubscribe: jest.fn((callback: SocketSubscription[1]) => {
+      const active = activeSubscriptions.get(context) ?? [];
+      activeSubscriptions.set(context, active.filter(([, subscribed]) => subscribed !== callback));
+    }),
   };
+  activeSubscriptions.set(context, []);
+  return context;
+}
+
+/** Delivers a message to a mock context's subscribers the way WebSocketProvider does. */
+export function deliverSocketMessage(
+  context: NonNullable<WebSocketValue>,
+  message: { type: string; destination?: string; source?: string; payload?: unknown }
+) {
+  (activeSubscriptions.get(context) ?? []).forEach(([filter, callback]) => {
+    if (filter(message)) callback(message.payload);
+  });
 }
 
 export function renderWithProviders(

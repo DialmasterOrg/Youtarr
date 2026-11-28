@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import axios from 'axios';
+import { serverErrorMessage } from '../utils/requestError';
 import {
   MediaServerType,
   Playlist,
@@ -25,139 +26,83 @@ export interface PlaylistSubscribeResult {
   restored: boolean;
 }
 
+type AuthHeaders = Record<string, string>;
+
 const SYNC_KEY_BY_SERVER: Record<MediaServerType, keyof Playlist> = {
   plex: 'sync_to_plex',
   jellyfin: 'sync_to_jellyfin',
   emby: 'sync_to_emby',
 };
 
-function extractMessage(err: unknown, fallback: string): string {
-  if (axios.isAxiosError(err)) {
-    const data = err.response?.data;
-    if (data && typeof (data as { error?: unknown }).error === 'string') {
-      return (data as { error: string }).error;
-    }
-  }
-  return fallback;
-}
-
-function authHeaders(token: string | null): Record<string, string> | undefined {
-  return token ? { 'x-access-token': token } : undefined;
-}
-
 export const usePlaylistMutations = ({ token }: UsePlaylistMutationsParams) => {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  const fetchPlaylistInfo = useCallback(
-    async (url: string): Promise<PlaylistPreview | null> => {
-      if (!token) return null;
+  // Runs one request with the shared pending and error state. Resolves to
+  // `failed` without a session or when the request fails.
+  const run = useCallback(
+    async <T>(failed: T, fallback: string, request: (headers: AuthHeaders) => Promise<T>): Promise<T> => {
+      if (!token) return failed;
       setPending(true);
       setError(null);
       try {
-        const res = await axios.post<PlaylistPreview>(
-          '/api/playlists/addplaylistinfo',
-          { url },
-          { headers: authHeaders(token) }
-        );
-        return res.data;
+        return await request({ 'x-access-token': token });
       } catch (err: unknown) {
-        setError(extractMessage(err, 'Failed to fetch playlist info'));
-        return null;
+        setError(serverErrorMessage(err, fallback));
+        return failed;
       } finally {
         setPending(false);
       }
     },
     [token]
+  );
+
+  const fetchPlaylistInfo = useCallback(
+    (url: string): Promise<PlaylistPreview | null> =>
+      run<PlaylistPreview | null>(null, 'Failed to fetch playlist info', async (headers) => {
+        const res = await axios.post<PlaylistPreview>('/api/playlists/addplaylistinfo', { url }, { headers });
+        return res.data;
+      }),
+    [run]
   );
 
   const subscribe = useCallback(
-    async (
-      url: string,
-      settings: PlaylistSubscribeSettings = {}
-    ): Promise<PlaylistSubscribeResult | null> => {
-      if (!token) return null;
-      setPending(true);
-      setError(null);
-      try {
-        const res = await axios.post<PlaylistResponse>(
-          '/api/playlists',
-          { url, settings },
-          { headers: authHeaders(token) }
-        );
+    (url: string, settings: PlaylistSubscribeSettings = {}): Promise<PlaylistSubscribeResult | null> =>
+      run<PlaylistSubscribeResult | null>(null, 'Failed to subscribe to playlist', async (headers) => {
+        const res = await axios.post<PlaylistResponse>('/api/playlists', { url, settings }, { headers });
         return { playlist: res.data.playlist, restored: Boolean(res.data.restored), ...(res.data.warning && { warning: res.data.warning }) };
-      } catch (err: unknown) {
-        setError(extractMessage(err, 'Failed to subscribe to playlist'));
-        return null;
-      } finally {
-        setPending(false);
-      }
-    },
-    [token]
+      }),
+    [run]
   );
 
   const unsubscribe = useCallback(
-    async (playlistId: string): Promise<boolean> => {
-      if (!token) return false;
-      setPending(true);
-      setError(null);
-      try {
-        await axios.delete(`/api/playlists/${playlistId}`, { headers: authHeaders(token) });
+    (playlistId: string): Promise<boolean> =>
+      run(false, 'Failed to unsubscribe', async (headers) => {
+        await axios.delete(`/api/playlists/${playlistId}`, { headers });
         return true;
-      } catch (err: unknown) {
-        setError(extractMessage(err, 'Failed to unsubscribe'));
-        return false;
-      } finally {
-        setPending(false);
-      }
-    },
-    [token]
+      }),
+    [run]
   );
 
   const updateSettings = useCallback(
-    async (
-      playlistId: string,
-      settings: PlaylistSubscribeSettings
-    ): Promise<boolean> => {
-      if (!token) return false;
-      setPending(true);
-      setError(null);
-      try {
-        await axios.put(`/api/playlists/${playlistId}/settings`, settings, { headers: authHeaders(token) });
+    (playlistId: string, settings: PlaylistSubscribeSettings): Promise<boolean> =>
+      run(false, 'Failed to update settings', async (headers) => {
+        await axios.put(`/api/playlists/${playlistId}/settings`, settings, { headers });
         return true;
-      } catch (err: unknown) {
-        setError(extractMessage(err, 'Failed to update settings'));
-        return false;
-      } finally {
-        setPending(false);
-      }
-    },
-    [token]
+      }),
+    [run]
   );
 
   const patchPlaylist = useCallback(
-    async (
+    (
       playlistId: string,
       patch: Partial<Pick<Playlist, 'enabled' | 'auto_download' | 'sync_to_plex' | 'sync_to_jellyfin' | 'sync_to_emby' | 'public_on_servers'>>
-    ): Promise<Playlist | null> => {
-      if (!token) return null;
-      setPending(true);
-      setError(null);
-      try {
-        const res = await axios.patch<PlaylistResponse>(
-          `/api/playlists/${playlistId}`,
-          patch,
-          { headers: authHeaders(token) }
-        );
+    ): Promise<Playlist | null> =>
+      run<Playlist | null>(null, 'Failed to update playlist', async (headers) => {
+        const res = await axios.patch<PlaylistResponse>(`/api/playlists/${playlistId}`, patch, { headers });
         return res.data.playlist;
-      } catch (err: unknown) {
-        setError(extractMessage(err, 'Failed to update playlist'));
-        return null;
-      } finally {
-        setPending(false);
-      }
-    },
-    [token]
+      }),
+    [run]
   );
 
   const toggleSyncTarget = useCallback(
@@ -186,72 +131,38 @@ export const usePlaylistMutations = ({ token }: UsePlaylistMutationsParams) => {
     [patchPlaylist]
   );
 
-  const ignoreVideo = useCallback(
-    async (playlistId: string, ytId: string): Promise<boolean> => {
-      if (!token) return false;
-      setPending(true);
-      setError(null);
-      try {
-        await axios.post(
-          `/api/playlists/${playlistId}/videos/${ytId}/ignore`,
-          {},
-          { headers: authHeaders(token) }
-        );
+  const setVideoIgnored = useCallback(
+    (playlistId: string, ytId: string, action: 'ignore' | 'unignore'): Promise<boolean> =>
+      run(false, `Failed to ${action} video`, async (headers) => {
+        await axios.post(`/api/playlists/${playlistId}/videos/${ytId}/${action}`, {}, { headers });
         return true;
-      } catch (err: unknown) {
-        setError(extractMessage(err, 'Failed to ignore video'));
-        return false;
-      } finally {
-        setPending(false);
-      }
-    },
-    [token]
+      }),
+    [run]
+  );
+
+  const ignoreVideo = useCallback(
+    (playlistId: string, ytId: string): Promise<boolean> => setVideoIgnored(playlistId, ytId, 'ignore'),
+    [setVideoIgnored]
   );
 
   const unignoreVideo = useCallback(
-    async (playlistId: string, ytId: string): Promise<boolean> => {
-      if (!token) return false;
-      setPending(true);
-      setError(null);
-      try {
-        await axios.post(
-          `/api/playlists/${playlistId}/videos/${ytId}/unignore`,
-          {},
-          { headers: authHeaders(token) }
-        );
-        return true;
-      } catch (err: unknown) {
-        setError(extractMessage(err, 'Failed to unignore video'));
-        return false;
-      } finally {
-        setPending(false);
-      }
-    },
-    [token]
+    (playlistId: string, ytId: string): Promise<boolean> => setVideoIgnored(playlistId, ytId, 'unignore'),
+    [setVideoIgnored]
   );
 
   // Resolves to how many of the videos were newly ignored (the server leaves
   // already ignored ones alone), or null when the request failed.
   const ignoreVideos = useCallback(
-    async (playlistId: string, ytIds: string[]): Promise<number | null> => {
-      if (!token) return null;
-      setPending(true);
-      setError(null);
-      try {
+    (playlistId: string, ytIds: string[]): Promise<number | null> =>
+      run<number | null>(null, 'Failed to ignore videos', async (headers) => {
         const res = await axios.post<{ ignored?: number }>(
           `/api/playlists/${playlistId}/videos/bulk-ignore`,
           { videoIds: ytIds },
-          { headers: authHeaders(token) }
+          { headers }
         );
         return typeof res.data?.ignored === 'number' ? res.data.ignored : ytIds.length;
-      } catch (err: unknown) {
-        setError(extractMessage(err, 'Failed to ignore videos'));
-        return null;
-      } finally {
-        setPending(false);
-      }
-    },
-    [token]
+      }),
+    [run]
   );
 
   // Called as the playlist page unmounts, so it sets no state. A failure needs
@@ -263,7 +174,7 @@ export const usePlaylistMutations = ({ token }: UsePlaylistMutationsParams) => {
         await axios.post(
           `/api/playlists/${playlistId}/run-pending-refresh`,
           {},
-          { headers: authHeaders(token) }
+          { headers: { 'x-access-token': token } }
         );
       } catch {
         // Covered by the server's own delay.

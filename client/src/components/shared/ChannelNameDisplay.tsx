@@ -2,6 +2,7 @@ import React from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Typography } from '../ui';
 import { Plus } from '../../lib/icons';
+import { youtubeChannelUrl } from '../../utils/youtubeUrls';
 
 interface ChannelNameDisplayProps {
   channelName: string;
@@ -38,7 +39,7 @@ export default function ChannelNameDisplay({
   }
 
   if (videoChannelId) {
-    const channelUrl = `https://www.youtube.com/channel/${videoChannelId}`;
+    const channelUrl = youtubeChannelUrl(videoChannelId);
     const activate = (e: React.SyntheticEvent) => {
       e.stopPropagation();
       onAddChannel(channelName, channelUrl);

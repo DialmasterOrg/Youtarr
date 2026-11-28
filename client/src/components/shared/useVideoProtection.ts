@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import axios from 'axios';
+import { serverErrorMessage } from '../../utils/requestError';
 
 interface UseVideoProtectionReturn {
   toggleProtection: (videoId: number, currentState: boolean) => Promise<boolean | undefined>;
@@ -43,10 +44,7 @@ export const useVideoProtection = (token: string | null): UseVideoProtectionRetu
       );
       return response.data.protected;
     } catch (err: unknown) {
-      const errorMessage =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        (err instanceof Error ? err.message : 'Failed to update protection status');
-      setError(errorMessage);
+      setError(serverErrorMessage(err, 'Failed to update protection status'));
       return undefined;
     } finally {
       setLoading(false);

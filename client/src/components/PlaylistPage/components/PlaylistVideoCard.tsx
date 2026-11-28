@@ -2,7 +2,7 @@ import React from 'react';
 import { PlaylistSortOrder } from '../../../hooks/usePlaylistDetail';
 import { Button, Card, CardContent, Checkbox, Chip, Tooltip, Typography } from '../../ui';
 import { PlaylistVideo } from '../../../types/playlist';
-import { formatDurationClock } from '../../../utils';
+import { formatDuration } from '../../../utils';
 import { isListedInOutputs, isSelectable, statusLabel, PlaylistVideoDates, toDownloadFileProps, showsMembersAccess } from './playlistVideoHelpers';
 import MembersAccessChip from '../../shared/MembersAccessChip';
 import DownloadFormatIndicator from '../../shared/DownloadFormatIndicator';
@@ -82,7 +82,7 @@ const PlaylistVideoCard: React.FC<PlaylistVideoCardProps> = ({
           <PlaylistVideoDates video={video} sortOrder={sortOrder} />
         </div>
         <div className="flex items-center gap-2 flex-wrap mt-1 text-xs text-muted-foreground">
-          <span className="whitespace-nowrap">{formatDurationClock(video.duration) || '-'}</span>
+          <span className="whitespace-nowrap">{formatDuration(video.duration) || '-'}</span>
           {video.downloaded ? (
             <>
               <DownloadFormatIndicator {...toDownloadFileProps(video)} orientation="horizontal" compact />

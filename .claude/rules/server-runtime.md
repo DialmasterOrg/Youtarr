@@ -23,6 +23,7 @@ paths:
   - "client/src/providers/WebSocketProvider.tsx"
   - "client/src/contexts/WebSocketContext.ts"
   - "client/src/hooks/useDownloadListingsRefresh.ts"
+  - "client/src/hooks/useSocketEvents.ts"
   - "client/src/components/Configuration/sections/LoggingSection.tsx"
   - "client/src/components/Configuration/hooks/useLogDownload.ts"
 ---
@@ -68,4 +69,6 @@ Process lifecycle, logging, DNS and database connections, the WebSocket, session
 - Clients never send data (`maxPayload` 1 KB), and every socket has an `error` listener, because ws rethrows an invalid frame's `error` without one and that crashed the process.
 - The server pings clients every 30 s and terminates unresponsive ones (proxy idle-timeout guard).
 - On connect the server replays only the last stored final-state message, never in-flight progress; the activity page seeds over REST instead (`.claude/rules/downloads.md`). The provider emits a local `connectionRestored` message after every reconnect.
-- Broadcast types: `videoActivityUpdated`, `downloadProgress`, `downloadComplete`, `jobsUpdated` (a job is enqueued or flips to In Progress), `videosUpdated` (per video mid-batch, after its rows persist), `rescanStatus`, `scheduledTaskStatus`, `downloadPauseChanged`, `playlistSyncUpdated`. Listing pages refetch through `client/src/hooks/useDownloadListingsRefresh.ts`.
+- Broadcast types: `videoActivityUpdated`, `downloadProgress`, `downloadComplete`, `jobsUpdated` (a job is enqueued or flips to In Progress), `videosUpdated` (per video mid-batch, after its rows persist), `rescanStatus`, `scheduledTaskStatus`, `downloadPauseChanged`, `playlistSyncUpdated`, `channelsUpdated`. Listing pages refetch through `client/src/hooks/useDownloadListingsRefresh.ts`.
+- Client code listens through `hooks/useSocketEvents`, never `subscribe` directly: its reconnect handler is a required argument, because four hand-written subscriptions had none and showed stale state after a reconnect until a reload.
+- `useSocketEvents` makes one provider subscription per message type, since the provider hands a callback the payload without its type.

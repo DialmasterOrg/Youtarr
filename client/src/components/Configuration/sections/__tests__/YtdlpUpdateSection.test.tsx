@@ -48,7 +48,6 @@ const createProps = (
   deploymentEnvironment: createDeploymentEnvironment(),
   isPlatformManaged: createPlatformManagedState(),
   onConfigChange: jest.fn(),
-  onMobileTooltipClick: jest.fn(),
   ytDlpVersionInfo: versionInfo,
   ytDlpUpdateStatus: 'idle',
   onYtDlpUpdate: jest.fn(),

@@ -1,6 +1,5 @@
 import React, {
   useContext,
-  useEffect,
   useState,
   useCallback,
   useMemo,
@@ -26,7 +25,9 @@ import WebSocketContext from '../../contexts/WebSocketContext';
 import { Job } from '../../types/Job';
 import { groupFailuresByDiagnosis } from './failureGrouping';
 import { jobTypeLabel } from '../../utils/jobTypeLabel';
+import { formatBytes } from '../../utils/formatters';
 import { useCurrentActivitySeed } from './hooks/useCurrentActivitySeed';
+import { useSocketEvents } from '../../hooks/useSocketEvents';
 import {
   DownloadProgressPayload,
   FinalSummary,
@@ -35,6 +36,9 @@ import {
 } from './types';
 import TerminateJobDialog from './TerminateJobDialog';
 import FailedVideoLineList from './FailedVideoLineList';
+
+const PROGRESS_BYTE_DECIMALS = 1;
+const PROGRESS_MESSAGE_TYPES = ['downloadProgress'];
 
 interface DownloadProgressProps {
   downloadProgressRef: React.MutableRefObject<{
@@ -92,7 +96,6 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
   if (!wsContext) {
     throw new Error('WebSocketContext not found');
   }
-  const { subscribe, unsubscribe } = wsContext;
 
   const pendingJobs = useMemo(
     () => jobs.filter((job) => job.status === 'Pending'),
@@ -200,15 +203,6 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     }
   }, [currentProgress]);
 
-  // Format bytes to human readable
-  const formatBytes = (bytes: number): string => {
-    if (!bytes || bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
-  };
-
   // Format timestamp to 12-hour format
   const formatTimestamp = (isoString?: string): string => {
     if (!isoString) return '';
@@ -247,12 +241,6 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
       setShowTerminateDialog(false);
     }
   };
-
-  const filter = useCallback((message: any) => {
-    return (
-      message.destination === 'broadcast' && message.type === 'downloadProgress'
-    );
-  }, []);
 
   const applyPayload = useCallback(
     (payload: DownloadProgressPayload) => {
@@ -393,14 +381,8 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     setFinalSummary(null);
   }, []);
 
-  useCurrentActivitySeed({ token, liveMessageGenerationRef, applyPayload, resetActivityState });
-
-  useEffect(() => {
-    subscribe(filter, processMessagesCallback);
-    return () => {
-      unsubscribe(processMessagesCallback);
-    };
-  }, [subscribe, unsubscribe, filter, processMessagesCallback]);
+  const reseed = useCurrentActivitySeed({ token, liveMessageGenerationRef, applyPayload, resetActivityState });
+  useSocketEvents(PROGRESS_MESSAGE_TYPES, processMessagesCallback, reseed);
 
   // Determine if terminate button should be shown
   const showTerminateButton = currentProgress &&
@@ -763,10 +745,10 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                 currentProgress.state === 'downloading_audio' ||
                 currentProgress.state === 'downloading_subtitles') && (
                 <Typography variant="caption" color="text.secondary">
-                  {formatBytes(currentProgress.progress?.speedBytesPerSecond ?? 0)}/s •{' '}
+                  {formatBytes(currentProgress.progress?.speedBytesPerSecond ?? 0, PROGRESS_BYTE_DECIMALS)}/s •{' '}
                   {(currentProgress.progress?.percent ?? 0).toFixed(1)}% •{' '}
-                  {formatBytes(currentProgress.progress?.downloadedBytes ?? 0)} /{' '}
-                  {formatBytes(currentProgress.progress?.totalBytes ?? 0)}
+                  {formatBytes(currentProgress.progress?.downloadedBytes ?? 0, PROGRESS_BYTE_DECIMALS)} /{' '}
+                  {formatBytes(currentProgress.progress?.totalBytes ?? 0, PROGRESS_BYTE_DECIMALS)}
                 </Typography>
               )}
             </Box>

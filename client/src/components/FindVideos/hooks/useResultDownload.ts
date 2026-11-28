@@ -3,11 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useTriggerDownloads } from '../../../hooks/useTriggerDownloads';
 import { toDownloadOverrideSettings } from '../../../utils/downloadOverrideSettings';
 import { isRemovedStatus } from '../../../utils/videoStatus';
+import { youtubeVideoUrl } from '../../../utils/youtubeUrls';
 import { DownloadSettings } from '../../DownloadManager/ManualDownload/types';
 import { VideoSelectionState } from '../../shared/VideoList/hooks/useVideoSelection';
 import { SearchResult } from '../types';
-
-const QUEUE_FAILED_MESSAGE = 'Failed to queue selected videos. Please try again.';
 
 type ActiveVideos = Record<string, { state?: string | null } | undefined>;
 
@@ -68,11 +67,11 @@ export function useResultDownload({ token, results, selection, activeVideos }: U
     if (!current) return;
     const ids = targetIds.filter((id) => !activeVideos[id]?.state);
     if (ids.length === 0) return;
-    const urls = ids.map((id) => `https://www.youtube.com/watch?v=${id}`);
-    const success = await triggerDownloads({ urls, overrideSettings: toDownloadOverrideSettings(settings) });
-    if (success === null) return;
-    if (!success) {
-      setError(QUEUE_FAILED_MESSAGE);
+    const urls = ids.map(youtubeVideoUrl);
+    const result = await triggerDownloads({ urls, overrideSettings: toDownloadOverrideSettings(settings) });
+    if (!result) return;
+    if (!result.ok) {
+      setError(result.message);
       return;
     }
     if (current.kind === 'selection') selection.clear();

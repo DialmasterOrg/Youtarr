@@ -7,6 +7,7 @@ paths:
   - "server/routes/videoSearch.js"
   - "server/routes/videoDetail.js"
   - "client/src/components/FindVideos/**/*"
+  - "client/src/hooks/useYoutubeSearch.ts"
   - "client/src/components/VideosPage/hooks/useVideoByYoutubeId.ts"
   - "client/src/components/shared/AvailabilityChip.tsx"
   - "client/src/components/shared/VideoModal/**/*"

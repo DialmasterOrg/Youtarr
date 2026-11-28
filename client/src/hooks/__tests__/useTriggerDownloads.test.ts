@@ -1,5 +1,7 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useTriggerDownloads } from '../useTriggerDownloads';
+import { useTriggerDownloads, TriggerDownloadsResult } from '../useTriggerDownloads';
+
+const FALLBACK = { ok: false, message: 'Failed to queue downloads. Please try again.' };
 
 const mockFetch = jest.fn();
 const originalFetch = globalThis.fetch;
@@ -23,7 +25,7 @@ describe('useTriggerDownloads', () => {
     let resolve!: (value: { ok: boolean }) => void;
     mockFetch.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
     const { result } = renderHook(() => useTriggerDownloads(token));
-    let first!: Promise<boolean | null>;
+    let first!: Promise<TriggerDownloadsResult | null>;
     act(() => { first = result.current.triggerDownloads({ urls: ['https://youtu.be/x'] }); });
     await act(async () => {
       expect(await result.current.triggerDownloads({ urls: ['https://youtu.be/y'] })).toBeNull();
@@ -33,29 +35,44 @@ describe('useTriggerDownloads', () => {
     await act(async () => { resolve({ ok: true }); await first; });
   });
 
-  test('returns false and sets error when token is null', async () => {
+  test('sends an overlapping submission when overlap is allowed', async () => {
+    mockFetch.mockReturnValueOnce(new Promise(() => {}));
+    mockFetch.mockResolvedValueOnce({ ok: true });
+    const { result } = renderHook(() => useTriggerDownloads(token, { allowOverlap: true }));
+    act(() => { void result.current.triggerDownloads({ urls: ['https://youtu.be/x'] }); });
+
+    let second: TriggerDownloadsResult | null | undefined;
+    await act(async () => {
+      second = await result.current.triggerDownloads({ urls: ['https://youtu.be/y'] });
+    });
+
+    expect(second).toEqual({ ok: true });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  test('fails without a request and sets error when token is null', async () => {
     const { result } = renderHook(() => useTriggerDownloads(null));
 
-    let returned: boolean | null | undefined;
+    let returned: TriggerDownloadsResult | null | undefined;
     await act(async () => {
       returned = await result.current.triggerDownloads({ urls: ['https://youtu.be/x'] });
     });
 
-    expect(returned).toBe(false);
+    expect(returned).toEqual(FALLBACK);
     expect(result.current.error?.message).toBe('No authentication token provided');
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  test('POSTs urls and returns true on success', async () => {
+  test('POSTs urls and reports success', async () => {
     mockFetch.mockResolvedValueOnce({ ok: true });
     const { result } = renderHook(() => useTriggerDownloads(token));
 
-    let returned: boolean | null | undefined;
+    let returned: TriggerDownloadsResult | null | undefined;
     await act(async () => {
       returned = await result.current.triggerDownloads({ urls: ['https://youtu.be/x'] });
     });
 
-    expect(returned).toBe(true);
+    expect(returned).toEqual({ ok: true });
     expect(result.current.error).toBeNull();
     expect(mockFetch).toHaveBeenCalledWith('/triggerspecificdownloads', {
       method: 'POST',
@@ -156,30 +173,43 @@ describe('useTriggerDownloads', () => {
     expect(body).not.toHaveProperty('videoChannelMap');
   });
 
-  test('returns false and sets error when response is not ok', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false, statusText: 'Bad Request' });
+  test('fails with the reason the server gave', async () => {
+    const reason = 'Downloads are paused: storage limit reached';
+    mockFetch.mockResolvedValueOnce({ ok: false, json: jest.fn().mockResolvedValueOnce({ error: reason }) });
     const { result } = renderHook(() => useTriggerDownloads(token));
 
-    let returned: boolean | null | undefined;
+    let returned: TriggerDownloadsResult | null | undefined;
     await act(async () => {
       returned = await result.current.triggerDownloads({ urls: ['https://youtu.be/x'] });
     });
 
-    expect(returned).toBe(false);
-    expect(result.current.error?.message).toBe('Failed to trigger downloads: Bad Request');
+    expect(returned).toEqual({ ok: false, message: reason });
+    expect(result.current.error?.message).toBe(reason);
   });
 
-  test('returns false and sets error when fetch rejects', async () => {
+  test('fails with the fallback message when the server gave no reason', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, json: jest.fn().mockRejectedValueOnce(new Error('not json')) });
+    const { result } = renderHook(() => useTriggerDownloads(token));
+
+    let returned: TriggerDownloadsResult | null | undefined;
+    await act(async () => {
+      returned = await result.current.triggerDownloads({ urls: ['https://youtu.be/x'] });
+    });
+
+    expect(returned).toEqual(FALLBACK);
+  });
+
+  test('fails with the fallback message and sets error when fetch rejects', async () => {
     const networkErr = new Error('Network down');
     mockFetch.mockRejectedValueOnce(networkErr);
     const { result } = renderHook(() => useTriggerDownloads(token));
 
-    let returned: boolean | null | undefined;
+    let returned: TriggerDownloadsResult | null | undefined;
     await act(async () => {
       returned = await result.current.triggerDownloads({ urls: ['https://youtu.be/x'] });
     });
 
-    expect(returned).toBe(false);
+    expect(returned).toEqual(FALLBACK);
     expect(result.current.error).toBe(networkErr);
   });
 
@@ -205,7 +235,7 @@ describe('useTriggerDownloads', () => {
 
     const { result } = renderHook(() => useTriggerDownloads(token));
 
-    let promise!: Promise<boolean | null>;
+    let promise!: Promise<TriggerDownloadsResult | null>;
     act(() => {
       promise = result.current.triggerDownloads({ urls: ['https://youtu.be/x'] });
     });
@@ -223,7 +253,7 @@ describe('useTriggerDownloads', () => {
   });
 
   test('clears previous error on a new successful call', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false, statusText: 'Boom' });
+    mockFetch.mockResolvedValueOnce({ ok: false, json: jest.fn().mockResolvedValueOnce({ error: 'Boom' }) });
     const { result } = renderHook(() => useTriggerDownloads(token));
 
     await act(async () => {

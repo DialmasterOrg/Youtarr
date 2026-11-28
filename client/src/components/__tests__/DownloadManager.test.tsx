@@ -240,33 +240,37 @@ describe('DownloadManager', () => {
   });
 
   describe('WebSocket Integration', () => {
-    test('subscribes to WebSocket on mount', () => {
-      renderWithContext(<DownloadManager token={mockToken} />, '/history');
+    test('refetches jobs when the connection is restored', async () => {
+      jest.useFakeTimers();
+      try {
+        mockedAxios.get.mockResolvedValueOnce({ data: [] });
 
-      expect(mockSubscribe).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.any(Function)
-      );
-    });
+        renderWithContext(<DownloadManager token={mockToken} />, '/history');
 
-    test('unsubscribes from WebSocket on unmount', () => {
-      const { unmount } = renderWithContext(<DownloadManager token={mockToken} />);
+        await waitFor(() => {
+          expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+        });
 
-      unmount();
+        mockedAxios.get.mockResolvedValueOnce({ data: mockJobs });
+        const restored = { destination: 'local', type: 'connectionRestored', payload: {} };
 
-      expect(mockUnsubscribe).toHaveBeenCalledWith(expect.any(Function));
-    });
+        act(() => {
+          mockSubscribe.mock.calls.forEach(([filter, callback]) => {
+            if (filter(restored)) callback(restored.payload);
+          });
+        });
+        await act(async () => {
+          jest.advanceTimersByTime(1000);
+        });
 
-    test('filter function matches job lifecycle and video broadcasts', () => {
-      renderWithContext(<DownloadManager token={mockToken} />);
-
-      const [filterFunction] = mockSubscribe.mock.calls[0];
-
-      expect(filterFunction({ destination: 'broadcast', type: 'downloadComplete' })).toBe(true);
-      expect(filterFunction({ destination: 'broadcast', type: 'jobsUpdated' })).toBe(true);
-      expect(filterFunction({ destination: 'broadcast', type: 'videosUpdated' })).toBe(true);
-      expect(filterFunction({ destination: 'broadcast', type: 'downloadProgress' })).toBe(false);
-      expect(filterFunction({ destination: 'private', type: 'downloadComplete' })).toBe(false);
+        expect(mockedAxios.get).toHaveBeenCalledTimes(2);
+        expect(screen.getByText('Jobs Count: 2')).toBeInTheDocument();
+      } finally {
+        act(() => {
+          jest.runOnlyPendingTimers();
+        });
+        jest.useRealTimers();
+      }
     });
 
     test('processes download complete message by fetching jobs after debounce', async () => {

@@ -1,18 +1,14 @@
-export const formatDuration = (duration: number | null) => {
-  if (!duration) return 'Unknown';
-  const hours = Math.floor(duration / 3600);
-  const minutes = Math.floor((duration % 3600) / 60);
-
-  return hours > 0 ? `${hours}h${minutes}m` : `${minutes}m`;
-};
-
-export const formatDurationClock = (seconds: number | null): string => {
-  if (!seconds || seconds <= 0) return '';
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  return `${m}:${String(s).padStart(2, '0')}`;
+// A duration as its two largest units, leaving out a zero smaller one:
+// "1h5m", "5m5s", "17s", "10m". Empty for an unknown duration.
+export const formatDuration = (seconds: number | null): string => {
+  const total = Math.floor(seconds ?? 0);
+  if (total <= 0) return '';
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return m > 0 ? `${h}h${m}m` : `${h}h`;
+  if (m > 0) return s > 0 ? `${m}m${s}s` : `${m}m`;
+  return `${s}s`;
 };
 
 // Format a date like YYYYMMDD to m/d/YYYY

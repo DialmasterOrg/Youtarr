@@ -1,5 +1,10 @@
 import { useState } from 'react';
 import axios from 'axios';
+import { serverErrorMessage } from '../../utils/requestError';
+
+// Callers show this after their own "Failed to delete videos:", so it reads as
+// the reason, not as a second statement of the failure.
+const DELETE_ERROR = 'The request failed. Please try again.';
 
 interface DeletionResult {
   success: boolean;
@@ -18,9 +23,11 @@ export const useVideoDeletion = (): UseVideoDeletionReturn => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const deleteVideos = async (
-    videoIds: number[],
-    token: string | null
+  // `toFailed` builds the per-video failures for a request that failed as a whole.
+  const runDelete = async (
+    data: { videoIds: number[] } | { youtubeIds: string[] },
+    token: string | null,
+    toFailed: (error: string) => DeletionResult['failed']
   ): Promise<DeletionResult> => {
     setLoading(true);
     setError(null);
@@ -30,59 +37,25 @@ export const useVideoDeletion = (): UseVideoDeletionReturn => {
         headers: {
           'x-access-token': token || '',
         },
-        data: {
-          videoIds,
-        },
+        data,
       });
 
       setLoading(false);
       return response.data;
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.error || err.message || 'Failed to delete videos';
+    } catch (err: unknown) {
+      const errorMessage = serverErrorMessage(err, DELETE_ERROR);
       setError(errorMessage);
       setLoading(false);
 
-      // Return a failed result
-      return {
-        success: false,
-        deleted: [],
-        failed: videoIds.map(id => ({ videoId: id, error: errorMessage })),
-      };
+      return { success: false, deleted: [], failed: toFailed(errorMessage) };
     }
   };
 
-  const deleteVideosByYoutubeIds = async (
-    youtubeIds: string[],
-    token: string | null
-  ): Promise<DeletionResult> => {
-    setLoading(true);
-    setError(null);
+  const deleteVideos = (videoIds: number[], token: string | null): Promise<DeletionResult> =>
+    runDelete({ videoIds }, token, (error) => videoIds.map((id) => ({ videoId: id, error })));
 
-    try {
-      const response = await axios.delete<DeletionResult>('/api/videos', {
-        headers: {
-          'x-access-token': token || '',
-        },
-        data: {
-          youtubeIds,
-        },
-      });
-
-      setLoading(false);
-      return response.data;
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.error || err.message || 'Failed to delete videos';
-      setError(errorMessage);
-      setLoading(false);
-
-      // Return a failed result
-      return {
-        success: false,
-        deleted: [],
-        failed: youtubeIds.map(id => ({ youtubeId: id, error: errorMessage })),
-      };
-    }
-  };
+  const deleteVideosByYoutubeIds = (youtubeIds: string[], token: string | null): Promise<DeletionResult> =>
+    runDelete({ youtubeIds }, token, (error) => youtubeIds.map((id) => ({ youtubeId: id, error })));
 
   return {
     deleteVideos,

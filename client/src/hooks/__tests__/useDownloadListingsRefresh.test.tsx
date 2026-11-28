@@ -52,29 +52,18 @@ describe('useDownloadListingsRefresh', () => {
     expect(onRefresh).toHaveBeenCalledTimes(1);
   });
 
-  test('calls onRefresh for downloadComplete broadcasts', () => {
-    const onRefresh = jest.fn();
-    renderHook(() => useDownloadListingsRefresh(onRefresh), { wrapper });
+  test.each(['downloadComplete', 'jobsUpdated', 'connectionRestored'])(
+    'calls onRefresh for a %s message',
+    (type) => {
+      const onRefresh = jest.fn();
+      renderHook(() => useDownloadListingsRefresh(onRefresh), { wrapper });
 
-    emitMessage({ destination: 'broadcast', type: 'downloadComplete', payload: { videos: [] } });
-    jest.advanceTimersByTime(1000);
+      emitMessage({ type, payload: {} });
+      jest.advanceTimersByTime(1000);
 
-    expect(onRefresh).toHaveBeenCalledTimes(1);
-  });
-
-  test('calls onRefresh for jobsUpdated broadcasts', () => {
-    const onRefresh = jest.fn();
-    renderHook(() => useDownloadListingsRefresh(onRefresh), { wrapper });
-
-    emitMessage({
-      destination: 'broadcast',
-      type: 'jobsUpdated',
-      payload: { jobId: 'job-1', status: 'In Progress' },
-    });
-    jest.advanceTimersByTime(1000);
-
-    expect(onRefresh).toHaveBeenCalledTimes(1);
-  });
+      expect(onRefresh).toHaveBeenCalledTimes(1);
+    }
+  );
 
   test('coalesces a burst of messages into a single refresh', () => {
     const onRefresh = jest.fn();
@@ -97,35 +86,6 @@ describe('useDownloadListingsRefresh', () => {
     emitMessage({ destination: 'broadcast', type: 'downloadProgress' });
     jest.advanceTimersByTime(1000);
 
-    expect(onRefresh).not.toHaveBeenCalled();
-  });
-
-  test('uses the latest onRefresh callback without resubscribing', () => {
-    const first = jest.fn();
-    const second = jest.fn();
-    const { rerender } = renderHook(
-      ({ cb }: { cb: () => void }) => useDownloadListingsRefresh(cb),
-      { wrapper, initialProps: { cb: first } }
-    );
-
-    rerender({ cb: second });
-    emitMessage({ destination: 'broadcast', type: 'videosUpdated' });
-    jest.advanceTimersByTime(1000);
-
-    expect(subscribe).toHaveBeenCalledTimes(1);
-    expect(first).not.toHaveBeenCalled();
-    expect(second).toHaveBeenCalledTimes(1);
-  });
-
-  test('unsubscribes and cancels a pending refresh on unmount', () => {
-    const onRefresh = jest.fn();
-    const { unmount } = renderHook(() => useDownloadListingsRefresh(onRefresh), { wrapper });
-
-    emitMessage({ destination: 'broadcast', type: 'videosUpdated' });
-    unmount();
-    jest.advanceTimersByTime(1000);
-
-    expect(unsubscribe).toHaveBeenCalled();
     expect(onRefresh).not.toHaveBeenCalled();
   });
 });

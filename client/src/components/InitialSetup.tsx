@@ -9,6 +9,7 @@ import {
   LinearProgress,
 } from './ui';
 import axios from 'axios';
+import { serverErrorMessage } from '../utils/requestError';
 import packageJson from '../../package.json';
 import {
   AUTH_CONTAINER_STYLE,
@@ -79,10 +80,7 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
       localStorage.setItem('authToken', response.data.token);
       onSetupComplete(response.data.token);
     } catch (err: unknown) {
-      const message =
-        (axios.isAxiosError(err) && err.response?.data?.error) ||
-        'Setup failed';
-      setError(message);
+      setError(serverErrorMessage(err, 'Setup failed'));
     } finally {
       setLoading(false);
     }

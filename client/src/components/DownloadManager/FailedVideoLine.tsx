@@ -1,6 +1,7 @@
 import React from 'react';
 import { Typography } from '../ui';
 import { FailedVideo } from '../../types/Job';
+import { youtubeVideoUrl } from '../../utils/youtubeUrls';
 
 // Job records persisted before v1.79 stored the literal string 'Unknown'
 // for missing metadata, and videoMetadataProcessor still writes
@@ -25,7 +26,7 @@ function FailedVideoLine({ video }: FailedVideoLineProps) {
   const channel = normalize(video.channel);
   const idLink = (
     <a
-      href={`https://www.youtube.com/watch?v=${video.youtubeId}`}
+      href={youtubeVideoUrl(video.youtubeId)}
       target="_blank"
       rel="noopener noreferrer"
       className="underline"

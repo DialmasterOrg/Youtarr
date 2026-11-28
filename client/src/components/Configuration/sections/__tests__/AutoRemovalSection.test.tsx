@@ -27,7 +27,6 @@ const createSectionProps = (
   config: createConfig(),
   storageAvailable: true,
   onConfigChange: jest.fn(),
-  onMobileTooltipClick: jest.fn(),
   ...overrides,
 });
 

@@ -1,13 +1,38 @@
+const KB = 1024;
+const MB = KB * 1024;
+const GB = MB * 1024;
+
+// The compact size on chips and table cells: "3.2GB", "250MB", "189KB".
 export const formatFileSize = (bytes: number | null | undefined): string => {
   if (!bytes) {
     return '';
   }
-  const gb = bytes / (1024 * 1024 * 1024);
-  if (gb >= 1) {
-    return `${gb.toFixed(1)}GB`;
+  if (bytes >= GB) {
+    return `${(bytes / GB).toFixed(1)}GB`;
   }
-  const mb = bytes / (1024 * 1024);
-  return `${mb.toFixed(0)}MB`;
+  // Under a megabyte, megabytes round to "0MB". The unit follows the rounded
+  // kilobytes, so a size a hair under a megabyte reads "1MB", not "1024KB".
+  const kb = Math.round(bytes / KB);
+  if (kb >= KB) {
+    return `${(bytes / MB).toFixed(0)}MB`;
+  }
+  return kb >= 1 ? `${kb}KB` : '<1KB';
+};
+
+const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
+const BYTE_UNIT_DECIMALS = [0, 1, 2, 2, 2];
+
+// "512 B", "1.5 KB", "3.20 GB". `decimals` fixes the precision of every unit
+// above bytes; without it each unit uses its own.
+export const formatBytes = (bytes: number, decimals?: number): string => {
+  if (!bytes || Number.isNaN(bytes) || bytes <= 0) {
+    return '0 B';
+  }
+
+  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), BYTE_UNITS.length - 1);
+  const value = bytes / Math.pow(1024, exponent);
+  const places = exponent === 0 ? 0 : decimals ?? BYTE_UNIT_DECIMALS[exponent];
+  return `${value.toFixed(places)} ${BYTE_UNITS[exponent]}`;
 };
 
 export const decodeHtml = (html: string): string => {

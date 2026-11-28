@@ -1,8 +1,9 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { CONFIG_UPDATED_EVENT } from '../../../hooks/useConfig';
+import { useDebouncedCallback } from '../../../hooks/useDebouncedCallback';
+import { useSocketEvents } from '../../../hooks/useSocketEvents';
 import { ScheduleKey } from '../schedules';
-import WebSocketContext from '../../../contexts/WebSocketContext';
 
 export type ScheduleRunStatus = 'running' | 'success' | 'error' | 'skipped' | 'interrupted';
 // 'download' is a download run reporting rejected cookies to the cookie check.
@@ -61,10 +62,10 @@ const LOAD_ERROR_MESSAGE = 'Could not load schedule status.';
 const IDLE_POLL_INTERVAL_MS = 60_000;
 const RUNNING_POLL_INTERVAL_MS = 30_000;
 // Server events that can change a task's running state or Run now availability.
-const REFRESH_MESSAGE_TYPES = new Set([
+const REFRESH_MESSAGE_TYPES = [
   'scheduledTaskStatus', 'rescanStatus', 'jobsUpdated', 'downloadComplete',
-  'downloadPauseChanged', 'connectionRestored',
-]);
+  'downloadPauseChanged',
+];
 // Download batches emit bursts of events; one refetch covers a burst.
 const WS_REFRESH_DEBOUNCE_MS = 300;
 // Refetch just after a cooldown or pause ends so Run now re-enables on time.
@@ -140,24 +141,10 @@ export function useScheduleStatus(token: string | null) {
     return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, [refresh]);
 
-  const ws = useContext(WebSocketContext);
-  useEffect(() => {
-    if (!ws) return undefined;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const filter = (message: { type?: string }) => REFRESH_MESSAGE_TYPES.has(message.type ?? '');
-    const callback = () => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        timer = null;
-        if (!document.hidden) refresh();
-      }, WS_REFRESH_DEBOUNCE_MS);
-    };
-    ws.subscribe(filter, callback);
-    return () => {
-      ws.unsubscribe(callback);
-      if (timer) clearTimeout(timer);
-    };
-  }, [ws, refresh]);
+  const scheduleRefresh = useDebouncedCallback(() => {
+    if (!document.hidden) refresh();
+  }, WS_REFRESH_DEBOUNCE_MS);
+  useSocketEvents(REFRESH_MESSAGE_TYPES, scheduleRefresh, scheduleRefresh);
 
   // availableAt is in server time; the browser clock may be off by minutes.
   const nextAvailableAt = useMemo(

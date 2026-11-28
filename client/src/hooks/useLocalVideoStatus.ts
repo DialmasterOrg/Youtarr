@@ -1,8 +1,10 @@
-import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import WebSocketContext from '../contexts/WebSocketContext';
 import { SearchResult } from '../components/FindVideos/types';
 import { useVideoActivity } from '../providers/VideoActivityProvider';
+import { useSocketEvents } from './useSocketEvents';
+
+const STATUS_MESSAGE_TYPES = ['videosUpdated', 'downloadComplete'];
 
 export type LocalVideoStatus = Pick<SearchResult, 'youtubeId' | 'status' | 'inArchive' | 'databaseId' | 'filePath' | 'fileSize' | 'audioFilePath' | 'audioFileSize' | 'addedAt' | 'isProtected' | 'normalizedRating' | 'ratingSource' | 'removedReason' | 'removedAt' | 'removedDetail'>;
 
@@ -11,9 +13,6 @@ export function useLocalVideoStatus(ids: string[], token: string | null) {
   const key = JSON.stringify([...new Set(ids)].sort());
   const [statuses, setStatuses] = useState<Record<string, LocalVideoStatus | undefined>>({});
   const request = useRef(0);
-  const ws = useContext(WebSocketContext);
-  const subscribe = ws?.subscribe;
-  const unsubscribe = ws?.unsubscribe;
   const { snapshot } = useVideoActivity();
   const refresh = useCallback(async () => {
     const generation = ++request.current;
@@ -51,10 +50,6 @@ export function useLocalVideoStatus(ids: string[], token: string | null) {
     previousInstance.current = snapshot.instanceId;
   }, [snapshot.instanceId, scheduleRefresh]);
 
-  useEffect(() => {
-    const filter = (message: { type: string }) => ['videosUpdated', 'downloadComplete', 'connectionRestored'].includes(message.type);
-    subscribe?.(filter, scheduleRefresh);
-    return () => { clearTimeout(timer.current); unsubscribe?.(scheduleRefresh); };
-  }, [scheduleRefresh, subscribe, unsubscribe]);
+  useSocketEvents(STATUS_MESSAGE_TYPES, scheduleRefresh, scheduleRefresh);
   return statuses;
 }

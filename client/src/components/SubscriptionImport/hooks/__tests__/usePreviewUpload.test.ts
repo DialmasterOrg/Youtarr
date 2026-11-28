@@ -121,30 +121,30 @@ describe('usePreviewUpload', () => {
     });
   });
 
-  test('falls back to AxiosError message when response has no error field', async () => {
+  test('shows the default message, not the transport message, when the response has no error field', async () => {
     const err = new AxiosError('Network down', { data: {} });
     axios.post.mockRejectedValueOnce(err);
 
     const { result } = renderHook(() => usePreviewUpload(token));
 
     await act(async () => {
-      await expect(result.current.upload('takeout', makeFile())).rejects.toThrow('Network down');
+      await expect(result.current.upload('takeout', makeFile())).rejects.toThrow('Upload failed');
     });
 
-    expect(result.current.error?.message).toBe('Network down');
+    expect(result.current.error?.message).toBe('Upload failed');
     expect(result.current.error?.details).toBeUndefined();
   });
 
-  test('uses generic Error message when not an AxiosError', async () => {
+  test('shows the default message when the request got no answer', async () => {
     axios.post.mockRejectedValueOnce(new Error('Generic boom'));
 
     const { result } = renderHook(() => usePreviewUpload(token));
 
     await act(async () => {
-      await expect(result.current.upload('takeout', makeFile())).rejects.toThrow('Generic boom');
+      await expect(result.current.upload('takeout', makeFile())).rejects.toThrow('Upload failed');
     });
 
-    expect(result.current.error).toEqual({ message: 'Generic boom', details: undefined });
+    expect(result.current.error).toEqual({ message: 'Upload failed', details: undefined });
   });
 
   test('uses default message when error is not an Error instance', async () => {
@@ -164,7 +164,7 @@ describe('usePreviewUpload', () => {
     const { result } = renderHook(() => usePreviewUpload(token));
 
     await act(async () => {
-      await expect(result.current.upload('takeout', makeFile())).rejects.toThrow('first failure');
+      await expect(result.current.upload('takeout', makeFile())).rejects.toThrow('Upload failed');
     });
     expect(result.current.error).not.toBeNull();
 

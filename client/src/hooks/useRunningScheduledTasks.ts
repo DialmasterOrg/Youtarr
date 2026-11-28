@@ -1,13 +1,13 @@
-import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import WebSocketContext from '../contexts/WebSocketContext';
+import { useDebouncedCallback } from './useDebouncedCallback';
+import { useSocketEvents } from './useSocketEvents';
 
 // Automatic downloads can count as running for hours and already have the
 // download activity indicator.
 const EXCLUDED_TASK_KEYS = new Set(['channelDownloadFrequency']);
-// The scheduler broadcasts every start and finish; connectionRestored covers
-// broadcasts missed while disconnected.
-const REFRESH_MESSAGE_TYPES = new Set(['scheduledTaskStatus', 'connectionRestored']);
+// The scheduler broadcasts every start and finish.
+const REFRESH_MESSAGE_TYPES = ['scheduledTaskStatus'];
 const REFETCH_DEBOUNCE_MS = 1000;
 // A fallback for a missed finish broadcast, only while something is running.
 const RUNNING_POLL_INTERVAL_MS = 30_000;
@@ -60,24 +60,8 @@ export function useRunningScheduledTasks(token: string | null): { running: Runni
     refresh();
   }, [token, refresh]);
 
-  const ws = useContext(WebSocketContext);
-  useEffect(() => {
-    if (!ws) return undefined;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const filter = (message: { type?: string }) => REFRESH_MESSAGE_TYPES.has(message.type ?? '');
-    const callback = () => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        timer = null;
-        refresh();
-      }, REFETCH_DEBOUNCE_MS);
-    };
-    ws.subscribe(filter, callback);
-    return () => {
-      ws.unsubscribe(callback);
-      if (timer) clearTimeout(timer);
-    };
-  }, [ws, refresh]);
+  const scheduleRefresh = useDebouncedCallback(refresh, REFETCH_DEBOUNCE_MS);
+  useSocketEvents(REFRESH_MESSAGE_TYPES, scheduleRefresh, scheduleRefresh);
 
   useEffect(() => {
     const onVisibilityChange = () => {

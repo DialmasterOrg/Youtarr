@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import axios from 'axios';
 import { useVideoActivity } from '../providers/VideoActivityProvider';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -8,15 +7,12 @@ import {
   Button,
   Card,
   CardContent,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Snackbar,
   Typography,
 } from './ui';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useConfig } from '../hooks/useConfig';
+import { useInfiniteScrollTrigger } from '../hooks/useInfiniteScrollTrigger';
 import { usePlaylistDetail, PlaylistSortOrder, PlaylistDownloadState, PlaylistWatchedState } from '../hooks/usePlaylistDetail';
 import { useDownloadListingsRefresh } from '../hooks/useDownloadListingsRefresh';
 import { usePlaylistMutations } from '../hooks/usePlaylistMutations';
@@ -26,9 +22,12 @@ import type { MembersAccessState } from '../types/ChannelVideo';
 import PlaylistHeader from './PlaylistPage/components/PlaylistHeader';
 import NoMediaServerWarning from './PlaylistPage/components/NoMediaServerWarning';
 import PlaylistVideoList from './PlaylistPage/components/PlaylistVideoList';
-import PlaylistSortControl from './PlaylistPage/components/PlaylistSortControl';
-import PlaylistDownloadFilterControl from './PlaylistPage/components/PlaylistDownloadFilterControl';
-import PlaylistWatchedFilterControl from './PlaylistPage/components/PlaylistWatchedFilterControl';
+import PlaylistSelectControl, {
+  DOWNLOAD_FILTER_OPTIONS,
+  SORT_OPTIONS,
+  WATCHED_FILTER_MIN_WIDTH,
+  WATCHED_FILTER_OPTIONS,
+} from './PlaylistPage/components/PlaylistSelectControl';
 import { useVideoSelection } from './shared/VideoList/hooks/useVideoSelection';
 import VideoListSelectionPill from './shared/VideoList/VideoListSelectionPill';
 import { SelectionAction } from './shared/VideoList/types';
@@ -39,10 +38,13 @@ import { isDeletable, isDownloadable, toModalData } from './PlaylistPage/compone
 import { usePlaylistVideoDeletion } from './PlaylistPage/hooks/usePlaylistVideoDeletion';
 import { usePlaylistVideoIgnore } from './PlaylistPage/hooks/usePlaylistVideoIgnore';
 import { usePlaylistSyncUpdates } from './PlaylistPage/hooks/usePlaylistSyncUpdates';
+import ConfirmDialog from './shared/ConfirmDialog';
 import DeleteVideosDialog from './shared/DeleteVideosDialog';
+import LoadMoreFailed from './shared/LoadMoreFailed';
 import DownloadSettingsDialog from './DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from './DownloadManager/ManualDownload/types';
 import { toDownloadOverrideSettings } from '../utils/downloadOverrideSettings';
+import { serverErrorMessage } from '../utils/requestError';
 import SubscriptionsBackButton from './shared/SubscriptionsBackButton';
 import VideoModal from './shared/VideoModal';
 import { VideoModalData } from './shared/VideoModal/types';
@@ -79,6 +81,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     syncStatus,
     loading,
     loadingMore,
+    loadMoreFailed,
     hasMore,
     error,
     loadMore,
@@ -174,9 +177,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         showSnackbar(successMessage ?? `${label} succeeded`);
         return true;
       } catch (err: unknown) {
-        const serverMessage: unknown = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
-        const fallback = err instanceof Error ? err.message : `${label} failed`;
-        showSnackbar(typeof serverMessage === 'string' && serverMessage ? serverMessage : fallback, 'error');
+        showSnackbar(serverErrorMessage(err, `${label} failed`), 'error');
         return false;
       } finally {
         setRunningAction(null);
@@ -186,7 +187,6 @@ function PlaylistPage({ token }: PlaylistPageProps) {
   );
 
   const selectionClearRef = useRef<() => void>(() => {});
-  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   // One selection holds downloaded and not-downloaded videos; each action
   // applies to the selected videos it fits.
@@ -299,21 +299,14 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     selection.clear();
   }, [downloadState, watchedState, selection.clear]);
 
-  useEffect(() => {
-    if (!loadMoreRef.current) return;
-    if (loading || loadingMore || !hasMore) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          void loadMore();
-        }
-      },
-      { root: null, rootMargin: '0px 0px 160px 0px', threshold: 0 }
-    );
-    observer.observe(loadMoreRef.current);
-    return () => observer.disconnect();
-  }, [loading, loadingMore, hasMore, loadMore]);
+  // Paused after a failed load: the sentinel is still in range, so the trigger
+  // would ask again at once, and keep asking for as long as the request fails.
+  const loadMoreRef = useInfiniteScrollTrigger({
+    enabled: !loadMoreFailed,
+    loading: loading || loadingMore,
+    hasNextPage: hasMore,
+    onLoadNextPage: () => void loadMore(),
+  });
 
   const handleToggleSync = useCallback(
     async (server: MediaServerType, enabled: boolean) => {
@@ -457,18 +450,25 @@ function PlaylistPage({ token }: PlaylistPageProps) {
               Videos
             </Typography>
             <Box className="flex items-center gap-2 flex-wrap">
-              <PlaylistDownloadFilterControl
+              <PlaylistSelectControl
+                label="Show"
                 value={downloadState}
+                options={DOWNLOAD_FILTER_OPTIONS}
                 onChange={setDownloadState}
                 disabled={loading && videos.length === 0}
               />
-              <PlaylistWatchedFilterControl
+              <PlaylistSelectControl
+                label="Watched"
                 value={watchedState}
+                options={WATCHED_FILTER_OPTIONS}
                 onChange={setWatchedState}
                 disabled={loading && videos.length === 0}
+                minWidth={WATCHED_FILTER_MIN_WIDTH}
               />
-              <PlaylistSortControl
+              <PlaylistSelectControl
+                label="Sort"
                 value={sortOrder}
+                options={SORT_OPTIONS}
                 onChange={setSortOrder}
                 disabled={loading && videos.length === 0}
               />
@@ -501,6 +501,9 @@ function PlaylistPage({ token }: PlaylistPageProps) {
                 </Typography>
               )}
             </div>
+          )}
+          {hasMore && loadMoreFailed && (
+            <LoadMoreFailed message="Could not load more videos." onRetry={() => void loadMore()} />
           )}
         </CardContent>
       </Card>
@@ -542,59 +545,37 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         defaultProtect={config.protectManualDownloads}
       />
 
-      <Dialog
+      <ConfirmDialog
         open={confirmPublicOpen}
-        onClose={() => setConfirmPublicOpen(false)}
-        maxWidth="sm"
-        fullWidth
+        title={`Make playlist ${playlist.public_on_servers ? 'private' : 'public'}?`}
+        confirmLabel="Confirm"
+        onCancel={() => setConfirmPublicOpen(false)}
+        onConfirm={() => handleConfirmPublic(!playlist.public_on_servers)}
       >
-        <DialogTitle>
-          Make playlist {playlist.public_on_servers ? 'private' : 'public'}?
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2">
-            {playlist.public_on_servers
-              ? 'On Jellyfin and Emby, this playlist will no longer be visible to other users. ' +
-                'Plex playlists are shared manually, so this setting does not affect them.'
-              : 'On Jellyfin and Emby, this playlist will become visible to other users. ' +
-                'Plex has no automatic public setting; share Plex playlists with each user inside Plex.'}
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button variant="text" onClick={() => setConfirmPublicOpen(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            onClick={() => handleConfirmPublic(!playlist.public_on_servers)}
-          >
-            Confirm
-          </Button>
-        </DialogActions>
-      </Dialog>
+        <Typography variant="body2">
+          {playlist.public_on_servers
+            ? 'On Jellyfin and Emby, this playlist will no longer be visible to other users. ' +
+              'Plex playlists are shared manually, so this setting does not affect them.'
+            : 'On Jellyfin and Emby, this playlist will become visible to other users. ' +
+              'Plex has no automatic public setting; share Plex playlists with each user inside Plex.'}
+        </Typography>
+      </ConfirmDialog>
 
-      <Dialog open={ignore.dialogOpen} onClose={ignore.cancelBulkIgnore} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          Ignore {ignore.confirmCount} video{ignore.confirmCount === 1 ? '' : 's'}?
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2">
-            {ignore.confirmListedCount === ignore.confirmCount
-              ? (ignore.confirmCount === 1 ? 'This video is ' : 'These videos are ')
-              : `${ignore.confirmListedCount} of them ${ignore.confirmListedCount === 1 ? 'is' : 'are'} `}
-            listed in this playlist&apos;s .m3u file and synced server playlists. Ignoring
-            removes {ignore.confirmListedCount === 1 ? 'it' : 'them'} from both. No file is deleted.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button variant="text" onClick={ignore.cancelBulkIgnore}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={ignore.confirmBulkIgnore}>
-            Ignore
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ConfirmDialog
+        open={ignore.dialogOpen}
+        title={`Ignore ${ignore.confirmCount} video${ignore.confirmCount === 1 ? '' : 's'}?`}
+        confirmLabel="Ignore"
+        onCancel={ignore.cancelBulkIgnore}
+        onConfirm={ignore.confirmBulkIgnore}
+      >
+        <Typography variant="body2">
+          {ignore.confirmListedCount === ignore.confirmCount
+            ? (ignore.confirmCount === 1 ? 'This video is ' : 'These videos are ')
+            : `${ignore.confirmListedCount} of them ${ignore.confirmListedCount === 1 ? 'is' : 'are'} `}
+          listed in this playlist&apos;s .m3u file and synced server playlists. Ignoring
+          removes {ignore.confirmListedCount === 1 ? 'it' : 'them'} from both. No file is deleted.
+        </Typography>
+      </ConfirmDialog>
 
       <Snackbar
         open={snackbar.open}

@@ -34,9 +34,8 @@ export interface SearchResult {
   ratingSource?: string | null;
 }
 
-export type PageSize = 10 | 25 | 50 | 100;
-export const PAGE_SIZES: PageSize[] = [10, 25, 50, 100];
-export const DEFAULT_PAGE_SIZE: PageSize = 25;
+export type { PageSize } from '../../types/youtubeSearch';
+export { PAGE_SIZES, DEFAULT_PAGE_SIZE } from '../../types/youtubeSearch';
 
 export type ViewMode = 'grid' | 'table';
 
@@ -64,9 +63,6 @@ export const SHORT_MAX_SECONDS = 60;
 export function isShort(duration: number | null): boolean {
   return duration !== null && duration <= SHORT_MAX_SECONDS;
 }
-
-export const THUMB_WIDTH = 120;
-export const THUMB_HEIGHT = 67;
 
 export interface ResultSelection {
   isChecked: (id: string) => boolean;

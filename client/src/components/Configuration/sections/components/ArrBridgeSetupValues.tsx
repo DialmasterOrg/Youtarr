@@ -3,16 +3,13 @@ import {
   Alert,
   Box,
   Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
   DialogContentText,
-  DialogTitle,
   RadioGroup,
   RadioGroupItem,
   TextField,
   Typography,
 } from '../../../ui';
+import ConfirmDialog from '../../../shared/ConfirmDialog';
 import { SnackbarState } from '../../types';
 import {
   ARR_APPS,
@@ -246,20 +243,18 @@ export const ArrBridgeSetupValues: React.FC<ArrBridgeSetupValuesProps> = ({
         </>
       )}
 
-      <Dialog open={confirmingNewKey} onClose={() => setConfirmingNewKey(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Create a new key?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            The current key stops working right away. Update the indexer and the download client in Sonarr and Radarr.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmingNewKey(false)}>Cancel</Button>
-          <Button variant="contained" onClick={createNewKey}>
-            Replace key
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ConfirmDialog
+        open={confirmingNewKey}
+        tone="danger"
+        title="Create a new key?"
+        confirmLabel="Replace key"
+        onCancel={() => setConfirmingNewKey(false)}
+        onConfirm={createNewKey}
+      >
+        <DialogContentText>
+          The current key stops working right away. Update the indexer and the download client in Sonarr and Radarr.
+        </DialogContentText>
+      </ConfirmDialog>
     </Box>
   );
 };

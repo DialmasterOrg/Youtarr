@@ -14,7 +14,7 @@ import {
   Box,
 } from '../../ui';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
-import { InfoTooltip } from '../common/InfoTooltip';
+import { InfoTooltip } from '../../shared/InfoTooltip';
 import { ConfigState, CustomArgsCheck } from '../types';
 import { validateProxyUrl } from '../utils/configValidation';
 import { useYtdlpArgsValidation } from '../hooks/useYtdlpArgsValidation';
@@ -28,7 +28,6 @@ import { CustomArgsCheckAlerts } from './components/CustomArgsCheckAlerts';
 interface YtdlpOptionsSectionProps {
   config: ConfigState;
   onConfigChange: (updates: Partial<ConfigState>) => void;
-  onMobileTooltipClick?: (text: string) => void;
   token: string | null;
   // Allowlist check of the SAVED custom args, from /getconfig. Shown on load so
   // a user whose saved args are now blocked sees why immediately.
@@ -38,7 +37,6 @@ interface YtdlpOptionsSectionProps {
 export const YtdlpOptionsSection: React.FC<YtdlpOptionsSectionProps> = ({
   config,
   onConfigChange,
-  onMobileTooltipClick,
   token,
   savedCustomArgsCheck,
 }) => {
@@ -107,7 +105,6 @@ export const YtdlpOptionsSection: React.FC<YtdlpOptionsSectionProps> = ({
                 Delay between yt-dlp API requests (0-30). Higher values prevent YouTube rate limiting but slow downloads.
                 <InfoTooltip
                   text='A delay of 1-2 seconds usually works well. Increase to 5-10 seconds if you experience 429 errors or frequent throttling.'
-                  onMobileClick={onMobileTooltipClick}
                 />
               </span>
             }
@@ -146,7 +143,6 @@ export const YtdlpOptionsSection: React.FC<YtdlpOptionsSectionProps> = ({
                 IPv4 is recommended for YouTube reliability.
                 <InfoTooltip
                   text='Force IPv6 or Auto only if your network requires it. Downloads may become unreliable on networks where YouTube responds slowly to IPv6.'
-                  onMobileClick={onMobileTooltipClick}
                 />
               </span>
             </FormHelperText>

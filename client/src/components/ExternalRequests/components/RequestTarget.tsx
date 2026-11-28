@@ -9,6 +9,7 @@ import { Avatar, Chip } from '../../ui';
 import RatingBadge from '../../shared/RatingBadge';
 import { ExternalRequestReview, ExternalRequestStatus } from '../../../types/externalRequest';
 import { requestStatusLabel } from '../requestPolicy';
+import { youtubeVideoUrl } from '../../../utils/youtubeUrls';
 
 type ChipColor = 'success' | 'error' | 'info' | 'warning';
 
@@ -47,7 +48,7 @@ const targetLabel = (request: ExternalRequestReview) => {
 
 const targetUrl = (request: ExternalRequestReview) => {
   if (request.type === 'channel') return request.target.channelUrl || null;
-  return request.target.youtubeId ? `https://www.youtube.com/watch?v=${request.target.youtubeId}` : null;
+  return request.target.youtubeId ? youtubeVideoUrl(request.target.youtubeId) : null;
 };
 
 const TypeIcon = ({ type }: { type: ExternalRequestReview['type'] }) => {

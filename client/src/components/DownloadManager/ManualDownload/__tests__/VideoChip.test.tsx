@@ -31,32 +31,11 @@ describe('VideoChip', () => {
       expect(screen.getByText('Test Video Title')).toBeInTheDocument();
     });
 
-    test('renders duration in correct format for seconds only', () => {
-      const video = { ...baseVideo, duration: 45 };
-      render(<VideoChip video={video} onDelete={mockOnDelete} />);
-
-      expect(screen.getByText('0:45')).toBeInTheDocument();
-    });
-
-    test('renders duration in correct format for minutes and seconds', () => {
+    test('renders the duration', () => {
       const video = { ...baseVideo, duration: 125 };
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
-      expect(screen.getByText('2:05')).toBeInTheDocument();
-    });
-
-    test('renders duration in correct format for hours', () => {
-      const video = { ...baseVideo, duration: 3665 };
-      render(<VideoChip video={video} onDelete={mockOnDelete} />);
-
-      expect(screen.getByText('1:01:05')).toBeInTheDocument();
-    });
-
-    test('renders duration with proper padding', () => {
-      const video = { ...baseVideo, duration: 3601 };
-      render(<VideoChip video={video} onDelete={mockOnDelete} />);
-
-      expect(screen.getByText('1:00:01')).toBeInTheDocument();
+      expect(screen.getByText('2m5s')).toBeInTheDocument();
     });
 
     test('renders full channel name in a CSS-truncated container', () => {
@@ -255,7 +234,7 @@ describe('VideoChip', () => {
       const video = { ...baseVideo, duration: 36125 }; // 10 hours, 2 minutes, 5 seconds
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
-      expect(screen.getByText('10:02:05')).toBeInTheDocument();
+      expect(screen.getByText('10h2m')).toBeInTheDocument();
     });
 
     test('handles empty channel name', () => {

@@ -29,7 +29,7 @@ Apply these when creating or substantially rewriting client code. Scope Discipli
 ## TypeScript
 
 - No `any`. `catch (err: unknown)` with narrowing; interfaces for props, API payloads and WebSocket messages; React's built-in event types. Existing `any` is legacy; do not add more.
-- Feature-specific types live with the feature; shared types in `client/src/types/`. New config fields go through the `CONFIG_FIELDS` registry in `client/src/config/configSchema.ts`.
+- Feature-specific types live with the feature. API and domain shapes used across features live in `client/src/types/`; a type that only describes one util module's inputs or outputs stays beside it. New config fields go through the `CONFIG_FIELDS` registry in `client/src/config/configSchema.ts`.
 
 ## Components and hooks
 
@@ -49,3 +49,9 @@ Apply these when creating or substantially rewriting client code. Scope Discipli
 - Axios, with `headers: { 'x-access-token': token }`; hooks receive `token` from the calling component. Type requests and responses. Handle specific status codes (403, 404, 503) rather than generic catch-alls.
 - `hooks/useConfig.ts` and other older files use raw `fetch()`; do not copy them.
 - Log a failed axios request through `utils/requestError.describeRequestError`, never the error itself: an axios error carries its request, including the `x-access-token` header.
+- Show a failed request's text through `utils/requestError.serverErrorMessage(err, fallback)`: the server's `{ error }` or the fallback, never axios's own message. Fifteen local copies had drifted apart; hooks that map status codes keep their own mapping.
+- Two-button confirmations use `shared/ConfirmDialog` with a `tone`: `danger` and `warning` fill and focus Cancel and outline the action, `default` fills the action. Hand-written dialogs had drifted into opposite conventions for destructive actions.
+- Info icons are `shared/InfoTooltip` everywhere: the app tooltip on hover, focus and tap. Settings once showed the text in a bottom bar on phones, through a callback threaded into every section; do not bring that back.
+- Queue videos through `hooks/useTriggerDownloads` and show the `message` of a failed result: the server's reason (downloads paused, a refused setting) or the one fallback. Each page's own failure string had hidden that reason.
+- Video row pieces live in `components/shared/`: `VideoThumbnail` (library), `RemoteThumbnail`, `thumbnailOverlays` (removed banner, duration badge), `VideoStatusChip`, `MediaTypeChip`, `VideoModal/videoDataToModalData`. Durations are `utils.formatDuration` ("1h5m") everywhere. Do not rebuild these per page.
+- YouTube links come from `utils/youtubeUrls`, byte sizes from `formatters.formatBytes`, and the `overrideSettings` request type from `types/downloadOverrideSettings`; do not rebuild them locally.

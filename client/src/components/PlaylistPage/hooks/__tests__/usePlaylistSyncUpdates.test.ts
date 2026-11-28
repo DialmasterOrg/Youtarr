@@ -3,8 +3,9 @@ import { renderHook } from '@testing-library/react';
 import WebSocketContext from '../../../../contexts/WebSocketContext';
 import { usePlaylistSyncUpdates } from '../usePlaylistSyncUpdates';
 
-type Filter = (message: unknown) => boolean;
-type Callback = (message: unknown) => void;
+type Message = { type: string; destination?: string; payload?: unknown };
+type Filter = (message: Message) => boolean;
+type Callback = (payload: unknown) => void;
 
 function setup(playlistDbId: number | null, onUpdate = jest.fn()) {
   const subscriptions: Array<{ filter: Filter; callback: Callback }> = [];
@@ -15,11 +16,11 @@ function setup(playlistDbId: number | null, onUpdate = jest.fn()) {
     const index = subscriptions.findIndex((entry) => entry.callback === callback);
     if (index >= 0) subscriptions.splice(index, 1);
   });
-  // Delivers a message the way the provider does: to every subscription whose filter accepts it.
-  const deliver = (message: unknown) => {
+  // Delivers a message the way the provider does: its payload, to every subscription whose filter accepts it.
+  const deliver = (message: Message) => {
     subscriptions
       .filter((entry) => entry.filter(message))
-      .forEach((entry) => entry.callback(message));
+      .forEach((entry) => entry.callback(message.payload));
   };
   const wrapper = ({ children }: { children: React.ReactNode }) =>
     React.createElement(
@@ -31,7 +32,7 @@ function setup(playlistDbId: number | null, onUpdate = jest.fn()) {
     ({ id }: { id: number | null }) => usePlaylistSyncUpdates(id, onUpdate),
     { wrapper, initialProps: { id: playlistDbId } }
   );
-  return { ...view, deliver, onUpdate, subscriptions };
+  return { ...view, deliver, onUpdate };
 }
 
 const syncUpdated = (playlistDbId: number) => ({
@@ -73,12 +74,12 @@ describe('usePlaylistSyncUpdates', () => {
     expect(onUpdate).toHaveBeenCalledTimes(1);
   });
 
-  test('listens for nothing until the playlist is known', () => {
-    const { deliver, onUpdate, subscriptions } = setup(null);
+  test('calls nothing until the playlist is known', () => {
+    const { deliver, onUpdate } = setup(null);
 
     deliver({ type: 'connectionRestored' });
+    deliver({ type: 'playlistSyncUpdated', payload: {} });
 
-    expect(subscriptions).toHaveLength(0);
     expect(onUpdate).not.toHaveBeenCalled();
   });
 
@@ -91,15 +92,5 @@ describe('usePlaylistSyncUpdates', () => {
 
     deliver(syncUpdated(9));
     expect(onUpdate).toHaveBeenCalledTimes(1);
-  });
-
-  test('stops listening on unmount', () => {
-    const { deliver, onUpdate, unmount, subscriptions } = setup(7);
-
-    unmount();
-    deliver(syncUpdated(7));
-
-    expect(subscriptions).toHaveLength(0);
-    expect(onUpdate).not.toHaveBeenCalled();
   });
 });

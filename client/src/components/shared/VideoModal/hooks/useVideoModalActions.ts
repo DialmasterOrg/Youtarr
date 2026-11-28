@@ -9,15 +9,13 @@ import { useVideoDeletion } from '../../useVideoDeletion';
 import { useTriggerDownloads } from '../../../../hooks/useTriggerDownloads';
 import { DownloadSettings } from '../../../DownloadManager/ManualDownload/types';
 import { toDownloadOverrideSettings } from '../../../../utils/downloadOverrideSettings';
+import { youtubeVideoUrl } from '../../../../utils/youtubeUrls';
+import { serverErrorMessage } from '../../../../utils/requestError';
 
 interface SnackbarState {
   open: boolean;
   message: string;
   severity: 'success' | 'error';
-}
-
-interface AxiosErrorShape {
-  response?: { data?: { error?: string } };
 }
 
 interface UseVideoModalActionsParams {
@@ -50,13 +48,6 @@ interface UseVideoModalActionsReturn {
   handleDownloadConfirm: (settings: DownloadSettings | null) => Promise<void>;
   handleRatingApply: (rating: string | null) => Promise<void>;
   handleSnackbarClose: () => void;
-}
-
-function extractErrorMessage(err: unknown, fallback: string): string {
-  return (
-    (err as AxiosErrorShape)?.response?.data?.error ||
-    (err instanceof Error ? err.message : fallback)
-  );
 }
 
 export function useVideoModalActions({
@@ -194,7 +185,7 @@ export function useVideoModalActions({
       );
       onIgnoreChanged?.(localVideo.youtubeId, newIgnored);
     } catch (err: unknown) {
-      showSnackbar(extractErrorMessage(err, 'Failed to update ignore status'), 'error');
+      showSnackbar(serverErrorMessage(err, 'Failed to update ignore status'), 'error');
     }
   }, [localVideo.isIgnored, localVideo.youtubeId, localVideo.channelId, token, showSnackbar, onIgnoreChanged]);
 
@@ -222,7 +213,7 @@ export function useVideoModalActions({
       onMarkedDeleted?.(localVideo.youtubeId);
       showSnackbar('Marked as deleted', 'success');
     } catch (err: unknown) {
-      showSnackbar(extractErrorMessage(err, 'Failed to mark the video as deleted'), 'error');
+      showSnackbar(serverErrorMessage(err, 'Failed to mark the video as deleted'), 'error');
     } finally {
       setMarkDeletedPending(false);
     }
@@ -235,22 +226,22 @@ export function useVideoModalActions({
       return;
     }
 
-    const url = `https://www.youtube.com/watch?v=${localVideo.youtubeId}`;
+    const url = youtubeVideoUrl(localVideo.youtubeId);
     const overrideSettings = toDownloadOverrideSettings(settings);
 
-    const success = await triggerDownloads({
+    const result = await triggerDownloads({
       urls: [url],
       overrideSettings,
       channelId: localVideo.channelId,
     });
 
-    if (success === null) return;
-    if (success) {
+    if (!result) return;
+    if (result.ok) {
       onDownloadQueued?.(localVideo.youtubeId);
       onClose();
       navigate('/downloads/activity');
     } else {
-      showSnackbar('Failed to queue download', 'error');
+      showSnackbar(result.message, 'error');
     }
   }, [localVideo.youtubeId, localVideo.channelId, triggerDownloads, showSnackbar, onDownloadQueued, onClose, navigate, snapshot]);
 
@@ -277,7 +268,7 @@ export function useVideoModalActions({
       showSnackbar('Rating updated', 'success');
       onRatingChanged?.(localVideo.youtubeId, rating);
     } catch (err: unknown) {
-      showSnackbar(extractErrorMessage(err, 'Failed to update rating'), 'error');
+      showSnackbar(serverErrorMessage(err, 'Failed to update rating'), 'error');
     }
   }, [localVideo.databaseId, localVideo.youtubeId, token, showSnackbar, onRatingChanged]);
 

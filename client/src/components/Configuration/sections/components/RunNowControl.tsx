@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import {
-  Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
-} from '../../../ui';
+import { Button, DialogContentText } from '../../../ui';
 import { Loader2, Play } from '../../../../lib/icons';
+import ConfirmDialog from '../../../shared/ConfirmDialog';
 import { ScheduleField } from '../../schedules';
 import { ScheduleTaskStatus } from '../../hooks/useScheduleStatus';
 import { isTaskRunning } from './scheduleDisplay';
@@ -29,7 +28,6 @@ export function RunNowControl({ field, status, pending, onRun }: RunNowControlPr
       ? `Starting ${field.label}`
       : `Run ${field.label} now`;
   const confirm = field.runNowConfirm;
-  const titleId = `${field.key}-run-now-title`;
   const Icon = running || pending ? Loader2 : Play;
 
   const handleClick = () => {
@@ -51,25 +49,19 @@ export function RunNowControl({ field, status, pending, onRun }: RunNowControlPr
         <span className="hidden sm:inline">{label}</span>
       </Button>
       {confirm && (
-        <Dialog open={confirming} onClose={() => setConfirming(false)} aria-labelledby={titleId}>
-          <DialogTitle id={titleId}>{confirm.title}</DialogTitle>
-          <DialogContent>
-            <DialogContentText>{confirm.body}</DialogContentText>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setConfirming(false)}>Cancel</Button>
-            <Button
-              variant="contained"
-              color="error"
-              onClick={() => {
-                setConfirming(false);
-                onRun();
-              }}
-            >
-              {confirm.confirmLabel}
-            </Button>
-          </DialogActions>
-        </Dialog>
+        <ConfirmDialog
+          open={confirming}
+          tone="danger"
+          title={confirm.title}
+          confirmLabel={confirm.confirmLabel}
+          onCancel={() => setConfirming(false)}
+          onConfirm={() => {
+            setConfirming(false);
+            onRun();
+          }}
+        >
+          <DialogContentText>{confirm.body}</DialogContentText>
+        </ConfirmDialog>
       )}
     </>
   );

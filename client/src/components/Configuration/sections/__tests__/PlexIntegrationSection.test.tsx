@@ -35,7 +35,6 @@ const createSectionProps = (
   onTestConnection: jest.fn(),
   onOpenLibrarySelector: jest.fn(),
   onOpenPlexAuthDialog: jest.fn(),
-  onMobileTooltipClick: jest.fn(),
   ...overrides,
 });
 
@@ -797,21 +796,6 @@ describe('PlexIntegrationSection Component', () => {
       expect(
         screen.queryByTestId('no-default-library-warning')
       ).not.toBeInTheDocument();
-    });
-  });
-
-  describe('InfoTooltip Integration', () => {
-    test('calls onMobileTooltipClick when provided', () => {
-      const onMobileTooltipClick = jest.fn();
-      const props = createSectionProps({ onMobileTooltipClick });
-      renderWithProviders(<PlexIntegrationSection {...props} />);
-      expect(screen.getByTestId('plex-ip-input')).toBeInTheDocument();
-    });
-
-    test('works without onMobileTooltipClick prop', () => {
-      const props = createSectionProps({ onMobileTooltipClick: undefined });
-      renderWithProviders(<PlexIntegrationSection {...props} />);
-      expect(screen.getByText('Plex Media Server Integration')).toBeInTheDocument();
     });
   });
 

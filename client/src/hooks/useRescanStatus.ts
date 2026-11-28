@@ -1,6 +1,9 @@
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import axios from 'axios';
-import WebSocketContext from '../contexts/WebSocketContext';
+import { serverErrorMessage } from '../utils/requestError';
+import { useSocketEvents } from './useSocketEvents';
+
+const RESCAN_MESSAGE_TYPES = ['rescanStatus'];
 
 export type RescanTrigger = 'manual' | 'scheduled' | 'startup';
 // timed-out: only runs from releases before the disk walk was exempt from the time limit.
@@ -67,31 +70,53 @@ export interface UseRescanStatusReturn {
   triggerRescan: (options?: TriggerRescanOptions) => Promise<TriggerRescanOutcome>;
 }
 
+// Three things write this hook's state: the status load (on mount and after a
+// reconnect), live rescanStatus messages, and a rescan started here. A load
+// answers with what the server knew when it was sent, so a live message or a
+// click on Rescan is newer than any load still in flight. Rule: those two bump
+// the version of the state they set (`running`/`progress`, or `lastRun`), and
+// the load applies each only if its version has not moved since it was sent.
+// The one write that does not bump is the rollback after a failed start: it
+// only undoes the click's guess, so a load sent after the click, which holds
+// the server's own answer, wins over it.
 export function useRescanStatus(token: string | null): UseRescanStatusReturn {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<RescanProgress | null>(null);
   const [lastRun, setLastRun] = useState<RescanLastRun | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Two errors, so a request clears only its own: a status load that succeeds
+  // must not hide why a rescan failed to start.
+  const [triggerError, setTriggerError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const ws = useContext(WebSocketContext);
+  // Bumped when the connection comes back, to load the status again: a rescan
+  // that ended while disconnected sends nothing more.
+  const [reloads, reload] = useReducer((count: number) => count + 1, 0);
+  // `status` covers `running` and `progress`. See the rule above.
+  const versionRef = useRef({ status: 0, lastRun: 0 });
 
   useEffect(() => {
     let cancelled = false;
     const headers = token ? { 'x-access-token': token } : undefined;
+    const versionAtStart = { ...versionRef.current };
 
     axios
       .get<RescanStatusResponse>('/api/maintenance/rescan-status', { headers })
       .then((res) => {
         if (cancelled) return;
-        setRunning(res.data.running);
-        setProgress(res.data.running ? res.data.progress ?? null : null);
-        setLastRun(res.data.lastRun);
+        if (versionRef.current.status === versionAtStart.status) {
+          setRunning(res.data.running);
+          setProgress(res.data.running ? res.data.progress ?? null : null);
+        }
+        if (versionRef.current.lastRun === versionAtStart.lastRun) {
+          setLastRun(res.data.lastRun);
+        }
+        setLoadError(null);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : 'Failed to load rescan status';
-        setError(message);
+        setLoadError(message);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -100,32 +125,30 @@ export function useRescanStatus(token: string | null): UseRescanStatusReturn {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, reloads]);
 
-  useEffect(() => {
-    if (!ws) return undefined;
-    // Filter receives the full message envelope; callback receives only the
-    // payload (WebSocketProvider strips the envelope before invoking).
-    const filter = (msg: { type?: string }) => msg.type === 'rescanStatus';
-    const callback = (payload: RescanStatusPayload) => {
-      setRunning(payload.running);
-      // A start message carries no progress yet; a finished rescan has none.
-      setProgress(payload.running ? payload.progress ?? null : null);
-      if (payload.running) {
-        setError(null);
-      }
-      if (payload.lastRun !== undefined) {
-        setLastRun(payload.lastRun);
-        setError(null);
-      }
-    };
-    ws.subscribe(filter, callback);
-    return () => ws.unsubscribe(callback);
-  }, [ws]);
+  const applyLiveStatus = (payload: RescanStatusPayload) => {
+    versionRef.current.status += 1;
+    setRunning(payload.running);
+    // A start message carries no progress yet; a finished rescan has none.
+    setProgress(payload.running ? payload.progress ?? null : null);
+    if (payload.lastRun !== undefined) {
+      versionRef.current.lastRun += 1;
+      setLastRun(payload.lastRun);
+    }
+    if (payload.running || payload.lastRun !== undefined) {
+      setTriggerError(null);
+      setLoadError(null);
+    }
+  };
+  useSocketEvents(RESCAN_MESSAGE_TYPES, applyLiveStatus, reload);
 
   const triggerRescan = useCallback(async (options?: TriggerRescanOptions): Promise<TriggerRescanOutcome> => {
-    setError(null);
+    setTriggerError(null);
     setRunning(true);
+    // Not a live message, but newer than a load in flight, which would
+    // otherwise turn `running` back off and re-enable the button.
+    versionRef.current.status += 1;
     const headers = token ? { 'x-access-token': token } : undefined;
     const body = options?.ignoreLibraryCheck ? { ignoreLibraryCheck: true } : undefined;
     try {
@@ -133,16 +156,18 @@ export function useRescanStatus(token: string | null): UseRescanStatusReturn {
       return { started: true };
     } catch (err: unknown) {
       if (axios.isAxiosError(err) && err.response?.status === 409) {
-        const data = err.response.data as { error?: string } | undefined;
-        setError(data?.error ?? 'Rescan already in progress');
+        setTriggerError(serverErrorMessage(err, 'Rescan already in progress'));
         return { started: false };
       }
+      // No version bump here, on purpose: a status load sent during this
+      // request reports what the server is really doing and must win.
       setRunning(false);
       const message = err instanceof Error ? err.message : 'Failed to start rescan';
-      setError(message);
+      setTriggerError(message);
       return { started: false };
     }
   }, [token]);
 
-  return { running, progress, lastRun, loading, error, triggerRescan };
+  // A rescan that failed to start outranks a status load that failed.
+  return { running, progress, lastRun, loading, error: triggerError ?? loadError, triggerRescan };
 }

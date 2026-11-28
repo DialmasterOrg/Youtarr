@@ -2,13 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Typography,
 } from '../../ui';
 import { Checkbox, FormControlLabel } from '../../ui/form';
+import ConfirmDialog from '../../shared/ConfirmDialog';
 import { ConfigurationCard } from '../../Configuration/common/ConfigurationCard';
 import { useRemovedVideos, type EmptyTrashOptions } from '../hooks/useRemovedVideos';
 import EmptyTrashDialog from './EmptyTrashDialog';
@@ -235,45 +232,37 @@ function RemovedVideosCard({ token, onRescanAnyway, rescanRunning = false, resca
         exact={rescanMarksEvery}
       />
 
-      <Dialog open={markAllOpen} onClose={() => setMarkAllOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Mark all missing videos as deleted</DialogTitle>
-        <DialogContent>
-          <div className="space-y-3">
-            <Typography variant="body2">
-              {missing === 1
-                ? '1 missing video will be marked as deleted and hidden from the Videos page by default. Its record is kept, so it can still be re-downloaded, and if its file turns up again the rescan marks it downloaded. Only do this if the file is really gone, not sitting on an unmounted drive.'
-                : `${missing} missing videos will be marked as deleted and hidden from the Videos page by default. Their records are kept, so they can still be re-downloaded, and if a file turns up again the rescan marks it downloaded. Only do this if the files are really gone, not sitting on an unmounted drive.`}
-            </Typography>
-            {mostlyMissingWarning && (
-              <Alert severity="warning" className="break-words">{mostlyMissingWarning}</Alert>
-            )}
-            {needsEmptiedAcknowledgement && (
-              <Alert severity="warning" className="break-words">{libraryWarning}</Alert>
-            )}
-            {needsGoneAcknowledgement && (
-              <FormControlLabel
-                control={
-                  <Checkbox checked={emptiedAcknowledged} onChange={(event) => setEmptiedAcknowledged(event.target.checked)} />
-                }
-                label={EMPTIED_MYSELF}
-              />
-            )}
-          </div>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setMarkAllOpen(false)} variant="contained" color="primary" autoFocus>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleMarkAll}
-            variant="outlined"
-            color="warning"
-            disabled={actionPending || (needsGoneAcknowledgement && !emptiedAcknowledged)}
-          >
-            Mark {missing} as deleted
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ConfirmDialog
+        open={markAllOpen}
+        tone="warning"
+        title="Mark all missing videos as deleted"
+        confirmLabel={`Mark ${missing} as deleted`}
+        confirmDisabled={actionPending || (needsGoneAcknowledgement && !emptiedAcknowledged)}
+        onCancel={() => setMarkAllOpen(false)}
+        onConfirm={handleMarkAll}
+      >
+        <div className="space-y-3">
+          <Typography variant="body2">
+            {missing === 1
+              ? '1 missing video will be marked as deleted and hidden from the Videos page by default. Its record is kept, so it can still be re-downloaded, and if its file turns up again the rescan marks it downloaded. Only do this if the file is really gone, not sitting on an unmounted drive.'
+              : `${missing} missing videos will be marked as deleted and hidden from the Videos page by default. Their records are kept, so they can still be re-downloaded, and if a file turns up again the rescan marks it downloaded. Only do this if the files are really gone, not sitting on an unmounted drive.`}
+          </Typography>
+          {mostlyMissingWarning && (
+            <Alert severity="warning" className="break-words">{mostlyMissingWarning}</Alert>
+          )}
+          {needsEmptiedAcknowledgement && (
+            <Alert severity="warning" className="break-words">{libraryWarning}</Alert>
+          )}
+          {needsGoneAcknowledgement && (
+            <FormControlLabel
+              control={
+                <Checkbox checked={emptiedAcknowledged} onChange={(event) => setEmptiedAcknowledged(event.target.checked)} />
+              }
+              label={EMPTIED_MYSELF}
+            />
+          )}
+        </div>
+      </ConfirmDialog>
 
       <EmptyTrashDialog
         open={emptyTrashOpen}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Button, Chip, Tooltip } from '../../../ui';
+import { Box, Button, Tooltip } from '../../../ui';
 import RatingBadge from '../../../shared/RatingBadge';
 import {
   Delete as DeleteIcon,
@@ -11,17 +11,11 @@ import {
 } from '../../../../lib/icons';
 import { FileX as MarkDeletedIcon, Youtube as YoutubeIcon } from 'lucide-react';
 import { VideoModalData } from '../types';
-import {
-  getMediaTypeInfo,
-  getStatusChipStyle,
-  getStatusChipVariant,
-  getStatusColor,
-  getStatusIcon,
-  getStatusLabel,
-  isRemovedStatus,
-} from '../../../../utils/videoStatus';
-import { SHARED_STATUS_CHIP_STYLE, SHARED_THEMED_CHIP_STYLE } from '../../../shared/chipStyles';
-import { YOUTUBE_URL_BASE } from '../constants';
+import { isRemovedStatus } from '../../../../utils/videoStatus';
+import { SHARED_THEMED_CHIP_STYLE } from '../../../shared/chipStyles';
+import MediaTypeChip from '../../../shared/MediaTypeChip';
+import VideoStatusChip from '../../../shared/VideoStatusChip';
+import { youtubeVideoUrl } from '../../../../utils/youtubeUrls';
 
 interface VideoActionsProps {
   video: VideoModalData;
@@ -56,9 +50,7 @@ function VideoActions({
   const showIgnore = (!isDownloadedAndPresent || video.isIgnored) && allowIgnore;
   const showDelete = isDownloadedAndPresent;
   const showMarkDeleted = video.status === 'missing' && video.databaseId !== null;
-  const mediaTypeInfo = getMediaTypeInfo(video.mediaType);
-  const statusLabel = video.status === 'downloaded' ? 'Available' : getStatusLabel(video.status);
-  const youtubeUrl = `${YOUTUBE_URL_BASE}${video.youtubeId}`;
+  const youtubeUrl = youtubeVideoUrl(video.youtubeId);
   const useIconOnlyActions = isMobile;
   const compactChipStyle = {
     height: 'var(--video-modal-action-control-height, 28px)',
@@ -100,35 +92,14 @@ function VideoActions({
         overflowX: 'hidden',
       }}
     >
-      <Chip
-        icon={getStatusIcon(video.status)}
-        label={statusLabel}
-        color={getStatusColor(video.status)}
-        variant={getStatusChipVariant(video.status)}
-        size="small"
-        style={{
-          ...SHARED_THEMED_CHIP_STYLE,
-          ...getStatusChipStyle(video.status),
-          ...compactChipStyle,
-          flexShrink: 0,
-          whiteSpace: 'nowrap',
-        }}
+      <VideoStatusChip
+        status={video.status}
+        downloadedLabel="Available"
+        baseStyle={SHARED_THEMED_CHIP_STYLE}
+        style={{ ...compactChipStyle, flexShrink: 0, whiteSpace: 'nowrap' }}
       />
 
-      {mediaTypeInfo && (
-        <Chip
-          label={mediaTypeInfo.label}
-          color={mediaTypeInfo.color}
-          size="small"
-          icon={mediaTypeInfo.icon}
-          variant="outlined"
-          style={{
-            ...SHARED_STATUS_CHIP_STYLE,
-            ...compactChipStyle,
-            flexShrink: 0,
-          }}
-        />
-      )}
+      <MediaTypeChip mediaType={video.mediaType} style={{ ...compactChipStyle, flexShrink: 0 }} />
 
       <Box
         style={{

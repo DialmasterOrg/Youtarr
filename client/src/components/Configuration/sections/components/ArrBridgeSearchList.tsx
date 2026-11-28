@@ -16,6 +16,7 @@ import {
   offeredFirst,
   searchOutcome,
 } from '../../utils/arrBridgeSearches';
+import { youtubeVideoUrl } from '../../../../utils/youtubeUrls';
 
 // The last column is a fixed width: with "auto", a row with the button and
 // a row without one would put their other columns in different places.
@@ -35,7 +36,7 @@ const CandidateRow: React.FC<{ candidate: ArrSearchCandidate }> = ({ candidate }
   <li className={`grid gap-1 border-0 border-t border-solid border-[var(--border)] py-2 ${CANDIDATE_COLUMNS}`}>
     <span className="min-w-0">
       <a
-        href={`https://www.youtube.com/watch?v=${encodeURIComponent(candidate.youtubeId)}`}
+        href={youtubeVideoUrl(candidate.youtubeId)}
         target="_blank"
         rel="noopener noreferrer"
         className="break-words text-primary underline"

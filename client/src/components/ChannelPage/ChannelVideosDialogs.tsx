@@ -1,15 +1,7 @@
 import React from 'react';
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
-  Button,
-  Snackbar,
-  Alert,
-} from '../ui';
+import { DialogContentText, Snackbar, Alert } from '../ui';
 import DownloadSettingsDialog from '../DownloadManager/ManualDownload/DownloadSettingsDialog';
+import ConfirmDialog from '../shared/ConfirmDialog';
 import DeleteVideosDialog from '../shared/DeleteVideosDialog';
 import { DownloadSettings } from '../DownloadManager/ManualDownload/types';
 import { TabDownloadStats } from '../../types/Channel';
@@ -119,29 +111,17 @@ function ChannelVideosDialogs({
       />
 
       {/* Load More Confirmation Dialog */}
-      <Dialog
+      <ConfirmDialog
         open={refreshConfirmOpen}
-        onClose={onRefreshCancel}
-        aria-labelledby="refresh-dialog-title"
-        aria-describedby="refresh-dialog-description"
+        title={`Load More ${tabLabel}`}
+        confirmLabel="Continue"
+        onCancel={onRefreshCancel}
+        onConfirm={onRefreshConfirm}
       >
-        <DialogTitle id="refresh-dialog-title">
-          Load More {tabLabel}
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText id="refresh-dialog-description">
-            {describeLoadMore(tabStats, tabLabel)} <i>This can take quite some time to complete, depending on the size of the channel and your internet connection!</i>
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={onRefreshCancel} color="primary">
-            Cancel
-          </Button>
-          <Button onClick={onRefreshConfirm} color="primary" variant="contained">
-            Continue
-          </Button>
-        </DialogActions>
-      </Dialog>
+        <DialogContentText>
+          {describeLoadMore(tabStats, tabLabel)} <i>This can take quite some time to complete, depending on the size of the channel and your internet connection!</i>
+        </DialogContentText>
+      </ConfirmDialog>
 
       {/* Delete Confirmation Dialog */}
       <DeleteVideosDialog

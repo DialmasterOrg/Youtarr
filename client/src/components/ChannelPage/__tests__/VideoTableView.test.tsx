@@ -382,6 +382,15 @@ describe('VideoTableView Component', () => {
       expect(headerCheckbox).toHaveAttribute('data-indeterminate', 'true');
     });
 
+    test('header checkbox is unchecked when the only selected video is on another page', () => {
+      renderWithProviders(
+        <VideoTableView {...defaultProps} checkedBoxes={['on-another-page']} />
+      );
+      const headerCheckbox = screen.getAllByRole('checkbox')[0];
+      expect(headerCheckbox).not.toBeChecked();
+      expect(headerCheckbox).not.toHaveAttribute('data-indeterminate', 'true');
+    });
+
     test('header checkbox is unchecked when videos array is empty', () => {
       renderWithProviders(<VideoTableView {...defaultProps} videos={[]} />);
       const checkboxes = screen.getAllByRole('checkbox');

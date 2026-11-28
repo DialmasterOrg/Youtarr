@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, ReactNode, useRef } from 'react';
-import WebSocketContext from '../contexts/WebSocketContext';
+import WebSocketContext, { CONNECTION_RESTORED } from '../contexts/WebSocketContext';
 import { locationUtils } from '../utils/location';
 
 interface WebSocketProviderProps {
@@ -173,7 +173,7 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
         dispatchMessage({
           destination: 'local',
           source: 'client',
-          type: 'connectionRestored',
+          type: CONNECTION_RESTORED,
           payload: {},
         });
       }

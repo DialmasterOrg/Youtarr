@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import PlaylistPage from '../PlaylistPage';
-import { createMockWebSocketContext, renderWithProviders } from '../../test-utils';
+import { createMockWebSocketContext, deliverSocketMessage, renderWithProviders } from '../../test-utils';
 import { PlaylistVideo } from '../../types/playlist';
 
 const mockTriggerDownload = jest.fn();
@@ -285,7 +285,7 @@ describe('PlaylistPage selected-download selection lifecycle', () => {
     await user.click(screen.getByTestId('selection-action-download'));
     await user.click(await screen.findByTestId('mock-confirm-download'));
 
-    expect(await screen.findByText('download blew up')).toBeInTheDocument();
+    expect(await screen.findByText('Download failed')).toBeInTheDocument();
     expect(mockTriggerDownload).toHaveBeenCalledWith(['vidA'], undefined);
     expect(mockNavigate).not.toHaveBeenCalled();
     expect(screen.getByText('1 selected')).toBeInTheDocument();
@@ -765,6 +765,25 @@ describe('PlaylistPage video list notices', () => {
       screen.getByText(/fewer videos here than YouTube reports/i)
     ).toBeInTheDocument();
   });
+
+  test('stops loading more videos after a failed load and offers a retry', async () => {
+    const originalObserver = window.IntersectionObserver;
+    const observerMock = jest.fn(() => ({ observe: jest.fn(), disconnect: jest.fn() }));
+    window.IntersectionObserver = observerMock as unknown as typeof IntersectionObserver;
+    const loadMore = jest.fn();
+    mockDetailOverride.current = { hasMore: true, loadMoreFailed: true, loadMore };
+
+    try {
+      renderWithProviders(<PlaylistPage token="t" />);
+      await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+      expect(loadMore).toHaveBeenCalledTimes(1);
+      expect(observerMock).not.toHaveBeenCalled();
+    } finally {
+      window.IntersectionObserver = originalObserver;
+      mockDetailOverride.current = {};
+    }
+  });
 });
 
 describe('PlaylistPage action errors', () => {
@@ -785,14 +804,15 @@ describe('PlaylistPage action errors', () => {
     expect(await screen.findByText('YouTube says this playlist does not exist.')).toBeInTheDocument();
   });
 
-  test('falls back to the error message when the server sent no explanation', async () => {
+  test('names the failed action, not the transport message, when the server sent no explanation', async () => {
     const user = userEvent.setup();
     mockRefresh.mockRejectedValue(Object.assign(new Error('Network Error'), { isAxiosError: true }));
 
     renderWithProviders(<PlaylistPage token="t" />);
     await user.click(screen.getByRole('button', { name: 'Refresh from YouTube' }));
 
-    expect(await screen.findByText('Network Error')).toBeInTheDocument();
+    expect(await screen.findByText('Refresh failed')).toBeInTheDocument();
+    expect(screen.queryByText('Network Error')).not.toBeInTheDocument();
   });
 });
 
@@ -835,10 +855,11 @@ describe('PlaylistPage media server sync updates', () => {
     const websocketValue = createMockWebSocketContext();
     renderWithProviders(<PlaylistPage token="t" />, { websocketValue });
 
-    const syncUpdated = { destination: 'broadcast', type: 'playlistSyncUpdated', payload: { playlistDbId: 42 } };
-    const listeners = websocketValue.subscribe.mock.calls.filter(([filter]) => filter(syncUpdated));
-    expect(listeners).toHaveLength(1);
-    listeners[0][1](syncUpdated);
+    deliverSocketMessage(websocketValue, {
+      destination: 'broadcast',
+      type: 'playlistSyncUpdated',
+      payload: { playlistDbId: 42 },
+    });
 
     expect(mockRefetchMeta).toHaveBeenCalledTimes(1);
   });

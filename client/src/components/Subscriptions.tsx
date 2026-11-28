@@ -7,7 +7,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   Divider,
   Grid,
   LinearProgress,
@@ -36,8 +35,11 @@ import { Undo2 as UndoIcon, FolderOpen as FolderSpecialIcon } from 'lucide-react
 import { MOBILE_NAV_SAFE_GAP } from './layout/navLayoutConstants';
 import useMediaQuery from '../hooks/useMediaQuery';
 import { useNavigate, useLocation } from 'react-router-dom';
-import WebSocketContext, { Message } from '../contexts/WebSocketContext';
+import WebSocketContext from '../contexts/WebSocketContext';
 import { useConfig } from '../hooks/useConfig';
+import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
+import { useInfiniteScrollTrigger } from '../hooks/useInfiniteScrollTrigger';
+import { useSocketEvents } from '../hooks/useSocketEvents';
 import { Channel } from '../types/Channel';
 import { useChannelList } from './Subscriptions/hooks/useChannelList';
 import { ChannelLookupResult, useChannelMutations } from './Subscriptions/hooks/useChannelMutations';
@@ -50,6 +52,7 @@ import {
   normalizeSubFolderKey,
   formatSubFolderLabel,
 } from '../utils/channelHelpers';
+import ConfirmDialog from './shared/ConfirmDialog';
 import HelpDialog from './Subscriptions/HelpDialog';
 import PlaylistHelpDialog from './Subscriptions/PlaylistHelpDialog';
 import PendingSaveBanner from './Subscriptions/components/PendingSaveBanner';
@@ -66,6 +69,7 @@ import AddPlaylistDialog from './Subscriptions/components/AddPlaylistDialog';
 import AddChannelSettingsDialog from './Subscriptions/components/AddChannelSettingsDialog';
 import { NewChannelSettings, PendingChannel } from './Subscriptions/newChannelSettings';
 import PlaylistListBlock from './Subscriptions/components/PlaylistListBlock';
+import LoadMoreFailed from './shared/LoadMoreFailed';
 import DownloadPercentInfo from './Subscriptions/components/DownloadPercentInfo';
 import { useActiveImport } from '../hooks/useActiveImport';
 import { usePlaylistList } from '../hooks/usePlaylistList';
@@ -77,6 +81,8 @@ type SortOrder = 'asc' | 'desc';
 
 const AUTO_DOWNLOADS_COLUMN_LABEL = 'Auto downloads';
 const CHANNEL_SEARCH_DEBOUNCE_MS = 300;
+const CHANNEL_LIST_MESSAGE_TYPES = ['channelsUpdated'];
+const CHANNEL_REFRESH_DEBOUNCE_MS = 1000;
 
 interface SubscriptionsProps {
   token: string | null;
@@ -95,7 +101,6 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
   const useInfiniteScroll = config.channelVideosHotLoad ?? false;
   const globalPreferredResolution = config.preferredResolution || '1080';
   const { activeImport } = useActiveImport(token);
-  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const [newSubscriptionUrl, setNewSubscriptionUrl] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -257,55 +262,22 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
     setPage(1);
   }, [useInfiniteScroll]);
 
-  useEffect(() => {
-    if (!useInfiniteScroll) {
-      return;
-    }
-    if (!loadMoreRef.current || loading || !hasNextPage) {
-      return;
-    }
+  // A failed load leaves the page number on the page that failed, and loading
+  // the one after it would skip its channels.
+  const loadMoreRef = useInfiniteScrollTrigger({
+    enabled: useInfiniteScroll && !error,
+    loading,
+    hasNextPage,
+    onLoadNextPage: () => setPage((prev) => prev + 1),
+  });
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const [entry] = entries;
-        if (entry.isIntersecting) {
-          setPage((prev) => prev + 1);
-        }
-      },
-      {
-        root: null,
-        rootMargin: '0px 0px 240px 0px',
-        threshold: 0,
-      }
-    );
-
-    observer.observe(loadMoreRef.current);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [loading, hasNextPage, useInfiniteScroll]);
-
-  const handleMessage = useCallback(() => {
+  // Adding channels sends a burst of updates; one reload covers a burst.
+  const scheduleRefetch = useDebouncedCallback(() => {
     if (!hasPendingChanges) {
       refetch();
     }
-  }, [hasPendingChanges, refetch]);
-
-  const messageFilter = useCallback((message: Message) => {
-    return (
-      message.destination === 'broadcast' &&
-      message.source === 'channel' &&
-      message.type === 'channelsUpdated'
-    );
-  }, []);
-
-  useEffect(() => {
-    websocketContext.subscribe(messageFilter, handleMessage);
-    return () => {
-      websocketContext.unsubscribe(handleMessage);
-    };
-  }, [websocketContext, messageFilter, handleMessage]);
+  }, CHANNEL_REFRESH_DEBOUNCE_MS);
+  useSocketEvents(CHANNEL_LIST_MESSAGE_TYPES, scheduleRefetch, scheduleRefetch);
 
   // Shows the lookup outcome: the settings dialog for a found channel (or the
   // pending entry it matches), otherwise a message. Returns false on failure.
@@ -777,6 +749,9 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
                         <CircularProgress size={20} />
                       </div>
                     )}
+                    {error && displayChannels.length > 0 && (
+                      <LoadMoreFailed message="Could not load channels." onRetry={() => void refetch()} />
+                    )}
                   </>
                 ) : (
                   <>
@@ -877,43 +852,33 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
         </div>
       </Grow>
 
-      <Dialog
+      <ConfirmDialog
         open={deleteConfirmOpen}
-        onClose={() => setDeleteConfirmOpen(false)}
+        tone="danger"
+        title="Remove channel?"
+        confirmLabel="Remove"
+        onCancel={() => setDeleteConfirmOpen(false)}
+        onConfirm={handleDeleteConfirm}
       >
-        <DialogTitle>Remove channel?</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Removing this channel will stop automatic downloads but won't delete existing videos or history.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
-          <Button onClick={handleDeleteConfirm} color="error">
-            Remove
-          </Button>
-        </DialogActions>
-      </Dialog>
+        <Typography>
+          Removing this channel will stop automatic downloads but won't delete existing videos or history.
+        </Typography>
+      </ConfirmDialog>
 
-      <Dialog
+      <ConfirmDialog
         open={playlistDeleteConfirmOpen}
-        onClose={() => setPlaylistDeleteConfirmOpen(false)}
+        tone="danger"
+        title="Remove playlist?"
+        confirmLabel="Remove"
+        onCancel={() => setPlaylistDeleteConfirmOpen(false)}
+        onConfirm={handlePlaylistDeleteConfirm}
       >
-        <DialogTitle>Remove playlist?</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Removing this playlist will stop automatic downloads and hide it from your
-            subscriptions. Existing videos, media server playlists, and .m3u files won't be
-            deleted. Re-adding it later restores its previous settings.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPlaylistDeleteConfirmOpen(false)}>Cancel</Button>
-          <Button onClick={handlePlaylistDeleteConfirm} color="error">
-            Remove
-          </Button>
-        </DialogActions>
-      </Dialog>
+        <Typography>
+          Removing this playlist will stop automatic downloads and hide it from your
+          subscriptions. Existing videos, media server playlists, and .m3u files won't be
+          deleted. Re-adding it later restores its previous settings.
+        </Typography>
+      </ConfirmDialog>
 
       <HelpDialog open={helpDialogOpen} onClose={() => setHelpDialogOpen(false)} isMobile={isMobile} />
 

@@ -1,6 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-import WebSocketContext from '../contexts/WebSocketContext';
+import { useSocketEvents } from '../hooks/useSocketEvents';
+
+const ACTIVITY_MESSAGE_TYPES = ['videoActivityUpdated'];
 
 export type VideoActivityState = 'queued' | 'downloading';
 interface Snapshot {
@@ -20,9 +22,6 @@ export default function VideoActivityProvider({ token, children }: {
   children: React.ReactNode;
 }) {
   const [snapshot, setSnapshot] = useState<Snapshot>(EMPTY);
-  const ws = useContext(WebSocketContext);
-  const subscribe = ws?.subscribe;
-  const unsubscribe = ws?.unsubscribe;
   const refreshRef = useRef<() => void>(() => {});
   const refresh = useCallback(() => refreshRef.current(), []);
 
@@ -57,10 +56,6 @@ export default function VideoActivityProvider({ token, children }: {
       timer = setTimeout(() => { void fetchSnapshot(); }, 100);
     };
     refreshRef.current = schedule;
-    const filter = (message: { destination: string; type: string }) =>
-      (message.destination === 'broadcast' && message.type === 'videoActivityUpdated') ||
-      message.type === 'connectionRestored';
-    subscribe?.(filter, schedule);
     window.addEventListener('focus', schedule);
     const poll = setInterval(schedule, 30000);
     void fetchSnapshot();
@@ -69,11 +64,12 @@ export default function VideoActivityProvider({ token, children }: {
       controller.abort();
       clearTimeout(timer);
       clearInterval(poll);
-      unsubscribe?.(schedule);
       window.removeEventListener('focus', schedule);
       refreshRef.current = () => {};
     };
-  }, [token, subscribe, unsubscribe]);
+  }, [token]);
+
+  useSocketEvents(ACTIVITY_MESSAGE_TYPES, refresh, refresh);
 
   const value = useMemo(() => ({ snapshot, refresh }), [snapshot, refresh]);
   return <VideoActivityContext.Provider value={value}>{children}</VideoActivityContext.Provider>;

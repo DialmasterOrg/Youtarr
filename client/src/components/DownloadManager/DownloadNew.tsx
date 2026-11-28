@@ -14,6 +14,7 @@ import DownloadSettingsDialog from './ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from './ManualDownload/types';
 import ErrorBoundary from '../ErrorBoundary';
 import { useConfig } from '../../hooks/useConfig';
+import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
 
 const API_KEYS_SETTINGS_PATH = '/settings/api-keys';
 
@@ -36,6 +37,9 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
   const [showChannelSettingsDialog, setShowChannelSettingsDialog] = useState(false);
   const [channelDownloadError, setChannelDownloadError] = useState<string | null>(null);
   const navigate = useNavigate();
+  // ManualDownload guards its own double submit, but a tab switch remounts it
+  // while a request is still out; a batch submitted then must still be sent.
+  const { triggerDownloads } = useTriggerDownloads(token, { allowOverlap: true });
 
   // Use config hook to get default resolution and video count
   const { config } = useConfig(token);
@@ -83,37 +87,19 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
       url.includes('&') ? url.substring(0, url.indexOf('&')) : url
     );
 
-    const body: any = { urls: strippedUrls };
-    // Add settings to the request body if provided
-    if (settings) {
-      body.overrideSettings = settings;
-    }
-    if (videoChannelMap && Object.keys(videoChannelMap).length > 0) {
-      body.videoChannelMap = videoChannelMap;
-    }
-
-    let result: Response;
-    try {
-      result = await fetch('/triggerspecificdownloads', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-access-token': token || '',
-        },
-        body: JSON.stringify(body),
-      });
-    } catch {
-      throw new Error('Could not start downloads.');
-    }
-    if (!result.ok) {
-      const data: { error?: string } = await result.json().catch(() => ({}));
-      throw new Error(data.error || 'Could not start downloads.');
-    }
+    const result = await triggerDownloads({
+      urls: strippedUrls,
+      overrideSettings: settings ?? undefined,
+      videoChannelMap,
+    });
+    // ManualDownload shows a rejection's message and keeps its list, so only a
+    // queued batch may resolve.
+    if (!result?.ok) throw new Error(result?.message);
 
     downloadInitiatedRef.current = true;
     setTimeout(fetchRunningJobs, 1000);
     navigate('/downloads/activity');
-  }, [token, fetchRunningJobs, downloadInitiatedRef, navigate]);
+  }, [triggerDownloads, fetchRunningJobs, downloadInitiatedRef, navigate]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);

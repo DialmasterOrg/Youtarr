@@ -8,6 +8,7 @@ paths:
   - "client/src/components/Configuration/sections/ArrBridgeSection.tsx"
   - "client/src/components/Configuration/sections/components/Arr*.tsx"
   - "client/src/components/Configuration/hooks/useArrBridge*.ts"
+  - "client/src/components/Configuration/hooks/useServerOwnedSecret.ts"
   - "client/src/components/Configuration/utils/arrBridgeSetup.ts"
   - "client/src/components/Configuration/utils/arrBridgeSearches.ts"
   - "server/modules/constants/jobOutputPrefixes.js"

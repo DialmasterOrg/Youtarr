@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { serverErrorMessage } from '../utils/requestError';
 
 export const SUBFOLDERS_UPDATED_EVENT = 'subfolders-updated';
 
@@ -10,15 +11,6 @@ interface UseSubfoldersResult {
   refetch: () => Promise<void>;
   createSubfolder: (name: string) => Promise<void>;
   deleteSubfolder: (name: string) => Promise<void>;
-}
-
-/** Pull the server's `{ error }` message off an Axios error, or fall back. */
-function extractErrorMessage(err: unknown, fallback: string): string {
-  if (axios.isAxiosError(err)) {
-    const data = err.response?.data as { error?: string } | undefined;
-    if (data?.error) return data.error;
-  }
-  return fallback;
 }
 
 export function useSubfolders(token: string | null): UseSubfoldersResult {
@@ -48,7 +40,7 @@ export function useSubfolders(token: string | null): UseSubfoldersResult {
     try {
       await axios.post('/api/subfolders', { name }, { headers: { 'x-access-token': token } });
     } catch (err) {
-      throw new Error(extractErrorMessage(err, 'Failed to create subfolder'));
+      throw new Error(serverErrorMessage(err, 'Failed to create subfolder'));
     }
     window.dispatchEvent(new Event(SUBFOLDERS_UPDATED_EVENT));
   }, [token]);
@@ -60,7 +52,7 @@ export function useSubfolders(token: string | null): UseSubfoldersResult {
         headers: { 'x-access-token': token },
       });
     } catch (err) {
-      throw new Error(extractErrorMessage(err, 'Failed to delete subfolder'));
+      throw new Error(serverErrorMessage(err, 'Failed to delete subfolder'));
     }
     window.dispatchEvent(new Event(SUBFOLDERS_UPDATED_EVENT));
   }, [token]);

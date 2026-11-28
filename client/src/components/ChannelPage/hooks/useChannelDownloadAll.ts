@@ -1,20 +1,12 @@
 import { useState, useCallback } from 'react';
 import axios from 'axios';
+import { DownloadOverrideSettings } from '../../../types/downloadOverrideSettings';
+import { serverErrorMessage } from '../../../utils/requestError';
 
 export interface DownloadAllPreview {
   count: number;
   totalDurationSeconds: number;
   missingDurations: number;
-}
-
-export interface DownloadAllOverrideSettings {
-  resolution?: string;
-  allowRedownload?: boolean;
-  subfolder?: string | null;
-  audioFormat?: string | null;
-  rating?: string | null;
-  skipVideoFolder?: boolean;
-  protect?: boolean;
 }
 
 interface StartDownloadAllResponse {
@@ -30,19 +22,9 @@ interface UseChannelDownloadAllResult {
   fetchPreview: (tabType: string) => Promise<DownloadAllPreview | null>;
   startDownloadAll: (
     tabType: string,
-    overrideSettings?: DownloadAllOverrideSettings
+    overrideSettings?: DownloadOverrideSettings
   ) => Promise<number | null>;
   resetPreview: () => void;
-}
-
-function extractMessage(err: unknown, fallback: string): string {
-  if (axios.isAxiosError(err)) {
-    const data = err.response?.data;
-    if (data && typeof (data as { error?: unknown }).error === 'string') {
-      return (data as { error: string }).error;
-    }
-  }
-  return fallback;
 }
 
 function authHeaders(token: string): Record<string, string> {
@@ -72,7 +54,7 @@ export function useChannelDownloadAll(
         setPreview(res.data);
         return res.data;
       } catch (err: unknown) {
-        setError(extractMessage(err, 'Failed to load the download preview'));
+        setError(serverErrorMessage(err, 'Failed to load the download preview'));
         return null;
       } finally {
         setPreviewLoading(false);
@@ -84,7 +66,7 @@ export function useChannelDownloadAll(
   const startDownloadAll = useCallback(
     async (
       tabType: string,
-      overrideSettings?: DownloadAllOverrideSettings
+      overrideSettings?: DownloadOverrideSettings
     ): Promise<number | null> => {
       if (!channelId || !token) return null;
 
@@ -98,7 +80,7 @@ export function useChannelDownloadAll(
         );
         return res.data.queued;
       } catch (err: unknown) {
-        setError(extractMessage(err, 'Failed to start the download'));
+        setError(serverErrorMessage(err, 'Failed to start the download'));
         return null;
       } finally {
         setStarting(false);

@@ -843,6 +843,42 @@ describe('useChannelList', () => {
         },
       });
     });
+
+    test('a refetch held from an earlier page reloads the rows loaded now and replaces them', async () => {
+      type Params = { page: number; pageSize: number };
+      const channel = (id: string, uploader: string): Channel => ({
+        ...mockChannel, channel_id: id, url: `https://www.youtube.com/channel/${id}`, uploader,
+      });
+      let onServer = ['One', 'Two', 'Three', 'Four', 'Five', 'Six'].map((name, index) => channel(`UC${index}`, name));
+      axios.get.mockImplementation((_url: string, { params }: { params: Params }) => {
+        const start = (params.page - 1) * params.pageSize;
+        const channels = onServer.slice(start, start + params.pageSize);
+        return Promise.resolve({ data: { channels, total: onServer.length, totalPages: 3 } });
+      });
+
+      const { result, rerender } = renderHook(
+        ({ page }: { page: number }) => useChannelList({ ...defaultParams, page, pageSize: 2, append: true }),
+        { initialProps: { page: 1 } }
+      );
+      await waitFor(() => expect(result.current.channels).toHaveLength(2));
+      const heldRefetch = result.current.refetch;
+      rerender({ page: 2 });
+      await waitFor(() => expect(result.current.channels).toHaveLength(4));
+
+      // One channel was renamed and one removed since the pages loaded.
+      onServer = [channel('UC0', 'One renamed'), ...onServer.slice(2)];
+      axios.get.mockClear();
+      await act(async () => {
+        await heldRefetch();
+      });
+
+      // One request for exactly the four rows that were loaded.
+      expect(axios.get.mock.calls.map(([, config]: [string, { params: Params }]) => config.params))
+        .toEqual([expect.objectContaining({ page: 1, pageSize: 4 })]);
+      expect(result.current.channels.map((entry) => entry.uploader))
+        .toEqual(['One renamed', 'Three', 'Four', 'Five']);
+      expect(result.current.totalPages).toBe(3);
+    });
   });
 
   describe('Cleanup on Unmount', () => {

@@ -17,7 +17,6 @@ const createSectionProps = (
 ): React.ComponentProps<typeof DownloadPerformanceSection> => ({
   config: createConfig(),
   onConfigChange: jest.fn(),
-  onMobileTooltipClick: jest.fn(),
   ...overrides,
 });
 
@@ -851,28 +850,6 @@ describe('DownloadPerformanceSection Component', () => {
 
       expect(screen.getByText('Stall Detection On')).toBeInTheDocument();
       expect(screen.queryByText('Stall Detection Off')).not.toBeInTheDocument();
-    });
-  });
-
-  describe('InfoTooltip Integration', () => {
-    test('calls onMobileTooltipClick when provided', async () => {
-      const user = userEvent.setup();
-      const onMobileTooltipClick = jest.fn();
-      const props = createSectionProps({ onMobileTooltipClick });
-      renderWithProviders(<DownloadPerformanceSection {...props} />);
-
-
-      // InfoTooltip components are present with onMobileTooltipClick prop
-      expect(screen.getByRole('checkbox', { name: /enable stall detection/i })).toBeInTheDocument();
-    });
-
-    test('works without onMobileTooltipClick prop', async () => {
-      const user = userEvent.setup();
-      const props = createSectionProps({ onMobileTooltipClick: undefined });
-      renderWithProviders(<DownloadPerformanceSection {...props} />);
-
-
-      expect(screen.getByText('Download Performance Settings')).toBeInTheDocument();
     });
   });
 

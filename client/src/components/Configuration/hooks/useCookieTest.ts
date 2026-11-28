@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import axios from 'axios';
+import { serverErrorMessage } from '../../../utils/requestError';
 import { CookieTestResult } from '../types';
 
 const FALLBACK_ERROR = 'Could not run the cookie test. Check the server logs.';
@@ -21,10 +22,7 @@ export function useCookieTest(token: string | null) {
       setResult(response.data);
     } catch (error: unknown) {
       // 400 (no active file), 409 (already running), and 429 all carry { error }.
-      const message = axios.isAxiosError(error)
-        ? (error.response?.data as { error?: string } | undefined)?.error
-        : undefined;
-      setResult({ ok: false, error: message || FALLBACK_ERROR });
+      setResult({ ok: false, error: serverErrorMessage(error, FALLBACK_ERROR) });
     } finally {
       setTestedAt(new Date());
       setTesting(false);

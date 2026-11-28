@@ -6,14 +6,8 @@ import {
   Eye as EyeIcon,
 } from '../../../lib/icons';
 import ChannelNameDisplay from '../../shared/ChannelNameDisplay';
-import {
-  getStatusColor,
-  getStatusIcon,
-  getStatusLabel,
-  getStatusChipVariant,
-  getStatusChipStyle,
-  VideoStatus,
-} from '../../../utils/videoStatus';
+import VideoStatusChip from '../../shared/VideoStatusChip';
+import { VideoStatus } from '../../../utils/videoStatus';
 import { SHARED_THEMED_CHIP_SMALL_STYLE } from '../../shared/chipStyles';
 import { formatCompactCount, formatRelativeDate } from '../../../utils/formatters';
 import { isSelectableForDownload, isShort, SearchResult } from '../types';
@@ -26,17 +20,7 @@ const noopAddChannel: AddChannelHandler = () => {};
 // and only the states worth noticing get a chip.
 export function ResultStatusChip({ status }: { status: VideoStatus }) {
   if (status === 'never_downloaded') return null;
-  return (
-    <Chip
-      icon={getStatusIcon(status)}
-      label={getStatusLabel(status)}
-      size="small"
-      color={getStatusColor(status)}
-      variant={getStatusChipVariant(status)}
-      className="shrink-0"
-      style={{ ...SHARED_THEMED_CHIP_SMALL_STYLE, ...getStatusChipStyle(status) }}
-    />
-  );
+  return <VideoStatusChip status={status} className="shrink-0" />;
 }
 
 interface ResultChannelProps {

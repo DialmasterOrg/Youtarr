@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert, Box, Typography } from '../../../ui';
-import { InfoTooltip } from '../../common/InfoTooltip';
+import { InfoTooltip } from '../../../shared/InfoTooltip';
 import { PlexConnectionStatus } from '../../types';
 import {
   PlexLibrary,
@@ -17,7 +17,6 @@ interface DefaultPlexLibraryDisplayProps {
   plexConnectionStatus: PlexConnectionStatus;
   hasPlexServerConfigured: boolean;
   hasPlexApiKey: boolean;
-  onMobileTooltipClick?: (text: string) => void;
 }
 
 /**
@@ -36,7 +35,6 @@ export const DefaultPlexLibraryDisplay: React.FC<DefaultPlexLibraryDisplayProps>
   plexConnectionStatus,
   hasPlexServerConfigured,
   hasPlexApiKey,
-  onMobileTooltipClick,
 }) => {
   if (libraryId) {
     const display = resolveLibraryDisplay(libraries, libraryId);
@@ -54,7 +52,6 @@ export const DefaultPlexLibraryDisplay: React.FC<DefaultPlexLibraryDisplayProps>
           />
           <InfoTooltip
             text={DEFAULT_LIBRARY_TOOLTIP}
-            onMobileClick={onMobileTooltipClick}
           />
         </Box>
         {plexConnectionStatus === 'not_connected' && (

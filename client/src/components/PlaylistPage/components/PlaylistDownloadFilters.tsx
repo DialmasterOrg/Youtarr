@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Button, List, ListItem, TextField, Typography } from '../../ui';
 import { CheckCircle as CheckCircleIcon, XCircle as CancelIcon } from '../../../lib/icons';
-import { formatDurationClock } from '../../../utils';
+import { formatDuration } from '../../../utils';
 import { hasDownloadFilters, PlaylistFilterValues, usePlaylistFilterPreview } from '../hooks/usePlaylistFilterPreview';
 
 interface PlaylistDownloadFiltersProps {
@@ -217,7 +217,7 @@ const PlaylistDownloadFilters: React.FC<PlaylistDownloadFiltersProps> = ({
                     </span>
                     <span className="min-w-0 flex-1 break-words">{video.title || video.youtube_id}</span>
                     <span className="shrink-0 whitespace-nowrap text-muted-foreground">
-                      {formatDurationClock(video.duration)}
+                      {formatDuration(video.duration)}
                     </span>
                   </ListItem>
                 ))}

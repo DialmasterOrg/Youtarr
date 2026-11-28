@@ -1,3 +1,5 @@
+import { youtubeVideoUrl } from '../../../utils/youtubeUrls';
+
 export interface ParsedUrl {
   url: string;
   youtubeId: string;
@@ -111,7 +113,7 @@ export function parseYoutubeUrls(
 
     seenIds.add(videoId);
     valid.push({
-      url: `https://www.youtube.com/watch?v=${videoId}`,
+      url: youtubeVideoUrl(videoId),
       youtubeId: videoId,
     });
   }

@@ -161,14 +161,8 @@ const DialogTitle = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
 );
 DialogTitle.displayName = 'DialogTitle';
 
-const DialogContentBody = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, children, ...props }, ref) => (
-    <div ref={ref} className={cn('flex-1 overflow-y-auto px-6 py-4 text-sm', className)} {...props}>
-      {children}
-    </div>
-  )
-);
-DialogContentBody.displayName = 'DialogContentBody';
+// The same element under its older name.
+const DialogContentBody = DialogContent;
 
 const DialogContentText = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
   ({ className, children, ...props }, ref) => (

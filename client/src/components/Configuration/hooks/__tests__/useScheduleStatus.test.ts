@@ -194,14 +194,23 @@ describe('useScheduleStatus', () => {
       'downloadPauseChanged', 'rescanStatus', 'connectionRestored',
     ];
 
-    test.each(REFRESH_TYPES)('the filter matches %s messages', async (type) => {
+    // Delivers a message the way WebSocketProvider does: payload only.
+    const deliver = (subscribers: Subscriber[], type: string) => {
+      act(() => {
+        subscribers.filter((s) => s.filter({ type })).forEach((s) => s.callback({}));
+        jest.advanceTimersByTime(300);
+      });
+    };
+
+    test.each(REFRESH_TYPES)('refetches after a %s message', async (type) => {
       axios.get.mockResolvedValue({ data: { tasks: [task] } });
       const subscribers: Subscriber[] = [];
       const { result } = renderHook(() => useScheduleStatus('tok'), { wrapper: makeWrapper(subscribers) });
       await waitFor(() => expect(result.current.loading).toBe(false));
 
-      expect(subscribers).toHaveLength(1);
-      expect(subscribers[0].filter({ type })).toBe(true);
+      deliver(subscribers, type);
+
+      await waitFor(() => expect(axios.get).toHaveBeenCalledTimes(2));
     });
 
     test('ignores other message types', async () => {
@@ -210,7 +219,9 @@ describe('useScheduleStatus', () => {
       const { result } = renderHook(() => useScheduleStatus('tok'), { wrapper: makeWrapper(subscribers) });
       await waitFor(() => expect(result.current.loading).toBe(false));
 
-      expect(subscribers[0].filter({ type: 'downloadProgress' })).toBe(false);
+      deliver(subscribers, 'downloadProgress');
+
+      expect(axios.get).toHaveBeenCalledTimes(1);
     });
 
     test('debounces a burst of matching messages into one refetch', async () => {
@@ -266,17 +277,6 @@ describe('useScheduleStatus', () => {
         document.dispatchEvent(new Event('visibilitychange'));
       });
       await waitFor(() => expect(axios.get).toHaveBeenCalledTimes(2));
-    });
-
-    test('unsubscribes on unmount', async () => {
-      axios.get.mockResolvedValue({ data: { tasks: [task] } });
-      const subscribers: Subscriber[] = [];
-      const { result, unmount } = renderHook(() => useScheduleStatus('tok'), { wrapper: makeWrapper(subscribers) });
-      await waitFor(() => expect(result.current.loading).toBe(false));
-      expect(subscribers).toHaveLength(1);
-
-      unmount();
-      expect(subscribers).toHaveLength(0);
     });
   });
 

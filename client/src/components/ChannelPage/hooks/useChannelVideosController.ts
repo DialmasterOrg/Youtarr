@@ -13,7 +13,7 @@ import { useChannelVideoQuery } from './useChannelVideoQuery';
 import { useChannelVideoRowActions } from './useChannelVideoRowActions';
 import { useChannelVideoSelection } from './useChannelVideoSelection';
 import { useChannelVideos } from './useChannelVideos';
-import { useInfiniteScrollTrigger } from './useInfiniteScrollTrigger';
+import { useInfiniteScrollTrigger } from '../../../hooks/useInfiniteScrollTrigger';
 import { useNewVideosNotice } from './useNewVideosNotice';
 
 interface UseChannelVideosControllerParams {

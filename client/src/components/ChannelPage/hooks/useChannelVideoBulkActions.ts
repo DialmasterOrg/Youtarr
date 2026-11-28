@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { toDownloadOverrideSettings } from '../../../utils/downloadOverrideSettings';
 import { describeRequestError } from '../../../utils/requestError';
+import { youtubeVideoUrl } from '../../../utils/youtubeUrls';
 import { ChannelVideo } from '../../../types/ChannelVideo';
 import { DownloadSettings } from '../../DownloadManager/ManualDownload/types';
 import { useVideoActivity } from '../../../providers/VideoActivityProvider';
@@ -67,15 +68,15 @@ export function useChannelVideoBulkActions({
     setDownloadDialogOpen(false);
     const eligibleIds = checkedBoxes.filter((id) => !snapshot.videos[id]?.state);
     if (!eligibleIds.length) return;
-    const urls = eligibleIds.map((id) => `https://www.youtube.com/watch?v=${id}`);
-    const success = await triggerDownloads({
+    const urls = eligibleIds.map(youtubeVideoUrl);
+    const result = await triggerDownloads({
       urls,
       overrideSettings: toDownloadOverrideSettings(settings),
       channelId,
     });
-    if (success === null) return;
-    if (!success) {
-      notify('Failed to queue downloads', 'error');
+    if (!result) return;
+    if (!result.ok) {
+      notify(result.message, 'error');
       return;
     }
     clearChecked();

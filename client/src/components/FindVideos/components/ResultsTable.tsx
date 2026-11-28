@@ -10,15 +10,14 @@ import {
   TableCell,
   TableSortLabel,
 } from '../../ui';
-import { formatDurationClock } from '../../../utils';
+import { formatDuration } from '../../../utils';
 import { defaultDirectionFor, ResultSort, SortKey } from '../sortResults';
 import {
   isSelectableForDownload,
   ResultSelection,
   SearchResult,
-  THUMB_WIDTH,
-  THUMB_HEIGHT,
 } from '../types';
+import RemoteThumbnail from '../../shared/RemoteThumbnail';
 import {
   AddChannelHandler,
   DownloadButton,
@@ -117,20 +116,7 @@ export default function ResultsTable({
                   </TableCell>
                 )}
                 <TableCell>
-                  <div
-                    className="relative inline-block overflow-hidden bg-[var(--media-placeholder-background)] rounded-[var(--radius-thumb)]"
-                    style={{ width: THUMB_WIDTH, height: THUMB_HEIGHT }}
-                  >
-                    {result.thumbnailUrl && (
-                      <img
-                        src={result.thumbnailUrl}
-                        alt=""
-                        className="block object-cover rounded-[var(--radius-thumb)]"
-                        style={{ width: THUMB_WIDTH, height: THUMB_HEIGHT }}
-                        loading="lazy"
-                      />
-                    )}
-                  </div>
+                  <RemoteThumbnail src={result.thumbnailUrl} />
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2" className="line-clamp-2 whitespace-normal">
@@ -150,7 +136,7 @@ export default function ResultsTable({
                 </TableCell>
                 <TableCell className="whitespace-nowrap">
                   <span className="inline-flex items-center gap-1.5">
-                    {formatDurationClock(result.duration) || '-'}
+                    {formatDuration(result.duration) || '-'}
                     <ShortBadge duration={result.duration} />
                   </span>
                 </TableCell>

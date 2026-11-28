@@ -275,26 +275,23 @@ describe('useActiveDownloads', () => {
     expect(axios.get).toHaveBeenCalledTimes(1);
   });
 
-  test('unsubscribes and cancels a pending refetch on unmount', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] });
+  test('probes again when the connection is restored, clearing a stale active state', async () => {
+    axios.get.mockResolvedValueOnce({ data: [{ id: 'a', status: 'In Progress' }] });
 
-    const { unmount } = renderHook(() => useActiveDownloads(mockToken), {
+    const { result } = renderHook(() => useActiveDownloads(mockToken), {
       wrapper,
     });
 
     await waitFor(() => {
-      expect(axios.get).toHaveBeenCalledTimes(1);
+      expect(result.current.active).toBe(true);
     });
 
-    emitMessage({
-      destination: 'broadcast',
-      type: 'downloadComplete',
-      payload: { videos: [] },
-    });
-    unmount();
+    axios.get.mockResolvedValueOnce({ data: [{ id: 'a', status: 'Terminated' }] });
+    emitMessage({ destination: 'local', type: 'connectionRestored', payload: {} });
     advanceTimers(1000);
 
-    expect(unsubscribe).toHaveBeenCalled();
-    expect(axios.get).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(result.current.active).toBe(false);
+    });
   });
 });

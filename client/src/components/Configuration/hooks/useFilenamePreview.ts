@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
+import { serverErrorMessage } from '../../../utils/requestError';
 
 export interface FilenamePreviewData {
   fileLine: string;
@@ -18,10 +19,6 @@ export interface UseFilenamePreviewResult {
   run: (prefix: string) => Promise<FilenamePreviewData | null>;
   /** True when `data` is non-null AND the active prefix differs from previewedPrefix. */
   isStale: (currentPrefix: string) => boolean;
-}
-
-interface ApiErrorBody {
-  error?: string;
 }
 
 /**
@@ -51,9 +48,7 @@ export function useFilenamePreview(token: string | null): UseFilenamePreviewResu
       setPreviewedPrefix(prefix);
       return response.data;
     } catch (err: unknown) {
-      const axiosErr = err as AxiosError<ApiErrorBody>;
-      const apiMessage = axiosErr.response?.data?.error;
-      setError(apiMessage || 'Preview failed. Please try again.');
+      setError(serverErrorMessage(err, 'Preview failed. Please try again.'));
       // Keep prior data; the stale indicator in the UI relies on previewedPrefix
       // matching the most recent successful render, not the most recent attempt.
       return null;

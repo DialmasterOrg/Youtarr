@@ -4,6 +4,7 @@ import { Close as CloseIcon, Lock, Link as LinkIcon, Loader2 } from '../../../li
 import { History as HistoryIcon } from 'lucide-react';
 import { VideoInfo } from './types';
 import MembersAccessChip from '../../shared/MembersAccessChip';
+import { formatDuration } from '../../../utils';
 
 interface VideoChipProps {
   video: VideoInfo;
@@ -139,17 +140,6 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete, isEnriching = fa
 
   const open = Boolean(anchorEl);
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
-
-  const formatDuration = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-
-    if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-    return `${minutes}:${secs.toString().padStart(2, '0')}`;
-  };
 
   const formattedPublishDate = video.publishedAt
     ? new Date(video.publishedAt * 1000).toLocaleDateString(undefined, {

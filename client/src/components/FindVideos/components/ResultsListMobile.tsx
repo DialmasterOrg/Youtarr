@@ -1,13 +1,8 @@
 import React from 'react';
-import { Checkbox, Typography, Chip } from '../../ui';
-import { formatDurationClock } from '../../../utils';
-import {
-  isSelectableForDownload,
-  ResultSelection,
-  SearchResult,
-  THUMB_WIDTH,
-  THUMB_HEIGHT,
-} from '../types';
+import { Checkbox, Typography } from '../../ui';
+import RemoteThumbnail from '../../shared/RemoteThumbnail';
+import { DurationBadge } from '../../shared/thumbnailOverlays';
+import { isSelectableForDownload, ResultSelection, SearchResult } from '../types';
 import {
   AddChannelHandler,
   DownloadButton,
@@ -32,7 +27,6 @@ export default function ResultsListMobile({
   return (
     <div className="flex flex-col">
       {results.map((result) => {
-        const durationLabel = formatDurationClock(result.duration);
         const selectable = Boolean(selection) && isSelectableForDownload(result.status);
         const checked = selectable && selection!.isChecked(result.youtubeId);
         return (
@@ -65,35 +59,9 @@ export default function ResultsListMobile({
                 />
               </div>
             )}
-            <div
-              className="relative shrink-0 overflow-hidden bg-[var(--media-placeholder-background)] rounded-[var(--radius-thumb)]"
-              style={{ width: THUMB_WIDTH, height: THUMB_HEIGHT }}
-            >
-              {result.thumbnailUrl && (
-                <img
-                  src={result.thumbnailUrl}
-                  alt=""
-                  className="block object-cover rounded-[var(--radius-thumb)]"
-                  style={{ width: THUMB_WIDTH, height: THUMB_HEIGHT }}
-                  loading="lazy"
-                />
-              )}
-              {durationLabel && (
-                <Chip
-                  label={durationLabel}
-                  size="small"
-                  style={{
-                    position: 'absolute',
-                    bottom: 4,
-                    right: 4,
-                    backgroundColor: 'var(--media-overlay-background-strong)',
-                    color: 'var(--media-overlay-foreground)',
-                    fontSize: '0.7rem',
-                    height: 18,
-                  }}
-                />
-              )}
-            </div>
+            <RemoteThumbnail src={result.thumbnailUrl} className="shrink-0">
+              <DurationBadge duration={result.duration} compact />
+            </RemoteThumbnail>
             <div className="flex-1 min-w-0 flex flex-col gap-0.5">
               <Typography
                 variant="body2"

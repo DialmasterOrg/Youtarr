@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import useMediaQuery from '../../hooks/useMediaQuery';
 import Subscriptions from '../Subscriptions';
-import { renderWithProviders, createMockWebSocketContext } from '../../test-utils';
+import { renderWithProviders, createMockWebSocketContext, deliverSocketMessage } from '../../test-utils';
 import { Channel } from '../../types/Channel';
 
 // Mock custom hooks
@@ -299,6 +299,32 @@ describe('Subscriptions Component', () => {
 
       renderSubscriptions();
       expect(screen.getByRole('progressbar')).toBeInTheDocument();
+    });
+
+    test('stops loading more channels after a failed load and offers a retry', async () => {
+      const originalObserver = window.IntersectionObserver;
+      const observerMock = jest.fn(() => ({ observe: jest.fn(), disconnect: jest.fn() }));
+      window.IntersectionObserver = observerMock as unknown as typeof IntersectionObserver;
+      useConfig.mockReturnValue({ config: { preferredResolution: '1080', channelVideosHotLoad: true } });
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 4,
+        totalPages: 2,
+        loading: false,
+        error: 'Failed to load channels',
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
+
+      try {
+        renderSubscriptions();
+        await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+        expect(mockRefetchChannels).toHaveBeenCalledTimes(1);
+        expect(observerMock).not.toHaveBeenCalled();
+      } finally {
+        window.IntersectionObserver = originalObserver;
+      }
     });
 
     test('keeps channel list rendered during a refetch when items already loaded', () => {
@@ -1512,74 +1538,35 @@ describe('Subscriptions Component', () => {
   });
 
   describe('WebSocket Integration', () => {
-    test('subscribes to websocket on mount', () => {
-      const wsCtx = createMockWebSocketContext();
-      renderWithProviders(
-        <Subscriptions token={mockToken} />,
-        { websocketValue: wsCtx }
-      );
-
-      expect(wsCtx.subscribe).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.any(Function)
-      );
+    beforeEach(() => {
+      jest.useFakeTimers();
     });
 
-    test('unsubscribes from websocket on unmount', () => {
-      const wsCtx = createMockWebSocketContext();
-      const { unmount } = renderWithProviders(
-        <Subscriptions token={mockToken} />,
-        { websocketValue: wsCtx }
-      );
-
-      unmount();
-
-      expect(wsCtx.unsubscribe).toHaveBeenCalled();
+    afterEach(() => {
+      jest.runOnlyPendingTimers();
+      jest.useRealTimers();
     });
 
-    test('refetches channels when channelsUpdated message received', async () => {
-      useChannelMutations.mockReturnValue({
-        pendingAdditions: [],
-        deletedChannels: [],
-        isAddingChannel: false,
-        isSaving: false,
-        lookupChannel: mockLookupChannel,
-      addPendingChannel: mockAddPendingChannel,
-      updatePendingChannel: mockUpdatePendingChannel,
-        queueChannelForDeletion: mockQueueChannelForDeletion,
-        undoChanges: mockUndoChanges,
-        saveChanges: mockSaveChanges,
-        hasPendingChanges: false,
-      });
+    test.each(['channelsUpdated', 'connectionRestored'])(
+      'refetches channels once after a burst of %s messages',
+      (type) => {
+        const wsCtx = createMockWebSocketContext();
+        renderWithProviders(
+          <Subscriptions token={mockToken} />,
+          { websocketValue: wsCtx }
+        );
 
-      const wsCtx = createMockWebSocketContext();
-      renderWithProviders(
-        <Subscriptions token={mockToken} />,
-        { websocketValue: wsCtx }
-      );
+        deliverSocketMessage(wsCtx, { type: 'videosUpdated' });
+        deliverSocketMessage(wsCtx, { type });
+        deliverSocketMessage(wsCtx, { type });
+        expect(mockRefetchChannels).not.toHaveBeenCalled();
 
-      const [messageFilter, handleMessage] = wsCtx.subscribe.mock.calls[0];
-
-      // Test filter
-      expect(messageFilter({
-        destination: 'broadcast',
-        source: 'channel',
-        type: 'channelsUpdated',
-      })).toBe(true);
-
-      expect(messageFilter({
-        destination: 'private',
-        source: 'channel',
-        type: 'channelsUpdated',
-      })).toBe(false);
-
-      // Trigger message handler
-      handleMessage();
-
-      await waitFor(() => {
-        expect(mockRefetchChannels).toHaveBeenCalled();
-      });
-    });
+        act(() => {
+          jest.advanceTimersByTime(1000);
+        });
+        expect(mockRefetchChannels).toHaveBeenCalledTimes(1);
+      }
+    );
 
     test('does not refetch when there are pending changes', () => {
       useChannelMutations.mockReturnValue({
@@ -1602,10 +1589,11 @@ describe('Subscriptions Component', () => {
         { websocketValue: wsCtx }
       );
 
-      const [, handleMessage] = wsCtx.subscribe.mock.calls[0];
-
-      // Trigger message handler
-      handleMessage();
+      deliverSocketMessage(wsCtx, { type: 'channelsUpdated' });
+      deliverSocketMessage(wsCtx, { type: 'connectionRestored' });
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
 
       // Should not refetch when there are pending changes
       expect(mockRefetchChannels).not.toHaveBeenCalled();

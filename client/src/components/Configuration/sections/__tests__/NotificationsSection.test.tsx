@@ -23,7 +23,6 @@ const createSectionProps = (
   config: createConfig(),
   onConfigChange: jest.fn(),
   setSnackbar: jest.fn(),
-  onMobileTooltipClick: jest.fn(),
   ...overrides,
 });
 
@@ -638,26 +637,6 @@ describe('NotificationsSection Component', () => {
       expect(
         screen.getByText('Link template can only use the variable {youtubeId}.')
       ).toBeInTheDocument();
-    });
-  });
-
-  describe('InfoTooltip Integration', () => {
-    test('renders section with InfoTooltip support', async () => {
-      const user = setupUser();
-      const props = createSectionProps();
-      renderWithProviders(<NotificationsSection {...props} />);
-
-
-      expect(screen.getByText('Enable Notifications')).toBeInTheDocument();
-    });
-
-    test('works without onMobileTooltipClick prop', async () => {
-      const user = setupUser();
-      const props = createSectionProps({ onMobileTooltipClick: undefined });
-      renderWithProviders(<NotificationsSection {...props} />);
-
-
-      expect(screen.getByText('Notifications')).toBeInTheDocument();
     });
   });
 

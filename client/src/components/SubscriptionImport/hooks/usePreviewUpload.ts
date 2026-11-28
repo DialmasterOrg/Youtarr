@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import axios, { AxiosError } from 'axios';
+import { serverErrorMessage } from '../../../utils/requestError';
 import { ImportSource, PreviewResponse } from '../../../types/subscriptionImport';
 
 interface PreviewError {
@@ -25,14 +26,9 @@ export function usePreviewUpload(token: string) {
       });
       return res.data;
     } catch (err: unknown) {
-      let message = 'Upload failed';
-      let details: string | undefined;
-      if (err instanceof AxiosError && err.response?.data) {
-        message = err.response.data.error || err.message;
-        details = err.response.data.details || undefined;
-      } else if (err instanceof Error) {
-        message = err.message;
-      }
+      const message = serverErrorMessage(err, 'Upload failed');
+      const details: string | undefined =
+        (err instanceof AxiosError && err.response?.data?.details) || undefined;
       setError({ message, details });
       throw new Error(message);
     } finally {

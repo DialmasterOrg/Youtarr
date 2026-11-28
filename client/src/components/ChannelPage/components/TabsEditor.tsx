@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { serverErrorMessage } from '../../../utils/requestError';
 import {
   Alert,
   Box,
@@ -86,13 +87,7 @@ function TabsEditor({
           : undefined,
       });
     } catch (err) {
-      let message = 'Failed to refresh tabs';
-      if (axios.isAxiosError(err) && err.response?.data?.error) {
-        message = err.response.data.error;
-      } else if (err instanceof Error) {
-        message = err.message;
-      }
-      setRefreshError(message);
+      setRefreshError(serverErrorMessage(err, 'Failed to refresh tabs'));
     } finally {
       setRefreshing(false);
     }

@@ -255,7 +255,7 @@ describe('VideoModal', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     protectionReturn.error = null;
-    mockTriggerDownloads.mockResolvedValue(true);
+    mockTriggerDownloads.mockResolvedValue({ ok: true });
     // Reset shared metadata mock so tests don't bleed
     videoMetadataReturn.metadata = null;
     videoMetadataReturn.loading = false;
@@ -762,6 +762,17 @@ describe('VideoModal', () => {
       await waitFor(() => {
         expect(screen.getByText('Network error')).toBeInTheDocument();
       });
+    });
+
+    test('shows the fallback, not the transport message, when the server sent no error text', async () => {
+      axios.post.mockRejectedValueOnce(new Error('Request failed with status code 502'));
+
+      renderModal({ video: neverDownloadedVideo });
+
+      await userEvent.click(screen.getByRole('button', { name: /ignore/i }));
+
+      expect(await screen.findByText('Failed to update ignore status')).toBeInTheDocument();
+      expect(screen.queryByText('Request failed with status code 502')).not.toBeInTheDocument();
     });
   });
 

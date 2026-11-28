@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
+import { serverErrorMessage } from '../../../utils/requestError';
 
 export interface RemovedVideosLibraryCheck {
   ok: boolean;
@@ -59,11 +60,6 @@ export interface UseRemovedVideosReturn {
 
 const LOAD_ERROR = 'Failed to load the deleted and missing video counts';
 
-function serverMessage(err: unknown, fallback: string): string {
-  const message = (err as { response?: { data?: { error?: unknown } } })?.response?.data?.error;
-  return typeof message === 'string' ? message : fallback;
-}
-
 export function useRemovedVideos(token: string | null): UseRemovedVideosReturn {
   const [summary, setSummary] = useState<RemovedVideosSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -98,7 +94,7 @@ export function useRemovedVideos(token: string | null): UseRemovedVideosReturn {
       const response = await request();
       return response.data;
     } catch (err: unknown) {
-      setActionError(serverMessage(err, fallback));
+      setActionError(serverErrorMessage(err, fallback));
       return null;
     } finally {
       // Also after a failure: a purge that failed partway still forgot the

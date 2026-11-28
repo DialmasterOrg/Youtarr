@@ -3,7 +3,8 @@ import { Box, Card, CardContent, Chip, Stack, Tooltip, Typography } from '../../
 import { MediaServerStatus, MediaServerType, Playlist, PlaylistSyncStatus } from '../../../types/playlist';
 import LibraryDownloadsGroup from './LibraryDownloadsGroup';
 import MediaServerSyncGroup from './MediaServerSyncGroup';
-import OpenInYouTubeLink, { youtubePlaylistUrl } from '../../shared/OpenInYouTubeLink';
+import OpenInYouTubeLink from '../../shared/OpenInYouTubeLink';
+import { youtubePlaylistUrl } from '../../../utils/youtubeUrls';
 import PlaylistCountsInfo from '../../shared/PlaylistCountsInfo';
 import { formatPlaylistCounts } from '../../../utils/playlistCounts';
 import { hasDownloadFilters } from '../hooks/usePlaylistFilterPreview';

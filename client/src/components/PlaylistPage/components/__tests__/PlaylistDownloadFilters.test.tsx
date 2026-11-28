@@ -194,7 +194,7 @@ describe('PlaylistDownloadFilters', () => {
       const { user } = setup({ title_filter_regex: 'Episode' });
       await runPreview(user);
       const items = await screen.findAllByRole('listitem');
-      expect(items.map((item) => item.textContent)).toEqual(['MatchesEpisode 115:00', 'SkippedTrailer1:00']);
+      expect(items.map((item) => item.textContent)).toEqual(['MatchesEpisode 115m', 'SkippedTrailer1m']);
     });
 
     test('shows no length for a video whose duration is unknown', async () => {

@@ -23,6 +23,8 @@ paths:
   - "client/src/components/Subscriptions/**/*"
   - "client/src/components/shared/AddChannelDialog.tsx"
   - "client/src/components/FindChannels/**/*"
+  - "client/src/hooks/useYoutubeSearch.ts"
+  - "client/src/hooks/useInfiniteScrollTrigger.ts"
   - "client/src/components/SubscriptionImport/**/*"
   - "client/src/utils/tabDownloadStats.ts"
   - "client/src/utils/channelTabs.ts"
@@ -45,13 +47,17 @@ Channel subscriptions, listings, title filters, per-tab download counts, channel
 - A listing the list request waited for also leaves a `lastResult`, which views that asked meanwhile need. The waiting client gets its `finishedAt` as `listingFinishedAt` and offers nothing for that result: its rows already hold those videos.
 - `useChannelVideos` reports a background refresh as `refreshSeq`, a new value per response, not a boolean: a latched flag never re-triggers tracking when the same view is refreshed again.
 - `ChannelVideos.tsx` is layout only; `useChannelVideosController` wires the list's hooks and has no test file of its own: `ChannelVideos.test.tsx` covers the wiring, and each hook's rules are tested beside it.
+- `channelVideoRowState` holds the one rule for which channel page rows can be selected, shared by the three views, select-all and the table header: separate copies drifted, and select-all picked YouTube-removed and live videos no row could uncheck.
 - `useChannelVideoOverrides` drops ignore and protection toggles when the list is replaced (new `resetKey`, any page change), except when an infinite list appends a later page. A same-page reload keeps them, because it can answer before a toggle is saved.
 - `useChannelVideos.refetch` on an infinite list past page 1 requests every loaded page at once and replaces the list: merging one reloaded page left earlier rows stale. The page number stays, so toggles and scroll position hold.
 - `useChannelVideos.refetch` always runs the current render's fetch: Load More and delete call it after a long wait, and a captured one would reload the pages loaded back then over a list that has since grown.
-- The channel list pauses `useInfiniteScrollTrigger` while its last load failed and shows a Retry that calls `refetch`: the page number stays on the failed page, so loading the next one would skip its rows.
+- The channel page's list and the Channels page both pause `useInfiniteScrollTrigger` while the last load failed and show a Retry that calls `refetch`: the page number stays on the failed page, so loading the next one would skip its rows.
 - `useChannelVideos.topLoadSeq` changes on every load from the first row. `useNewVideosNotice` withdraws its offer on it, because a reload past page 1 keeps the page number and already brings in the offered videos.
 - `useChannelVideoQuery` returns to page 1 during render, not in an effect: an effect commits the old page with the new filter first, and the list requests that page before page 1.
 - `useInfiniteScrollTrigger` asks for a page whenever the sentinel is in range and nothing loads, and then not again until `loading` turns true: the sentinel can be reported again before the fetch starts, and a second ask would skip a page.
+- A list with no fetch (Download History reveals jobs it already holds) leaves `loading` out of `useInfiniteScrollTrigger`, which then checks the sentinel again after each ask; a constant `loading` would stop it after the first reveal.
+- `useInfiniteScrollTrigger` returns a callback ref and keeps the sentinel in state: a sentinel that mounts later (the Channels tab after Playlists) changes nothing else, and a plain ref left it unwatched.
+- `useInfiniteScrollTrigger` ignores a report that arrives after its effect cleaned up: `disconnect()` keeps already queued reports, and one landing during a reload set the ask-once wait with no load left to end it.
 - `useChannelTabs` uses only the first tabs answer per channel (the first request or a 2-second retry): a later one would reset the tab the user chose, and one from before a channel switch would show the previous channel's tabs.
 - `utils/channelTabs.ts` defines each channel tab (label, media type, auto-download label) for the channel page, its settings and the subscription list. `TabsEditor` keeps its own wording in a map typed by `ChannelTabType`, so a new tab must be added there to compile.
 - A new tab or media type also needs `tabsUtils.js` on the server and the client's media type lists that are not driven by tabs: `RssFeedsSection`, the API key `PolicyEditor`, `utils/videoStatus` and the manual download `VideoChip`.
@@ -70,6 +76,9 @@ Channel subscriptions, listings, title filters, per-tab download counts, channel
 - Both cached channel thumbnail writers (`channelThumbnails.resizeChannelThumbnail` and the post-processor's fallback) cap the longest side at 512 px without upscaling, via `constants/channelThumbnail.js`: avatar sources run from under 200 px to over 4000, so a percentage fits neither.
 - The channel list calls `backfillChannelImagesInBackground`, never awaited, which skips channels checked in the last 15 minutes; a poster or backdrop setting change forgets every check, so newly enabled images appear on the next load.
 - The Channels page's add input is also the list search (`/getchannels?search=`, debounced). Enter adds only `isExplicitChannelReference` input, because a bare word may be a search; the search is held while a lookup runs so the list does not empty behind it.
+- `useChannelList.refetch` on an infinite list past page 1 requests every loaded row (one request up to the server's 128-row limit) and replaces the list: merging one reloaded page kept each channel's older copy and any removed channel.
+- That `refetch` is stable and runs the current render's fetch: a save holds it across an await, and one captured earlier replaced the list with fewer pages than the page counter said were loaded.
+- The Channels page debounces socket-triggered reloads by a second, because adding channels sends a burst of `channelsUpdated`; Save and Retry reload at once.
 - `useChannelList` applies only its newest request's response, because search-as-you-type overlaps requests. An unmatched name goes to Find Channels as `?q=`, run once on open: a YouTube search costs 100 quota units or seconds of yt-dlp, so never as-you-type.
 
 ## Per-tab download counts (issue #865)

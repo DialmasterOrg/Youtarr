@@ -27,7 +27,6 @@ import DownloadManager from './components/DownloadManager';
 import VideosPage from './components/VideosPage';
 import FindVideos from './components/FindVideos';
 import FindChannels from './components/FindChannels';
-import LocalLogin from './components/LocalLogin';
 import InitialSetup from './components/InitialSetup';
 import ChannelPage from './components/ChannelPage';
 import PlaylistPage from './components/PlaylistPage';

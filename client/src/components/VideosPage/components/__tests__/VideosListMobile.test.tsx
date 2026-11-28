@@ -41,7 +41,6 @@ const renderList = (overrides: Partial<React.ComponentProps<typeof VideosListMob
     onToggleSelect: jest.fn(),
     onOpenModal: jest.fn(),
     onToggleProtection: jest.fn(),
-    onImageError: jest.fn(),
     onAddChannel: jest.fn(),
   };
   render(
@@ -50,7 +49,6 @@ const renderList = (overrides: Partial<React.ComponentProps<typeof VideosListMob
         videos={[sampleVideo]}
         selectedVideos={[]}
         enabledChannels={enabledChannels}
-        imageErrors={{}}
         {...handlers}
         {...overrides}
       />

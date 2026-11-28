@@ -7,6 +7,7 @@ import {
   hiddenGrabNote, requestedRetryNote,
 } from '../../utils/arrBridgeSetup';
 import { ArrBridgeListFrame } from './ArrBridgeListFrame';
+import { youtubeVideoUrl } from '../../../../utils/youtubeUrls';
 
 const ROW_COLUMNS = 'md:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_minmax(0,1.5fr)_auto]';
 const READY_HINT = "Waiting for Sonarr/Radarr to import it. If it stays here, check the app's queue for the reason.";
@@ -39,7 +40,7 @@ const GrabRow: React.FC<{ grab: ArrGrab; retry: ArrGrabRetry }> = ({ grab, retry
       <span className="break-all font-mono">{grab.releaseTitle}</span>
       <span className="min-w-0">
         <a
-          href={`https://www.youtube.com/watch?v=${encodeURIComponent(grab.youtubeId)}`}
+          href={youtubeVideoUrl(grab.youtubeId)}
           target="_blank"
           rel="noopener noreferrer"
           className="break-words text-primary underline"
