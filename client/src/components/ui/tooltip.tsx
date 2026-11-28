@@ -254,12 +254,12 @@ const Tooltip: React.FC<TooltipProps> = ({
     )
     : null;
 
+  // No element around the trigger, as with a mouse: a wrapper becomes the
+  // containing block of an absolutely positioned trigger and moves it.
   if (coarsePointer) {
     return (
       <>
-        <span style={triggerWrapperStyle}>
-          {childWithTouch}
-        </span>
+        {childWithTouch}
         {touchBubble}
       </>
     );
