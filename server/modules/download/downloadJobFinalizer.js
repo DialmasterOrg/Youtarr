@@ -51,6 +51,12 @@ const BENIGN_STDERR_WARNING_PATTERNS = [
   // Account-level SABR experiment: the router already broadcast its own
   // warning; the download itself completes on the fallback clients.
   /WARNING:.*SABR-only streaming experiment/i,
+  // SponsorBlock holds segments submitted against an earlier cut of the video;
+  // yt-dlp drops the ones whose duration does not match and uses the rest.
+  /WARNING:.*Some SponsorBlock segments are from a video of different duration/i,
+  // --throttled-rate tripped: yt-dlp re-extracts the formats and resumes the
+  // same download. A video that still fails prints its own ERROR.
+  /WARNING:.*download speed is below throttle limit/i,
 ];
 
 // True when everything yt-dlp wrote to stderr is known-benign warnings (or

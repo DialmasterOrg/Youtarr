@@ -1371,5 +1371,27 @@ describe('downloadJobFinalizer', () => {
 
       expect(stderrHasOnlyBenignWarnings(stderr)).toBe(true);
     });
+
+    it('treats the SponsorBlock duration mismatch warning as benign', () => {
+      const stderr = 'WARNING: Some SponsorBlock segments are from a video of different duration, maybe from an old version of this video\n';
+
+      expect(stderrHasOnlyBenignWarnings(stderr)).toBe(true);
+    });
+
+    it('treats the throttle re-extraction warning as benign', () => {
+      const stderr = '\nWARNING: The download speed is below throttle limit; Re-extracting data\n';
+
+      expect(stderrHasOnlyBenignWarnings(stderr)).toBe(true);
+    });
+
+    it('still flags a failed subtitle download', () => {
+      const stderr = [
+        'WARNING: --paths is ignored since an absolute path is given in output template',
+        'WARNING: Unable to download video subtitles for \'en\': HTTP Error 429: Too Many Requests',
+        'WARNING: Skipping embedding en subtitle because the file is missing'
+      ].join('\n');
+
+      expect(stderrHasOnlyBenignWarnings(stderr)).toBe(false);
+    });
   });
 });
