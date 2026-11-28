@@ -2,7 +2,7 @@
 
 const express = require('express');
 const multer = require('multer');
-const rateLimit = require('express-rate-limit');
+const { createRateLimiter } = require('../middleware/rateLimiter');
 const { ParseError } = require('../modules/subscriptionImport/takeoutParser');
 const { FetchError } = require('../modules/subscriptionImport/cookiesFetcher');
 const { ImportInProgressError } = require('../modules/subscriptionImport');
@@ -47,13 +47,10 @@ function handleUpload(uploadMiddleware) {
 }
 
 // Rate limiter for the cookies preview endpoint (expensive yt-dlp call)
-const cookiesLimiter = rateLimit({
+const cookiesLimiter = createRateLimiter({
   windowMs: COOKIES_RATE_LIMIT_WINDOW_MS,
   max: COOKIES_RATE_LIMIT_MAX,
-  message: { error: 'Too many requests. Please try again in a minute.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-  validate: { trustProxy: false },
+  error: 'Too many requests. Please try again in a minute.',
 });
 
 /**

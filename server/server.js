@@ -6,8 +6,8 @@
 process.umask(0o002);
 
 const express = require('express');
-const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = require('express-rate-limit');
+const { createRateLimiter } = require('./middleware/rateLimiter');
 const logger = require('./logger');
 const pinoHttp = require('pino-http');
 const { setupSwagger } = require('./swagger');
@@ -626,17 +626,10 @@ const initialize = async () => {
     };
 
     // Rate limiter for login attempts
-    const loginLimiter = rateLimit({
+    const loginLimiter = createRateLimiter({
       windowMs: 15 * 60 * 1000, // 15 minutes
       max: 5, // limit each IP to 5 requests per windowMs
-      message: { error: 'Too many failed login attempts. Please wait 15 minutes before trying again.' },
-      standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-      legacyHeaders: false, // Disable the `X-RateLimit-*` headers
       skipSuccessfulRequests: true, // Don't count successful requests
-      validate: {
-        trustProxy: false, // Suppress trust proxy warning - we run in Docker with proxy
-        ip: false, // Disable IP validation - we're using a custom key
-      },
       keyGenerator: (req) => {
         // Trust forwarded client IPs only when TRUST_PROXY is explicitly
         // configured; otherwise use the direct peer to avoid spoofable limits.
@@ -644,59 +637,29 @@ const initialize = async () => {
         const username = req.body.username || 'unknown';
         return `${normalizedIp}:${username}`;
       },
-      handler: (req, res) => {
-        res.status(429).json({
-          error: 'Too many failed login attempts. Please wait 15 minutes before trying again.'
-        });
-      }
+      error: 'Too many failed login attempts. Please wait 15 minutes before trying again.',
     });
 
-    const setupCreateAuthLimiter = rateLimit({
+    const setupCreateAuthLimiter = createRateLimiter({
       windowMs: 15 * 60 * 1000,
       max: 10,
-      standardHeaders: true,
-      legacyHeaders: false,
-      validate: {
-        trustProxy: false,
-        ip: false,
-      },
-      keyGenerator: (req) => getRateLimitAddress(req),
-      handler: (_req, res) => {
-        res.status(429).json({
-          error: 'Too many setup attempts. Please wait 15 minutes before trying again.'
-        });
-      }
+      keyGenerator: getRateLimitAddress,
+      error: 'Too many setup attempts. Please wait 15 minutes before trying again.',
     });
 
     // General API rate limiter (more permissive)
-    const apiLimiter = rateLimit({
-      windowMs: 1 * 60 * 1000, // 1 minute
+    const apiLimiter = createRateLimiter({
       max: 100, // limit each IP to 100 requests per minute
+      keyGenerator: getRateLimitAddress,
       message: 'Too many requests from this IP, please try again later',
-      standardHeaders: true,
-      legacyHeaders: false,
-      validate: {
-        trustProxy: false,
-        ip: false,
-      },
-      keyGenerator: (req) => getRateLimitAddress(req),
     });
 
     // Rate limiter for RSS feeds, which take a token instead of a session. Readers
     // poll every few minutes at most, so this leaves room for several of them.
-    const feedLimiter = rateLimit({
-      windowMs: 1 * 60 * 1000,
+    const feedLimiter = createRateLimiter({
       max: 60,
-      standardHeaders: true,
-      legacyHeaders: false,
-      validate: {
-        trustProxy: false,
-        ip: false,
-      },
-      keyGenerator: (req) => getRateLimitAddress(req),
-      handler: (_req, res) => {
-        res.status(429).json({ error: 'Too many feed requests. Please wait a minute before trying again.' });
-      },
+      keyGenerator: getRateLimitAddress,
+      error: 'Too many feed requests. Please wait a minute before trying again.',
     });
 
     // Rate limiter for the Sonarr/Radarr bridge, which takes a key instead of
@@ -705,172 +668,80 @@ const initialize = async () => {
     // minutes, and behind a proxy every client can share one address, so
     // junk requests must never use up the apps' own allowance. Their searches
     // are paced inside the bridge, which holds them instead of refusing.
-    const arrBridgeLimiter = rateLimit({
-      windowMs: 1 * 60 * 1000,
+    const arrBridgeLimiter = createRateLimiter({
       max: 600,
       skip: (req) => arrBridge.isAuthorized(req.query.apikey),
-      standardHeaders: true,
-      legacyHeaders: false,
-      validate: {
-        trustProxy: false,
-        ip: false,
-      },
-      keyGenerator: (req) => getRateLimitAddress(req),
-      handler: (_req, res) => {
-        res.status(429).json({ error: 'Too many requests. Please wait a minute before trying again.' });
-      },
+      keyGenerator: getRateLimitAddress,
+      error: 'Too many requests. Please wait a minute before trying again.',
     });
 
     // Rate limiter for saving and testing a Sonarr or Radarr connection from
     // Settings: each attempt makes this server call an address the user typed.
-    const arrBridgeConnectionLimiter = rateLimit({
-      windowMs: 1 * 60 * 1000,
+    const arrBridgeConnectionLimiter = createRateLimiter({
       max: 10,
-      standardHeaders: true,
-      legacyHeaders: false,
-      validate: {
-        trustProxy: false,
-        ip: false,
-      },
-      keyGenerator: (req) => getRateLimitAddress(req),
-      handler: (_req, res) => {
-        res.status(429).json({ error: 'Too many connection tests. Please wait a minute before trying again.' });
-      },
+      keyGenerator: getRateLimitAddress,
+      error: 'Too many connection tests. Please wait a minute before trying again.',
     });
 
     // Rate limiter for YouTube API key validation. Each test round-trips to
     // Google; users mistyping a key shouldn't burn quota or our outbound rate.
-    const youtubeApiKeyTestLimiter = rateLimit({
-      windowMs: 1 * 60 * 1000,
+    const youtubeApiKeyTestLimiter = createRateLimiter({
       max: 10,
-      message: { error: 'Too many key tests. Please wait a minute before trying again.' },
-      standardHeaders: true,
-      legacyHeaders: false,
-      validate: {
-        trustProxy: false,
-        ip: false,
-      },
-      keyGenerator: (req) => getRateLimitAddress(req),
-      handler: (_req, res) => {
-        res.status(429).json({
-          error: 'Too many key tests. Please wait a minute before trying again.',
-        });
-      },
+      keyGenerator: getRateLimitAddress,
+      error: 'Too many key tests. Please wait a minute before trying again.',
     });
 
     // Rate limiter for the /api/ytdlp/validate-args endpoint. Each request
     // spawns yt-dlp; a UI bug or malicious user could otherwise spam validation.
-    const ytdlpValidationRateLimiter = rateLimit({
-      windowMs: 1 * 60 * 1000,
+    const ytdlpValidationRateLimiter = createRateLimiter({
       max: 5,
-      message: { error: 'Too many validation requests. Please wait a minute before trying again.' },
-      standardHeaders: true,
-      legacyHeaders: false,
-      validate: {
-        trustProxy: false,
-        ip: false,
-      },
-      keyGenerator: (req) => getRateLimitAddress(req),
-      handler: (_req, res) => {
-        res.status(429).json({
-          error: 'Too many validation requests. Please wait a minute before trying again.',
-        });
-      },
+      keyGenerator: getRateLimitAddress,
+      error: 'Too many validation requests. Please wait a minute before trying again.',
     });
 
     // Rate limiter for the /api/config/filename-preview endpoint. Each
     // request spawns two yt-dlp processes (file template + folder template);
     // limit is higher than ytdlp validate-args since it's button-driven and
     // legitimate users can issue several previews per minute while iterating.
-    const filenamePreviewRateLimiter = rateLimit({
-      windowMs: 1 * 60 * 1000,
+    const filenamePreviewRateLimiter = createRateLimiter({
       max: 30,
-      message: { error: 'Too many preview requests. Please wait a minute before trying again.' },
-      standardHeaders: true,
-      legacyHeaders: false,
-      validate: {
-        trustProxy: false,
-        ip: false,
-      },
-      keyGenerator: (req) => getRateLimitAddress(req),
-      handler: (_req, res) => {
-        res.status(429).json({
-          error: 'Too many preview requests. Please wait a minute before trying again.',
-        });
-      },
+      keyGenerator: getRateLimitAddress,
+      error: 'Too many preview requests. Please wait a minute before trying again.',
     });
 
     // Rate limiter for /api/cookies/test. Each test spawns yt-dlp and makes a
     // signed-in request to YouTube; repeated tests could draw a bot check.
-    const cookieTestRateLimiter = rateLimit({
-      windowMs: 1 * 60 * 1000,
+    const cookieTestRateLimiter = createRateLimiter({
       max: 5,
-      message: { error: 'Too many cookie tests. Please wait a minute before trying again.' },
-      standardHeaders: true,
-      legacyHeaders: false,
-      validate: {
-        trustProxy: false,
-        ip: false,
-      },
-      keyGenerator: (req) => getRateLimitAddress(req),
-      handler: (_req, res) => {
-        res.status(429).json({
-          error: 'Too many cookie tests. Please wait a minute before trying again.',
-        });
-      },
+      keyGenerator: getRateLimitAddress,
+      error: 'Too many cookie tests. Please wait a minute before trying again.',
     });
-    const externalApiIngressLimiter = rateLimit({
-      windowMs: 60 * 1000,
+
+    const externalRateLimited = (message) => (req, res) => sendExternalError(
+      res,
+      429,
+      message,
+      { code: 'rate_limited', requestId: req.id }
+    );
+    const externalApiIngressLimiter = createRateLimiter({
       max: 300,
-      standardHeaders: true,
-      legacyHeaders: false,
-      validate: { trustProxy: false, ip: false },
       keyGenerator: (req) => `external-api-ingress:${getRateLimitAddress(req)}`,
-      handler: (req, res) => sendExternalError(
-        res,
-        429,
-        'External API ingress rate limit exceeded',
-        { code: 'rate_limited', requestId: req.id }
-      ),
+      handler: externalRateLimited('External API ingress rate limit exceeded'),
     });
-    const externalApiLimiter = rateLimit({
-      windowMs: 60 * 1000,
+    const externalApiLimiter = createRateLimiter({
       max: 120,
-      standardHeaders: true,
-      legacyHeaders: false,
-      validate: { trustProxy: false, ip: false },
       keyGenerator: (req) => `external-api:${req.externalApiKey?.id || 'unknown'}`,
-      handler: (req, res) => sendExternalError(
-        res,
-        429,
-        'External API rate limit exceeded',
-        { code: 'rate_limited', requestId: req.id }
-      ),
+      handler: externalRateLimited('External API rate limit exceeded'),
     });
-    const externalApiWriteLimiter = rateLimit({
-      windowMs: 60 * 1000,
+    const externalApiWriteLimiter = createRateLimiter({
       max: 10,
-      standardHeaders: true,
-      legacyHeaders: false,
-      validate: { trustProxy: false, ip: false },
       keyGenerator: (req) => `external-api-write:${req.externalApiKey?.id || 'unknown'}`,
-      handler: (req, res) => sendExternalError(
-        res,
-        429,
-        'External API write rate limit exceeded',
-        { code: 'rate_limited', requestId: req.id }
-      ),
+      handler: externalRateLimited('External API write rate limit exceeded'),
     });
-    const externalRequestReviewLimiter = rateLimit({
-      windowMs: 60 * 1000,
+    const externalRequestReviewLimiter = createRateLimiter({
       max: 30,
-      standardHeaders: true,
-      legacyHeaders: false,
-      validate: { trustProxy: false, ip: false },
       keyGenerator: (req) => `external-request-review:${req.sessionId || getRateLimitAddress(req)}`,
-      handler: (_req, res) => res.status(429).json({
-        error: 'External request review rate limit exceeded',
-      }),
+      error: 'External request review rate limit exceeded',
     });
     const externalApiAuth = createExternalApiAuth({
       // Resolve the model-backed module only if an external request arrives.

@@ -1,31 +1,22 @@
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const { createRateLimiter } = require('../middleware/rateLimiter');
 const { ROOT_SENTINEL, GLOBAL_DEFAULT_SENTINEL } = require('../modules/filesystem/constants');
 const { sendRunBlocked } = require('./runNowResponse');
 
 // Video validation rate limiter
-const videoValidationLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
+const videoValidationLimiter = createRateLimiter({
   max: 30, // 30 requests per minute
   message: 'Too many validation requests, please try again later',
-  standardHeaders: true,
-  legacyHeaders: false,
-  validate: { trustProxy: false },
 });
 
 // Bulk enrichment rate limiter
-const bulkEnrichLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
+const bulkEnrichLimiter = createRateLimiter({
   max: 20, // 20 enrichment batches per minute per client
   message: 'Too many enrichment requests, please try again later',
-  standardHeaders: true,
-  legacyHeaders: false,
-  validate: { trustProxy: false },
 });
 
 // API key download rate limiter
-const apiKeyDownloadLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
+const apiKeyDownloadLimiter = createRateLimiter({
   max: (req) => {
     // Only apply to API key auth, session auth is unlimited
     if (req.authType !== 'api_key') {
@@ -41,9 +32,6 @@ const apiKeyDownloadLimiter = rateLimit({
   },
   skip: (req) => req.authType !== 'api_key', // Skip rate limiting for session auth
   message: { success: false, error: 'Rate limit exceeded. Try again later.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-  validate: { trustProxy: false, ip: false },
 });
 
 /**
